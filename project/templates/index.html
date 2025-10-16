@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>NCOP Internal</title>
+    {% load django_vite %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/main.js' %}
+  </head>
+  <body>
+    <div id="app">Hello NCOP-Internal (Django + Vite)</div>
+  </body>
+</html>

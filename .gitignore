@@ -1,4 +1,8 @@
+# Django & Python
 djangoenv/
+*.pyc
+__init__.py
+__init__.pyc
 
 .github_token
 
@@ -172,3 +176,6 @@ node_modules
 /assets/
 mediafiles
 staticfiles
+
+# Vite cache
+.vite
