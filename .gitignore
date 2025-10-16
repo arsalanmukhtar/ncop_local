@@ -1,5 +1,4 @@
 # Django & Python
-djangoenv/
 *.pyc
 __init__.py
 __init__.pyc
