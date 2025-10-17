@@ -1,0 +1,141 @@
+{% load django_vite static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>NCOP</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+
+    {# Expose per-request values BEFORE loading the Vite entry #}
+    <script>
+        window.MAPBOX_ACCESS_TOKEN = "{{ mapbox_token|escapejs }}";
+        window.USER_ID = "{{ user.id|escapejs }}";
+        window.USERNAME = "{{ user.username|escapejs }}";
+    </script>
+
+    {# Vite HMR + bundle #}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/entries/dashboard_main.js' %}
+
+    {# Tailwind CDN (ok in dev) #}
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    {# Google Fonts #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap"
+        rel="stylesheet">
+
+    {# Favicon (place file at project/static/src/favicon.ico) #}
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { inter: ['Inter', 'sans-serif'] },
+                    colors: { primary: { 50: '#f0f4ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' } }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .logo-spin {
+            animation: spin-y 3s linear infinite;
+        }
+
+        @keyframes spin-y {
+            0% {
+                transform: rotateY(0deg);
+            }
+
+            100% {
+                transform: rotateY(360deg);
+            }
+        }
+
+        .user-panel-visible {
+            transform: translateX(0) !important;
+            opacity: 1 !important;
+        }
+
+        .mapboxgl-ctrl-attrib {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body class="font-inter bg-slate-50">
+    <div class="ncop-container fixed top-3 left-3 z-50 border-2 rounded-2xl px-2 py-6">
+        <div class="flex items-center space-x-4">
+            <div class="w-16 h-16 flex-shrink-0">
+                <img data-asset="ndmaLogo" alt="NDMA Logo" class="w-full h-full object-contain logo-spin">
+            </div>
+            <div class="text-left flex-1">
+                <h1 class="text-lg font-normal text-white leading-tight">
+                    National Common Operating Picture <span class="text-gray-300 mt-1">(NCOP)</span>
+                </h1>
+            </div>
+        </div>
+    </div>
+
+    <div id="userPanel"
+        class="fixed top-12 right-2 z-40 bg-black/80 backdrop-filter backdrop-blur-lg border-2 border-white rounded-xl p-4 min-w-[200px] transform transition-all duration-300 translate-x-full opacity-0">
+        <div class="flex items-center space-x-3 mb-3">
+            <div class="flex items-center justify-center w-8 h-8 bg-white/20 rounded-md">
+                <i data-lucide="user" class="w-4 h-4 text-white"></i>
+            </div>
+            <div>
+                <p class="text-white font-medium text-sm">{{ user.first_name|default:user.username }}</p>
+                <p class="text-gray-300 text-xs">Dashboard User</p>
+            </div>
+        </div>
+        <a href="{% url 'logout' %}"
+            class="w-full flex items-center justify-center px-3 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors duration-200">
+            <i data-lucide="log-out" class="w-4 h-4 mr-2"></i> Logout
+        </a>
+    </div>
+
+    <div id="sidebarPanel" class="sidebar-panel border-2">
+        <div class="sidebar-header">
+            <div class="sidebar-search-container">
+                <div class="search-input-wrapper">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="sidebarSearch" placeholder="Search..." class="search-input">
+                    <button id="clearSearch" class="clear-search-btn" style="display:none;">
+                        <i data-lucide="x" class="clear-icon"></i>
+                    </button>
+                </div>
+            </div>
+            <button id="sidebarCloseBtn" class="sidebar-close-btn" title="Close Menu">
+                <i data-lucide="menu"></i>
+            </button>
+        </div>
+        <div class="sidebar-content" id="sidebarContent">
+            <div class="accordion-container"></div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+</body>
+
+</html>

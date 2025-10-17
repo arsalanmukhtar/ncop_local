@@ -1,0 +1,54 @@
+/* Signup Page Specific Styles */
+.signup-btn {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: white !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 15px rgba(70, 178, 255, 0.3) !important;
+}
+
+.signup-btn:hover {
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700)) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(70, 178, 255, 0.4) !important;
+}
+
+.signup-btn:focus {
+    border: 1px solid var(--primary-400) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(70, 178, 255, 0.2) !important;
+}
+
+.login-link {
+    color: #4ade80 !important;
+    text-decoration: none !important;
+}
+
+.login-link:hover {
+    color: #22c55e !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Form validation styling - override for specific states */
+.field-error {
+    border: 1px solid var(--danger-500) !important;
+}
+
+.field-success {
+    border: 1px solid var(--accent-500) !important;
+}
+
+.validation-message {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.validation-error {
+    color: var(--danger-600) !important;
+}
+
+.validation-success {
+    color: var(--accent-600) !important;
+}

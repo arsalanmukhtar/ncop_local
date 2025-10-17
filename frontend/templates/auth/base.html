@@ -1,0 +1,93 @@
+{% load django_vite static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GeoDjango Map{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cabin:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap"
+        rel="stylesheet">
+
+    {% vite_hmr_client %}
+    {% block vite_entry %}{% endblock %}
+
+    {% block extra_css %}{% endblock %}
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'cabin': ['Cabin', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc', 400: '#38bdf8', 500: '#46b2ff', 600: '#0284c7', 700: '#0369a1', 800: '#075985', 900: '#0c4a6e' },
+                        danger: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ff0000', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' },
+                        accent: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac', 400: '#4ade80', 500: '#096a0b', 600: '#075a09', 700: '#064e08', 800: '#054206', 900: '#043605' }
+                    },
+                    animation: { 'spin-y': 'spin-y 3s linear infinite' },
+                    keyframes: { 'spin-y': { '0%': { transform: 'rotateY(0deg)' }, '100%': { transform: 'rotateY(360deg)' } } }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="font-cabin min-h-screen flex items-center justify-center p-4 relative auth-background">
+    <div class="absolute inset-0 bg-gradient-to-br from-black/40 via-blue-900/30 to-black/60"></div>
+    <div class="absolute inset-0 bg-gradient-to-t from-transparent via-blue-500/5 to-transparent"></div>
+
+    <div class="w-full {% block container_width %}max-w-md{% endblock %} relative z-10">
+        <div class="auth-card rounded-2xl overflow-hidden">
+            <div class="auth-header px-6 py-12 text-center border-b border-white/10">
+                <div class="flex items-center justify-center space-x-8">
+                    <div class="w-28 h-28 flex-shrink-0">
+                        <!-- Vite-managed: src set by entry via setAssets({ ndmaLogo }) -->
+                        <img data-asset="ndmaLogo" alt="NDMA Logo" class="w-full h-full object-contain logo-spin">
+                    </div>
+                    <div class="text-left flex-1">
+                        <h1 class="text-3xl font-bold text-accent-100 leading-tight">
+                            National Common Operating Picture (NCOP)
+                        </h1>
+                    </div>
+                </div>
+                {% block subtitle_block %}{% endblock %}
+            </div>
+
+            <div class="card-content px-8 py-8">
+                {% if messages %}
+                <div class="space-y-3 mb-6">
+                    {% for message in messages %}
+                    <div class="alert-message flex items-center p-4 rounded-lg text-sm
+                        {% if message.tags == 'success' %}bg-accent-50 text-accent-800 border border-accent-200
+                        {% elif message.tags == 'danger' or message.tags == 'error' %}bg-danger-50 text-danger-800 border border-danger-200
+                        {% elif message.tags == 'warning' %}bg-amber-50 text-amber-800 border border-amber-200
+                        {% else %}bg-primary-50 text-primary-800 border border-primary-200{% endif %}">
+                        <i data-lucide="{% if message.tags == 'success' %}check-circle{% elif message.tags == 'danger' or message.tags == 'error' %}alert-circle{% elif message.tags == 'warning' %}alert-triangle{% else %}info{% endif %}"
+                            class="w-4 h-4 mr-2 flex-shrink-0"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+
+        <div class="text-center mt-6">
+            <p class="text-sm text-white/50">
+                Powered by National Disaster Management Authority (NDMA)
+            </p>
+        </div>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

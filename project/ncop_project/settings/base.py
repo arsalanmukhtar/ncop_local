@@ -1,14 +1,18 @@
-import environ, os
+import os
 from pathlib import Path
+import environ
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # .../project
 env = environ.Env(DEBUG=(bool, False))
-environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env"))
+environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env"))  # repo/.env
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-insecure")
+# --- Core ---
+MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
+SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 
+# --- Apps ---
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -23,6 +27,7 @@ INSTALLED_APPS = [
     "ncop_internal",
 ]
 
+# --- Middleware ---
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -37,23 +42,31 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "ncop_project.urls"
 
+# --- Templates ---
+# You have templates under: project/templates AND frontend/templates (from earlier steps)
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR / "templates",
+            BASE_DIR.parent / "frontend" / "templates",
+        ],
         "APP_DIRS": True,
-        "OPTIONS": {"context_processors": [
-            "django.template.context_processors.debug",
-            "django.template.context_processors.request",
-            "django.contrib.auth.context_processors.auth",
-            "django.contrib.messages.context_processors.messages",
-        ]},
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ]
+        },
     },
 ]
 
 WSGI_APPLICATION = "ncop_project.wsgi.application"
 ASGI_APPLICATION = "ncop_project.asgi.application"
 
+# --- Database (PostGIS) ---
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
@@ -65,17 +78,23 @@ DATABASES = {
     }
 }
 
+# --- I18N ---
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Karachi"
 USE_I18N = True
 USE_TZ = True
 
+# --- Static/Media ---
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "static" / "dist"
-STATICFILES_DIRS = [
-    BASE_DIR / "static" / "src",  # if you keep any legacy assets
-    BASE_DIR.parent / "frontend" / "dist",  # <-- add this line
-]
+
+# Only include dirs that actually exist (avoid warnings before first build)
+STATICFILES_DIRS = []
+legacy_static = BASE_DIR / "static" / "src"
+vite_dist = BASE_DIR.parent / "frontend" / "dist"
+for p in (legacy_static, vite_dist):
+    if p.exists():
+        STATICFILES_DIRS.append(p)
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -84,14 +103,15 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
+# --- CORS ---
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)
 
+# --- Django-Vite ---
 DJANGO_VITE = {
     "default": {
-        "dev_mode": env.bool("VITE_DEV_MODE", default=True),
+        "dev_mode": env.bool("VITE_DEV_MODE", default=DEBUG),
         "manifest_path": BASE_DIR.parent / "frontend" / "dist" / ".vite" / "manifest.json",
         "static_url_prefix": STATIC_URL,
-        # (optional but handy in dev)
         "dev_server_host": env("VITE_DEV_SERVER_HOST", default="localhost"),
         "dev_server_port": env.int("VITE_DEV_SERVER_PORT", default=5173),
     }

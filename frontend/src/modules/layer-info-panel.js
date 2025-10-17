@@ -1,0 +1,112 @@
+export class LayerInfoPanel {
+    #map;
+    #sourceLayerControl;
+    #isVisible = false;
+
+    constructor(map, sourceLayerControl) {
+        this.#map = map;
+        this.#sourceLayerControl = sourceLayerControl;
+        this.render();
+        this.addEventListeners();
+        this.setupLayerChangeListener();
+    }
+
+    render() {
+        let controlsWrapper = document.querySelector('.map-controls-wrapper');
+        if (!controlsWrapper) return;
+
+        // Create info control
+        const infoControl = document.createElement('div');
+        infoControl.className = 'custom-layer-info-control';
+        infoControl.innerHTML = `
+            <button id="layerInfoToggle" class="custom-layer-btn" title="Layer Info">
+                <i data-lucide="info"></i>
+            </button>
+            <div id="layerInfoPanel" class="layer-info-panel">
+                <div class="layer-info-header">
+                    <span class="layer-info-title">Layer Info</span>
+                    <div class="layer-info-subtitle">Details for active layers</div>
+                </div>
+                <div id="layerInfoList" class="layer-info-list">
+                    <div class="no-layers-message">No active layers</div>
+                </div>
+            </div>
+        `;
+        controlsWrapper.appendChild(infoControl);
+        lucide.createIcons();
+    }
+
+    addEventListeners() {
+        const infoToggle = document.getElementById('layerInfoToggle');
+        const infoPanel = document.getElementById('layerInfoPanel');
+        infoToggle?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.togglePanel();
+            // Collapse layer order panel if open
+            const orderPanelDiv = document.querySelector('.custom-layer-control');
+            if (orderPanelDiv && !orderPanelDiv.classList.contains('panel-collapsed')) {
+                orderPanelDiv.classList.add('panel-collapsed');
+            }
+        });
+        // Hide when basemap panel opens
+        const basemapToggle = document.getElementById('basemapToggle');
+        basemapToggle?.addEventListener('click', () => {
+            this.hidePanel();
+        });
+    }
+
+    setupLayerChangeListener() {
+        const originalAddLayer = this.#sourceLayerControl.addLayerByKey.bind(this.#sourceLayerControl);
+        const originalRemoveLayer = this.#sourceLayerControl.removeLayerByKey.bind(this.#sourceLayerControl);
+        this.#sourceLayerControl.addLayerByKey = (...args) => {
+            const result = originalAddLayer(...args);
+            if (this.#isVisible) setTimeout(() => this.updateLayerList(), 100);
+            return result;
+        };
+        this.#sourceLayerControl.removeLayerByKey = (...args) => {
+            const result = originalRemoveLayer(...args);
+            if (this.#isVisible) setTimeout(() => this.updateLayerList(), 100);
+            return result;
+        };
+    }
+
+    togglePanel() {
+        this.#isVisible = !this.#isVisible;
+        const infoPanel = document.getElementById('layerInfoPanel');
+        if (this.#isVisible) {
+            this.updateLayerList();
+            infoPanel.classList.add('visible');
+        } else {
+            infoPanel.classList.remove('visible');
+        }
+    }
+
+    hidePanel() {
+        this.#isVisible = false;
+        const infoPanel = document.getElementById('layerInfoPanel');
+        infoPanel?.classList.remove('visible');
+    }
+
+    updateLayerList() {
+        const infoList = document.getElementById('layerInfoList');
+        if (!infoList) return;
+        const activeLayerKeys = this.#sourceLayerControl.getActiveLayerKeys();
+        if (activeLayerKeys.length === 0) {
+            infoList.innerHTML = '<div class="no-layers-message">No active layers</div>';
+            return;
+        }
+        // Show info for each active layer
+        const items = activeLayerKeys.map(layerKey => {
+            const layerInfo = this.#sourceLayerControl.findLayerConfig(layerKey);
+            const label = layerInfo?.config?.label || layerKey;
+            const info = layerInfo?.config?.information || 'No information available.';
+            return `
+                <div class="layer-info-item">
+                    <div class="layer-info-label">${label}</div>
+                    <div class="layer-info-details">${info}</div>
+                </div>
+            `;
+        }).join('');
+        infoList.innerHTML = items;
+    }
+}

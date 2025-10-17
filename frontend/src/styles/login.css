@@ -1,0 +1,85 @@
+/* Login Page Specific Styles */
+.login-btn {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: white !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 15px rgba(70, 178, 255, 0.3) !important;
+}
+
+.login-btn:hover {
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700)) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(70, 178, 255, 0.4) !important;
+}
+
+.login-btn:focus {
+    border: 1px solid var(--primary-400) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(70, 178, 255, 0.2) !important;
+}
+
+.create-account-link {
+    color: #4ade80 !important;
+    text-decoration: none !important;
+}
+
+.create-account-link:hover {
+    color: #22c55e !important;
+    transform: translateY(-1px) !important;
+}
+
+.forgot-password-link {
+    color: #f87171 !important;
+    text-decoration: none !important;
+}
+
+.forgot-password-link:hover {
+    color: #ef4444 !important;
+    transform: translateY(-1px) !important;
+}
+
+.password-toggle {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 20px !important;
+    height: 20px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: none !important;
+    background-color: transparent !important;
+    cursor: pointer !important;
+    z-index: 15 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.password-toggle:hover,
+.password-toggle:focus,
+.password-toggle:active {
+    background: none !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transform: translateY(-50%) !important;
+}
+
+.password-toggle i {
+    color: #64748b !important;
+    transition: color 0.2s ease !important;
+    width: 16px !important;
+    height: 16px !important;
+}
+
+.password-toggle:hover i {
+    color: var(--primary-500) !important;
+}

@@ -1,0 +1,1682 @@
+/* Dashboard Page Specific Styles */
+@import "tailwindcss";
+
+/* Variables */
+:root {
+    /* ===========================
+       BRAND COLORS (NDMA)
+    =========================== */
+    --ndma-green: #2ecc71;
+    --ndma-green-opaque: rgba(9, 106, 11, 0.75);
+    --ndma-green-light: rgba(9, 106, 11, 0.35);
+    --ndma-green-glow: rgba(9, 106, 11, 0.25);
+    --ndma-green-gradient: linear-gradient(to right, rgba(28, 169, 30, 0.6), rgba(9, 106, 11, 0.9));
+
+    --ndma-blue: #46b2ff;
+    --ndma-blue-opaque: rgba(70, 178, 255, 0.75);
+    --ndma-blue-light: rgba(70, 178, 255, 0.35);
+    --ndma-blue-glow: rgba(70, 178, 255, 0.25);
+    --ndma-blue-gradient: linear-gradient(to right, rgba(70, 178, 255, 0.9), rgba(30, 144, 255, 0.6));
+
+    --ndma-red: #ff0000;
+    --ndma-red-opaque: rgba(255, 0, 0, 0.75);
+    --ndma-red-light: rgba(255, 0, 0, 0.35);
+    --ndma-red-glow: rgba(255, 0, 0, 0.25);
+    --ndma-red-gradient: linear-gradient(to right, rgba(255, 76, 76, 0.7), rgba(255, 0, 0, 0.9));
+
+    /* ===========================
+       BASE COLORS (GLASSMORPHIC)
+    =========================== */
+    --black: #000000;
+    --white: #ffffff;
+
+    /* Glass-like layered tones */
+    --glass-dark: rgba(0, 0, 0, 0.6);
+    --glass-medium: rgba(0, 0, 0, 0.4);
+    --glass-light: rgba(255, 255, 255, 0.2);
+    --glass-lighter: rgba(255, 255, 255, 0.15);
+    --glass-highlight: rgba(255, 255, 255, 0.25);
+
+    /* ===========================
+       BACKGROUNDS
+    =========================== */
+    --primary-bg: var(--glass-dark);
+    --secondary-bg: var(--glass-medium);
+    --tertiary-bg: var(--glass-light);
+    --accent-bg-green: var(--ndma-green-opaque);
+    --accent-bg-blue: var(--ndma-blue-opaque);
+    --accent-bg-red: var(--ndma-red-opaque);
+    --overlay-bg: rgba(255, 255, 255, 0.05);
+    --frost-bg: rgba(255, 255, 255, 0.12);
+
+    /* ===========================
+       TEXT COLORS
+    =========================== */
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.75);
+    --text-muted: rgba(255, 255, 255, 0.55);
+    --text-inverse: rgba(0, 0, 0, 0.85);
+    --text-accent-green: var(--ndma-green);
+    --text-accent-blue: var(--ndma-blue);
+    --text-accent-red: var(--ndma-red);
+
+    /* ===========================
+       BORDERS (SUBTLE & TRANSLUCENT)
+    =========================== */
+    --border-dark: rgba(255, 255, 255, 0.2);
+    --border-light: rgba(255, 255, 255, 0.7);
+    --border-strong: rgba(0, 0, 0, 0.2);
+    --border-green: var(--ndma-green-light);
+    --border-blue: var(--ndma-blue-light);
+    --border-red: var(--ndma-red-light);
+
+    /* ===========================
+       BUTTONS & STATES
+    =========================== */
+    --btn-green-bg: var(--ndma-green-opaque);
+    --btn-green-hover: var(--ndma-green-gradient);
+    --btn-blue-bg: var(--ndma-blue-opaque);
+    --btn-blue-hover: var(--ndma-blue-gradient);
+    --btn-red-bg: var(--ndma-red-opaque);
+    --btn-red-hover: var(--ndma-red-gradient);
+
+    /* ===========================
+       HIGHLIGHTS / FEEDBACK
+    =========================== */
+    --focus-ring: var(--ndma-blue-light);
+    --hover-bg: rgba(255, 255, 255, 0.08);
+    --active-bg: rgba(255, 255, 255, 0.12);
+    --success-bg: var(--ndma-green-glow);
+    --error-bg: var(--ndma-red-glow);
+    --info-bg: var(--ndma-blue-glow);
+
+    /* ===========================
+       SHADOWS / DEPTH
+    =========================== */
+    --shadow-soft: 0 8px 16px rgba(0, 0, 0, 0.25);
+    --shadow-glow-green: 0 0 12px 2px var(--ndma-green-glow);
+    --shadow-glow-blue: 0 0 12px 2px var(--ndma-blue-glow);
+    --shadow-glow-red: 0 0 12px 2px var(--ndma-red-glow);
+}
+
+/* Universal Scrollbar Styling */
+* {
+    scrollbar-width: none;
+    /* Firefox — hide thumb entirely */
+}
+
+/* Chrome, Safari, Edge */
+*::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--glass-light);
+    border-radius: 10px;
+}
+
+/* Hide scrollbar thumb completely */
+*::-webkit-scrollbar-thumb {
+    background: transparent;
+    border: none;
+}
+
+/* Hide scrollbar corner and buttons */
+*::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-button {
+    display: none;
+}
+
+/* Global Font Application */
+* {
+    font-family: 'Inter', sans-serif !important;
+}
+
+html, body {
+    font-family: 'Inter', sans-serif !important;
+}
+
+.ncop-container {
+    background-color: var(--primary-bg);
+    width: 265px;
+    backdrop-filter: blur(15px);
+    border-color: var(--border-light);
+    
+}
+
+/* Navigation Controls Wrapper */
+.nav-controls-wrapper {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+/* Custom Navigation Controls Container */
+.custom-nav-control {
+    /* background: var(--primary-bg); */
+    border-radius: 8px;
+    /* padding: 4px; */
+    /* backdrop-filter: blur(15px); */
+    /* border: 1px solid var(--border-light); */
+    transition: all 0.3s ease;
+    transform-origin: bottom right;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Hide navigation buttons when collapsed */
+.custom-nav-control.collapsed .custom-nav-btn:not(.nav-toggle-btn) {
+    transform: translateX(100%);
+    opacity: 0;
+    visibility: hidden;
+    margin-bottom: 0;
+    height: 0;
+    padding: 0;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+
+.custom-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease, height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    /* padding: 4px; */
+    color: var(--white);
+}
+
+.custom-nav-btn:hover {
+    background: var(--primary-bg);
+}
+
+/* .custom-nav-btn:active {
+    transform: scale(0.95);
+} */
+
+.custom-nav-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.custom-nav-btn .nav-icon {
+    font-size: 14px;
+    line-height: 1;
+    display: block;
+}
+
+/* Style for text labels in buttons */
+.custom-nav-btn .nav-text {
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0.5px;
+}
+
+/* Navigation Toggle Button */
+.nav-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary-bg);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-light);
+    margin-bottom: 0;
+    color: var(--text-primary);
+}
+
+.nav-toggle-btn:hover {
+    background: var(--accent-bg-blue);
+}
+
+.nav-toggle-btn i {
+    width: 16px;
+    height: 16px;
+    color: white;
+}
+
+/* Home Button Styling - Light Green Background */
+button#homeExtent.custom-nav-btn {
+    background: var(--ndma-green) !important; /* Light green (green-500 with opacity) */
+    color: var(--text-primary) !important;
+    border-color: var(--border-strong) !important;
+}
+
+button#homeExtent.custom-nav-btn:hover {
+    background: var(--ndma-green-opaque) !important; /* Darker green on hover */
+    color: var(--text-primary) !important;
+}
+
+/* 3D Toggle Button Active State */
+button.custom-nav-btn.terrain-active {
+    background: var(--ndma-blue) !important;
+    color: white !important;
+    border-color: var(--ndma-blue-gradient) !important;
+}
+
+button.custom-nav-btn.terrain-active:hover {
+    background: var(--ndma-blue) !important;
+}
+
+/* Custom User Control */
+.custom-user-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+.custom-user-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-user-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-user-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Custom Basemap Control */
+.custom-basemap-control {
+    /* position: relative; */
+    z-index: 1000;
+    transition: all 0.3s ease;
+    color: var(--white);
+}
+
+/* Custom Menu Control */
+.custom-menu-control {
+    position: absolute;
+    top: 140px; /* Below NCOP panel with proper margin */
+    left: 13px; /* Aligned with NCOP panel */
+    z-index: 1000;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.custom-menu-control.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.custom-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-menu-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-menu-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Sidebar Panel */
+.sidebar-panel {
+    position: fixed;
+    top: 140px;
+    left: 12px;
+    width: 265px;
+    height: calc(100vh - 130px - 3rem);
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 16px;
+    backdrop-filter: blur(15px);
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 999;
+    overflow-y: auto;
+    padding: 12px 12px 12px 12px; /* Extra bottom padding for last elements */
+    box-sizing: border-box;
+    scroll-behavior: smooth; /* Smooth scrolling */
+}
+
+.sidebar-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 12px;
+}
+
+.sidebar-title {
+    color: var(--white);
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.sidebar-search-container {
+    flex: 1;
+    max-width: none;
+}
+
+
+/* Search Functionality */
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    color: var(--text-primary);
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 6px 28px 6px 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-input:focus {
+    outline: none;
+    background: transparent;
+    /* border-color: var(--primary-foreground); */
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-icon {
+    width: 8px;
+    height: 8px;
+    color: transparent;
+    visibility: hidden;
+}
+
+/* Search Results Highlighting */
+/* .search-highlight {
+    background: var(--success-bg);
+    border-radius: 2px;
+    padding: 1px 2px;
+    font-weight: 600;
+} */
+
+/* Hide elements that don't match search */
+.search-hidden {
+    display: none !important;
+}
+
+/* No results message */
+.no-results-message {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #000000;
+    background: var(--tertiary-bg);
+    border-radius: 8px;
+    margin: 1rem 0;
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+}
+
+.no-results-message p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.no-results-message small {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 2px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.sidebar-close-btn:hover {
+    color: var(--white);
+    background: var(--ndma-red-opaque);
+}
+
+.sidebar-close-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Sidebar Content */
+.sidebar-content {
+    color: var(--white);
+}
+
+.sidebar-accordion {
+    margin-bottom: 15px;
+}
+
+.accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px;
+    background: var(--tertiary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-dark);
+    margin-bottom: 4px;
+}
+
+.accordion-header:hover {
+    background: var(--accent-bg-blue);
+}
+
+.accordion-header.active {
+    background: var(--ndma-blue-gradient);
+    border-color: var(--ndma-blue);
+}
+
+.accordion-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--white);
+    flex: 1;
+}
+
+.accordion-icon {
+    width: 12px;
+    height: 12px;
+    color: var(--white);
+    font-weight: bold;
+    transition: transform 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.accordion-body {
+    padding: 15px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--glass-lighter);
+}
+
+/* NCOP Sidebar Specific Styles */
+.ncop-subcategory {
+    margin: 4px 0;
+}
+
+.ncop-subcategory-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.ncop-subcategory-header:hover {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header.expanded {
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header .subcategory-chevron {
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    margin-left: 5px;
+}
+
+.ncop-subcategory-header span {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--white);
+}
+
+.ncop-subcategory-header.expanded .subcategory-chevron {
+    transform: rotate(90deg);
+}
+
+.ncop-items-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    margin-top: 4px;
+}
+
+.ncop-items-container.visible {
+    max-height: 400px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    scroll-padding-bottom: 10px;
+}
+
+.ncop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+/* Single column grid for button items */
+.ncop-grid:has(.ncop-item-button) {
+    grid-template-columns: 1fr;
+    gap: 0px;
+}
+
+.ncop-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* background: var(--secondary-bg); */
+    /* border-radius: 6px; */
+    margin: 4px 0;
+    padding: 8px;
+    /* border: 2px solid var(--border-dark); */
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+/* Toggle items - horizontal layout with label and control */
+.ncop-item-toggle {
+    justify-content: space-between;
+}
+
+/* Temporal items - vertical layout centered */
+.ncop-item-temporal {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    padding: 12px 8px;
+    min-height: 120px;
+}
+
+/* Dropdown items - centered single element */
+.ncop-item-dropdown {
+    justify-content: center;
+}
+
+/* Button items - text left, toggle right */
+.ncop-item-button {
+    justify-content: space-between;
+    border-radius: 5px;
+    border: 1px solid transparent !important;
+    background-color: transparent !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Button with checked toggle - full color background */
+/* .ncop-item-button:has(.ncop-toggle input:checked) {
+    border: 1px solid var(--button-color, #6366f1) !important;
+} */
+
+/* Toggle inside button items - full opacity background when checked */
+.ncop-item-button .ncop-toggle input:checked + .ncop-toggle-slider {
+    background-color: var(--button-color, #6366f1) !important;
+}
+
+.ncop-item-image {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    border-radius: 15px;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+    border: 3px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.ncop-item-image.selected img {
+    border: 3px solid var(--ndma-green);
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+ 
+.ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Button content with image - left aligned with proper spacing */
+.ncop-item-button .ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-right: 8px;
+}
+
+.ncop-item-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--white);
+    line-height: 1.2;
+    text-align: center;
+}
+
+/* Toggle item labels */
+.ncop-item-toggle .ncop-item-label {
+    flex: 1;
+    margin-right: 8px;
+    text-align: left;
+}
+
+/* Temporal item labels - centered below image */
+.ncop-item-temporal .ncop-item-label {
+    margin-top: 8px;
+    font-size: 10px;
+}
+
+/* Remove right margin from images in temporal items */
+.ncop-item-temporal .ncop-item-image {
+    margin-right: 0;
+}
+
+/* Button labels - left aligned */
+.ncop-item-button .ncop-item-label {
+    text-align: left;
+    flex: 1;
+    margin-right: 8px;
+}
+
+/* Dropdown labels - centered */
+.ncop-item-dropdown .ncop-item-label {
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-control {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* NCOP Toggle Styles */
+.ncop-toggle {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.ncop-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ncop-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--tertiary-bg);
+    transition: 0.3s;
+    border-radius: 20px;
+    border: 1px solid var(--border-dark);
+}
+
+.ncop-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--white);
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px var(--shadow-soft);
+}
+
+.ncop-toggle input:checked + .ncop-toggle-slider {
+    background-color: var(--ndma-green);
+    border-color: var(--border-dark);
+}
+
+.ncop-toggle input:checked + .ncop-toggle-slider:before {
+    transform: translateX(16px);
+}
+
+/* NCOP Dropdown Styles */
+.ncop-dropdown {
+    background: var(--ndma-blue-light);
+    border: 1px solid var(--ndma-blue-light);
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 10px;
+    padding: 7px 2px;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown:focus {
+    outline: none;
+    border-color: var(--ndma-blue);
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown option {
+    background: var(--primary-bg);
+    color: var (--white);
+    padding: 4px;
+}
+
+/* Custom accordion icon for GIS layers */
+.accordion-header .accordion-custom-icon {
+    width: 50px;
+    height: 50px;
+    margin-right: 10px;
+    object-fit: contain;
+}
+
+.accordion-header .accordion-title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+}
+
+.accordion-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+}
+
+.accordion-header.active .accordion-chevron {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: transparent;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.accordion-content.expanded {
+    max-height: 600px;
+    padding-bottom: 16px; /* Extra space for last subcategories */
+}
+
+.custom-basemap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+}
+
+.custom-basemap-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-basemap-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Basemap Panel */
+.basemap-panel {
+    position: absolute;
+    top: 0;
+    right: 42px; /* Move panel 42px from right when opened */
+    width: 280px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%); /* Start hidden, slide in from right */
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001;
+    pointer-events: none;
+    box-shadow: 0 8px 32px var(--shadow-soft);
+}
+
+.basemap-panel.visible {
+    pointer-events: auto;
+    opacity: 1;
+    top: 0;
+    right: 42px;
+    transform: translateX(0); /* Slide in from right when visible */
+}
+
+/* Labels Toggle */
+.labels-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.labels-toggle-text {
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background: var(--primary-bg);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.toggle-switch.active {
+    background: var(--ndma-blue);
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--white);
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+}
+
+.toggle-switch.active .toggle-slider {
+    transform: translateX(20px);
+}
+
+/* Basemap List */
+.basemap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.basemap-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.basemap-item:hover {
+    background: var(--secondary-bg);
+    border-color: var(--border-dark);
+}
+
+.basemap-item.active {
+    background: var(--ndma-blue-light);
+    border-color: var(--ndma-blue);
+}
+
+.basemap-image {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    margin-right: 12px;
+    background: var(--tertiary-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.basemap-image img {
+    border-radius: 6px;
+}
+
+.basemap-name {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Projection Panel */
+.projection-panel {
+    position: absolute;
+    bottom: 50px; /* Above navigation controls */
+    right: 10px;
+    width: 300px;
+    max-height: 450px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-dark);
+    border-radius: 12px;
+    padding: 0;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    z-index: 1001;
+}
+
+.projection-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.projection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+}
+
+.projection-header h3 {
+    margin: 0;
+    color: var(--white);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.projection-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-muted);
+}
+
+.projection-close-btn:hover {
+    background: var(--ndma-red-opaque);
+    color: var(--white);
+}
+
+.projection-close-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.projection-list {
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.projection-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    margin: 4px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.projection-item:hover {
+    background: var (--secondary-bg);
+    border-color: var(--border-dark);
+}
+
+.projection-item.active {
+    background: var(--ndma-blue-light);
+    border-color: var (--ndma-blue);
+}
+
+.projection-preview {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-right: 12px;
+    background: var(--tertiary-bg);
+    border-radius: 6px;
+}
+
+.projection-info {
+    flex: 1;
+}
+
+.projection-name {
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.projection-desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+/* Hide default Mapbox controls */
+.mapboxgl-ctrl-group {
+    display: none !important;
+}
+
+.mapboxgl-ctrl-top-right {
+    display: none !important;
+}
+
+.mapboxgl-ctrl-bottom-right {
+    display: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .dashboard-nav .nav-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+      .dashboard-nav .user-section {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+/* ===========================
+   MAP CONTROLS WRAPPER
+=========================== */
+.map-controls-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    position: absolute;
+    top: 52px; /* Just below user control (32px + 10px margin + 10px gap) */
+    right: 10px;
+    z-index: 1000;
+    width: auto;
+    pointer-events: none; /* Disable pointer events for wrapper itself */
+}
+
+.map-controls-wrapper > * {
+    pointer-events: auto; /* Enable pointer events for children */
+}
+
+.map-controls-wrapper.panel-open {
+    transform: translateY(122px); /* Adjust based on user panel height */
+    transition: all 0.3s ease;
+}
+
+/* Fix: Ensure all control buttons and panels are clickable and expand from the right */
+.custom-layer-control,
+.custom-layer-info-control,
+.custom-basemap-control {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    z-index: 1;
+}
+
+.custom-layer-btn,
+.custom-layer-info-btn,
+.custom-basemap-btn {
+    margin-left: auto;
+    z-index: 2;
+}
+
+/* Panels expand/collapse from the right side, overlaying below the button */
+.layer-order-panel,
+.layer-info-panel,
+.basemap-panel {
+    position: absolute;
+    top: 0;
+    right: 42px; /* Move panel 42px from right when opened */
+    width: 280px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%); /* Start hidden, slide in from right */
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001;
+    pointer-events: none;
+    box-shadow: 0 8px 32px var(--shadow-soft);
+}
+
+.layer-order-panel.visible,
+.layer-info-panel.visible,
+.basemap-panel.visible {
+    pointer-events: auto;
+    opacity: 1;
+    top: 0;
+    right: 42px;
+    transform: translateX(0); /* Slide in from right when visible */
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+    .layer-order-panel,
+    .layer-info-panel,
+    .basemap-panel {
+        width: 220px;
+        max-height: 300px;
+        right: 42px;
+    }
+}
+
+/* ===========================
+   LAYER ORDER CONTROL
+=========================== */
+.custom-layer-control {
+    position: relative;
+    color: var(--white);
+    width: auto;
+    min-width: 40px;
+    max-width: 320px;
+    margin: 0;
+    box-sizing: border-box;
+    position: relative;
+    transition: box-shadow 0.2s;
+    z-index: 1;
+    align-items: flex-end;
+}
+
+.custom-layer-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+    margin-left: auto;
+}
+
+.custom-layer-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-layer-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.custom-layer-control.panel-collapsed .control-content {
+    display: none;
+}
+
+.custom-layer-control .control-content {
+    display: block;
+    width: 100%;
+}
+
+/* Layer Order Panel */
+.layer-order-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 280px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001; /* Bring to front */
+    pointer-events: none; /* Don't block clicks when hidden */
+}
+
+.layer-order-panel.visible {
+    pointer-events: auto; /* Enable clicks when visible */
+}
+
+.layer-order-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+/* Layer Order Header */
+.layer-order-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.layer-order-title {
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 600;
+    display: block;
+}
+
+.layer-order-subtitle {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+/* Layer Order List */
+.layer-order-list {
+    min-height: 60px;
+}
+
+.no-layers-message {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Layer Items */
+.layer-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 4px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.layer-item:hover {
+    background: var(--tertiary-bg);
+    border-color: var(--border-light);
+}
+
+.layer-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.layer-drag-handle {
+    margin-right: 8px;
+    color: var(--text-muted);
+    cursor: grab;
+}
+
+.layer-drag-handle i {
+    width: 12px;
+    height: 12px;
+}
+
+.layer-info {
+    flex: 1;
+    margin-right: 8px;
+}
+
+.layer-name {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 500;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.layer-visibility {
+    color: var(--ndma-green);
+    opacity: 0.8;
+}
+
+.layer-visibility i {
+    width: 14px;
+    height: 14px;
+}
+
+/* ===========================
+   LAYER INFO PANEL
+=========================== */
+.custom-layer-info-control {
+    position: relative;
+    color: var(--white);
+    width: auto;
+    min-width: 40px;
+    max-width: 320px;
+    margin: 0;
+    box-sizing: border-box;
+    position: relative;
+    transition: box-shadow 0.2s;
+    z-index: 1;
+    align-items: flex-end;
+}
+
+.layer-info-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 280px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+.layer-info-panel.visible {
+    pointer-events: auto;
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.layer-info-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.layer-info-title {
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 600;
+    display: block;
+}
+
+.layer-info-subtitle {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.layer-info-list {
+    min-height: 60px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.layer-info-item {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.layer-info-label {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.layer-info-details {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-line;
+    text-align: justify;
+}
+
+.custom-layer-info-control.panel-collapsed .control-content {
+    display: none;
+}
+
+.custom-layer-info-control .control-content {
+    display: block;
+    width: 100%;
+}
+
+/* ===========================
+   LAYER ATTRIBUTE POPUP
+=========================== */
+.layer-attribute-popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--primary-bg);
+  box-shadow: 0 8px 32px var(--shadow-soft);
+  border-radius: 8px;
+  padding: 10px 15px;
+  min-width: 220px;
+  max-width: 380px;
+  font-size: 13px;
+  font-family: 'Inter', Arial, sans-serif;
+  border: 1px solid var(--border-light);
+  backdrop-filter: blur(15px) saturate(180%);
+  -webkit-backdrop-filter: blur(15px) saturate(180%);
+  transition: opacity 0.2s;
+  opacity: 1;
+  display: flex;
+  flex-direction: column;
+}
+.layer-attribute-popup.hidden {
+  display: none;
+  opacity: 0;
+}
+.layer-attribute-popup .popup-label {
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 10px;
+  color: var(--ndma-blue);
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 8px var(--shadow-glow-blue);
+  text-align: left;
+}
+.layer-attribute-popup .popup-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.layer-attribute-popup .popup-attributes {
+  width: 100%;
+  border-spacing: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+.layer-attribute-popup .popup-attributes-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 0;
+  background: transparent;
+}
+.layer-attribute-popup .popup-attributes tr {
+    border-bottom: 0.5px solid var(--glass-highlight);
+    color: var(--white);
+}
+.layer-attribute-popup .popup-attributes tr:last-child {
+    border-bottom: none;
+}
+.layer-attribute-popup .attr-key {
+    font-weight: 500;
+    color: var(--text-accent-green);
+    background: transparent;
+    padding: 7px 10px 7px 0;
+    min-width: 90px;
+    vertical-align: top;
+}
+.layer-attribute-popup .attr-value {
+    color: var(--white);
+    padding: 7px 0 7px 10px;
+    word-break: break-word;
+    background: transparent;
+}
+.layer-attribute-popup::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -10px;
+    transform: translateX(-50%);
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 10px solid var(--secondary-bg);
+    backdrop-filter: blur(15px) saturate(180%);
+    -webkit-backdrop-filter: blur(15px) saturate(180%);
+    transition: opacity 0.2s;
+    opacity: 1;
+    pointer-events: none;
+}
+
+/* ===========================
+   RESPONSIVE ADJUSTMENTS
+=========================== */
+@media (max-width: 768px) {
+    .map-controls-wrapper {
+        top: 42px;
+        right: 8px;
+        width: auto;
+    }
+    
+    .layer-order-panel,
+    .layer-info-panel {
+        width: 220px;
+        max-height: 300px;
+        right: 42px;
+    }
+}

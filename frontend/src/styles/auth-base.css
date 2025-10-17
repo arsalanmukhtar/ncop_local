@@ -1,0 +1,272 @@
+/* Auth Base Styles */
+
+/* Universal Scrollbar Styling */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(70, 178, 255, 0.4) rgba(255, 255, 255, 0.1);
+}
+
+/* Webkit Scrollbar (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: rgba(70, 178, 255, 0.4);
+    border-radius: 3px;
+    transition: background 0.3s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(70, 178, 255, 0.6);
+}
+
+*::-webkit-scrollbar-corner {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Remove scrollbar arrows/buttons */
+*::-webkit-scrollbar-button {
+    display: none;
+}
+
+/* Global Font Application */
+* {
+    font-family: 'Cabin', sans-serif !important;
+}
+
+html, body {
+    font-family: 'Cabin', sans-serif !important;
+}
+
+.auth-background {
+    background-image: url('@assets/images/bg_images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.logo-spin {
+    animation: spin-y 3s linear infinite;
+}
+
+@keyframes spin-y {
+    0% { transform: rotateY(0deg); }
+    100% { transform: rotateY(360deg); }
+}
+
+/* Custom Tailwind Configuration */
+:root {
+    --primary-50: #f0f9ff;
+    --primary-100: #e0f2fe;
+    --primary-200: #bae6fd;
+    --primary-300: #7dd3fc;
+    --primary-400: #38bdf8;
+    --primary-500: #46b2ff;
+    --primary-600: #0284c7;
+    --primary-700: #0369a1;
+    --primary-800: #075985;
+    --primary-900: #0c4a6e;
+    
+    --danger-50: #fef2f2;
+    --danger-100: #fee2e2;
+    --danger-200: #fecaca;
+    --danger-300: #fca5a5;
+    --danger-400: #f87171;
+    --danger-500: #ff0000;
+    --danger-600: #dc2626;
+    --danger-700: #b91c1c;
+    --danger-800: #991b1b;
+    --danger-900: #7f1d1d;
+    
+    --accent-50: #f0fdf4;
+    --accent-100: #dcfce7;
+    --accent-200: #bbf7d0;
+    --accent-300: #86efac;
+    --accent-400: #4ade80;
+    --accent-500: #096a0b;
+    --accent-600: #075a09;
+    --accent-700: #064e08;
+    --accent-800: #054206;
+    --accent-900: #043605;
+}
+
+/* Alert Message Animations */
+.alert-message {
+    transition: opacity 0.5s ease-out;
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Enhanced glass container */
+.glass-container {
+    backdrop-filter: blur(40px) !important;
+    -webkit-backdrop-filter: blur(40px) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Footer text - simple styling */
+
+/* Glass Effect for Auth Cards */
+.auth-card {
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(30px) !important;
+    -webkit-backdrop-filter: blur(30px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Ensure content is readable on glass background */
+.auth-card .card-content {
+    background: rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0 0 1rem 1rem !important;
+}
+
+/* Header glass effect */
+.auth-header {
+    background: linear-gradient(135deg, rgba(70, 178, 255, 0.2), rgba(9, 106, 11, 0.15)) !important;
+    backdrop-filter: blur(25px) !important;
+    -webkit-backdrop-filter: blur(25px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Input fields consistent styling */
+.auth-card input,
+.auth-card select,
+.auth-card textarea {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    transition: all 0.2s ease !important;
+    padding-left: 2.5rem !important;
+    margin: 0 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.auth-card input:focus,
+.auth-card select:focus,
+.auth-card textarea:focus {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid var(--primary-500) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(70, 178, 255, 0.1) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Icon positioning for input fields */
+.auth-card .relative .absolute {
+    z-index: 10 !important;
+}
+
+/* Fix input container positioning */
+.auth-card .relative {
+    position: relative !important;
+}
+
+/* Button consistent styling */
+.auth-card button {
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    transition: all 0.2s ease !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.auth-card button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15) !important;
+}
+
+.auth-card button:focus {
+    outline: none !important;
+    border: 1px solid var(--primary-500) !important;
+    box-shadow: 0 0 0 3px rgba(70, 178, 255, 0.15) !important;
+}
+
+/* Primary button specific styling */
+.auth-card button.bg-primary-500 {
+    background: linear-gradient(135deg, rgba(70, 178, 255, 0.9), rgba(2, 132, 199, 0.9)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.auth-card button.bg-primary-500:hover {
+    background: linear-gradient(135deg, rgba(70, 178, 255, 1), rgba(2, 132, 199, 1)) !important;
+}
+
+/* Password toggle button - override all button styles */
+.auth-card button.password-toggle,
+button.password-toggle {
+    background: none !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 15 !important;
+}
+
+.auth-card button.password-toggle:hover,
+.auth-card button.password-toggle:focus,
+.auth-card button.password-toggle:active,
+button.password-toggle:hover,
+button.password-toggle:focus,
+button.password-toggle:active {
+    background: none !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: translateY(-50%) !important;
+}
+
+/* Clean label styling - pure white text, no background */
+.auth-card label,
+.card-content label,
+form label {
+    background: none !important;
+    background-color: transparent !important;
+    color: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 0 0.5rem 0 !important;
+    text-shadow: none !important;
+    font-weight: 500 !important;
+    display: inline-block !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Enhanced border styles for auth links container */
+.auth-links {
+    background: rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0.75rem !important;
+    padding: 1rem !important;
+}
+
+/* Enhance text color for better visibility */
+.auth-card .text-slate-700 {
+    color: rgba(51, 65, 85, 0.95) !important;
+}

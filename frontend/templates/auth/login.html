@@ -1,0 +1,56 @@
+{% extends 'auth/base.html' %}
+{% load django_vite %}
+
+{% block title %}Login - NCOP{% endblock %}
+{% block vite_entry %}{% vite_asset 'src/entries/auth_login.js' %}{% endblock %}
+
+{% block content %}
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <!-- Username Field -->
+    <label for="username" class="block text-sm font-medium text-white mb-2">Username</label>
+    <div class="relative mb-6">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i data-lucide="user" class="h-5 w-5 text-slate-400"></i>
+        </div>
+        <input type="text" id="username" name="username"
+            class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-lg focus:outline-none transition-colors duration-200 text-sm"
+            placeholder="Enter your username" value="{{ request.POST.username|default:'' }}" required>
+    </div>
+
+    <!-- Password Field -->
+    <label for="password" class="block text-sm font-medium text-white mb-2">Password</label>
+    <div class="relative mb-6">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i data-lucide="lock" class="h-5 w-5 text-slate-400"></i>
+        </div>
+        <input type="password" id="password" name="password"
+            class="block w-full pl-10 pr-12 py-3 border border-slate-300 rounded-lg focus:outline-none transition-colors duration-200 text-sm"
+            placeholder="Enter your password" required>
+        <button type="button" id="togglePassword" class="password-toggle">
+            <i data-lucide="eye" id="eyeIcon" class="h-4 w-4"></i>
+        </button>
+    </div>
+
+    <!-- Submit Button -->
+    <button type="submit"
+        class="w-full flex justify-center items-center py-3 px-4 rounded-lg shadow-sm text-sm font-medium transition-colors duration-200 login-btn mb-6">
+        <i data-lucide="log-in" class="w-4 h-4 mr-2"></i>
+        Sign In
+    </button>
+
+    <!-- Auth Links -->
+    <div class="flex items-center justify-between text-sm">
+        <a href="{% url 'signup' %}"
+            class="flex items-center transition-all duration-200 font-medium create-account-link">
+            <i data-lucide="user-plus" class="w-4 h-4 mr-1"></i>
+            Create Account
+        </a>
+        <a href="{% url 'password_reset' %}" class="flex items-center transition-all duration-200 forgot-password-link">
+            <i data-lucide="key" class="w-4 h-4 mr-1"></i>
+            Forgot Password?
+        </a>
+    </div>
+</form>
+{% endblock %}
