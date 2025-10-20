@@ -82,36 +82,6 @@ export function handleToggleInteraction(categoryKey, subcategoryKey, itemKey, is
     }
 }
 
-/**
- * Handle temporal item interactions (image clicks)
- */
-export function handleTemporalInteraction(categoryKey, subcategoryKey, itemKey, isActive) {
-    const stateKey = initializeItemState(categoryKey, subcategoryKey, itemKey);
-    const itemData = getItemData(categoryKey, subcategoryKey, itemKey, 'temporal');
-    
-    // Update state
-    layerStates.set(stateKey, { active: isActive });
-    
-    // Log the interaction with full item data
-    // console.log('🖼️ TEMPORAL INTERACTION:', {
-    //     category: categoryKey,
-    //     subcategory: subcategoryKey,
-    //     itemKey: itemKey,
-    //     itemData: itemData,
-    //     active: isActive,
-    //     stateKey: stateKey
-    // });
-      // Handle layer management using SourceLayerControl
-    if (sourceLayerControl && itemData && itemData.source && itemData.layers) {
-        if (isActive) {
-            // Add layer to map
-            sourceLayerControl.addLayerByKey(itemKey);
-        } else {
-            // Remove layer from map
-            sourceLayerControl.removeLayerByKey(itemKey);
-        }
-    }
-}
 
 /**
  * Handle dropdown item interactions (select changes)
@@ -201,4 +171,48 @@ export function clearAllStates() {
     layerStates.clear();
     // console.log('🗑️ All layer states cleared');
 }
+//temporal handler
+export function handleTemporalInteraction(
+  categoryKey,
+  subcategoryKey,
+  itemKey,
+  isActive
+) {
+  console.log(`🔄 Temporal interaction: ${itemKey}, isActive: ${isActive}`);
 
+  if (isActive) {
+    // Get layer array from window
+    const layerArray = window[itemKey];
+
+    if (!layerArray) {
+      console.error(`❌ Layer array not found: ${itemKey}`);
+      return;
+    }
+
+    console.log(`✅ Found layer array:`, layerArray.length, "steps");
+
+    // Call the global updateTempSlider function
+    if (typeof window.updateTempSlider === "function") {
+      window.updateTempSlider(layerArray, `${subcategoryKey}`, itemKey, null);
+      console.log(`✅ Slider initialized`);
+    } else {
+      console.error("❌ updateTempSlider function not found");
+    }
+  } else {
+    // Hide slider when deselected
+    console.log(`🔴 Hiding slider for: ${itemKey}`);
+
+    const tempSlider = document.getElementById("temp-slider1");
+    if (tempSlider) {
+      tempSlider.style.display = "none";
+    }
+
+    // Call global cleanup functions
+    if (typeof window.hideAllSliderLayers === "function") {
+      window.hideAllSliderLayers();
+    }
+    if (typeof window.cleanupSliderLayers === "function") {
+      window.cleanupSliderLayers();
+    }
+  }
+}

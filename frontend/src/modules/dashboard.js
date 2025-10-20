@@ -20,6 +20,13 @@ if (NCOPStorageManager.isAvailable()) {
 // --- END: NCOP Storage Manager Integration (The Fix) ---
 // --------------------------------------------------------
 
+// ========== ADD TIME SLIDER IMPORTS HERE ==========
+import { generateDWDSatelliteLayers } from "./time-functions.js";
+import "./map-layers.js"; // Exposes window.dwd_satellite_infrared
+import "./time-slider-functionality.js"; // Exposes global functions
+import { handleTemporalInteraction } from "./mapbox-functions.js";
+// ===================================================
+
 import { MapControls } from "./map-controls.js";
 import { NavigationPanel } from "./navigation-panel.js";
 import { ProjectionPanel } from "./projection-panel.js";
@@ -120,6 +127,10 @@ class DashboardManager {
       projection: savedProjection || "mercator",
       hash: true,
     });
+
+    // CRITICAL: Expose map globally so slider can access it
+    window.ncop_map = this.#map;
+    console.log("✅ Map exposed as window.ncop_map");
   }
 
   #onMapLoad() {

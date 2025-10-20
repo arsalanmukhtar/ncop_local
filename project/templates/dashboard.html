@@ -28,6 +28,9 @@
         href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap"
         rel="stylesheet">
 
+    {# Font Awesome for icons #}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     {# Favicon (place file at project/static/src/favicon.ico) #}
     <link rel="icon" href="{% static 'favicon.ico' %}">
 
@@ -136,6 +139,20 @@
     </div>
 
     <div id="map"></div>
+
+    <!-- Time Slider Container -->
+    <div id="temp-slider1" style="display:none;">
+        <div>
+            <button id="playPauseButton1" title="Play/Pause animation">
+                <i class="fas fa-play"></i>
+            </button>
+            <button id="speedControlButton" class="speed-btn" title="Change animation speed">1x</button>
+            <input type="range" min="0" step="1" value="0" class="slider1" id="slider1" title="Drag to change time step">
+        </div>
+        <p></p>
+        <div class="year-labels1"></div>
+        <div id="legend-container-slider1"></div>
+    </div>
 </body>
 
 </html>

@@ -1680,3 +1680,329 @@ button.custom-nav-btn.terrain-active:hover {
         right: 42px;
     }
 }
+
+
+/* ===========================
+TIME SLIDER STYLES (NCOP THEMED)
+=========================== */
+
+#temp-slider1 {
+    position: absolute;
+    bottom: 10px;
+    left: 56%;
+    transform: translateX(-50%);
+    z-index: 30;
+    width: calc(100% - 40px);
+    max-width: 95em;
+    background: var(--primary-bg);
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-light);
+    border-radius: 16px;
+    padding: 16px 20px;
+    animation: sliderSlideUp 0.3s ease-out;
+    display: none;
+    box-sizing: border-box;
+    box-shadow: var(--shadow-soft);
+}
+
+@keyframes sliderSlideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Control buttons container */
+#temp-slider1>div:first-child {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+/* Play/Pause Button */
+#playPauseButton1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+
+    background: var(--ndma-blue-opaque);
+    color: var(--white);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+#playPauseButton1:hover {
+    background: var(--ndma-blue-gradient);
+    border-color: var(--ndma-blue);
+    box-shadow: 0 0 12px var(--ndma-blue-glow);
+}
+
+#playPauseButton1 i {
+    width: 14px;
+    height: 14px;
+    color: var(--white);
+}
+
+/* Speed Control Button */
+#speedControlButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    height: 36px;
+
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    border: 2px solid var(--border-dark);
+    border-radius: 8px;
+
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.2s ease;
+    padding: 0 12px;
+}
+
+#speedControlButton:hover {
+    background: var(--ndma-green-opaque);
+    border-color: var(--border-light);
+    color: var(--white);
+}
+
+/* Range Slider */
+#slider1 {
+    flex: 1;
+    cursor: pointer;
+    height: 6px;
+
+    -webkit-appearance: none;
+    appearance: none;
+
+    background: var(--tertiary-bg);
+    border: none;
+    border-radius: 3px;
+    outline: none;
+
+    transition: background 0.2s ease;
+}
+
+#slider1:hover {
+    background: var(--glass-light);
+}
+
+#slider1::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+
+    background: var(--ndma-green);
+    border: 2px solid var(--white);
+    cursor: pointer;
+
+    transition: all 0.2s ease;
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+#slider1::-webkit-slider-thumb:hover {
+    background: var(--ndma-green-opaque);
+    transform: scale(1.2);
+    box-shadow: 0 0 12px var(--ndma-green-glow);
+}
+
+#slider1::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+
+    background: var(--ndma-green);
+    border: 2px solid var(--white);
+    cursor: pointer;
+
+    transition: all 0.2s ease;
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+#slider1::-moz-range-thumb:hover {
+    background: var(--ndma-green-opaque);
+    transform: scale(1.2);
+    box-shadow: 0 0 12px var(--ndma-green-glow);
+}
+
+#slider1::-moz-range-track {
+    background: transparent;
+    border: none;
+}
+
+#slider1::-moz-range-progress {
+    background: var(--ndma-green);
+    border-radius: 3px;
+    height: 6px;
+}
+
+/* Title/Label */
+#temp-slider1 p {
+    margin: 10px 0 8px 0;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Time Labels Container */
+.year-labels1 {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 8px 0;
+    margin-bottom: 8px;
+
+    /* Scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-dark) transparent;
+}
+
+.year-labels1::-webkit-scrollbar {
+    height: 4px;
+}
+
+.year-labels1::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 2px;
+}
+
+.year-labels1::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+    border-radius: 2px;
+}
+
+.year-labels1::-webkit-scrollbar-thumb:hover {
+    background: var(--border-light);
+}
+
+/* Individual time label spans */
+.year-labels1 span {
+    display: inline-block;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+
+    border-radius: 4px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+
+    transition: all 0.2s ease;
+}
+
+.year-labels1 span:hover {
+    background: var(--ndma-blue-light);
+    border-color: var(--ndma-blue);
+    color: var(--white);
+}
+
+/* Legend Container */
+#legend-container-slider1 {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-dark);
+
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: none;
+}
+
+#legend-container-slider1.visible {
+    display: block;
+}
+
+/* Legend content styling */
+#legend-container-slider1 img,
+#legend-container-slider1 svg {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+/* Legend items */
+#legend-container-slider1 .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+#legend-container-slider1 .legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    border: 1px solid var(--border-dark);
+}
+
+#legend-container-slider1 .legend-label {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #temp-slider1 {
+        bottom: 15px;
+        left: 50%;
+        width: calc(100% - 20px);
+        padding: 12px 16px;
+        max-width: none;
+    }
+
+    #temp-slider1>div:first-child {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    #playPauseButton1,
+    #speedControlButton {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        font-size: 10px;
+    }
+
+    #speedControlButton {
+        padding: 0 8px;
+    }
+
+    .year-labels1 {
+        gap: 8px;
+    }
+
+    .year-labels1 span {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    #temp-slider1 p {
+        font-size: 12px;
+    }
+}
