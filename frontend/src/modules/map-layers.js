@@ -1,6 +1,6 @@
-import airportIcon from "../assets/icons/map_icons/layer_icons/airplane.webp";
-import schoolIcon from "../assets/icons/map_icons/layer_icons/school.webp";
-import settlementIcon from "../assets/icons/map_icons/layer_icons/settlement.webp";
+import airportIcon from "@assets/images/map_icons/airplane.webp";
+import schoolIcon from "@assets/images/map_icons/school.webp";
+import settlementIcon from "@assets/images/map_icons/settlement.webp";
 
 export const ncop_menu_items = {
     gis_layers: {

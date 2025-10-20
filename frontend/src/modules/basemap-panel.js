@@ -1,13 +1,13 @@
 // BasemapPanel.js
 import { MapControls } from "./map-controls.js";
 
-import streetsLogo from "../assets/images/basemap_images/streets.webp";
-import hybridLogo from "../assets/images/basemap_images/hybrid.webp";
-import osmLogo from "../assets/images/basemap_images/osm.webp";
-import outdoorsLogo from "../assets/images/basemap_images/outdoors.webp";
-import satelliteLogo from "../assets/images/basemap_images/satellite.webp";
-import lightLogo from "../assets/images/basemap_images/light.webp";
-import darkLogo from "../assets/images/basemap_images/dark.webp";
+import streetsLogo from "@assets/images/basemap_images/streets.webp";
+import hybridLogo from "@assets/images/basemap_images/hybrid.webp";
+import osmLogo from "@assets/images/basemap_images/osm.webp";
+import outdoorsLogo from "@assets/images/basemap_images/outdoors.webp";
+import satelliteLogo from "@assets/images/basemap_images/satellite.webp";
+import lightLogo from "@assets/images/basemap_images/light.webp";
+import darkLogo from "@assets/images/basemap_images/dark.webp";
 
 /**
  * Handles the top-right basemap/style and labels control.

@@ -5,7 +5,7 @@ import { createIcons, icons } from "lucide";
 import mapboxgl from "mapbox-gl";
 window.mapboxgl = mapboxgl;
 
-import ndmaLogo from "../assets/images/bg_images/ndma-logo.png";
+import ndmaLogo from "@assets/images/bg_images/ndma-logo.png";
 import { setAssets } from "../modules/set-assets.js";
 
 // Load supporting modules (DashboardManager lives in ../modules/dashboard.js)

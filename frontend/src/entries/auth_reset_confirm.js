@@ -1,6 +1,6 @@
 import { createIcons, icons } from "lucide";
 
-import ndmaLogo from "../assets/images/bg_images/ndma-logo.png";
+import ndmaLogo from "@assets/images/bg_images/ndma-logo.png";
 import { setAssets } from "../modules/set-assets.js";
 
 // Shim the old global so existing inline code `lucide.createIcons()` still works.

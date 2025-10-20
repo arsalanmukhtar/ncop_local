@@ -7,12 +7,12 @@ import {
     handleButtonInteraction
 } from './mapbox-functions.js';
 
-import gisLayersIcon from "../assets/icons/accordion_icons/gis-layers.webp";
-import weatherSystemsIcon from "../assets/icons/accordion_icons/weather-systems.webp";
-import floodMonitoringIcon from "../assets/icons/accordion_icons/flood.webp";
-import airQualityIcon from "../assets/icons/accordion_icons/air-quality.webp";
-import oceanCoastalIcon from "../assets/icons/accordion_icons/ocean-coastal.webp";
-import earlyWarningIcon from "../assets/icons/accordion_icons/early-warning.webp";
+import gisLayersIcon from "@assets/images/accordion_icons/gis-layers.webp";
+import weatherSystemsIcon from "@assets/images/accordion_icons/weather-systems.webp";
+import floodMonitoringIcon from "@assets/images/accordion_icons/flood.webp";
+import airQualityIcon from "@assets/images/accordion_icons/air-quality.webp";
+import oceanCoastalIcon from "@assets/images/accordion_icons/ocean-coastal.webp";
+import earlyWarningIcon from "@assets/images/accordion_icons/early-warning.webp";
 
 /**
  * Handles the main sidebar logic, including configuration loading, UI generation (accordions),
