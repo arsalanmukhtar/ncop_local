@@ -142,7 +142,7 @@
 
     <!-- Time Slider Container -->
     <div id="temp-slider1" style="display:none;">
-        <div>
+        <div id="tempslider-controls">
             <button id="playPauseButton1" title="Play/Pause animation">
                 <i data-lucide="play" class="fas fa-play"></i>
             </button>
@@ -150,11 +150,13 @@
                 <i data-lucide="pause" class="fas fa-pause"></i>
             </button>
             <button id="speedControlButton" class="speed-btn" title="Change animation speed">1x</button>
-            <input type="range" min="0" step="1" value="0" class="slider1" id="slider1" title="Drag to change time step">
         </div>
-        <p></p>
+        <input type="range" min="0" step="1" value="0" class="slider1" id="slider1" title="Drag to change time step">
         <div class="year-labels1"></div>
-        <div id="legend-container-slider1"></div>
+        <div class="legend-container1">
+            <div id="legend-container-slider1"></div>
+            <p></p>
+        </div>
     </div>
 </body>
 

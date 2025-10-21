@@ -1681,7 +1681,6 @@ button.custom-nav-btn.terrain-active:hover {
     }
 }
 
-
 /* _________________________________________________________________________________________________________________________________________________________ */
 #temp-slider1 {
     position: absolute;
@@ -1695,20 +1694,57 @@ button.custom-nav-btn.terrain-active:hover {
     display: none;
     animation: nrotateMenu 3s;
 }
+/* Button container: vertical stack on the left */
+#tempslider-controls {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* stack buttons vertically */
+    align-items: center;
+    /* center horizontally within the column */
+    justify-content: center;
+    /* center the entire stack vertically if parent allows space */
+    gap: 10px;
+    /* spacing between buttons */
+    margin-top: 4rem;
+    width: 40px;
+    /* a bit wider for centering comfort */ }
 
-/* Make both buttons share the same style/placement */
-#playPauseButton1,
-#playPauseButton2 {
-    position: absolute;
-    top: 50%;
-    margin-left: 0.2%;
-    transform: translateY(-50%);
-    background: transparent;
-    color: white;
-    border: 1.5px solid white;
-    border-radius: 6px;
-    padding: 0.2vw 0.4vw;
+/* Shared button styling */
+#tempslider-controls button {
     cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--white);
+}
+
+#tempslider-controls button i,
+#tempslider-controls .speed-btn {
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    color: var(--white) !important;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#tempslider-controls .speed-btn {
+    width: 30px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--white);
 }
 
 #slider1 {
@@ -1750,35 +1786,32 @@ button.custom-nav-btn.terrain-active:hover {
     transform: scale(1.5);
 }
 
-
-#legend-container-slider1 {
+.legend-container1 {
     position: absolute;
-    bottom: 10%;
-    right: 0%;
-    height: 30%;
-    width: 85%;
+    top: 80%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60rem;
+    height: auto;
+    z-index: 2;
 }
 
-#temp-slider1 p {
-    position: absolute;
-    top: 70%;
-    left: 5%;
-    transform: translateY(-50%);
-    /* Center vertically */
-    font-size: 0.8vw;
-    color: #fff;
-    font-weight: bolder;
-    width: 15%;
-    height: 50%;
-    overflow: hidden;
-    white-space: pre-line;
-    /* Allows line breaks from \n */
-    /* text-shadow:
-      1px 1px 0 #000000,
-      -1px -1px 0 #000000,
-      1px -1px 0 #000000,
-      -1px 1px 0 #000000; */
+#legend-container-slider1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
 
+#legend-container1 p {
+    font-size: 20px;
+    color: var(--white);
+    text-align: center;
+    margin: 0 auto;
 }
 
 .year-labels1 {
@@ -1843,68 +1876,4 @@ button.custom-nav-btn.terrain-active:hover {
 .bar2 span {
     position: absolute;
     top: 0.5vh;
-}
-
-/* ___________________________________________________________________Speed________________________________________________________________________________________ */
-#speedControlButton.speed-btn {
-    position: absolute;
-    top: 65%;
-    left: 2.3%;
-    transform: translateY(-50%);
-    padding: 0.2vw 0.4vw;
-    font-size: 0.6vw;
-    font-weight: bold;
-    background-color: transparent;
-    color: white;
-    border: 1.5px solid white;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.3s, color 0.3s;
-}
-
-#speedControlButton.speed-btn:hover {
-    background-color: white;
-    color: black;
-}
-
-/* .hoss{
-    position: absolute;
-    margin-right: 1vw;
-  } */
-/* __________________________________________________________________________________________________________
-  /* Custom Scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
-    /* Optimal width for usability */
-    border-radius: 10px;
-}
-
-/* Track */
-::-webkit-scrollbar-track {
-    background: #e8f5e9;
-    /* Light pastel green */
-    border-radius: 10px;
-    margin: 4px;
-    /* Prevents the scrollbar from overflowing curved edges */
-}
-
-/* Handle (Scrollbar Thumb) */
-::-webkit-scrollbar-thumb {
-    background: linear-gradient(45deg, #004472, #2e6b7d);
-    border-radius: 10px;
-    transition: all 0.3s ease-in-out;
-}
-
-/* Handle on Hover */
-::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(45deg, #43a047, #1b5e20);
-    /* Darker green for interaction */
-    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.2);
-}
-
-/* Ensures corners do not overflow */
-::-webkit-scrollbar-track-piece {
-    border-radius: 10px;
-    margin: 5px;
-    overflow: hidden;
 }

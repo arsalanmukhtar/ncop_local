@@ -176,7 +176,8 @@ export function handleTemporalInteraction(
   categoryKey,
   subcategoryKey,
   itemKey,
-  isActive
+  isActive,
+  layerConfig  // Add this parameter to receive the config object
 ) {
   console.log(`🔄 Temporal interaction: ${itemKey}, isActive: ${isActive}`);
 
@@ -191,10 +192,12 @@ export function handleTemporalInteraction(
 
     console.log(`✅ Found layer array:`, layerArray.length, "steps");
 
-    // Call the global 
-    //  function
+    // Extract title from layer config
+    const title = layerConfig?.title || subcategoryKey; // Fallback to subcategoryKey if no title
+
+    // Call the global function with the title
     if (typeof window.updateTempSlider === "function") {
-      window.updateTempSlider(layerArray, `${subcategoryKey}`, itemKey, null);
+      window.updateTempSlider(layerArray, title, itemKey, null);
       console.log(`✅ Slider initialized`);
     } else {
       console.error("❌ updateTempSlider function not found");
