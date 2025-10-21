@@ -191,7 +191,8 @@ export function handleTemporalInteraction(
 
     console.log(`✅ Found layer array:`, layerArray.length, "steps");
 
-    // Call the global updateTempSlider function
+    // Call the global 
+    //  function
     if (typeof window.updateTempSlider === "function") {
       window.updateTempSlider(layerArray, `${subcategoryKey}`, itemKey, null);
       console.log(`✅ Slider initialized`);
