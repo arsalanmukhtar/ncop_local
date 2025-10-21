@@ -1685,9 +1685,9 @@ button.custom-nav-btn.terrain-active:hover {
 #temp-slider1 {
     position: absolute;
     bottom: 10px;
-    left: 17%;
+    left: 16%;
     width: 80%;
-    height: 15%;
+    height: 12%;
     background-color: var(--primary-bg);
     border-radius: 10px;
     outline: solid 2px var(--border-dark);
@@ -1704,29 +1704,29 @@ button.custom-nav-btn.terrain-active:hover {
     /* center horizontally within the column */
     justify-content: center;
     /* center the entire stack vertically if parent allows space */
-    gap: 10px;
+    gap: 7px;
     /* spacing between buttons */
-    margin-top: 4rem;
+    margin-top: 3.5rem;
     width: 40px;
     /* a bit wider for centering comfort */ }
 
 /* Shared button styling */
 #tempslider-controls button {
     cursor: pointer;
-    width: 30px;
-    height: 30px;
+    width: 25px;
+    height: 25px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 400;
     color: var(--white);
 }
 
 #tempslider-controls button i,
 #tempslider-controls .speed-btn {
-    font-size: 12px !important;
+    font-size: 10px !important;
     font-weight: 400 !important;
     color: var(--white) !important;
     margin: 0 auto;
@@ -1788,7 +1788,7 @@ button.custom-nav-btn.terrain-active:hover {
 
 .legend-container1 {
     position: absolute;
-    top: 80%;
+    top: 72%;
     left: 50%;
     transform: translate(-50%, -50%);
     display: flex;
@@ -1804,14 +1804,18 @@ button.custom-nav-btn.terrain-active:hover {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%; /* Ensure it fills the parent width */
+    min-width: 0;
     margin: 0 auto;
+    box-sizing: border-box;
 }
 
 #legend-container1 p {
-    font-size: 20px;
+    font-size: 25px;
     color: var(--white);
     text-align: center;
     margin: 0 auto;
+    font-weight: 700;
 }
 
 .year-labels1 {
@@ -1827,53 +1831,5 @@ button.custom-nav-btn.terrain-active:hover {
     font-size: 0.7vw;
     color: rgb(255, 255, 255);
     font-weight: bolder;
-    /* text-shadow:
-      1px 1px 0 #fff,
-      -1px -1px 0 #fff,
-      1px -1px 0 #fff,
-      -1px 1px 0 #fff; */
-    /* Adds a white stroke effect */
 }
 
-.bar1 {
-    width: 4vw;
-    height: 1vh;
-    display: flex;
-    color: white;
-    font-size: small;
-    font-weight: bolder;
-    /* text-shadow:
-      1px 1px 0 #000000,
-      -1px -1px 0 #000000,
-      1px -1px 0 #000000,
-      -1px 1px 0 #000000; */
-    outline: solid 1px rgb(0, 0, 0);
-}
-
-.bar1 span {
-    position: absolute;
-    top: 1vh;
-}
-
-.bar2 {
-    height: 3vh;
-    width: 13vw;
-    /* Adjust width for better fit */
-    display: flex;
-    text-align: center;
-    justify-content: center;
-    color: white;
-    font-size: smaller;
-    font-weight: bolder;
-    /* text-shadow:
-      1px 1px 0 #000000,
-      -1px -1px 0 #000000,
-      1px -1px 0 #000000,
-      -1px 1px 0 #000000; */
-    outline: solid 1px white;
-}
-
-.bar2 span {
-    position: absolute;
-    top: 0.5vh;
-}

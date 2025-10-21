@@ -326,6 +326,19 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
   setTimeout(addClickListeners, 300);
 }
 
+// After rendering the legend HTML into #legend-container-slider1, dynamically set legend bar widths
+export function updateLegendBarWidths() {
+  const legendContainer = document.getElementById('legend-container-slider1');
+  if (!legendContainer) return;
+  // Select all direct child divs with class bar1 or bar2 (legend bars)
+  const bars = legendContainer.querySelectorAll('div.bar1, div.bar2');
+  bars.forEach(bar => {
+      bar.style.flex = '1 1 0';
+      bar.style.minWidth = '0';
+      bar.style.width = '';
+  });
+}
+
 // ===== MAIN SLIDER FUNCTION =====
 
 function updateTempSlider(layers, textContent, layerKey, event = null) {
@@ -512,6 +525,9 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   } else if (legendContainer) {
     legendContainer.style.display = "none";
   }
+
+  // After legend HTML is set:
+  updateLegendBarWidths();
 
   // Show first frame when map idle
   map.once("idle", () => {
