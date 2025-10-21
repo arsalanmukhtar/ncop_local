@@ -21,7 +21,18 @@ if (NCOPStorageManager.isAvailable()) {
 // --------------------------------------------------------
 
 // ========== ADD TIME SLIDER IMPORTS HERE ==========
-import { generateDWDSatelliteLayers } from "./time-functions.js";
+import {
+  generateDWDSatelliteLayers,
+  generateECMWFLightningLayers,
+  generatePM25Layers,
+  generatePM10Layers,
+  generateNO2Layers,
+  generateSO2Layers,
+  generateO3Layers,
+  generateCOLayers,
+  generateDustLayers,
+  generateCH4300Layers,
+} from "./time-functions.js";
 import "./map-layers.js"; // Exposes window.dwd_satellite_infrared
 import "./time-slider-functionality.js"; // Exposes global functions
 import { handleTemporalInteraction } from "./mapbox-functions.js";

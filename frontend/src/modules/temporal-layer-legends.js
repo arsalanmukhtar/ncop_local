@@ -161,7 +161,7 @@ export const legends = {
         <div id="imerg_p17" class="bar1" style="background-color: rgba(66,9,9,1.0); width: 4vw;"><span>≥ 53.0</span></div>
     </div>
 `,
-  ecmwfLight: `
+  ecmwf_lightning: `
     <div style="display: flex; align-items: center; flex-wrap: wrap; width: 100%;">
         <div style="
             background: linear-gradient(to right, #87ff89, #feff59, #fcb12d, #f65319, #b10a0a, #270522);
@@ -195,7 +195,7 @@ export const legends = {
             <div id="11" class="bar1" style="flex: 0;"><span>100</span></div>
             <div id="11" class="bar1" style="flex: 0;"><span></span></div>
         </div>`,
-  pm25: `
+  particulate_matter_25: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
         <div id="p1" class="bar1" style="background-color: #ffffff; width:5.5vw"><span>0</span></div>
         <div id="p2" class="bar1" style="background-color: #ecfac5; width:5.5vw"><span>20</span></div>
@@ -210,7 +210,7 @@ export const legends = {
         <div id="p11" class="bar1" style="background-color: #2b0043; width:5.5vw"><span>300</span></div>
         <div id="p12" class="bar1" style="flex:0;"><span>500</span></div>
     </div>`,
-  pm10: `
+  particulate_matter_10: `
         <div style="display: flex;  align-items: center; flex-wrap: wrap;">
             <div id="p1" class="bar1" style="background-color: #c6e9f3; width:5vw"><span>0</span></div>
             <div id="p2" class="bar1" style="background-color: #b3dfeb; width:5vw"><span>2</span></div>
@@ -226,7 +226,7 @@ export const legends = {
             <div id="p12" class="bar1" style="background-color: #852716; width:5vw"><span>200</span></div>
             <div id="p13" class="bar1" style="flex: 0;"><span>500</span></div>
     </div>`,
-  no2: `
+  nitrogen_dioxide_850hPa: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
         <div id="p1" class="bar1" style="background-color: #265ba0; width:5.5vw"><span>0.01</span></div>
         <div id="p2" class="bar1" style="background-color: #269170; width:5.5vw"><span>0.02</span></div>
@@ -242,7 +242,7 @@ export const legends = {
         <div id="p12" class="bar1" style="background-color: #341919; width:5.5vw"><span>50</span></div>
         <div id="p13" class="bar1" style="flex: 0;"><span>3</span></div>
     </div>`,
-  so2: `
+  sulphur_dioxide_850hPa: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
         <div id="p1" class="bar1" style="background-color: #c6e9f3; width:  5vw"><span>0</span></div>
         <div id="p2" class="bar1" style="background-color: #b3dfeb; width:  5vw"><span>2</span></div>
@@ -258,7 +258,7 @@ export const legends = {
         <div id="p12" class="bar1" style="background-color: #852716; width:  5vw"><span>200</span></div>
         <div id="p13" class="bar1" style="flex: 0;"><span>800</span></div>
     </div>`,
-  o3: `
+  ozone: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
         <div id="p1" class="bar1" style="background-color: #c6e9f3; width:5.5vw"><span>0</span></div>
         <div id="p2" class="bar1" style="background-color: #b3dfeb; width:5.5vw"><span>20</span></div>
@@ -274,7 +274,7 @@ export const legends = {
         <div id="p12" class="bar1" style="background-color:#852716; width:3.5vw"><span>240</span></div>
         <div id="p13" class="bar1" style="flex: 0;"><span>500</span></div>
     </div>`,
-  co: `
+  carbon_monoxide: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
         <div id="p1" class="bar1" style="background-color: #c6e9f3; width:5.2vw"><span>0</span></div>
         <div id="p2" class="bar1" style="background-color: #b3dfeb; width:5.2vw"><span>50</span></div>
@@ -304,7 +304,7 @@ export const legends = {
         <div id="p10" class="bar1" style="background-color: #7D290B; width:6vw"><span>1</span></div>
         <div id="p11" class="bar1" style="background-color: #913815; width:6vw"><span>3/span></div>
     </div>`,
-  ch4300: `
+  methane_at_300hPa: `
     <div style="display: flex;  align-items: center; flex-wrap: wrap;">
             <div id="p1" class="bar1" style="background-color: #0c0c0c; width: 2.5vw;"><span>0</span></div>
             <div id="p2" class="bar1" style="background-color: #680177; width: 2.5vw;"></div>

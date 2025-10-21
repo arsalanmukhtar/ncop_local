@@ -1,7 +1,18 @@
 import airportIcon from "@assets/images/map_icons/airplane.webp";
 import schoolIcon from "@assets/images/map_icons/school.webp";
 import settlementIcon from "@assets/images/map_icons/settlement.webp";
-import { generateDWDSatelliteLayers } from "./time-functions.js";
+import {
+  generateDWDSatelliteLayers,
+  generateECMWFLightningLayers,
+  generatePM25Layers,
+  generatePM10Layers,
+  generateNO2Layers,
+  generateSO2Layers,
+  generateO3Layers,
+  generateCOLayers,
+  generateDustLayers,
+  generateCH4300Layers,
+} from "./time-functions.js";
 
 // Layer thumbnails can be added in loop by importing images like below
 const images = import.meta.glob("@assets/images/layer_thumbnails/*.webp", { eager: true });
@@ -11,8 +22,26 @@ function getImage(filename) {
     return match ? match[1].default : null;
 }
 const dwd_layers = generateDWDSatelliteLayers();
+const ecmwf_layers = generateECMWFLightningLayers();
+const pm25_layers = generatePM25Layers();
+const pm10_layers = generatePM10Layers();
+const no2_layers = generateNO2Layers();
+const so2_layers = generateSO2Layers();
+const o3_layers = generateO3Layers();
+const co_layers = generateCOLayers();
+const dust_layers = generateDustLayers();
+const ch4300_layers = generateCH4300Layers();
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
+window.ecmwf_lightning = ecmwf_layers;
+window.particulate_matter_25 = pm25_layers;
+window.particulate_matter_10 = pm10_layers;
+window.nitrogen_dioxide_850hPa = no2_layers;
+window.sulphur_dioxide_850hPa = so2_layers;
+window.ozone = o3_layers;
+window.carbon_monoxide = co_layers;
+window.dust = dust_layers;
+window.methane_at_300hPa = ch4300_layers;
 console.log(
   "✅ DWD layers created:",
   window.dwd_satellite_infrared.length,
@@ -453,12 +482,12 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
         },
-        lightning_forecast: {
+        ecmwf_lightning: {
           label: "Lightning Forecast",
           image: getImage("lightning_forcasting.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Probability %",
         },
         tropical_cyclone_strike_probability: {
           label: "Tropical Cyclone Strike Probability",
@@ -672,61 +701,61 @@ export const ncop_menu_items = {
   air_quality: {
     "Real Time Air Quality Parameters": {
       temporal: {
-        "particulate_matter_2.5": {
+        particulate_matter_25: {
           label: "Particulate Matter (2.5)",
           image: getImage("pm_2.5.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "PM2.5 (µg/m³)",
         },
         particulate_matter_10: {
           label: "Particulate Matter (10)",
           image: getImage("pm_10.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "PM10 (µg/m³)",
         },
         nitrogen_dioxide_850hPa: {
           label: "Nitrogen Dioxide (850hPa)",
           image: getImage("no2.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Nitrogen Dioxide (ppbv)",
         },
         ozone: {
           label: "Ozone",
           image: getImage("O3.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Ozone (µg/m³)",
         },
         sulphur_dioxide_850hPa: {
           label: "Sulphur Dioxide (850hPa)",
           image: getImage("SO2.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Sulphur Dioxide (µg/m³)",
         },
         carbon_monoxide: {
           label: "Carbon Monoxide",
           image: getImage("CO.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Carbon Monoxide (ppbv)",
         },
         dust: {
           label: "Dust",
           image: getImage("cams_composition_duaod550.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Dust",
         },
         methane_at_300hPa: {
           label: "Methane at 300hPa",
           image: getImage("methane.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Methane (ppbv)",
         },
       },
     },

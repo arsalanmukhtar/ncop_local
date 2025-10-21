@@ -304,3 +304,350 @@ export function generateDWDSatelliteLayers() {
 
   return dwdSatellite;
 }
+// LAYER definitions and additions
+export function generateECMWFLightningLayers() {
+  const ecmwfLight = [];
+
+  Array.from({ length: 9 }, (_, index) => {
+    const idSuffixes = [
+      "today",
+      "onedayahead",
+      "twodayahead",
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+    ];
+    const id = `ecmwf_lightning_${idSuffixes[index]}`;
+    const date = getNextNDays(index - 1, "short");
+    const timeParam = getNextNDays(index - 1);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://maps.effis.emergency.copernicus.eu/gwis?LAYERS=ecmwf.extra.lightning&FORMAT=image/png&TRANSPARENT=true&SERVICE=wms&VERSION=1.1.1&REQUEST=GetMap&STYLES=&SRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=1439&HEIGHT=602&TIME=${timeParam}`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date,
+    };
+
+    ecmwfLight.push(entry);
+  });
+
+  return ecmwfLight;
+}
+//--------------- LAYER definitions and additions - Air Quality Layers Start-------------------------------------------
+
+export function generatePM25Layers() {
+  const pm25 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `pm25_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm2p5&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    pm25.push(entry);
+  });
+
+  return pm25;
+}
+
+export function generatePM10Layers() {
+  const pm10 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `pm10_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm10&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    pm10.push(entry);
+  });
+
+  return pm10;
+}
+
+export function generateNO2Layers() {
+  const no2 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `no2_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_no2_850hpa&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    no2.push(entry);
+  });
+
+  return no2;
+}
+
+export function generateSO2Layers() {
+  const so2 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `so2_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_so2_850hpa&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    so2.push(entry);
+  });
+
+  return so2;
+}
+
+export function generateO3Layers() {
+  const o3 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `o3_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_o3_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    o3.push(entry);
+  });
+
+  return o3;
+}
+
+export function generateCOLayers() {
+  const co = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `co_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_co_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    co.push(entry);
+  });
+
+  return co;
+}
+
+export function generateDustLayers() {
+  const dust = [];
+
+  Array.from({ length: 5 }, (_, index) => {
+    const id = `dust_${index + 1}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ch4_300hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    dust.push(entry);
+  });
+
+  return dust;
+}
+
+export function generateCH4300Layers() {
+  const ch4300 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `ch4300_${index + 1}`;
+    const time = getNextNDays(index, "short");
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_ch4_300hpa&TIME=${time}-2025T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: time,
+    };
+
+    ch4300.push(entry);
+  });
+
+  return ch4300;
+}
+//--------------- LAYER definitions and additions - Air Quality Layers END-------------------------------------------
