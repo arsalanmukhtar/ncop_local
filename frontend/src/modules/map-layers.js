@@ -795,6 +795,17 @@ export const ncop_menu_items = {
     },
   },
   "Disaster Early Warning (DEW)": {
+    "API Features": {
+      dropdown: {
+        dew_exposures: {
+          exposure_id_endpoint: "http://172.18.1.108:8000/get-exposures/",
+          exposure_feature_endpoint: `http://172.18.1.108:8000/get-exposures/?exposure_id=<individual_exposure_id>`,
+          key: "id",
+          attribute: "remarks",
+          type: "geojson",
+        }
+      },
+    },
     "DEW Polygons": {
       toggle: {
         rajanpur_and_dg_khan: {
@@ -828,26 +839,6 @@ export const ncop_menu_items = {
           geometry: null,
         },
       },
-    },
-    "DEW Exposures Api Features": {
-      dropdown: [
-        {
-          endpoint: "http://172.18.1.108:8000/get-exposures/",
-          key: "id",
-          attribute: "remarks",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        {
-          endpoint: "http://172.18.1.108:8000/get-exposures/",
-          key: "id",
-          attribute: "remarks",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-      ],
     },
     "DEW Parameters": {
       button: {

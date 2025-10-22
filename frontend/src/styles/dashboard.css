@@ -1835,3 +1835,489 @@ button.custom-nav-btn.terrain-active:hover {
     font-weight: 500;
 }
 
+
+/* ========================================================================
+   TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
+   ======================================================================== */
+
+/* ========================================================================
+   MAIN CONTAINER FOR DROPDOWN GROUP
+   ======================================================================== */
+
+.ncop-item-dropdown-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0;
+}
+
+/* ========================================================================
+   DROPDOWN WRAPPER - TABLE STRUCTURE
+   ======================================================================== */
+
+.ncop-dropdown-wrapper {
+    background: var(--secondary-bg);
+    /* border: 2px solid var(--border-dark); */
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* .ncop-dropdown-wrapper:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-color: var(--border-dark);
+} */
+
+/* ========================================================================
+   DROPDOWN HEADER - COLLAPSIBLE TOGGLE
+   ======================================================================== */
+
+.ncop-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    /* background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%); */
+    border: 2px solid var(--border-blue);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    color: var(--white);
+    border-radius: 10px;
+}
+
+.ncop-dropdown-header:hover {
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown-header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.ncop-dropdown-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+.ncop-dropdown-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    background: transparent;
+    color: var(--ndma-blue);
+    /* border-radius: 12px; */
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 10px;
+}
+
+.ncop-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: var(--white);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-inverse);
+    font-size: 12px;
+}
+
+.ncop-dropdown-header:hover .ncop-dropdown-toggle {
+    background: #e0e0e0;
+    border-color: #bbb;
+}
+
+.ncop-dropdown-toggle.expanded {
+    background: #0288d1;
+    border-color: #0288d1;
+    color: #fff;
+    transform: rotate(180deg);
+}
+
+.ncop-dropdown-toggle::after {
+    content: '▼';
+    display: inline-block;
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* ========================================================================
+   TABLE CONTENT - SCROLLABLE AREA
+   ======================================================================== */
+
+.ncop-dropdown-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+}
+
+.ncop-dropdown-content.expanded {
+    max-height: 400px;
+    overflow-y: auto;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* Scrollbar styling for dropdown content */
+.ncop-dropdown-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 3px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb {
+    background: #bdbdbd;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb:hover {
+    background: #9e9e9e;
+}
+
+/* Firefox scrollbar */
+.ncop-dropdown-content {
+    scrollbar-width: thin;
+    scrollbar-color: #bdbdbd #f5f5f5;
+}
+
+/* ========================================================================
+   TABLE STYLING
+   ======================================================================== */
+
+.ncop-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.ncop-data-table thead {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+}
+
+.ncop-data-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #37474f;
+    border-bottom: 2px solid #e0e0e0;
+    white-space: nowrap;
+    background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
+}
+
+.ncop-data-table tbody tr {
+    border-bottom: 1px solid #f0f0f0;
+    transition: all 0.15s ease;
+}
+
+.ncop-data-table tbody tr:hover {
+    background: #f9f9f9;
+}
+
+.ncop-data-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.ncop-data-table td {
+    padding: 11px 12px;
+    color: #546e7a;
+    vertical-align: middle;
+}
+
+/* ========================================================================
+   CHECKBOX STYLING IN TABLE
+   ======================================================================== */
+
+.ncop-checkbox-cell {
+    width: 40px;
+    padding: 11px 8px !important;
+    text-align: center;
+}
+
+.ncop-row-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #0288d1;
+    transition: all 0.2s ease;
+}
+
+.ncop-row-checkbox:hover {
+    transform: scale(1.1);
+}
+
+.ncop-row-checkbox:checked {
+    accent-color: #01579b;
+}
+
+/* ========================================================================
+   KEY CELL STYLING
+   ======================================================================== */
+
+.ncop-key-cell {
+    font-weight: 600;
+    color: #0288d1;
+    min-width: 60px;
+    max-width: 100px;
+    word-break: break-word;
+}
+
+/* ========================================================================
+   ATTRIBUTE/VALUE CELL STYLING
+   ======================================================================== */
+
+.ncop-attribute-cell {
+    color: #546e7a;
+    flex: 1;
+    word-break: break-word;
+    max-width: 300px;
+}
+
+/* ========================================================================
+   EMPTY STATE
+   ======================================================================== */
+
+.ncop-empty-state {
+    padding: 24px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+.ncop-empty-state-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.ncop-empty-state-text {
+    color: #999;
+}
+
+/* ========================================================================
+   LOADING STATE
+   ======================================================================== */
+
+.ncop-loading-state {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+}
+
+.ncop-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #0288d1;
+    border-radius: 50%;
+    animation: ncop-spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+@keyframes ncop-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================================================
+   ERROR STATE
+   ======================================================================== */
+
+.ncop-error-state {
+    padding: 16px;
+    background: #ffebee;
+    border-left: 3px solid #f44336;
+    color: #c62828;
+    font-size: 13px;
+    border-radius: 0 4px 4px 0;
+}
+
+.ncop-error-icon {
+    margin-right: 6px;
+}
+
+/* ========================================================================
+   NO ITEMS STATE (Empty table)
+   ======================================================================== */
+
+.ncop-table-empty-row {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+/* ========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================================================== */
+
+@media (max-width: 768px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 6px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 12px 14px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 13px;
+    }
+
+    .ncop-data-table {
+        font-size: 12px;
+    }
+
+    .ncop-data-table th {
+        padding: 8px 10px;
+    }
+
+    .ncop-data-table td {
+        padding: 9px 10px;
+    }
+
+    .ncop-key-cell {
+        max-width: 80px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 4px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 10px 12px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 12px;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 22px;
+        height: 22px;
+        font-size: 11px;
+    }
+
+    .ncop-data-table {
+        font-size: 11px;
+    }
+
+    .ncop-data-table th,
+    .ncop-data-table td {
+        padding: 8px 8px;
+    }
+
+    .ncop-key-cell {
+        max-width: 60px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 150px;
+    }
+}
+
+/* ========================================================================
+   ACCESSIBILITY
+   ======================================================================== */
+
+.ncop-dropdown-header:focus-within {
+    outline: 2px solid #0288d1;
+    outline-offset: 2px;
+}
+
+.ncop-row-checkbox:focus {
+    outline: 2px solid #0288d1;
+}
+
+/* ========================================================================
+   ANIMATION FOR SMOOTH TRANSITIONS
+   ======================================================================== */
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ncop-data-table tbody tr {
+    animation: slideDown 0.2s ease forwards;
+}
+
+.ncop-data-table tbody tr:nth-child(1) {
+    animation-delay: 0ms;
+}
+
+.ncop-data-table tbody tr:nth-child(2) {
+    animation-delay: 20ms;
+}
+
+.ncop-data-table tbody tr:nth-child(3) {
+    animation-delay: 40ms;
+}
+
+.ncop-data-table tbody tr:nth-child(n+4) {
+    animation-delay: 60ms;
+}
+
+/* ========================================================================
+   PRINT STYLES
+   ======================================================================== */
+
+@media print {
+    .ncop-dropdown-wrapper {
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+
+    .ncop-dropdown-content {
+        max-height: none !important;
+    }
+
+    .ncop-row-checkbox {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+}

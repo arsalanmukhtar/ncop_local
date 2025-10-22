@@ -1,10 +1,10 @@
 // SidebarMenu.js
 
 import {
-    handleToggleInteraction,
-    handleTemporalInteraction,
-    handleDropdownInteraction,
-    handleButtonInteraction
+  handleToggleInteraction,
+  handleTemporalInteraction,
+  handleDropdownInteraction,
+  handleButtonInteraction
 } from './mapbox-functions.js';
 
 import gisLayersIcon from "@assets/images/accordion_icons/gis-layers.webp";
@@ -399,9 +399,8 @@ export class SidebarMenu {
     itemDiv.className = "ncop-item ncop-item-temporal";
     itemDiv.innerHTML = `
             <div class="ncop-item-image">
-                <img src="${
-                  itemData.image || "/static/images/placeholder.png"
-                }" alt="${itemData.label}" />
+                <img src="${itemData.image || "/static/images/placeholder.png"
+      }" alt="${itemData.label}" />
             </div>
             <span class="ncop-item-label">${itemData.label}</span>
         `;
@@ -425,86 +424,246 @@ export class SidebarMenu {
     // console.log(`✅ Temporal item created successfully:`, itemDiv);
     return itemDiv;
   }
+
+
   #createDropdownItem(categoryKey, subcategoryKey, itemKey, itemData) {
-    // console.log(`🔧 Creating dropdown item: ${itemKey}`, itemData);
-
-    if (!itemData) {
-      console.error(`❌ Invalid dropdown item data for ${itemKey}:`, itemData);
-      return null;
-    }
-
+    // Main container for all dropdowns in this item
     const itemDiv = document.createElement("div");
-    itemDiv.className = "ncop-item ncop-item-dropdown";
-    // For dropdown, endpoint/key/attribute are at the dropdown object level, not inside children
-    const endpoint = itemData.endpoint || "";
-    const keyField = itemData.key || "id";
-    const attributeField = itemData.attribute || "label";
+    itemDiv.className = "ncop-item ncop-item-dropdown-group";
 
-    // console.log(`🔍 Dropdown config - endpoint: ${endpoint}, key: ${keyField}, attribute: ${attributeField}`);
+    // Iterate through each dropdown configuration
+    const dropdownKeys = Object.keys(itemData);
 
-    // Check if dropdown has an image
-    if (itemData.image) {
-      itemDiv.innerHTML = `
-                <div class="ncop-item-image">
-                    <img src="${itemData.image}" alt="${
-        itemData.label || "Dropdown"
-      }" />
-                </div>                <select class="ncop-dropdown" data-endpoint="${endpoint}" data-key-field="${keyField}" data-attribute-field="${attributeField}" data-item-key="${itemKey}">
-                    <option value="" selected>Loading...</option>
-                </select>
-            `;
-      // Add click handler for image selection
-      const imageElement = itemDiv.querySelector(".ncop-item-image");
-      imageElement.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.#handleImageSelection(imageElement);
-      });
-    } else {
-      itemDiv.innerHTML = `
-                <select class="ncop-dropdown" data-endpoint="${endpoint}" data-key-field="${keyField}" data-attribute-field="${attributeField}" data-item-key="${itemKey}">
-                    <option value="" selected>Loading...</option>
-                </select>
-            `;
-    }
+    dropdownKeys.forEach((dropdownKey) => {
+      const dropdownConfig = itemData[dropdownKey];
 
-    // Fetch and populate dropdown options asynchronously
-    setTimeout(() => {
-      const select = itemDiv.querySelector("select");
-      if (!endpoint) {
-        console.warn(`⚠️ No endpoint provided for dropdown ${itemKey}`);
-        select.innerHTML = `<option selected disabled>No endpoint</option>`;
-        return;
+      // ===== STEP 1: Extract endpoint =====
+      let endpoint = "";
+      for (const k in dropdownConfig) {
+        if (k.endsWith('_endpoint') && typeof dropdownConfig[k] === 'string' && dropdownConfig[k].startsWith('http')) {
+          endpoint = dropdownConfig[k];
+          break;
+        }
       }
 
-      // console.log(`📡 Fetching dropdown data from: ${endpoint}`);
-      fetch(endpoint)
-        .then((res) => res.json())
-        .then((data) => {
-          // console.log(`📊 Dropdown data for ${itemKey}:`, data);
-          select.innerHTML = `<option value="" selected>Select an option</option>`;
-          data.forEach((row) => {
-            // console.log(`🔍 Processing row:`, row);
-            const value = row[keyField];
-            const label = row[attributeField];
-            // console.log(`✅ Value: ${value}, Label: ${label}`);
-            select.innerHTML += `<option value="${value}">${label}</option>`;
-          });
+      // ===== STEP 2: Extract configuration values =====
+      const keyField = dropdownConfig.key || "id";
+      const attributeField = dropdownConfig.attribute || "remarks";
 
-          // Add event listener for dropdown interaction
-          select.addEventListener("change", (e) => {
-            const val = e.target.value;
-            const lbl = e.target.options[e.target.selectedIndex]?.text;
-            handleDropdownInteraction(categoryKey, subcategoryKey, val, lbl);
-          });
-        })
-        .catch((err) => {
-          console.error(`❌ Dropdown fetch error for ${itemKey}:`, err);
-          select.innerHTML = `<option selected disabled>Error loading data</option>`;
-        });
-    }, 0);
+      // Format label from dropdown key (dew_exposures → Dew Exposures)
+      const label = dropdownKey
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-    // console.log(`✅ Dropdown item created successfully:`, itemDiv);        return itemDiv;
+      // ===== STEP 3: Create wrapper container =====
+      const wrapper = document.createElement("div");
+      wrapper.className = "ncop-dropdown-wrapper";
+      wrapper.setAttribute("data-dropdown-key", dropdownKey);
+
+      // ===== STEP 4: Create collapsible header =====
+      const header = document.createElement("div");
+      header.className = "ncop-dropdown-header";
+
+      const headerContent = document.createElement("div");
+      headerContent.className = "ncop-dropdown-header-content";
+
+      const headerLabel = document.createElement("label");
+      headerLabel.className = "ncop-dropdown-label";
+      headerLabel.textContent = label;
+
+      // Count badge (shows number of items loaded)
+      const countBadge = document.createElement("span");
+      countBadge.className = "ncop-dropdown-count";
+      countBadge.textContent = "0";
+      countBadge.style.display = "none"; // Hidden initially
+
+      headerContent.appendChild(headerLabel);
+      headerContent.appendChild(countBadge);
+
+      // Toggle button (expand/collapse)
+      const toggleBtn = document.createElement("div");
+      toggleBtn.className = "ncop-dropdown-toggle";
+
+      header.appendChild(headerContent);
+      header.appendChild(toggleBtn);
+
+      // ===== STEP 5: Create scrollable content area with table =====
+      const contentArea = document.createElement("div");
+      contentArea.className = "ncop-dropdown-content";
+      contentArea.setAttribute("data-endpoint", endpoint);
+      contentArea.setAttribute("data-key-field", keyField);
+      contentArea.setAttribute("data-attribute-field", attributeField);
+      contentArea.setAttribute("data-item-key", dropdownKey);
+
+      // Add to wrapper first
+      wrapper.appendChild(header);
+      wrapper.appendChild(contentArea);
+
+      // ===== STEP 6: Attach expand/collapse handler =====
+      header.addEventListener("click", () => {
+        contentArea.classList.toggle("expanded");
+        toggleBtn.classList.toggle("expanded");
+      });
+
+      // ===== STEP 7: Fetch and populate table asynchronously =====
+      setTimeout(() => {
+        if (!endpoint) {
+          contentArea.innerHTML = `
+                    <div class="ncop-error-state">
+                        <span class="ncop-error-icon">⚠️</span>
+                        No endpoint provided for dropdown: ${dropdownKey}
+                    </div>
+                `;
+          console.warn(`⚠️ No endpoint provided for dropdown ${dropdownKey}`);
+          return;
+        }
+
+        // Show loading state
+        contentArea.innerHTML = `
+                <div class="ncop-loading-state">
+                    <span class="ncop-spinner"></span>
+                    Loading data...
+                </div>
+            `;
+
+        // Fetch data from endpoint
+        fetch(endpoint)
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then((data) => {
+            // Validate data is an array
+            if (!Array.isArray(data)) {
+              throw new Error("Endpoint did not return an array");
+            }
+
+            // Check if data is empty
+            if (data.length === 0) {
+              contentArea.innerHTML = `
+                            <div class="ncop-empty-state">
+                                <div class="ncop-empty-state-icon">📋</div>
+                                <div class="ncop-empty-state-text">No data available</div>
+                            </div>
+                        `;
+              countBadge.textContent = "0";
+              countBadge.style.display = "inline-flex";
+              return;
+            }
+
+            // Update count badge
+            countBadge.textContent = data.length;
+            countBadge.style.display = "inline-flex";
+
+            // ===== CREATE TABLE =====
+            const table = document.createElement("table");
+            table.className = "ncop-data-table";
+
+            // Create thead with headers
+            const thead = document.createElement("thead");
+            const headerRow = document.createElement("tr");
+
+            // Checkbox header
+            const checkboxHeader = document.createElement("th");
+            checkboxHeader.textContent = "✓";
+            checkboxHeader.style.textAlign = "center";
+            checkboxHeader.style.width = "40px";
+            headerRow.appendChild(checkboxHeader);
+
+            // Key field header
+            const keyHeader = document.createElement("th");
+            keyHeader.textContent = keyField.replace(/_/g, " ").toUpperCase();
+            keyHeader.style.minWidth = "60px";
+            headerRow.appendChild(keyHeader);
+
+            // Attribute field header
+            const attrHeader = document.createElement("th");
+            attrHeader.textContent = attributeField.replace(/_/g, " ").toUpperCase();
+            attrHeader.style.flex = "1";
+            headerRow.appendChild(attrHeader);
+
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Create tbody with data rows
+            const tbody = document.createElement("tbody");
+
+            data.forEach((row) => {
+              const tr = document.createElement("tr");
+
+              // ===== CHECKBOX CELL =====
+              const checkboxCell = document.createElement("td");
+              checkboxCell.className = "ncop-checkbox-cell";
+
+              const checkbox = document.createElement("input");
+              checkbox.type = "checkbox";
+              checkbox.className = "ncop-row-checkbox";
+              checkbox.value = row[keyField];
+
+              // Store reference to attribute label for potential use
+              checkbox.setAttribute("data-attribute-label", row[attributeField]);
+
+              // Handle checkbox change
+              checkbox.addEventListener("change", (e) => {
+                const isChecked = e.target.checked;
+                const keyValue = e.target.value;
+                const attrLabel = e.target.getAttribute("data-attribute-label");
+
+                // Call handler with relevant data
+                handleDropdownInteraction(
+                  categoryKey,
+                  subcategoryKey,
+                  keyValue,
+                  attrLabel,
+                  dropdownKey,
+                  isChecked
+                );
+              });
+
+              checkboxCell.appendChild(checkbox);
+              tr.appendChild(checkboxCell);
+
+              // ===== KEY CELL =====
+              const keyCell = document.createElement("td");
+              keyCell.className = "ncop-key-cell";
+              keyCell.textContent = row[keyField];
+              keyCell.title = `${keyField}: ${row[keyField]}`; // Tooltip
+              tr.appendChild(keyCell);
+
+              // ===== ATTRIBUTE CELL =====
+              const attrCell = document.createElement("td");
+              attrCell.className = "ncop-attribute-cell";
+              attrCell.textContent = row[attributeField];
+              attrCell.title = `${attributeField}: ${row[attributeField]}`; // Tooltip
+              tr.appendChild(attrCell);
+
+              tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            contentArea.innerHTML = ""; // Clear loading state
+            contentArea.appendChild(table);
+          })
+          .catch((error) => {
+            console.error(`❌ Error fetching data for ${dropdownKey}:`, error);
+            contentArea.innerHTML = `
+                        <div class="ncop-error-state">
+                            <span class="ncop-error-icon">❌</span>
+                            Error loading data: ${error.message}
+                        </div>
+                    `;
+          });
+      }, 0); // Deferred execution
+
+      // Add wrapper to main item div
+      itemDiv.appendChild(wrapper);
+    });
+
+    return itemDiv;
   }
+
   #createButtonItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // console.log(`🔧 Creating button item: ${itemKey}`, itemData);
 
@@ -548,7 +707,6 @@ export class SidebarMenu {
                 <label class="ncop-toggle">
                     <input type="checkbox" data-item-key="${itemKey}">
                     <span class="ncop-toggle-slider"></span>
-                </label>
             `;
     }
 
@@ -626,8 +784,6 @@ export class SidebarMenu {
     lucide.createIcons();
   }
 
-  // --- NCOP Control Handlers ---
-
   #handleNCOPToggle(endpoint, itemKey, isEnabled) {
     // console.log(`🔄 NCOP Toggle - ${itemKey}:`, {
     //     endpoint: endpoint,
@@ -687,8 +843,6 @@ export class SidebarMenu {
 
     // console.log("🔄 NCOP control states restored from localStorage");
   }
-
-  // --- Search Functionality ---
 
   #initializeSearchFunctionality() {
     const searchInput = document.getElementById("sidebarSearch");
