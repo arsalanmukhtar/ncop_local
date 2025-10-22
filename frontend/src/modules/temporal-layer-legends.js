@@ -1,25 +1,30 @@
-// Utility to generate standardized linear gradient legend bars with labels inside
+// Utility to generate standardized linear gradient legend bars with labels aligned to color stops
 function gradientLegendBar(colors, values) {
   // colors: array of color stops (hex/rgb)
   // values: array of tick labels (numbers/strings)
   const gradient = `linear-gradient(to right, ${colors.join(", ")})`;
-  let html = `<div style="display: flex; align-items: center; flex-wrap: wrap; width: 100%;">
-    <div style="
-      background: ${gradient};
-      width: 100%; 
-      height: 30px; 
-      display: flex; 
-      align-items: center; 
-      justify-content: space-between; 
-      border-radius: 4px; 
-      padding: 0 8px;
-    ">`;
-
+  const n = values.length;
+  let html = `<div style="position: relative; width: 100%; height: 30px; margin-bottom: 2px;">`;
+  html += `<div style="background: ${gradient}; width: 100%; height: 100%; border-radius: 4px; position: relative;">`;
+  // Place each label absolutely at the correct percentage, centered vertically and horizontally
   values.forEach((val, i) => {
-    html += `<span style="color: #fff; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.8);">${val}</span>`;
+    const leftPercent = (n === 1) ? 0 : (i / (n - 1)) * 100;
+    let style =
+      "position: absolute; " +
+      "top: 50%; transform: translateY(-50%); " +
+      "font-size: 13px; font-weight: 400; color: #fff; white-space: nowrap; " +
+      "text-shadow: 0 0 4px #000, 0 0 2px #000; " +
+      "padding: 0 6px; "; // horizontal padding
+    if (i === 0) {
+      style += "left: 0; min-width: 32px; text-align: left; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
+    } else if (i === n - 1) {
+      style += "right: 0; min-width: 32px; text-align: right; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
+    } else {
+      style += `left: calc(${leftPercent}% - 24px); min-width: 48px; text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis;`;
+    }
+    html += `<span style="${style}">${val}</span>`;
   });
-
-  html += "</div></div>";
+  html += `</div></div>`;
   return html;
 }
 
@@ -245,25 +250,10 @@ export const legends = {
       "≥53.0",
     ]
   ),
-  ecmwf_lightning: `
-    <div style="display: flex; align-items: center; flex-wrap: wrap; width: 100%;">
-        <div style="
-            background: linear-gradient(to right, #87ff89, #feff59, #fcb12d, #f65319, #b10a0a, #270522);
-            width: 100%; 
-            height: 30px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            border-radius: 4px; 
-            padding: 0 8px;
-        ">
-            <span style="color: black; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px;">Very Low</span>
-            <span style="color: black; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px;">Low</span>
-            <span style="color: white; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px;">Moderate</span>
-            <span style="color: white; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px;">High</span>
-            <span style="color: white; flex: 1; text-align: center; font-size: 14px; font-weight: 600; padding: 0 4px;">Very High</span>
-        </div>
-    </div>`,
+  ecmwf_lightning: gradientLegendBar(
+    ["#87ff89", "#feff59", "#fcb12d", "#f65319", "#b10a0a"],
+    ["Very Low", "Low", "Moderate", "High", "Very High"]
+  ),
   ecmwfCyclone: gradientLegendBar(
     [
       "#FF06FF",

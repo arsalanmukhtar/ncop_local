@@ -376,10 +376,6 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     tempSlider.style.display = "none";
     if (legendContainer) legendContainer.style.display = "none";
 
-    document
-      .querySelectorAll(".ncop-item-image.selected")
-      .forEach((img) => img.classList.remove("selected"));
-
     currentActiveLayerSet = null;
     _sliderRestore = {
       layerKey: null,
@@ -398,14 +394,6 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
   // Load icons for temporal set
   loadsliderlayertemporalIcons(layers);
-
-  // Update UI selected thumb
-  document
-    .querySelectorAll(".ncop-item-image.selected")
-    .forEach((img) => img.classList.remove("selected"));
-  if (event?.target) {
-    event.target.closest(".ncop-item-image")?.classList.add("selected");
-  }
 
   tempSlider.style.display = "block";
   sliderLayers = [];
@@ -514,7 +502,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   const titleElement = document.querySelector("#temp-slider1 p");
   if (titleElement) {
     titleElement.textContent = textContent;
-                }
+  }
 
   // Load legend
   if (typeof legends !== "undefined" && legends[layerKey]) {
