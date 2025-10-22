@@ -220,3 +220,159 @@ export function handleTemporalInteraction(
     }
   }
 }
+
+/**
+ * DEW Exposure Dropdown Checkbox Handler
+ * Handles checkbox interactions for exposure items in the dropdown
+ * Uses SourceLayerControl for map operations
+ */
+
+const exposureLayersMap = new Map(); // Track: exposureId -> {layerId, outlineId, sourceId}
+
+/**
+ * Get SourceLayerControl instance
+ */
+function getSourceLayerControl() {
+  return window.sourceLayerControl;
+}
+
+/**
+ * Get map instance
+ */
+function getMap() {
+  return window.map || (window.sourceLayerControl?.map);
+}
+
+/**
+ * Remove polygon layers for a specific exposure
+ */
+function removeExposureLayersById(exposureId) {
+  const layerInfo = exposureLayersMap.get(exposureId);
+  
+  if (!layerInfo) return;
+
+  const { layerId, outlineId, sourceId } = layerInfo;
+  const map = getMap();
+
+  // Remove layers from map
+  if (map && map.getLayer(layerId)) {
+    map.removeLayer(layerId);
+  }
+  if (map && map.getLayer(outlineId)) {
+    map.removeLayer(outlineId);
+  }
+  
+  // Remove source
+  if (map && map.getSource(sourceId)) {
+    map.removeSource(sourceId);
+  }
+
+  exposureLayersMap.delete(exposureId);
+  console.log(`🗑️ Exposure layers removed for ID: ${exposureId}`);
+}
+
+/**
+ * Add exposure polygon to map from GeoJSON
+ */
+function addExposurePolygonToMap(exposureId, geojson) {
+  if (!geojson || !geojson.features || geojson.features.length === 0) {
+    console.error(`❌ No features found for exposure ${exposureId}`);
+    return;
+  }
+
+  const map = getMap();
+  if (!map) {
+    console.error(`❌ Map instance not available`);
+    return;
+  }
+
+  const layerId = `exposure-polygon-${exposureId}`;
+  const outlineId = `exposure-outline-${exposureId}`;
+  const sourceId = `exposure-source-${exposureId}`;
+
+  try {
+    // Add GeoJSON source
+    map.addSource(sourceId, {
+      type: "geojson",
+      data: geojson
+    });
+
+    // Add filled polygon layer
+    map.addLayer({
+      id: layerId,
+      type: "fill",
+      source: sourceId,
+      paint: {
+        "fill-color": "#ff0000",
+        "fill-opacity": 0.6
+      }
+    });
+
+    // Add outline layer
+    map.addLayer({
+      id: outlineId,
+      type: "line",
+      source: sourceId,
+      paint: {
+        "line-color": "#ff0000",
+        "line-width": 2,
+        "line-opacity": 1
+      }
+    });
+
+    // Store layer info
+    if (!window.exposureLayersMap) {
+      window.exposureLayersMap = new Map();
+    }
+    window.exposureLayersMap.set(exposureId, { layerId, outlineId, sourceId });
+
+    // Zoom to polygon bounds
+    const coords = geojson.features[0].geometry.coordinates[0];
+    const bounds = coords.reduce(
+      (b, coord) => b.extend(coord),
+      new mapboxgl.LngLatBounds(coords[0], coords[0])
+    );
+    map.fitBounds(bounds, { padding: 40 });
+
+    console.log(`✅ Exposure ${exposureId} added to map`);
+  } catch (error) {
+    console.error(`❌ Error adding exposure polygon:`, error);
+  }
+}
+
+/**
+ * Handle DEW exposure checkbox interaction
+ * @param {string} exposureId - The exposure ID
+ * @param {boolean} isChecked - Checkbox state
+ */
+export async function handleDewExposureCheckbox(exposureId, isChecked) {
+  console.log(`🔄 DEW Exposure: ID=${exposureId}, checked=${isChecked}`);
+
+  if (isChecked) {
+    // Fetch and add to map
+    try {
+      const endpoint = `http://172.18.1.108:8000/get-exposures/?exposure_id=${exposureId}`;
+      console.log(`📡 Fetching: ${endpoint}`);
+      
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const geojson = await response.json();
+      addExposurePolygonToMap(exposureId, geojson);
+    } catch (error) {
+      console.error(`❌ Error:`, error);
+    }
+  } else {
+    // Remove from map
+    removeExposureLayersById(exposureId);
+  }
+}
+
+/**
+ * Clear all exposure layers
+ */
+export function clearAllExposureLayersFromMap() {
+  exposureLayersMap.forEach((_, exposureId) => {
+    removeExposureLayersById(exposureId);
+  });
+}

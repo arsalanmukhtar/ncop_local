@@ -6,7 +6,7 @@ import {
   handleDropdownInteraction,
   handleButtonInteraction
 } from './mapbox-functions.js';
-
+import { handleDewExposureCheckbox } from "./mapbox-functions.js";
 import gisLayersIcon from "@assets/images/accordion_icons/gis-layers.webp";
 import weatherSystemsIcon from "@assets/images/accordion_icons/weather-systems.webp";
 import floodMonitoringIcon from "@assets/images/accordion_icons/flood.webp";
@@ -603,14 +603,17 @@ export class SidebarMenu {
               checkbox.value = row[keyField];
 
               // Store reference to attribute label for potential use
-              checkbox.setAttribute("data-attribute-label", row[attributeField]);
+              checkbox.setAttribute(
+                "data-attribute-label",
+                row[attributeField]
+              );
 
+              // Handle checkbox change
               // Handle checkbox change
               checkbox.addEventListener("change", (e) => {
                 const isChecked = e.target.checked;
                 const keyValue = e.target.value;
                 const attrLabel = e.target.getAttribute("data-attribute-label");
-
                 // Call handler with relevant data
                 handleDropdownInteraction(
                   categoryKey,
@@ -620,6 +623,10 @@ export class SidebarMenu {
                   dropdownKey,
                   isChecked
                 );
+                // Handle DEW Exposure specific functionality
+                if (dropdownKey === "dew_exposures") {
+                  handleDewExposureCheckbox(keyValue, isChecked);
+                }
               });
 
               checkboxCell.appendChild(checkbox);

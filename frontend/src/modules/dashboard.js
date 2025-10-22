@@ -90,6 +90,9 @@ class DashboardManager {
     }
 
     this.#initializeMap();
+    // MOVE GLOBAL ASSIGNMENTS HERE (after map is created)
+    window.map = this.#map;
+    window.ncop_map = this.#map;
 
     // Initialize SourceLayerControl for layer management
     this.#sourceLayerControl = new SourceLayerControl(this.#map);

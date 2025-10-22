@@ -597,6 +597,24 @@ export class SourceLayerControl {
     }
 
     /**
+     * Get configs for all DEW polygons (for popup)
+     */
+    getDewPolygonConfigs() {
+        // This should return configs for all DEW polygons currently on the map
+        // For now, we use a simple structure: { dew_exposure_{id}: { label, ... } }
+        const configs = {};
+        if (window.exposureLayersMap) {
+            window.exposureLayersMap.forEach((info, exposureId) => {
+                configs[`dew_exposure_${exposureId}`] = {
+                    label: `DEW Exposure #${exposureId}`,
+                    // Add more config options here if needed
+                };
+            });
+        }
+        return configs;
+    }
+
+    /**
      * Setup map click handler for vector tile feature popup
      */
     _setupFeatureClickHandler() {
@@ -633,7 +651,10 @@ export class SourceLayerControl {
                     }
                 }
             }
-            this.layerAttributePopup.hide();
+            // Only hide if no DEW popup is active
+            if (!window.ncop_popup_active) {
+                this.layerAttributePopup.hide();
+            }
         });
     }
 
