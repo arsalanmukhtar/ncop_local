@@ -155,11 +155,7 @@ html, body {
 
 /* Custom Navigation Controls Container */
 .custom-nav-control {
-    /* background: var(--primary-bg); */
     border-radius: 8px;
-    /* padding: 4px; */
-    /* backdrop-filter: blur(15px); */
-    /* border: 1px solid var(--border-light); */
     transition: all 0.3s ease;
     transform-origin: bottom right;
     display: flex;
@@ -179,7 +175,6 @@ html, body {
     transition: all 0.2s ease;
 }
 
-
 .custom-nav-btn {
     display: flex;
     align-items: center;
@@ -193,17 +188,12 @@ html, body {
     transition: all 0.3s ease, height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
     backdrop-filter: blur(10px);
     border: 2px solid var(--border-dark);
-    /* padding: 4px; */
     color: var(--white);
 }
 
 .custom-nav-btn:hover {
     background: var(--primary-bg);
 }
-
-/* .custom-nav-btn:active {
-    transform: scale(0.95);
-} */
 
 .custom-nav-btn i {
     width: 14px;
@@ -311,7 +301,6 @@ button.custom-nav-btn.terrain-active:hover {
 
 /* Custom Basemap Control */
 .custom-basemap-control {
-    /* position: relative; */
     z-index: 1000;
     transition: all 0.3s ease;
     color: var(--white);
@@ -408,7 +397,6 @@ button.custom-nav-btn.terrain-active:hover {
     max-width: none;
 }
 
-
 /* Search Functionality */
 .search-input-wrapper {
     position: relative;
@@ -446,7 +434,6 @@ button.custom-nav-btn.terrain-active:hover {
 .search-input:focus {
     outline: none;
     background: transparent;
-    /* border-color: var(--primary-foreground); */
 }
 
 .clear-search-btn {
@@ -469,14 +456,6 @@ button.custom-nav-btn.terrain-active:hover {
     color: transparent;
     visibility: hidden;
 }
-
-/* Search Results Highlighting */
-/* .search-highlight {
-    background: var(--success-bg);
-    border-radius: 2px;
-    padding: 1px 2px;
-    font-weight: 600;
-} */
 
 /* Hide elements that don't match search */
 .search-hidden {
@@ -663,11 +642,8 @@ button.custom-nav-btn.terrain-active:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    /* background: var(--secondary-bg); */
-    /* border-radius: 6px; */
     margin: 4px 0;
     padding: 8px;
-    /* border: 2px solid var(--border-dark); */
     transition: all 0.2s ease;
     cursor: pointer;
 }
@@ -686,26 +662,8 @@ button.custom-nav-btn.terrain-active:hover {
     min-height: 120px;
 }
 
-/* Dropdown items - centered single element */
-.ncop-item-dropdown {
-    justify-content: center;
-}
-
-/* Button items - text left, toggle right */
-.ncop-item-button {
-    justify-content: space-between;
-    border-radius: 5px;
-    border: 1px solid transparent !important;
-    background-color: transparent !important;
-    transition: background-color 0.3s ease;
-}
 
 /* Button with checked toggle - full color background */
-/* .ncop-item-button:has(.ncop-toggle input:checked) {
-    border: 1px solid var(--button-color, #6366f1) !important;
-} */
-
-/* Toggle inside button items - full opacity background when checked */
 .ncop-item-button .ncop-toggle input:checked + .ncop-toggle-slider {
     background-color: var(--button-color, #6366f1) !important;
 }
@@ -1700,16 +1658,12 @@ button.custom-nav-btn.terrain-active:hover {
     position: relative;
     display: flex;
     flex-direction: column;
-    /* stack buttons vertically */
     align-items: center;
-    /* center horizontally within the column */
     justify-content: center;
-    /* center the entire stack vertically if parent allows space */
     gap: 7px;
-    /* spacing between buttons */
     margin-top: 3.5rem;
     width: 40px;
-    /* a bit wider for centering comfort */ }
+}
 
 /* Shared button styling */
 #tempslider-controls button {
@@ -1858,16 +1812,11 @@ button.custom-nav-btn.terrain-active:hover {
 .ncop-dropdown-wrapper {
     background: var(--secondary-bg);
     /* border: 2px solid var(--border-dark); */
-    border-radius: 10px;
+    border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* .ncop-dropdown-wrapper:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    border-color: var(--border-dark);
-} */
 
 /* ========================================================================
    DROPDOWN HEADER - COLLAPSIBLE TOGGLE
@@ -1879,12 +1828,12 @@ button.custom-nav-btn.terrain-active:hover {
     justify-content: space-between;
     padding: 5px 10px;
     /* background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%); */
-    border: 2px solid var(--border-blue);
+    border: 1px solid var(--ndma-green);
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
     color: var(--white);
-    border-radius: 10px;
+    border-radius: 4px;
 }
 
 .ncop-dropdown-header:hover {
@@ -1899,8 +1848,8 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 .ncop-dropdown-label {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 200;
     color: var(--white);
     margin: 0;
     cursor: pointer;
@@ -1914,10 +1863,10 @@ button.custom-nav-btn.terrain-active:hover {
     min-width: 24px;
     height: 24px;
     background: transparent;
-    color: var(--ndma-blue);
+    color: var(--ndma-green);
     /* border-radius: 12px; */
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 300;
     padding: 0 10px;
 }
 
@@ -1942,9 +1891,9 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 .ncop-dropdown-toggle.expanded {
-    background: #0288d1;
-    border-color: #0288d1;
-    color: #fff;
+    background: var(--ndma-green);
+    border-color: var(--ndma-green-glow);
+    color: var(--white);
     transform: rotate(180deg);
 }
 
@@ -2057,19 +2006,15 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 .ncop-row-checkbox {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     cursor: pointer;
-    accent-color: #0288d1;
+    accent-color: var(--text-primary);
     transition: all 0.2s ease;
 }
 
-.ncop-row-checkbox:hover {
-    transform: scale(1.1);
-}
-
 .ncop-row-checkbox:checked {
-    accent-color: #01579b;
+    accent-color: var(--ndma-blue);
 }
 
 /* ========================================================================
@@ -2257,13 +2202,13 @@ button.custom-nav-btn.terrain-active:hover {
    ======================================================================== */
 
 .ncop-dropdown-header:focus-within {
-    outline: 2px solid #0288d1;
+    outline: 2px solid var(--ndma-blue);
     outline-offset: 2px;
 }
 
-.ncop-row-checkbox:focus {
-    outline: 2px solid #0288d1;
-}
+/* .ncop-row-checkbox:focus {
+    outline: 2px solid var(--ndma-blue);
+} */
 
 /* ========================================================================
    ANIMATION FOR SMOOTH TRANSITIONS

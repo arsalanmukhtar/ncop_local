@@ -87,9 +87,6 @@ export const ncop_menu_items = {
               },
             },
           ],
-          attributes: {
-            name: "Name",
-          },
           information:
             "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
         },
@@ -431,6 +428,7 @@ export const ncop_menu_items = {
           theme: "slider",
           type: "raster",
           title: "DWD Radar (°C)",
+          information: "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
         },
         imerg_precipitation_rate_14_days: {
           label: "IMERG Precipitation Rate (14 Days)",
