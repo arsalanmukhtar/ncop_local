@@ -49,6 +49,8 @@ import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerOrderControl } from "./layer-order-control.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import { LayerInfoPanel } from "./layer-info-panel.js";
+import LayerAttributePopup from "./layer-attribute-popup.js";
+
 
 // ---- Mapbox token handling ----
 // The entry (dashboard_main.js) already set mapboxgl.accessToken when possible.
@@ -96,6 +98,14 @@ class DashboardManager {
     // Initialize SourceLayerControl for layer management
     this.#sourceLayerControl = new SourceLayerControl(this.#map);
     this.#layerAttributePopup = this.#sourceLayerControl.layerAttributePopup;
+    // === NEW: Ensure a global popup instance is available ===
+    if (!this.#layerAttributePopup) {
+      this.#layerAttributePopup = new LayerAttributePopup(this.#map); // SAFE now (deferred)
+    }
+    // Make it globally reachable anywhere in your app:
+    window.layerAttributePopup = this.#layerAttributePopup; // short, generic global
+    window.ncop_popup = this.#layerAttributePopup; // namespaced alias (optional)
+    // ========================================================
 
     // Initialize SourceLayerControl reference for interaction handlers
     initializeSourceLayerControl(this.#sourceLayerControl);

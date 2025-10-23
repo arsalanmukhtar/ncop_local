@@ -1,331 +1,414 @@
-// // layer-attribute-popup.js
-// // Themed popup for displaying vector tile feature attributes on click
+// layer-attribute-popup.js
+// Generic attribute popup bound to the clicked lng/lat (NOT screen pixels)
+// - Reads popup: true groups from map-layers.js (vector/geojson only; skips raster)
+// - ALSO supports dynamic DEW exposure polygons added at runtime via window.exposureLayersMap
+// - Does NOT inject "information" from config, but WILL display "information" if present in feature properties
 
-// class LayerAttributePopup {
-//     constructor(map, layerConfigs) {
-//         this.map = map;
-//         this.layerConfigs = layerConfigs;
-//         this.popupEl = this._createPopupElement();
-//         this.popupLngLat = null; // Store geographic coordinates (lat/lng) of popup
-//         this.mapMoveListener = null; // Reference to map movement handler
-//         this._bindEvents();
-//         this._setupDewPolygonClickHandler();
-//     }
+import { ncop_menu_items } from "./map-layers.js";
 
-//     _createPopupElement() {
-//         const el = document.createElement("div");
-//         el.className = "layer-attribute-popup hidden";
-//         el.innerHTML = '<div class="popup-content"></div>';
-//         document.body.appendChild(el);
-//         return el;
-//     }
+function prettyAttributeName(key) {
+  return String(key)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+}
 
-//     _bindEvents() {
-//         // Hide popup when clicking outside
-//         let lastMapClickTime = 0;
-//         this.map.on("click", () => {
-//             lastMapClickTime = Date.now();
-//         });
-//         document.addEventListener("mousedown", (e) => {
-//             // Prevent immediate hide after map click
-//             if (Date.now() - lastMapClickTime < 200) return;
-//             if (
-//                 !this.popupEl.classList.contains("hidden") &&
-//                 !this.popupEl.contains(e.target)
-//             ) {
-//                 this.hide();
-//             }
-//         });
-//     }
+// Show everything the feature already has, including "information"
+const HIDDEN_KEYS = new Set();
 
-//     /**
-//      * Setup click handler for DEW exposure polygon layers and all vector tile features
-//      */
-//     _setupDewPolygonClickHandler() {
-//         this.map.on("click", (e) => {
-//             // Query all rendered features at this click point
-//             let features = [];
-//             if (this.map && typeof this.map.queryRenderedFeatures === 'function') {
-//                 features = this.map.queryRenderedFeatures(e.point);
-//             }
+export default class LayerAttributePopup {
+  constructor(map) {
+    this.map = null; // will be set once a real map is found
+    this.popupEl = this.#createEl();
+    this.anchorLngLat = null;
 
-//             if (!features || features.length === 0) {
-//                 this.hide();
-//                 return;
-//             }
+    // Static (config-driven) popup eligibility
+    const { popupLayers, popupSources, labelsByLayer, labelsBySource } =
+      this.#indexPopupEligible();
+    this.popupLayers = popupLayers; // Set<string>
+    this.popupSources = popupSources; // Set<string>
+    this.labelsByLayer = labelsByLayer; // Map<layerId, title>
+    this.labelsBySource = labelsBySource; // Map<sourceId, title>
 
-//             // Look for DEW polygon layers FIRST (format: exposure-polygon-{id})
-//             for (const feature of features) {
-//                 // Support both vector tile and GeoJSON features
-//                 const layerId = feature.layer?.id;
-//                 const sourceId = feature.source;
-//                 const sourceType = this.map.getSource(sourceId)?.type;
+    // Dynamic (runtime DEW) eligibility
+    this.dynamicPopupLayers = new Set(); // Set<string> (layerIds)
+    this.dynamicPopupSources = new Set(); // Set<string> (sourceIds)
+    this.dynamicTitleByLayer = new Map(); // Map<layerId, title>
+    this.dynamicTitleBySource = new Map(); // Map<sourceId, title>
+    this._lastExposureCount = -1; // to detect changes
 
-//                 // Try to match exposure polygons by layerId or sourceId
-//                 let exposureId = null;
-//                 if (layerId && layerId.startsWith("exposure-polygon-")) {
-//                     exposureId = layerId.replace("exposure-polygon-", "");
-//                 } else if (sourceId && sourceId.startsWith("exposure-source-")) {
-//                     exposureId = sourceId.replace("exposure-source-", "");
-//                 }
-//                 if (exposureId) {
-//                     // Use the remarks property from feature.properties for the label
-//                     const remarks =
-//                       feature?.properties?.exposure_remarks ||
-//                       `DEW Exposure #${exposureId}`;
-//                     const customConfig = { label: remarks };
-//                     // Pass the actual click coordinates (e.lngLat) for accurate positioning
-//                     this.show(
-//                         feature,
-//                         `dew_exposure_${exposureId}`,
-//                         e.lngLat,
-//                         customConfig
-//                     );
-//                     return;
-//                 }
-//             }
+    // Defer bind until a real map exists
+    this.#deferredBind(map);
+  }
 
-//             // If no DEW polygon found, process other vector tile features
-//             for (const feature of features) {
-//                 const layerId = feature.layer?.id;
-//                 const sourceId = feature.source;
-//                 const sourceType = this.map.getSource(sourceId)?.type;
+  // ---------- DOM ----------
+  #createEl() {
+    const el = document.createElement("div");
+    el.className = "layer-attribute-popup hidden";
+    el.innerHTML = `
+      <div class="popup-content">
+        <div class="popup-label"></div>
+        <div class="popup-attributes-scroll">
+          <table class="popup-attributes"></table>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    return el;
+  }
 
-//                 // Skip if no layer ID or source ID
-//                 if (!layerId && !sourceId) continue;
+  // Public wrapper so other modules can programmatically set content
+  setContent(title, properties) {
+    this.#setContent({ title, properties });
+    if (this.anchorLngLat) {
+      this.#show();
+      this.#updatePosition();
+      this.#attachMoveListeners();
+    }
+  }
 
-//                 // Try to find a matching config
-//                 let config = (this.layerConfigs && this.layerConfigs[layerId]) || (this.layerConfigs && this.layerConfigs[sourceId]);
+  #setContent({ title, properties }) {
+    const labelEl = this.popupEl.querySelector(".popup-label");
+    const tableEl = this.popupEl.querySelector(".popup-attributes");
 
-//                 if (config) {
-//                     console.log(
-//                         `🔍 Vector tile feature clicked: ${layerId || sourceId
-//                         } (source type: ${sourceType})`,
-//                         feature
-//                     );
-//                     // Always pass e.lngLat for vector tiles - it's the exact click point
-//                     this.show(feature, layerId || sourceId, e.lngLat, null);
-//                     return;
-//                 }
-//             }
+    labelEl.textContent = title || "Attributes";
+    tableEl.innerHTML = ""; // reset
 
-//             // No matching feature or config found - hide popup
-//             this.hide();
-//         });
+    const props = properties || {};
+    const keys = Object.keys(props || {}); // <- do NOT filter out "information"
 
-//         // Change cursor to pointer when hovering over interactive features
-//         this.map.on("mousemove", (e) => {
-//             const features = this.map.queryRenderedFeatures(e.point);
-//             let hasInteractiveFeature = features?.some((f) => {
-//                 const layerId = f.layer?.id;
-//                 const sourceId = f.source;
+    if (!props || keys.length === 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="attr-value" colspan="2">No attributes found</td>`;
+      tableEl.appendChild(tr);
+      return;
+    }
 
-//                 // Check if it's a DEW polygon
-//                 if (
-//                     (layerId && layerId.startsWith("exposure-polygon-")) ||
-//                     (sourceId && sourceId.startsWith("exposure-source-"))
-//                 ) {
-//                     return true;
-//                 }
+    const addRows = (obj, level = 0) => {
+      Object.keys(obj).forEach((key) => {
+        if (HIDDEN_KEYS.has(key)) return;
 
-//                 // Check if it has a config in layerConfigs
-//                 if ((this.layerConfigs && this.layerConfigs[layerId]) || (this.layerConfigs && this.layerConfigs[sourceId])) {
-//                     return true;
-//                 }
+        let val = obj[key];
+        // Try JSON parse for stringified objects/arrays
+        if (typeof val === "string") {
+          try {
+            const parsed = JSON.parse(val);
+            if (parsed && typeof parsed === "object") val = parsed;
+          } catch (_) {}
+        }
+        const indent = level * 16;
 
-//                 return false;
-//             });
+        if (val && typeof val === "object" && !Array.isArray(val)) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td class="attr-key" style="padding-left:${indent}px">${prettyAttributeName(
+            key
+          )}</td><td class="attr-value"></td>`;
+          tableEl.appendChild(tr);
+          addRows(val, level + 1);
+        } else {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="attr-key" style="padding-left:${indent}px">${prettyAttributeName(
+            key
+          )}</td>
+            <td class="attr-value">${
+              Array.isArray(val) ? val.join(", ") : String(val)
+            }</td>`;
+          tableEl.appendChild(tr);
+        }
+      });
+    };
 
-//             this.map.getCanvas().style.cursor = hasInteractiveFeature
-//                 ? "pointer"
-//                 : "";
-//         });
-//     }
+    addRows(props);
+  }
 
-//     show(feature, layerId, lngLatOrClickPoint = null, customConfig = null) {
-//         // Try to get config from vector tile layers first
-//         let config = customConfig || this.layerConfigs[layerId];
+  // ---------- Index popup-enabled items from config ----------
+  #indexPopupEligible() {
+    const popupLayers = new Set(); // actual Mapbox layer IDs we should accept
+    const popupSources = new Set(); // Mapbox source IDs we should accept
+    const labelsByLayer = new Map(); // title by layer id
+    const labelsBySource = new Map(); // title by source id
 
-//         // If not found, try to get config from DEW polygons
-//         if (
-//             !config &&
-//             window.sourceLayerControl &&
-//             typeof window.sourceLayerControl.getDewPolygonConfigs === "function"
-//         ) {
-//             const dewConfigs = window.sourceLayerControl.getDewPolygonConfigs();
-//             config = dewConfigs[layerId];
-//         }
+    const visit = (item) => {
+      if (!item || !item.source || !item.layers) return;
+      if (!item.popup) return; // only items explicitly flagged popup: true
+      const title = item.label || null;
 
-//         if (!config) {
-//             console.warn("❌ No config found");
-//             return;
-//         }
+      // Source-level enable
+      if (item.source.id) {
+        popupSources.add(item.source.id);
+        if (title) labelsBySource.set(item.source.id, title);
+      }
+      // Layer-level enable
+      item.layers.forEach((l) => {
+        if (l && l.id) {
+          popupLayers.add(l.id);
+          if (title) labelsByLayer.set(l.id, title);
+        }
+      });
+    };
 
-//         const content = this.popupEl.querySelector(".popup-content");
+    try {
+      Object.values(ncop_menu_items || {}).forEach((category) => {
+        Object.values(category || {}).forEach((subcat) => {
+          ["toggle", "temporal", "button", "dropdown"].forEach((bucket) => {
+            const group = subcat?.[bucket];
+            if (!group) return;
+            if (bucket === "dropdown" && Array.isArray(group)) return;
+            if (typeof group === "object") {
+              Object.values(group).forEach((item) => visit(item));
+            }
+          });
+        });
+      });
+    } catch (err) {
+      console.warn("Popup index failed:", err);
+    }
 
-//         let html = `<div class="popup-label">${config.label || layerId}</div>`;
-//         html +=
-//             '<div class="popup-attributes-scroll"><table class="popup-attributes">';
+    return { popupLayers, popupSources, labelsByLayer, labelsBySource };
+  }
 
-//         // Fallback for missing properties
-//         const props = feature.properties || {};
-//         if (Object.keys(props).length === 0) {
-//             html += `<tr><td colspan="2" class="attr-value">No attributes found</td></tr>`;
-//         } else {
-//             // Helper to recursively render nested objects and JSON strings as tables
-//             function renderNestedTable(obj, level = 0) {
-//                 let rows = "";
-//                 for (const key in obj) {
-//                     const prettyKey = prettyAttributeName(key);
-//                     let value = obj[key];
-//                     // Try to parse JSON strings
-//                     if (typeof value === "string") {
-//                         try {
-//                             const parsed = JSON.parse(value);
-//                             if (typeof parsed === "object" && parsed !== null) {
-//                                 value = parsed;
-//                             }
-//                         } catch (e) { }
-//                     }
-//                     if (typeof value === "object" && value !== null) {
-//                         rows += `<tr><td class="attr-key" style="padding-left:${level * 16}px">${prettyKey}</td><td></td></tr>`;
-//                         rows += renderNestedTable(value, level + 1);
-//                     } else {
-//                         rows += `<tr><td class="attr-key" style="padding-left:${level * 16}px">${prettyKey}</td><td class="attr-value">${value}</td></tr>`;
-//                     }
-//                 }
-//                 return rows;
-//             }
-//             html += renderNestedTable(props);
-//         }
+  // ---------- Dynamic DEW exposure indexing ----------
+  // ---------- Dynamic DEW exposure indexing ----------
+  #refreshDynamicExposureLookups() {
+    const mapObj = window.exposureLayersMap;
+    const count = mapObj instanceof Map ? mapObj.size : 0;
+    if (count === this._lastExposureCount) return; // nothing changed
 
-//         html += "</table></div>";
-//         content.innerHTML = html;
+    // Rebuild
+    this.dynamicPopupLayers.clear();
+    this.dynamicPopupSources.clear();
+    this.dynamicTitleByLayer.clear();
+    this.dynamicTitleBySource.clear();
 
-//         // Always use the clicked lat/lng for popup anchoring
-//         let lngLat = null;
+    if (mapObj instanceof Map && count > 0) {
+      mapObj.forEach(({ layerId, outlineId, sourceId }, exposureId) => {
+        let title = `DEW Exposure #${exposureId}`;
 
-//         // PRIORITY 1: Use the actual click coordinates (e.lngLat) if available
-//         // This is the most accurate for vector tiles since it's the exact point clicked
-//         if (
-//             lngLatOrClickPoint &&
-//             lngLatOrClickPoint.lng !== undefined &&
-//             lngLatOrClickPoint.lat !== undefined
-//         ) {
-//             lngLat = lngLatOrClickPoint;
-//             console.log(
-//                 `📍 Using click coordinates for popup: ${lngLat.lng}, ${lngLat.lat}`
-//             );
-//         }
-//         // FALLBACK: Only use feature geometry if click coordinates are not available
-//         // This handles cases where geometry data is available (GeoJSON features, etc.)
-//         else if (feature?.geometry?.type && feature?.geometry?.coordinates) {
-//             if (feature.geometry.type === "Point") {
-//                 lngLat = {
-//                     lng: feature.geometry.coordinates[0],
-//                     lat: feature.geometry.coordinates[1],
-//                 };
-//                 console.log(
-//                     `📍 Using Point geometry for popup: ${lngLat.lng}, ${lngLat.lat}`
-//                 );
-//             } else if (
-//                 feature.geometry.type === "Polygon" &&
-//                 feature.geometry.coordinates[0]
-//             ) {
-//                 // Use centroid of polygon for fallback
-//                 const coords = feature.geometry.coordinates[0];
-//                 let sumX = 0,
-//                     sumY = 0;
-//                 coords.forEach(([x, y]) => {
-//                     sumX += x;
-//                     sumY += y;
-//                 });
-//                 lngLat = { lng: sumX / coords.length, lat: sumY / coords.length };
-//                 console.log(
-//                     `📍 Using Polygon centroid for popup: ${lngLat.lng}, ${lngLat.lat}`
-//                 );
-//             }
-//         }
+        try {
+          // Try to fetch the GeoJSON source and extract exposure_remarks from its properties
+          const src = this.map?.getSource(sourceId);
+          const data = src?.serialized?.data || src?._data || src?.data;
+          const features = data?.features || [];
+          if (features.length > 0) {
+            const remarks = features[0].properties?.exposure_remarks;
+            if (
+              remarks &&
+              typeof remarks === "string" &&
+              remarks.trim() !== ""
+            ) {
+              title = remarks.trim();
+            }
+          }
+        } catch (err) {
+          console.warn(
+            "⚠️ Could not read exposure_remarks for",
+            exposureId,
+            err
+          );
+        }
 
-//         this.popupLngLat = lngLat;
+        if (layerId) {
+          this.dynamicPopupLayers.add(layerId);
+          this.dynamicTitleByLayer.set(layerId, title);
+        }
+        if (outlineId) {
+          this.dynamicPopupLayers.add(outlineId);
+          this.dynamicTitleByLayer.set(outlineId, title);
+        }
+        if (sourceId) {
+          this.dynamicPopupSources.add(sourceId);
+          this.dynamicTitleBySource.set(sourceId, title);
+        }
+      });
+    }
 
-//         // Position the popup and set up listeners
-//         this.popupEl.classList.remove("hidden");
-//         this._updatePopupPosition();
-//         this._setupMapMoveListener();
-//         window.ncop_popup_active = true;
-//     }
+    this._lastExposureCount = count;
+  }
 
-//     /**
-//      * Setup listeners for map movement/zoom/rotation
-//      * When the map moves, recalculate popup position to stay bound to geographic coordinates
-//      */
-//     _setupMapMoveListener() {
-//         // Remove existing listener if any
-//         if (this.mapMoveListener) {
-//             this.map.off("move", this.mapMoveListener);
-//             this.map.off("zoom", this.mapMoveListener);
-//             this.map.off("rotate", this.mapMoveListener);
-//         }
+  // ---------- Map readiness ----------
+  #isMapboxMap(obj) {
+    return !!(
+      obj &&
+      typeof obj.on === "function" &&
+      typeof obj.project === "function" &&
+      typeof obj.getCanvas === "function"
+    );
+  }
 
-//         // Create the listener function
-//         this.mapMoveListener = () => this._updatePopupPosition();
+  #deferredBind(candidate) {
+    const tryAttach = () => {
+      const m = candidate || window.ncop_map || window.map;
+      if (this.#isMapboxMap(m)) {
+        this.map = m;
+        this.#bind();
+        return true;
+      }
+      return false;
+    };
 
-//         // Attach listeners for all map change events
-//         this.map.on("move", this.mapMoveListener);
-//         this.map.on("zoom", this.mapMoveListener);
-//         this.map.on("rotate", this.mapMoveListener);
-//     }
+    if (tryAttach()) return;
 
-//     /**
-//      * Update popup screen position based on stored geographic coordinates
-//      */
-//     _updatePopupPosition() {
-//         if (!this.popupLngLat || this.popupEl.classList.contains("hidden")) {
-//             return;
-//         }
+    this._bindRetryTimer = setInterval(() => {
+      if (tryAttach()) {
+        clearInterval(this._bindRetryTimer);
+        this._bindRetryTimer = null;
+      }
+    }, 100);
+  }
 
-//         // Use requestAnimationFrame to ensure DOM has rendered before calculating dimensions
-//         requestAnimationFrame(() => {
-//             // Convert geographic coordinates to current screen coordinates
-//             const screenCoords = this.map.project(this.popupLngLat);
+  // ---------- Safe query wrapper ----------
+  #safeQueryRenderedFeatures(point, options) {
+    try {
+      if (!this.map) return [];
+      // Guard against querying during style churn/initialization
+      const style = this.map.getStyle && this.map.getStyle();
+      if (!style || !this.map.isStyleLoaded || !this.map.isStyleLoaded())
+        return [];
+      // Some Mapbox builds throw if internal featuresets not ready; catch hard
+      return this.map.queryRenderedFeatures(point, options) || [];
+    } catch (err) {
+      // Swallow known Mapbox GL edge errors (e.g., “featuresets” undefined)
+      // and degrade gracefully.
+      return [];
+    }
+  }
 
-//             // Get the actual rendered dimensions
-//             const rect = this.popupEl.getBoundingClientRect();
-//             const popupWidth = rect.width;
-//             const popupHeight = rect.height;
+  // ---------- Events ----------
+  #bind() {
+    // Click: find first popup-eligible feature (vector tile or geojson), skip raster
+    this.map.on("click", (e) => {
+      // Update dynamic eligibility (DEW) just-in-time
+      this.#refreshDynamicExposureLookups();
 
-//             // Position popup centered above the geographic point
-//             // The triangle at the bottom points to the exact clicked location
-//             const left = screenCoords.x - popupWidth / 2;
-//             const top = screenCoords.y - popupHeight - 16; // 16px offset for the triangle
+      const features = this.#safeQueryRenderedFeatures(e.point);
+      if (!features || features.length === 0) return this.hide();
 
-//             this.popupEl.style.left = `${Math.max(left, 8)}px`;
-//             this.popupEl.style.top = `${Math.max(top, 8)}px`;
-//         });
-//     }
+      // Prefer items that are explicitly enabled (static or dynamic), never raster
+      const chosen = features.find((f) => {
+        const layerType = f?.layer?.type;
+        if (layerType === "raster") return false;
+        const layerId = f?.layer?.id;
+        const sourceId = f?.source;
+        // static eligibility
+        const okStatic =
+          (layerId && this.popupLayers.has(layerId)) ||
+          (sourceId && this.popupSources.has(sourceId));
+        // dynamic DEW eligibility
+        const okDynamic =
+          (layerId && this.dynamicPopupLayers.has(layerId)) ||
+          (sourceId && this.dynamicPopupSources.has(sourceId));
+        return okStatic || okDynamic;
+      });
 
-//     hide() {
-//         this.popupEl.classList.add("hidden");
-//         window.ncop_popup_active = false;
+      if (!chosen) return this.hide();
 
-//         // Remove map listeners when popup is hidden
-//         if (this.mapMoveListener) {
-//             this.map.off("move", this.mapMoveListener);
-//             this.map.off("zoom", this.mapMoveListener);
-//             this.map.off("rotate", this.mapMoveListener);
-//             this.mapMoveListener = null;
-//         }
-//         this.popupLngLat = null;
-//     }
-// }
+      const layerId = chosen?.layer?.id;
+      const sourceId = chosen?.source;
 
-// function prettyAttributeName(attr) {
-//     // Replace underscores/dashes with spaces, capitalize each word
-//     return attr
-//         .replace(/[_-]+/g, " ")
-//         .replace(/([a-z])([A-Z])/g, "$1 $2")
-//         .replace(/\b\w/g, (c) => c.toUpperCase());
-// }
+      // Title preference: static label → dynamic DEW title → layer/source fallback
+      const title =
+        this.labelsByLayer.get(layerId) ||
+        this.labelsBySource.get(sourceId) ||
+        this.dynamicTitleByLayer.get(layerId) ||
+        this.dynamicTitleBySource.get(sourceId) ||
+        layerId ||
+        sourceId ||
+        "Feature";
 
-// export default LayerAttributePopup;
+      // Compose properties (do NOT inject config "information"; keep whatever the feature has)
+      const properties = { ...(chosen.properties || {}) };
+
+      // Anchor strictly to clicked lngLat
+      this.anchorLngLat = e.lngLat;
+      this.#setContent({ title, properties });
+      this.#show();
+      this.#updatePosition();
+
+      // Keep bound to same lngLat on move/zoom/rotate
+      this.#attachMoveListeners();
+    });
+
+    // Cursor affordance for eligible features
+    this.map.on("mousemove", (e) => {
+      this.#refreshDynamicExposureLookups();
+
+      const features = this.#safeQueryRenderedFeatures(e.point);
+      const hover = features.some((f) => {
+        if (f?.layer?.type === "raster") return false;
+        const lid = f?.layer?.id;
+        const sid = f?.source;
+        const okStatic =
+          (lid && this.popupLayers.has(lid)) ||
+          (sid && this.popupSources.has(sid));
+        const okDynamic =
+          (lid && this.dynamicPopupLayers.has(lid)) ||
+          (sid && this.dynamicPopupSources.has(sid));
+        return okStatic || okDynamic;
+      });
+      this.map.getCanvas().style.cursor = hover ? "pointer" : "";
+    });
+
+    // Click outside to hide (with small guard)
+    let lastMapClick = 0;
+    this.map.on("click", () => (lastMapClick = Date.now()));
+    document.addEventListener("mousedown", (ev) => {
+      if (Date.now() - lastMapClick < 200) return;
+      if (
+        !this.popupEl.classList.contains("hidden") &&
+        !this.popupEl.contains(ev.target)
+      ) {
+        this.hide();
+      }
+    });
+  }
+
+  #attachMoveListeners() {
+    this.#detachMoveListeners();
+    this._moveHandler = () => this.#updatePosition();
+    this._zoomHandler = () => this.#updatePosition();
+    this._rotateHandler = () => this.#updatePosition();
+
+    this.map.on("move", this._moveHandler);
+    this.map.on("zoom", this._zoomHandler);
+    this.map.on("rotate", this._rotateHandler);
+  }
+  #detachMoveListeners() {
+    if (this._moveHandler) this.map.off("move", this._moveHandler);
+    if (this._zoomHandler) this.map.off("zoom", this._zoomHandler);
+    if (this._rotateHandler) this.map.off("rotate", this._rotateHandler);
+    this._moveHandler = this._zoomHandler = this._rotateHandler = null;
+  }
+
+  // ---------- Positioning ----------
+  #updatePosition() {
+    if (!this.anchorLngLat) return;
+    const p = this.map.project(this.anchorLngLat); // screen pixel in map container coords
+    const mapCanvas = this.map.getCanvas();
+    const rect = mapCanvas.getBoundingClientRect();
+    const left = rect.left + p.x;
+    const top = rect.top + p.y;
+
+    const OFFSET_Y = 16; // lift a bit above the clicked point
+    this.popupEl.style.left = `${Math.round(left)}px`;
+    this.popupEl.style.top = `${Math.round(top - OFFSET_Y)}px`;
+  }
+
+  // ---------- Visibility ----------
+  #show() {
+    this.popupEl.classList.remove("hidden");
+    window.ncop_popup_active = true;
+  }
+
+  hide() {
+    this.popupEl.classList.add("hidden");
+    this.anchorLngLat = null;
+    this.#detachMoveListeners();
+    window.ncop_popup_active = false;
+  }
+}
+
+// Optional auto-init (safe due to deferred binding)
+if (typeof window !== "undefined" && !window.layerAttributePopup) {
+  const m = window.ncop_map || window.map;
+  window.layerAttributePopup = new LayerAttributePopup(m);
+}

@@ -92,6 +92,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: true,
           information:
             "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
         },
@@ -130,6 +131,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: true,
           information:
             "The Provincial Boundary layer delineates the borders of provinces within the country. This layer is crucial for regional planning and analysis, allowing users to visualize and manage data at the provincial level.",
         },
@@ -167,6 +169,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: true,
           information:
             "The District Boundary layer outlines the borders of districts within the country. This layer is important for local governance and resource management, providing a clear framework for administrative boundaries.",
         },
@@ -204,6 +207,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: false,
           information:
             "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
         },
@@ -247,6 +251,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: true,
           information:
             "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
@@ -617,6 +622,7 @@ export const ncop_menu_items = {
               },
             },
           ],
+          popup: true,
           information:
             "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
         },
@@ -824,6 +830,7 @@ export const ncop_menu_items = {
           key: "id",
           attribute: "remarks",
           type: "geojson",
+          popup: true,
         },
       },
     },
