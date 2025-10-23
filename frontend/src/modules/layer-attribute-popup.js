@@ -44,7 +44,10 @@ class LayerAttributePopup {
     _setupDewPolygonClickHandler() {
         this.map.on("click", (e) => {
             // Query all rendered features at this click point
-            const features = this.map.queryRenderedFeatures(e.point);
+            let features = [];
+            if (this.map && typeof this.map.queryRenderedFeatures === 'function') {
+                features = this.map.queryRenderedFeatures(e.point);
+            }
 
             if (!features || features.length === 0) {
                 this.hide();
@@ -92,7 +95,7 @@ class LayerAttributePopup {
                 if (!layerId && !sourceId) continue;
 
                 // Try to find a matching config
-                let config = this.layerConfigs[layerId] || this.layerConfigs[sourceId];
+                let config = (this.layerConfigs && this.layerConfigs[layerId]) || (this.layerConfigs && this.layerConfigs[sourceId]);
 
                 if (config) {
                     console.log(
@@ -126,7 +129,7 @@ class LayerAttributePopup {
                 }
 
                 // Check if it has a config in layerConfigs
-                if (this.layerConfigs[layerId] || this.layerConfigs[sourceId]) {
+                if ((this.layerConfigs && this.layerConfigs[layerId]) || (this.layerConfigs && this.layerConfigs[sourceId])) {
                     return true;
                 }
 
