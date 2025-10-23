@@ -1,6 +1,7 @@
 # Setup the environment (python version=3.11)
 python -m venv ncopenv311
-source ncopenv311/bin/activate
+ncopenv311/Scripts/activate
+deactivate
 
 # Install required python modules
 pip install -r requirements.txt
