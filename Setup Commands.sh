@@ -3,6 +3,7 @@ git pull origin dev-arsalan
 # Setup the environment (python version=3.11)
 python -m venv ncopenv311
 ncopenv311/Scripts/activate
+# Deactivate the environment
 deactivate
 
 # Install required python modules
