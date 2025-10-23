@@ -49,7 +49,6 @@ import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerOrderControl } from "./layer-order-control.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import { LayerInfoPanel } from "./layer-info-panel.js";
-import LayerAttributePopup from "./layer-attribute-popup.js";
 
 // ---- Mapbox token handling ----
 // The entry (dashboard_main.js) already set mapboxgl.accessToken when possible.

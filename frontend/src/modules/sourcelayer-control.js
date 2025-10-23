@@ -1,7 +1,7 @@
 // sourcelayer-control.js - Direct Mapbox layer management using map-layers.js configuration
 
 import { ncop_menu_items } from './map-layers.js';
-import LayerAttributePopup from './layer-attribute-popup.js';
+// import LayerAttributePopup from './layer-attribute-popup.js';
 
 /**
  * SourceLayerControl Class
@@ -25,7 +25,7 @@ export class SourceLayerControl {
         // Listen for style changes to restore layers
         this.setupStyleChangeHandler();
 
-        this.layerAttributePopup = new LayerAttributePopup(map, this.getVectorTileLayerConfigs());
+        // // this.layerAttributePopup = new LayerAttributePopup(map, this.getVectorTileLayerConfigs());
         this._setupFeatureClickHandler();
 
         // Preload sources only after style is loaded
@@ -646,14 +646,14 @@ export class SourceLayerControl {
                     const layerId = info.layerIds[0];
                     const features = this.map.queryRenderedFeatures(e.point, { layers: [layerId] });
                     if (features && features.length > 0) {
-                        this.layerAttributePopup.show(features[0], layerKey, e.point);
+                        // this.layerAttributePopup.show(features[0], layerKey, e.point);
                         return;
                     }
                 }
             }
             // Only hide if no DEW popup is active
             if (!window.ncop_popup_active) {
-                this.layerAttributePopup.hide();
+                // this.layerAttributePopup.hide();
             }
         });
     }
@@ -662,7 +662,7 @@ export class SourceLayerControl {
      * Position popup at top right of viewport
      */
     _positionPopupTopRight() {
-        const el = this.layerAttributePopup.popupEl;
+        // const el = this.layerAttributePopup.popupEl;
         el.style.position = 'fixed';
         el.style.top = '24px';
         el.style.right = '32px';

@@ -247,8 +247,11 @@ function getMap() {
  * Remove polygon layers for a specific exposure
  */
 function removeExposureLayersById(exposureId) {
-  const layerInfo = exposureLayersMap.get(exposureId);
-  
+  // Try both local and global exposureLayersMap
+  let layerInfo = exposureLayersMap.get(exposureId);
+  if (!layerInfo && window.exposureLayersMap) {
+    layerInfo = window.exposureLayersMap.get(exposureId);
+  }
   if (!layerInfo) return;
 
   const { layerId, outlineId, sourceId } = layerInfo;
@@ -261,13 +264,15 @@ function removeExposureLayersById(exposureId) {
   if (map && map.getLayer(outlineId)) {
     map.removeLayer(outlineId);
   }
-  
   // Remove source
   if (map && map.getSource(sourceId)) {
     map.removeSource(sourceId);
   }
 
   exposureLayersMap.delete(exposureId);
+  if (window.exposureLayersMap) {
+    window.exposureLayersMap.delete(exposureId);
+  }
   console.log(`🗑️ Exposure layers removed for ID: ${exposureId}`);
 }
 
@@ -289,6 +294,17 @@ function addExposurePolygonToMap(exposureId, geojson) {
   const layerId = `exposure-polygon-${exposureId}`;
   const outlineId = `exposure-outline-${exposureId}`;
   const sourceId = `exposure-source-${exposureId}`;
+
+  // Always remove existing layers and source before adding new ones
+  if (map.getLayer(layerId)) {
+    map.removeLayer(layerId);
+  }
+  if (map.getLayer(outlineId)) {
+    map.removeLayer(outlineId);
+  }
+  if (map.getSource(sourceId)) {
+    map.removeSource(sourceId);
+  }
 
   try {
     // Add GeoJSON source
@@ -363,8 +379,12 @@ export async function handleDewExposureCheckbox(exposureId, isChecked) {
       console.error(`❌ Error:`, error);
     }
   } else {
-    // Remove from map
+    // Remove from map: always remove source and layers for this exposureId
     removeExposureLayersById(exposureId);
+    // Also remove from window.exposureLayersMap if present
+    if (window.exposureLayersMap) {
+      window.exposureLayersMap.delete(exposureId);
+    }
   }
 }
 
@@ -373,6 +393,7 @@ export async function handleDewExposureCheckbox(exposureId, isChecked) {
  */
 export function clearAllExposureLayersFromMap() {
   exposureLayersMap.forEach((_, exposureId) => {
+    console.log(`🗑️ Clearing exposure ID: ${exposureId}`);
     removeExposureLayersById(exposureId);
   });
 }

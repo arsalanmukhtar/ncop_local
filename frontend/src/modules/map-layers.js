@@ -1,6 +1,5 @@
-import airportIcon from "@assets/images/map_icons/airplane.webp";
-import schoolIcon from "@assets/images/map_icons/school.webp";
-import settlementIcon from "@assets/images/map_icons/settlement.webp";
+import {map_icons} from "./map-icons.js"
+
 import {
   generateDWDSatelliteLayers,
   generateECMWFLightningLayers,
@@ -14,6 +13,11 @@ import {
   generateCH4300Layers,
 } from "./time-functions.js";
 
+// Global baseUrl for the entire application
+window.baseUrl = window.location.origin;
+console.log('🌐 Global baseUrl:', window.baseUrl);
+export const baseUrl = window.baseUrl;
+
 // Layer thumbnails can be added in loop by importing images like below
 const images = import.meta.glob("@assets/images/layer_thumbnails/*.webp", { eager: true });
 // Use this function name with image name to load it e.g. getImage('airports.webp')
@@ -21,6 +25,7 @@ function getImage(filename) {
     const match = Object.entries(images).find(([path]) => path.includes(filename));
     return match ? match[1].default : null;
 }
+
 const dwd_layers = generateDWDSatelliteLayers();
 const ecmwf_layers = generateECMWFLightningLayers();
 const pm25_layers = generatePM25Layers();
@@ -225,7 +230,7 @@ export const ncop_menu_items = {
               source: "airports-source",
               "source-layer": "airports",
               layout: {
-                "icon-image": airportIcon, // Use custom icon name
+                "icon-image": map_icons.airportIcon, // Use custom icon name
                 // Interpolate icon-size based on zoom for smooth scaling
                 "icon-size": [
                   "interpolate",
@@ -297,7 +302,7 @@ export const ncop_menu_items = {
               source: "schools-source",
               "source-layer": "schools",
               layout: {
-                "icon-image": schoolIcon, // Use custom icon name
+                "icon-image": map_icons.schoolIcon, // Use custom icon name
                 // Interpolate icon-size based on zoom for smooth scaling
                 "icon-size": [
                   "interpolate",
@@ -336,7 +341,7 @@ export const ncop_menu_items = {
               source: "settlements-source",
               "source-layer": "settlements",
               layout: {
-                "icon-image": settlementIcon, // Use custom icon name
+                "icon-image": map_icons.settlementIcon, // Use custom icon name
                 // Interpolate icon-size based on zoom for smooth scaling
                 "icon-size": [
                   "interpolate",
@@ -428,7 +433,8 @@ export const ncop_menu_items = {
           theme: "slider",
           type: "raster",
           title: "DWD Radar (°C)",
-          information: "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
+          information:
+            "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
         },
         imerg_precipitation_rate_14_days: {
           label: "IMERG Precipitation Rate (14 Days)",
@@ -579,23 +585,40 @@ export const ncop_menu_items = {
     },
     "Pakistan Meteorological Department (PMD)": {
       toggle: {
-        precipitation_past_3_days: {
-          label: "Precipitation (Past 3 Days)",
-          type: "geojson",
+        pmd_weather_stations: {
+          label: "PMD Weather Stations",
           theme: null,
-          geometry: null,
-        },
-        pmd_rainfall_stations: {
-          label: "PMD Rainfall Stations",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        pmd_temperature_stations: {
-          label: "PMD Temperature Stations",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          source: {
+            id: "pmd_weather_stations-source",
+            type: "geojson",
+            data: `${baseUrl}/get-weather-pmdffd-data/`,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "pmd_weather_stations-symbol",
+              type: "symbol",
+              source: "pmd_weather_stations-source",
+              layout: {
+                "icon-image": map_icons.weatherStationIcon, // Use custom icon name
+                // Interpolate icon-size based on zoom for smooth scaling
+                "icon-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  5,
+                  0.25,
+                  10,
+                  0.5,
+                  15,
+                  1,
+                ],
+                "icon-allow-overlap": true,
+              },
+            },
+          ],
+          information:
+            "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
         },
       },
     },
@@ -801,7 +824,7 @@ export const ncop_menu_items = {
           key: "id",
           attribute: "remarks",
           type: "geojson",
-        }
+        },
       },
     },
     "DEW Polygons": {
