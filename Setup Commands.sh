@@ -1,3 +1,5 @@
+# To take the latest pull from main dev dm arsalan to keep your branch updated
+git pull origin dev-arsalan
 # Setup the environment (python version=3.11)
 python -m venv ncopenv311
 ncopenv311/Scripts/activate
