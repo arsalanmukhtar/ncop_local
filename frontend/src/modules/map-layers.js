@@ -99,8 +99,7 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information:
-            "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
+          information:"The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
         },
         provincial_boundary: {
           label: "Provincial Boundary",
@@ -258,8 +257,7 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information:
-            "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
+          information: "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
         // hospitals: {
         //     label: "Hospitals",
@@ -838,6 +836,7 @@ export const ncop_menu_items = {
           attribute: "remarks",
           type: "geojson",
           popup: true,
+          information: "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
         },
       },
     },

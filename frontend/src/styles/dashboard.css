@@ -1574,7 +1574,7 @@ button.custom-nav-btn.terrain-active:hover {
     opacity: 1;
     display: flex;
     flex-direction: column;
-    transform: translate(-50%, -95%);
+    transform: translate(-50%, -100%);
 }
 
 .layer-attribute-popup.hidden {
