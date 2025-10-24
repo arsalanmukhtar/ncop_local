@@ -1,6 +1,7 @@
 // time-slider-functionality.js
 // Updated to work with DashboardManager's private map instance
 // Adds: clean Lucide play/pause toggle with two buttons, and restoration on map 'style.load'.
+// ADDED: Drag and Resize functionality
 
 import { legends } from "./temporal-layer-legends";
 
@@ -22,6 +23,18 @@ let _sliderRestore = {
 };
 let _styleLoadHandlerBound = false;
 
+// Drag and Resize variables
+let isDragging = false;
+let isResizing = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragStartLeft = 0;
+let dragStartTop = 0;
+let resizeStartX = 0;
+let resizeStartY = 0;
+let resizeStartWidth = 0;
+let resizeStartHeight = 0;
+
 // Helper to get the map instance from DashboardManager
 function getMap() {
   if (!window.ncop_map) {
@@ -31,6 +44,81 @@ function getMap() {
     return null;
   }
   return window.ncop_map;
+}
+
+// ===== DRAG AND RESIZE FUNCTIONS =====
+
+function initDragResize() {
+  const tempSlider = document.getElementById("temp-slider1");
+  const dragBtn = document.getElementById("dragControlButton");
+  const resizeBtn = document.getElementById("resizeControlButton");
+
+  if (!tempSlider || !dragBtn || !resizeBtn) return;
+  // ===== DRAG FUNCTIONALITY =====
+  dragBtn.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragStartLeft = parseInt(window.getComputedStyle(tempSlider).left) || 0;
+    dragStartTop = parseInt(window.getComputedStyle(tempSlider).top) || 0;
+
+    document.addEventListener("mousemove", onDragMove);
+    document.addEventListener("mouseup", onDragEnd);
+  });
+
+  function onDragMove(e) {
+    if (!isDragging) return;
+
+    const deltaX = e.clientX - dragStartX;
+    const deltaY = e.clientY - dragStartY;
+
+    tempSlider.style.left = dragStartLeft + deltaX + "px";
+    tempSlider.style.top = dragStartTop + deltaY + "px";
+  }
+
+  function onDragEnd() {
+    isDragging = false;
+    document.removeEventListener("mousemove", onDragMove);
+    document.removeEventListener("mouseup", onDragEnd);
+  }
+
+  // ===== RESIZE FUNCTIONALITY =====
+  resizeBtn.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    isResizing = true;
+    resizeStartX = e.clientX;
+    resizeStartY = e.clientY;
+    resizeStartWidth = tempSlider.offsetWidth;
+    resizeStartHeight = tempSlider.offsetHeight;
+
+    document.addEventListener("mousemove", onResizeMove);
+    document.addEventListener("mouseup", onResizeEnd);
+  });
+
+  function onResizeMove(e) {
+    if (!isResizing) return;
+
+    const deltaX = e.clientX - resizeStartX;
+    const deltaY = e.clientY - resizeStartY;
+
+    const newWidth = Math.max(100, resizeStartWidth + deltaX);
+    const newHeight = Math.max(50, resizeStartHeight + deltaY);
+
+    tempSlider.style.width = newWidth + "px";
+    tempSlider.style.height = newHeight + "px";
+
+    const legendContainer = document.querySelector(".legend-container1");
+    if (legendContainer) {
+      legendContainer.style.width = newWidth * 0.95 + "px";
+    }
+  }
+
+  function onResizeEnd() {
+    isResizing = false;
+    document.removeEventListener("mousemove", onResizeMove);
+    document.removeEventListener("mouseup", onResizeEnd);
+  }
 }
 
 // ===== UTILITY FUNCTIONS =====
@@ -328,14 +416,14 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
 
 // After rendering the legend HTML into #legend-container-slider1, dynamically set legend bar widths
 export function updateLegendBarWidths() {
-  const legendContainer = document.getElementById('legend-container-slider1');
+  const legendContainer = document.getElementById("legend-container-slider1");
   if (!legendContainer) return;
   // Select all direct child divs with class bar1 or bar2 (legend bars)
-  const bars = legendContainer.querySelectorAll('div.bar1, div.bar2');
-  bars.forEach(bar => {
-      bar.style.flex = '1 1 0';
-      bar.style.minWidth = '0';
-      bar.style.width = '';
+  const bars = legendContainer.querySelectorAll("div.bar1, div.bar2");
+  bars.forEach((bar) => {
+    bar.style.flex = "1 1 0";
+    bar.style.minWidth = "0";
+    bar.style.width = "";
   });
 }
 
@@ -565,6 +653,9 @@ document.addEventListener("DOMContentLoaded", function () {
   try {
     window.lucide?.createIcons();
   } catch {}
+
+  // Initialize drag and resize
+  initDragResize();
 
   // Initialize speed label
   if (speedBtn) {
