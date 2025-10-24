@@ -160,7 +160,7 @@ export const legends = {
     ["#007700", "#EECC00", "#FF0000", "#FF06FF", "#005599"],
     ["Rain", "Rain-Snow", "Freezing Rain", "Ice-Pellets", "Snow"]
   ),
-  ecmwfTemp: gradientLegendBar(
+  ecmwf_temperature_850hPa: gradientLegendBar(
     [
       "#e133e1",
       "#ae33ae",
@@ -254,7 +254,7 @@ export const legends = {
     ["#87ff89", "#feff59", "#fcb12d", "#f65319", "#b10a0a"],
     ["Very Low", "Low", "Moderate", "High", "Very High"]
   ),
-  ecmwfCyclone: gradientLegendBar(
+  ecmwf_cyclone: gradientLegendBar(
     [
       "#FF06FF",
       "#FF4F01",
