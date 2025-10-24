@@ -120,3 +120,5 @@ git add ibrahim-abdullah/hydroanalytics-portal/*
 git commit -m "Added Ibrahim Abdullah hydroanalytics-portal"
 # Push the changes in main branch
 git push origin main
+
+# END OF SETUP COMMANDS.SH
