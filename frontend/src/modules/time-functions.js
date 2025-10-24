@@ -305,6 +305,109 @@ export function generateDWDSatelliteLayers() {
   return dwdSatellite;
 }
 // LAYER definitions and additions
+
+// Generate ECMWF Temperature Layers
+export function generateECMWFTempLayers() {
+  const ecmwfTemp = [];
+
+  Array.from({ length: 10 }, (_, index) => {
+    const idSuffixes = [
+      "today",
+      "onedayahead",
+      "twodayahead",
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+    ];
+
+    const id = `ecmwf_temp_${idSuffixes[index]}`;
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=t850_public&TIME=${timeParam}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date,
+    };
+
+    ecmwfTemp.push(entry);
+  });
+
+  return ecmwfTemp;
+}
+
+// Generate ECMWF Cyclone Layers
+export function generateECMWFCycloneLayers() {
+  const ecmwfCyclone = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const idSuffixes = [
+      "today",
+      "onedayahead",
+      "twodayahead",
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+    ];
+
+    const id = `ecmwf_cyclone_${idSuffixes[index]}`;
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=genesis_td&TIME=${timeParam}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date,
+    };
+
+    ecmwfCyclone.push(entry);
+  });
+
+  return ecmwfCyclone;
+}
+
+
+// Generate ECMWF Lightning Layers
 export function generateECMWFLightningLayers() {
   const ecmwfLight = [];
 
