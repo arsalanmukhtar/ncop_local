@@ -2,8 +2,8 @@ import os, sys
 from pathlib import Path
 import environ
 
-GDAL_LIBRARY_PATH = r'C:\OSGeo4W\bin\gdal311.dll'
-GEOS_LIBRARY_PATH = r'C:\OSGeo4W\bin\geos_c.dll'
+GDAL_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\gdal307.dll'
+GEOS_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\geos_c.dll'
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # .../project
 env = environ.Env(DEBUG=(bool, False))

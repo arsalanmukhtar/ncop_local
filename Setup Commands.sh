@@ -1,80 +1,59 @@
-# Setup the environment
-sudo apt update
-sudo apt install python3-venv -y
+# To take the latest pull from main dev dm arsalan to keep your branch updated
+git pull origin dev-arsalan
+# Setup the environment (python version=3.11)
+python -m venv ncopenv311
+ncopenv311/Scripts/activate
+# Deactivate the environment
+deactivate
 
-# Install GDAL and its dependencies for ubuntu
-sudo add-apt-repository ppa:ubuntugis/ppa && sudo apt-get update
-sudo apt-get update
-sudo apt-get install gdal-bin
-sudo apt-get install libgdal-dev
-export CPLUS_INCLUDE_PATH=/usr/include/gdal
-export C_INCLUDE_PATH=/usr/include/gdal
-# Install gdal but if there is some error just ignore it
-pip install GDAL
-
-# Install gdal and its dependencies for windows using OsGeo4W and wheel file
+# Install required python modules
+pip install -r requirements.txt
+# Compatible GDAL wheel download link
 DOWNLOAD_URL="https://github.com/arsalanmukhtar/ncop_local/blob/dev-arsalan/GDAL-3.4.3-cp311-cp311-win_amd64.whl"
 
-# Add paths in the terminal environment variables
+# Install postgresql and postgis if not installed  and setup database on postgresql (SQL Shell or pgAdmin) for dev-ahadkhan
+PS C:\Users\7987sarim> psql -U postgres
+Password for user postgres:
+
+# ================================ Welcome to psql 14.11 ================================ #
+psql (14.11)
+WARNING: Console code page (437) differs from Windows code page (1252)
+         8-bit characters might not work correctly. See psql reference
+         page "Notes for Windows users" for details.
+Type "help" for help.
+
+postgres=# CREATE DATABASE dev-ahadkhan;
+postgres=# CREATE EXTENSION postgis;
+postgres=# CREATE EXTENSION pg_trgm;
+postgres=# CREATE EXTENSION hstore;
+# ================================ Goodbye from psql 14.11 =============================== #
+
+# Add paths in the terminal environment variables. NOTE: You may need to find right path of OSGeo4W installation on your system.
+# Paths for dev-arsalan
 setx GDAL_LIBRARY_PATH "C:\OSGeo4W\bin\gdal311.dll"
 setx GEOS_LIBRARY_PATH "C:\OSGeo4W\bin\geos_c.dll"
 setx PROJ_LIB "C:\OSGeo4W\share\proj"
 setx PATH "$($env:PATH);C:\OSGeo4W\bin"
-
 # Add this is project settings.py
 GDAL_LIBRARY_PATH = r'C:\OSGeo4W\bin\gdal311.dll'
 GEOS_LIBRARY_PATH = r'C:\OSGeo4W\bin\geos_c.dll'
-
-# Adjust the GDAL_LIBRARY_PATH in project settings.py accordingly at the top
-import os
-os.environ['GDAL_LIBRARY_PATH'] = r"D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin\gdal304.dll"
-os.environ['PROJ_LIB'] = r"D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin\proj7"
-os.environ['PATH'] += os.pathsep + r"D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin"
 # Test your GDAL binaries setup
 (ncopenv311) PS D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin> python -c "from django.contrib.gis import gdal; print(gdal.GDAL_VERSION)"
+
+# -------------------------- #
+# Paths for dev-ahadkhan
+setx GDAL_LIBRARY_PATH "C:\Program Files\QGIS 3.32.3\bin\gdal307.dll"
+setx GEOS_LIBRARY_PATH "C:\Program Files\QGIS 3.32.3\bin\geos_c.dll"
+setx PROJ_LIB "C:\Program Files\QGIS 3.32.3\share\proj"
+setx PATH "$($env:PATH);C:\Program Files\QGIS 3.32.3\bin"
+
+# Add this is project settings.py
+GDAL_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\gdal307.dll'
+GEOS_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\geos_c.dll'
+
+# Test your GDAL binaries setup in env terminal
+(ncopenv311) python -c "from osgeo import gdal; print(gdal.VersionInfo('--version'))"
 # Console output: (3, 4, 3) --> Works perfect
-
-# Install postgresql and postgis
-sudo apt update
-sudo apt install postgresql postgresql-contrib -y
-sudo apt install postgis postgresql-14-postgis-3 -y
-
-# Start the postgresql service
-sudo systemctl enable postgresql
-sudo service postgresql restart
-
-# Allow windows to access WSL IP
-sudo nano /etc/postgresql/14/main/postgresql.conf
-# listen_addresses = '*'
-sudo nano /etc/postgresql/14/main/pg_hba.conf
-# Database administrative login by Unix domain socket
-local   all             postgres                                peer
-
-# "local" is for Unix domain socket connections only
-local   all             all                                     peer
-
-# IPv4 local connections:
-host    all             all             127.0.0.1/32           md5
-host    all             all             0.0.0.0/0              md5   # optional, allows all IPs
-
-# IPv6 local connections:
-host    all             all             ::1/128                scram-sha-256
-
-# Allow replication connections
-local   replication     all                                     peer
-host    replication     all             127.0.0.1/32          scram-sha-256
-host    replication     all             ::1/128                scram-sha-256
-
-# Start the postgresql service to take effect
-sudo service postgresql start
-
-# Now install and activate the environment
-sudo apt install python3.10-venv
-python3 -m venv --system-site-packages djangoenv
-source djangoenv/bin/activate
-
-# Install python modules
-pip install -r requirements.txt
 
 # Install node service
 # Download and install nvm:
@@ -87,6 +66,25 @@ nvm install 22
 node -v # Should print "v22.20.0".
 # Verify npm version:
 npm -v # Should print "10.9.3".
+
+# ======================================== SETTING UP THE PROJECT AND SERVER ======================================== #
+# Terminal prompts
+.\ncopenv311\Scripts\activate
+cd .\project\
+# Initial setup and only when database changes are made
+python manage.py makemigrations
+python manage.py migrate
+
+# Create superuser for admin panel (only if required)
+python manage.py createsuperuser
+
+# Starting the server
+python manage.py runserver
+
+# Starting vite for frontend assets
+cd \ncop_local\frontend>
+npm install
+npm run dev
 
 # =========================================== NDMA Github Portal Push Commands =========================================== #
 
@@ -122,3 +120,5 @@ git add ibrahim-abdullah/hydroanalytics-portal/*
 git commit -m "Added Ibrahim Abdullah hydroanalytics-portal"
 # Push the changes in main branch
 git push origin main
+
+# END OF SETUP COMMANDS.SH

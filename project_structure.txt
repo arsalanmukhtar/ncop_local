@@ -25,5 +25,3 @@ ncop_local
 	.env (env variables)
 	.gitignore (github ignore file config)
 	requirements.txt (installation file for djangoenv modules)
-
-
