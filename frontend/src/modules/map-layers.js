@@ -2,8 +2,6 @@ import {map_icons} from "./map-icons.js"
 
 import {
   generateDWDSatelliteLayers,
-  generateECMWFTempLayers,
-  generateECMWFCycloneLayers,
   generateECMWFLightningLayers,
   generatePM25Layers,
   generatePM10Layers,
@@ -29,8 +27,6 @@ function getImage(filename) {
 }
 
 const dwd_layers = generateDWDSatelliteLayers();
-const ecmwf_temp_layers = generateECMWFTempLayers();
-const ecmwf_cyclone_layers = generateECMWFCycloneLayers();
 const ecmwf_layers = generateECMWFLightningLayers();
 const pm25_layers = generatePM25Layers();
 const pm10_layers = generatePM10Layers();
@@ -42,8 +38,6 @@ const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
-window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
-window.ecmwf_cyclone = ecmwf_cyclone_layers;
 window.ecmwf_lightning = ecmwf_layers;
 window.particulate_matter_25 = pm25_layers;
 window.particulate_matter_10 = pm10_layers;
@@ -328,7 +322,6 @@ export const ncop_menu_items = {
               },
             },
           ],
-          popup: true,
           information:
             "The Schools layer displays the locations of schools within the country. This layer is essential for education planning and resource allocation, providing critical information for educational services and facilities.",
         },
@@ -489,12 +482,12 @@ export const ncop_menu_items = {
     },
     "ECMWF Weather Forecast Parameters": {
       temporal: {
-        ecmwf_temperature_850hPa: {
+        temperature_850hPa: {
           label: "Temperature (850hPa)",
           image: getImage("temperature_cams.webp"),
           type: "raster",
           theme: "slider",
-          title: "Temperature (°C)",
+          geometry: null,
         },
         ecmwf_lightning: {
           label: "Lightning Forecast",
@@ -503,12 +496,12 @@ export const ncop_menu_items = {
           theme: "slider",
           title: "Probability %",
         },
-        ecmwf_cyclone: {
+        tropical_cyclone_strike_probability: {
           label: "Tropical Cyclone Strike Probability",
           image: getImage("Tropical_Cyclone_strike_propability.webp"),
           type: "raster",
           theme: "slider",
-          title: "Probability %",
+          geometry: null,
         },
       },
     },
