@@ -28,6 +28,221 @@ function getImage(filename) {
     return match ? match[1].default : null;
 }
 
+// ======================================================
+// Sync JSON → GeoJSON helpers (no async/await required)
+// ======================================================
+//
+// main use:
+// const fc = jsonUrlToGeoJsonSync("https://.../latest.json");
+// map.addSource("...", { type: "geojson", data: fc });
+//
+// NOTE: This uses a synchronous XHR (blocking). That's intentional
+// because we need data immediately at config-build time.
+//
+
+/**
+ * Fetch remote JSON synchronously, convert it to a GeoJSON FeatureCollection.
+ * Always returns a valid FeatureCollection, even on error.
+ */
+function jsonUrlToGeoJsonSync(url) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, false); // false => block until done
+
+  try {
+    xhr.send(null);
+  } catch (e) {
+    console.error("jsonUrlToGeoJsonSync: network error for", url, e);
+    return emptyFC();
+  }
+
+  if (xhr.status < 200 || xhr.status >= 300) {
+    console.error("jsonUrlToGeoJsonSync:", url, "bad status", xhr.status);
+    return emptyFC();
+  }
+
+  let data;
+  try {
+    data = JSON.parse(xhr.responseText);
+  } catch (err) {
+    console.error("jsonUrlToGeoJsonSync:", url, "invalid JSON", err);
+    return emptyFC();
+  }
+
+  return buildFC(data);
+}
+
+/**
+ * Small helper: return an empty but valid FeatureCollection.
+ */
+function emptyFC() {
+  return { type: "FeatureCollection", features: [] };
+}
+
+/**
+ * Turn an arbitrary nested object into a FeatureCollection.
+ * We scan for any arrays whose objects look like they have coordinates.
+ */
+function buildFC(obj) {
+  const arrays = collectGeoArrays(obj);
+  const features = [];
+
+  for (const arr of arrays) {
+    for (const item of arr) {
+      const feat = toPointFeature(item);
+      if (feat) features.push(feat);
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * Recursively walk the object, collecting arrays that appear "geospatial".
+ * "Geospatial" = at least one element that looks like it has lon/lat.
+ */
+function collectGeoArrays(root) {
+  const found = [];
+
+  (function walk(node) {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      // If array contains point-like objects, record it.
+      if (looksGeospatial(node)) found.push(node);
+
+      // Still descend in case there are nested arrays deeper.
+      for (const child of node) {
+        if (child && typeof child === "object") walk(child);
+      }
+      return;
+    }
+
+    if (typeof node === "object") {
+      for (const k in node) {
+        if (Object.prototype.hasOwnProperty.call(node, k)) {
+          walk(node[k]);
+        }
+      }
+    }
+  })(root);
+
+  return found;
+}
+
+/**
+ * Quick heuristic: check first object-like element in array and see
+ * if we can extract coords from it.
+ */
+function looksGeospatial(arr) {
+  const firstObj = arr.find(
+    (el) => el && typeof el === "object" && !Array.isArray(el)
+  );
+  return !!firstObj && !!extractCoords(firstObj);
+}
+
+/**
+ * Convert one data record into a GeoJSON Point feature.
+ * Returns null if no usable coords.
+ */
+function toPointFeature(props) {
+  const coords = extractCoords(props);
+  if (!coords) return null;
+
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: coords },
+    properties: { ...props },
+  };
+}
+
+/**
+ * Try to pull [lon, lat] from flexible field names like:
+ * long/lat, lon/lat, lng/lat, longitude/latitude, x/y, etc.
+ *
+ * Returns [lon, lat] as numbers, or null if invalid.
+ */
+function extractCoords(obj) {
+  if (!obj || typeof obj !== "object") return null;
+
+  // Preferred explicit pairs to test in order.
+  const pairs = [
+    ["long", "lat"],
+    ["lon", "lat"],
+    ["lng", "lat"],
+    ["longitude", "latitude"],
+    ["x", "y"],
+    ["Long", "Lat"],
+    ["LONG", "LAT"],
+  ];
+
+  for (const [lonKey, latKey] of pairs) {
+    if (lonKey in obj && latKey in obj) {
+      const lon = toNum(obj[lonKey]);
+      const lat = toNum(obj[latKey]);
+      if (validCoord(lon, lat)) return [lon, lat];
+    }
+  }
+
+  // Loose fallback: find any plausible lon-ish / lat-ish keys.
+  const lonKeys = ["long", "lng", "lon", "longitude", "x", "LONG", "Long"];
+  const latKeys = ["lat", "latitude", "y", "LAT", "Lat"];
+
+  let lon, lat;
+
+  for (const k of lonKeys) {
+    if (k in obj) {
+      lon = toNum(obj[k]);
+      if (!Number.isNaN(lon)) break;
+    }
+  }
+  for (const k of latKeys) {
+    if (k in obj) {
+      lat = toNum(obj[k]);
+      if (!Number.isNaN(lat)) break;
+    }
+  }
+
+  return validCoord(lon, lat) ? [lon, lat] : null;
+}
+
+/**
+ * toNum(val):
+ * - number → number
+ * - "34,900" → 34900
+ * - "72.7338000" → 72.7338
+ * otherwise NaN
+ */
+function toNum(val) {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const num = Number(val.trim().replace(/,/g, ""));
+    if (!Number.isNaN(num)) return num;
+  }
+  return NaN;
+}
+
+/**
+ * Basic lon/lat sanity (WGS84-ish).
+ */
+function validCoord(lon, lat) {
+  return (
+    typeof lon === "number" &&
+    typeof lat === "number" &&
+    !Number.isNaN(lon) &&
+    !Number.isNaN(lat) &&
+    lon >= -180 &&
+    lon <= 180 &&
+    lat >= -90 &&
+    lat <= 90
+  );
+}
+///
+// This call BLOCKS until the JSON is fetched + converted.
+// After this line, __FFD_GEOJSON__ is a real FeatureCollection.
+const __FFD_GEOJSON__ = jsonUrlToGeoJsonSync(
+  "https://raw.githubusercontent.com/Ibrahom1/hydrosituation/main/latest.json"
+);
+// Defining the layer of temporal data
 const dwd_layers = generateDWDSatelliteLayers();
 const ecmwf_temp_layers = generateECMWFTempLayers();
 const ecmwf_cyclone_layers = generateECMWFCycloneLayers();
@@ -99,7 +314,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information:"The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
+          information:
+            "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
         },
         provincial_boundary: {
           label: "Provincial Boundary",
@@ -257,7 +473,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information: "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
+          information:
+            "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
         // hospitals: {
         //     label: "Hospitals",
@@ -645,6 +862,89 @@ export const ncop_menu_items = {
     },
   },
   flood: {
+    "Flood Forecasting Division (FFD-Data)": {
+      toggle: {
+        ffd_data : {
+          label: "FFD Data",
+          theme: null,
+          source: {
+            id: "ffd_data-source",
+            type: "geojson",
+            data: __FFD_GEOJSON__, // fully populated FeatureCollection, synchronously created
+          },
+          layers: [
+            {
+              id: "ffd_data-circle",
+              type: "circle",
+              // Critical: must match source.id so SourceLayerControl wires it correctly
+              source: "ffd_data-source",
+              paint: {
+                "circle-color": [
+                  "match",
+                  ["get", "status"],
+        
+                  "Normal",
+                  "#28a745", // Green - Normal Flow
+                  "NORMAL",
+                  "#28a745", // Green - Normal Flow
+        
+                  "Low",
+                  "#17a2b8", // Teal - Low Flood
+                  "LOW",
+                  "#17a2b8", // Teal - Low Flood
+        
+                  "Medium",
+                  "#ffc107", // Yellow - Medium Flood
+                  "MEDIUM",
+                  "#ffc107", // Yellow - Medium Flood
+        
+                  "High",
+                  "#fd7e14", // Orange - High Flood
+                  "HIGH",
+                  "#fd7e14", // Orange - High Flood
+        
+                  "Very High",
+                  "#dc3545", // Red - Very High Flood
+                  "VERY_HIGH",
+                  "#dc3545", // Red - Very High Flood
+        
+                  "Exceptionally High",
+                  "#6f42c1", // Purple - Exceptionally High Flood
+                  "EX_HIGH",
+                  "#6f42c1", // Purple - Exceptionally High Flood
+        
+                  "#999999", // default gray if none match
+                ],
+                "circle-opacity": 1,
+                "circle-radius": 7,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#FFFFFF",
+              },
+            },
+            {
+              id: "ffd_data-labels",
+              type: "symbol",
+              source: "ffd_data-source",
+              layout: {
+                "text-field": "{name} \n {outflow_discharge}",
+                "text-size": 12,
+                "text-offset": [0, -0.5],
+                "text-anchor": "bottom",
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+              },
+              paint: {
+                "text-color": "white",
+                "text-halo-color": "black",
+                "text-halo-width": 1,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "The FFD Data layer displays real-time flood monitoring data from the Flood Forecasting Division (FFD). This layer is crucial for flood risk assessment and management, providing vital information on water levels and flood status across various locations.",
+        },
+      },
+    },
     "Global Flood Awareness System (GloFAS)": {
       temporal: {
         precipitation_probability_50mm_10days: {
@@ -836,7 +1136,8 @@ export const ncop_menu_items = {
           attribute: "remarks",
           type: "geojson",
           popup: true,
-          information: "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
+          information:
+            "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
         },
       },
     },
