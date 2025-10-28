@@ -6,6 +6,8 @@ import mapboxgl from "mapbox-gl";
 window.mapboxgl = mapboxgl;
 
 import ndmaLogo from "@assets/images/bg_images/ndma-logo.png";
+import socialMediaIcon from "@assets/images/misc_icons/social-media1.webp";
+import newsIcon from "@assets/images/misc_icons/newspaper1.webp";
 import { setAssets } from "../modules/set-assets.js";
 
 // Load supporting modules (DashboardManager lives in ../modules/dashboard.js)
@@ -35,6 +37,6 @@ if (token && !mapboxgl.accessToken) {
 
 // ---- Lightweight DOM setup for assets & icons ----
 document.addEventListener("DOMContentLoaded", () => {
-  setAssets({ ndmaLogo });
+  setAssets({ ndmaLogo, socialMediaIcon, newsIcon });
   window.lucide.createIcons();
 });
