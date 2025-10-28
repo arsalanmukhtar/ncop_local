@@ -169,6 +169,31 @@
             <p></p>
         </div>
     </div>
+
+    <!--NEWS Modal-->
+    <div id="news-modal" class="news-modal bg-glass">
+        <!-- Left section: Logo + Global News + Time -->
+         <!-- Left: Logo + Title + Time -->
+        <div class="news-header">
+            <div class="logo-container">
+                <img data-asset="ndmaLogo" alt="NDMA Logo" class="logo-spin" />
+            </div>
+            <div class="news-info">
+                <div class="news-title">Local News</div>
+                <div class="news-time" id="news-time">--:--:--</div>
+            </div>
+            <div class="news-toggle-buttons">
+                <button id="toggle-social-btn" title="Toggle Social Media News" class="toggle-btn"><img data-asset="socialMediaIcon" alt="Toggle Social Media News"></button>
+                <button id="fetch-regular-btn" title="Fetch News Only" class="toggle-btn"><img data-asset="newsIcon" alt="Fetch News Only"></button>
+            </div>
+            <div class="divider-line"></div>
+        </div>
+        <!-- Right: Scrolling news -->
+         <div class="news-scroll-wrapper">
+            <div class="news-scroll" id="news-scroll"></div>
+        </div>
+    </div>
+
 </body>
 
 </html>
