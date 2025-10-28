@@ -13,6 +13,13 @@ import {
   generateCOLayers,
   generateDustLayers,
   generateCH4300Layers,
+  generateGDPSHumLayers,
+  generateGDPSAccPreciLayers,
+  generateGDPSPreciTypesLayers,
+  generateOceanSalinityLayers,
+  generateOceanTemperatureLayers,
+  generateOceanCurrentsLayers,
+  generateOceanSurfaceHeightLayers
 } from "./time-functions.js";
 
 // Global baseUrl for the entire application
@@ -40,6 +47,13 @@ const o3_layers = generateO3Layers();
 const co_layers = generateCOLayers();
 const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
+const gdps_hum_layers = generateGDPSHumLayers();
+const gdps_accu_precip_layers = generateGDPSAccPreciLayers();
+const gdps_preci_types_layers = generateGDPSPreciTypesLayers();
+const ocean_salinity_layers = generateOceanSalinityLayers();
+const ocean_temperature_layers = generateOceanTemperatureLayers();
+const ocean_currents_layers = generateOceanCurrentsLayers();
+const ocean_surface_height_layers = generateOceanSurfaceHeightLayers();
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
 window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
@@ -53,6 +67,13 @@ window.ozone = o3_layers;
 window.carbon_monoxide = co_layers;
 window.dust = dust_layers;
 window.methane_at_300hPa = ch4300_layers;
+window.specific_humidity_2m_above_ground = gdps_hum_layers;
+window.gdps_accumulated_precipitation = gdps_accu_precip_layers;
+window.precipitation_type_3hrs = gdps_preci_types_layers;
+window.ocean_salinity = ocean_salinity_layers;
+window.ocean_temperature = ocean_temperature_layers;
+window.ocean_surface_currents = ocean_currents_layers;
+window.ocean_surface_height = ocean_surface_height_layers;
 console.log(
   "✅ DWD layers created:",
   window.dwd_satellite_infrared.length,
@@ -462,7 +483,7 @@ export const ncop_menu_items = {
           image: getImage("specific_humidity_weekly_2m_forecast.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Specific Humidity (g/kg)",
         },
         relative_humidity_percent: {
           label: "Relative Humidity (%)",
@@ -471,19 +492,19 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
         },
-        accumulated_precipitation: {
+        gdps_accumulated_precipitation: {
           label: "Accumulated Precipitation",
           image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        "precipitation_type_/_3hrs": {
+        precipitation_type_3hrs: {
           label: "Precipitation Type / 3hrs",
           image: getImage("Precipitation_3hourly_forecast.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Precipitation Type",
         },
       },
     },
@@ -795,28 +816,28 @@ export const ncop_menu_items = {
   "ocean/coastal": {
     Oceanography: {
       temporal: {
-        ocean_surface_salinity_10m: {
+        ocean_salinity: {
           label: "Ocean Surface Salinity (10m)",
           image: getImage("Sea_Water_salinity_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_temperature_10m: {
+        ocean_temperature: {
           label: "Ocean Surface Temperature (10m)",
           image: getImage("Sea_Water_Potential_Temperature_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_currents_10m: {
+        ocean_surface_currents: {
           label: "Ocean Surface Currents (10m)",
           image: getImage("Sea_Water_Potential_currents_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_height_wrt_geoid: {
+        ocean_surface_height: {
           label: "Ocean Surface Height w.r.t Geoid",
           image: getImage("Sea_Water_Potential_Height_2mgeoid_forecast.webp"),
           type: "raster",

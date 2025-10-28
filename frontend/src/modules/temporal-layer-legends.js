@@ -97,7 +97,7 @@ export const legends = {
     ],
     ["0.1", "0.5", "1", "2", "5", "10", "20", "30", "50", "100", "150"]
   ),
-  gdpsRelHum: gradientLegendBar(
+  specific_humidity_2m_above_ground: gradientLegendBar(
     [
       "#FFFFFF",
       "#0010CC",
@@ -118,7 +118,7 @@ export const legends = {
     ["#001AB4", "#1AA3E3", "#B4FE4B", "#FE7201", "#AD1300"],
     ["Very Low", "Low", "Moderate", "High", "Very High"]
   ),
-  gdpsAccPreci: gradientLegendBar(
+  gdps_accumulated_precipitation: gradientLegendBar(
     [
       "#FFFFFF",
       "#B8D5FF",
@@ -156,7 +156,7 @@ export const legends = {
       "150",
     ]
   ),
-  gdpsPreciTypes: gradientLegendBar(
+  precipitation_type_3hrs: gradientLegendBar(
     ["#007700", "#EECC00", "#FF0000", "#FF06FF", "#005599"],
     ["Rain", "Rain-Snow", "Freezing Rain", "Ice-Pellets", "Snow"]
   ),
@@ -466,7 +466,7 @@ export const legends = {
     ],
     ["0", "1780", "1840", "1900", "1960", "2020", "2080", "2140", "10000"]
   ),
-  oceanSal: gradientLegendBar(
+  ocean_salinity: gradientLegendBar(
     [
       "#000DB9",
       "#0014ED",
@@ -504,7 +504,7 @@ export const legends = {
       "33-37",
     ]
   ),
-  oceanTemp: gradientLegendBar(
+  ocean_temperature: gradientLegendBar(
     [
       "#00067F",
       "#012EDC",
@@ -517,7 +517,7 @@ export const legends = {
     ],
     ["271K", "278K", "284K", "290K", "296K", "297K", "303K", "400K"]
   ),
-  oceanSurCur: gradientLegendBar(
+  ocean_surface_currents: gradientLegendBar(
     [
       "#99E8FD",
       "#9994FF",
@@ -547,7 +547,7 @@ export const legends = {
       "2.50",
     ]
   ),
-  oceanSurHeight: gradientLegendBar(
+  ocean_surface_height: gradientLegendBar(
     [
       "#000892",
       "#000EBD",

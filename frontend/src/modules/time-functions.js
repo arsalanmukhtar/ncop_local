@@ -753,4 +753,469 @@ export function generateCH4300Layers() {
 
   return ch4300;
 }
+
+
+// GDPS Layers
+export function generateGDPSHumLayers() {
+  const gdpsHumLayers = [];
+
+  // Iterate 11 times (index 0 to 10) to cover "today" and "onedayahead" through "tendayahead"
+  Array.from({ length: 11 }, (_, index) => {
+    // Determine the ID suffix based on the index
+    const idSuffixes = [
+      "today",
+      "onedayahead",
+      "twodayahead",
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead",
+    ];
+
+    const suffix = idSuffixes[index];
+    const date = getNextNDays(index, "short");
+    // Assuming getNextNDaysWithTime(index, "00", "00", "00") provides the time parameter
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00"); 
+
+    // --- Relative Humidity Layer Entry ---
+    const idRelHum = `gdps_rel_hum_${suffix}`;
+    const relHumEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id: idRelHum,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HR`,
+        ],
+      },
+      layers: [
+        {
+          id: idRelHum,
+          type: "raster",
+          source: idRelHum,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
+            "raster-opacity-transition": { duration: 1000 }, 
+          },
+        },
+      ],
+    };
+
+    // --- Specific Humidity Layer Entry ---
+    const idSpecHum = `gdps_spec_hum_${suffix}`;
+    const specHumEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id: idSpecHum,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HU_2m`,
+        ],
+      },
+      layers: [
+        {
+          id: idSpecHum,
+          type: "raster",
+          source: idSpecHum,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
+            "raster-opacity-transition": { duration: 1000 },
+          },
+        },
+      ],
+    };
+
+    // Push both entries to the final array
+    gdpsHumLayers.push(relHumEntry, specHumEntry);
+  });
+
+  return gdpsHumLayers;
+}
+
+// Precipitation Layer (GDPS)
+
+export function generateGDPSAccPreciLayers() {
+  const gdpsAccPreci = [];
+
+  // Iterate 10 times (index 0 to 9) to cover days 1 through 10 ahead
+  Array.from({ length: 10 }, (_, index) => {
+    // The relevant day index is index + 1, from 1 to 10
+    const dayIndex = index + 1; 
+
+    // Determine the ID suffix based on the day index (1 to 10)
+    const idSuffixes = [
+      "onedayahead", // index 0 (dayIndex 1)
+      "twodayahead", // index 1 (dayIndex 2)
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead", // index 9 (dayIndex 10)
+    ];
+
+    const suffix = idSuffixes[index];
+    const date = getNextNDays(dayIndex, "short");
+    // Use dayIndex (index + 1) for the time calculation as in the original snippet
+    const timeParam = getNextNDaysWithTime(dayIndex, "00", "00", "00"); 
+
+    // --- Accumulated Precipitation Layer Entry ---
+    const idAccPreci = `gdps_acc_preci_${suffix}`; // Updated ID to use suffix
+    const accPreciEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id: idAccPreci,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          // Using dayIndex for the time parameter
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+        ],
+      },
+      layers: [
+        {
+          id: idAccPreci,
+          type: "raster",
+          source: idAccPreci,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Changed "raster-fade-duration" to "raster-opacity-transition"
+            "raster-opacity-transition": { duration: 1000 }, 
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    gdpsAccPreci.push(accPreciEntry);
+  });
+
+  return gdpsAccPreci;
+}
+
+// Precipitation Type Layer (GDPS)
+export function generateGDPSPreciTypesLayers() {
+  const gdpsPreciTypes = [];
+
+  // Arrays defining the specific time steps for the 10 layers
+  const hours = ["03", "06", "09", "12", "15", "18", "21", "03", "06", "09"];
+  const daysOffset = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1];
+
+  Array.from({ length: 10 }, (_, i) => {
+    // The ID is based on the index + 1 (1 to 10)
+    const id = `gdpsPreciTypes_${i + 1}`; 
+    
+    // Calculate the time parameter for the WMS tile URL
+    const timeParam = getNextNDaysWithTime(daysOffset[i], hours[i], "00", "00");
+
+    // Calculate the date property for the entry
+    // Note: The original code used a function that calculates date/time based on *hours*, not days.
+    const date = getNextNHoursWithTime(hours[i], "00", "00", "gmt", "short");
+
+    // Create precipitation entry
+    const hourlyPreciEntry = {
+      date, // Date/time property at the top level
+      source: {
+        id,
+        type: "raster",
+        tileSize: 256,
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.DIAG_NW_PT1H`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Changed "raster-fade-duration" to "raster-opacity-transition"
+            "raster-opacity-transition": { duration: 1000 },
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    gdpsPreciTypes.push(hourlyPreciEntry);
+  });
+
+  return gdpsPreciTypes;
+}
+
+// Ocean Salinity Layers
+export function generateOceanSalinityLayers() {
+  const oceanSalinityLayers = [];
+
+  // Iterate 10 times (index 0 to 9) to cover days 1 through 10 ahead
+  Array.from({ length: 10 }, (_, index) => {
+    // The relevant day index is index + 1, from 1 to 10
+    const dayIndex = index + 1; 
+
+    // Determine the ID suffix based on the day index (1 to 10)
+    const idSuffixes = [
+      "onedayahead", // index 0 (dayIndex 1)
+      "twodayahead", // index 1 (dayIndex 2)
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead", // index 9 (dayIndex 10)
+    ];
+
+    const suffix = idSuffixes[index];
+    // The original ID was numeric, but we'll use the descriptive suffix for consistency with the new pattern
+    const id = `Sea_Water_salinity_10m_forecast_${suffix}`; 
+    const date = getNextNDays(dayIndex, "short");
+    // Use dayIndex (index + 1) for the time calculation as in the original snippet
+    const timeParam = getNextNDaysWithTime(dayIndex, "00", "00", "00"); 
+
+    // --- Ocean Salinity Layer Entry ---
+    const oceanSalEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id,
+        type: "raster",
+        // Note: tileSize was missing in the original snippet, assuming 256 for consistency
+        tileSize: 256, 
+        tiles: [
+          // Using dayIndex for the time parameter
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=OCEAN.GIOPS.3D_SALW_0010`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Keeping the correct "raster-opacity-transition" property and removing the redundant "raster-fade-duration"
+            "raster-opacity-transition": { duration: 500 }, 
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    oceanSalinityLayers.push(oceanSalEntry);
+  });
+
+  return oceanSalinityLayers;
+}
+
+// Ocean Temperature Layers
+export function generateOceanTemperatureLayers() {
+  const oceanTempLayers = [];
+
+  // Iterate 10 times (index 0 to 9) to cover days 1 through 10 ahead
+  Array.from({ length: 10 }, (_, index) => {
+    // The relevant day index is index + 1, from 1 to 10
+    const dayIndex = index + 1; 
+
+    // Determine the ID suffix based on the day index (1 to 10)
+    const idSuffixes = [
+      "onedayahead", // index 0 (dayIndex 1)
+      "twodayahead", 
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead", // index 9 (dayIndex 10)
+    ];
+
+    const suffix = idSuffixes[index];
+    // Use the descriptive suffix for the ID
+    const id = `Sea_Water_temp_10m_forecast_${suffix}`; 
+    const date = getNextNDays(dayIndex, "short");
+    // Use dayIndex (index + 1) for the time calculation as in the original snippet
+    const timeParam = getNextNDaysWithTime(dayIndex, "00", "00", "00"); 
+
+    // --- Ocean Temperature Layer Entry ---
+    const oceanTempEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id,
+        type: "raster",
+        // Adding tileSize for consistency, assuming 256
+        tileSize: 256, 
+        tiles: [
+          // Using timeParam
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=OCEAN.GIOPS.3D_TM2_0010`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Keeping the correct "raster-opacity-transition" property and removing the redundant "raster-fade-duration"
+            "raster-opacity-transition": { duration: 500 }, 
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    oceanTempLayers.push(oceanTempEntry);
+  });
+
+  return oceanTempLayers;
+}
+
+//Ocean Currents Layers
+export function generateOceanCurrentsLayers() {
+  const oceanCurrentsLayers = [];
+
+  // Iterate 10 times (index 0 to 9) to cover days 1 through 10 ahead
+  Array.from({ length: 10 }, (_, index) => {
+    // The relevant day index is index + 1, from 1 to 10
+    const dayIndex = index + 1; 
+
+    // Determine the ID suffix based on the day index (1 to 10)
+    const idSuffixes = [
+      "onedayahead", // index 0 (dayIndex 1)
+      "twodayahead", 
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead", // index 9 (dayIndex 10)
+    ];
+
+    const suffix = idSuffixes[index];
+    // Use the descriptive suffix for the ID
+    const id = `Sea_Water_Potential_currents_10m_forecast_${suffix}`; 
+    const date = getNextNDays(dayIndex, "short");
+    // Use dayIndex (index + 1) for the time calculation as in the original snippet
+    const timeParam = getNextNDaysWithTime(dayIndex, "00", "00", "00"); 
+
+    // --- Ocean Surface Currents Layer Entry ---
+    const oceanSurCurEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id,
+        type: "raster",
+        // Adding tileSize for consistency, assuming 256
+        tileSize: 256, 
+        tiles: [
+          // Using timeParam
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=OCEAN.GIOPS.3D_UU2W_0010`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Keeping the correct "raster-opacity-transition" property and removing the redundant "raster-fade-duration"
+            "raster-opacity-transition": { duration: 500 }, 
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    oceanCurrentsLayers.push(oceanSurCurEntry);
+  });
+
+  return oceanCurrentsLayers;
+}
+
+// Ocean Surface Height Layers
+export function generateOceanSurfaceHeightLayers() {
+  const oceanSurfaceHeightLayers = [];
+
+  // Iterate 10 times (index 0 to 9) to cover days 1 through 10 ahead
+  Array.from({ length: 10 }, (_, index) => {
+    // The relevant day index is index + 1, from 1 to 10
+    const dayIndex = index + 1; 
+
+    // Determine the ID suffix based on the day index (1 to 10)
+    const idSuffixes = [
+      "onedayahead", // index 0 (dayIndex 1)
+      "twodayahead", 
+      "threedayahead",
+      "fourdayahead",
+      "fivedayahead",
+      "sixdayahead",
+      "sevendayahead",
+      "eightdayahead",
+      "ninedayahead",
+      "tendayahead", // index 9 (dayIndex 10)
+    ];
+
+    const suffix = idSuffixes[index];
+    // Use the descriptive suffix for the ID
+    const id = `Sea_Water_Potential_Height_2mgeoid_forecast_${suffix}`; 
+    const date = getNextNDays(dayIndex, "short");
+    // Use dayIndex (index + 1) for the time calculation as in the original snippet
+    const timeParam = getNextNDaysWithTime(dayIndex, "00", "00", "00"); 
+
+    // --- Ocean Surface Height Layer Entry ---
+    const oceanSurHeightEntry = {
+      date, // The date property is moved up one level
+      source: {
+        id,
+        type: "raster",
+        // Adding tileSize for consistency, assuming 256
+        tileSize: 256, 
+        tiles: [
+          // Using timeParam
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=OCEAN.GIOPS.2D_SSH`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": 1,
+            // Keeping the correct "raster-opacity-transition" property and removing the redundant "raster-fade-duration"
+            "raster-opacity-transition": { duration: 500 }, 
+          },
+        },
+      ],
+    };
+
+    // Push the entry to the final array
+    oceanSurfaceHeightLayers.push(oceanSurHeightEntry);
+  });
+
+  return oceanSurfaceHeightLayers;
+}
+
 //--------------- LAYER definitions and additions - Air Quality Layers END-------------------------------------------
