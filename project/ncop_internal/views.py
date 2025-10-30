@@ -55,8 +55,9 @@ from functools import lru_cache
 # )
 # from .serializers import IncidentsMediaSerializer
 from ncop_project.settings.base import (
-    MAPBOX_ACCESS_TOKEN,
+    MAPBOX_ACCESS_TOKEN, METEOBLUE_TOKEN
 )
+
 import os
 import time
 import asyncio
@@ -101,7 +102,8 @@ User = get_user_model()
 @login_required(login_url="login")
 def dashboard_view(request):
     return render(request, "dashboard.html", {
-        "mapbox_token": settings.MAPBOX_ACCESS_TOKEN
+        "mapbox_token": settings.MAPBOX_ACCESS_TOKEN,
+        "metblut": settings.METEOBLUE_TOKEN,  # ← add this line
     })
 
 
@@ -246,8 +248,6 @@ def password_reset_confirm_view(request, uidb64, token):
         return redirect("login")
 
     return render(request, "auth/password_reset_confirm.html")
-
-
 #GDELT AND SOCIAL MEDIA VIEWS HERE
 class RateLimiter:
     """Thread-safe rate limiter for API requests"""

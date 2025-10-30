@@ -2,6 +2,7 @@
 // Updated to work with DashboardManager's private map instance
 // Adds: clean Lucide play/pause toggle with two buttons, and restoration on map 'style.load'.
 // ADDED: Drag and Resize functionality
+// IMPROVED: Table-based popup with advanced styling and CSS variables
 
 import { legends } from "./temporal-layer-legends";
 
@@ -44,6 +45,156 @@ function getMap() {
     return null;
   }
   return window.ncop_map;
+}
+
+// ===== POPUP FORMATTING UTILITIES =====
+
+function formatPropertyValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  // Format numbers with thousands separator
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) {
+      return value.toLocaleString();
+    } else {
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+    }
+  }
+
+  // Format dates
+  if (typeof value === "string") {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}/;
+    if (dateRegex.test(value)) {
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          });
+        }
+      } catch (e) {
+        return value;
+      }
+    }
+  }
+
+  return value;
+}
+
+function formatPropertyKey(key) {
+  // Convert snake_case or camelCase to Title Case
+  return key
+    .replace(/([_-])/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase())
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildPopupContent(layerId, feature) {
+  let tableRows = `
+    <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.08);">
+      <td style="
+        padding: 8px 0;
+        padding-right: 12px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.6);
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+      ">Layer</td>
+      <td style="
+        padding: 8px 0;
+        color: rgba(0, 0, 0, 0.85);
+        font-weight: 500;
+        word-break: break-word;
+      ">${layerId}</td>
+    </tr>
+  `;
+
+  if (feature.properties && Object.keys(feature.properties).length > 0) {
+    Object.entries(feature.properties).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== "") {
+        const formattedKey = formatPropertyKey(key);
+        const formattedValue = formatPropertyValue(value);
+
+        tableRows += `
+          <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.05);">
+            <td style="
+              padding: 8px 0;
+              padding-right: 12px;
+              font-weight: 600;
+              color: rgba(0, 0, 0, 0.6);
+              white-space: nowrap;
+              vertical-align: top;
+            ">${formattedKey}:</td>
+            <td style="
+              padding: 8px 0;
+              color: rgba(0, 0, 0, 0.85);
+              word-break: break-word;
+              max-width: 250px;
+            ">${formattedValue}</td>
+          </tr>
+        `;
+      }
+    });
+  } else {
+    tableRows += `
+      <tr>
+        <td colspan="2" style="
+          padding: 8px 0;
+          color: rgba(0, 0, 0, 0.4);
+          font-size: 12px;
+          font-style: italic;
+          text-align: center;
+        ">No properties available</td>
+      </tr>
+    `;
+  }
+
+  const html = `
+    <div style="
+      position: fixed;
+      z-index: 9999;
+      background: var(--primary-bg, #ffffff);
+      box-shadow: 0 8px 32px var(--shadow-soft, rgba(0, 0, 0, 0.1));
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-size: 13px;
+      border: 1px solid var(--border-dark, rgba(0, 0, 0, 0.1));
+      backdrop-filter: blur(15px) saturate(180%);
+      -webkit-backdrop-filter: blur(15px) saturate(180%);
+      transition: opacity 0.2s;
+      opacity: 1;
+      display: flex;
+      flex-direction: column;
+      transform: translate(-50%, -100%);
+      min-width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.4;
+    ">
+      <table style="
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+        padding: 0;
+      ">
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  return html;
 }
 
 // ===== DRAG AND RESIZE FUNCTIONS =====
@@ -239,23 +390,15 @@ function addClickListeners() {
             clickPopup.remove();
           }
 
-          let popupContent = '<div style="max-width: 200px; font-size: 12px;">';
-          popupContent += `<strong>Layer:</strong> ${layerId}<br>`;
-
-          if (feature.properties) {
-            Object.entries(feature.properties).forEach(([key, value]) => {
-              if (value !== null && value !== undefined && value !== "") {
-                popupContent += `<strong>${key}:</strong> ${value}<br>`;
-              }
-            });
-          }
-
-          popupContent += "</div>";
+          const popupContent = buildPopupContent(layerId, feature);
 
           clickPopup = new mapboxgl.Popup({
             closeButton: true,
             closeOnClick: true,
-            maxWidth: "300px",
+            maxWidth: "400px",
+            offset: [0, -10],
+            anchor: "bottom",
+            className: "temporal-layer-popup",
           })
             .setLngLat(coordinates)
             .setHTML(popupContent)

@@ -19,7 +19,18 @@ import {
   generateOceanSalinityLayers,
   generateOceanTemperatureLayers,
   generateOceanCurrentsLayers,
-  generateOceanSurfaceHeightLayers
+  generateOceanSurfaceHeightLayers,
+  generateMeteoblueNEMSCloudPrecipLayers,
+  generateMBX_MeteoblueHourlyCloudPrecipLayers,
+  generateMBX_MeteoblueHourlyTemperatureLayers,
+  generateMBX_MeteoblueRadarCompositeLayers,
+  generateMBX_MeteoblueSnowfallHourlyLayers,
+  generateMBX_MeteoblueCAPEHourlyLayers,
+  generateMBX_MeteoblueStormHelicityHourlyLayers,
+  generateMBX_MeteoblueDailySnowfallLayers,
+  generateMBX_MeteoblueDailyCAPELayers,
+  generateMBX_MeteoblueOfficialWeatherWarningsLayers,
+  generateMBX_MeteoblueForecastWarningsDailyLayers,
 } from "./time-functions.js";
 
 // Global baseUrl for the entire application
@@ -249,6 +260,13 @@ function validCoord(lon, lat) {
 const __FFD_GEOJSON__ = jsonUrlToGeoJsonSync(
   "https://raw.githubusercontent.com/Ibrahom1/hydrosituation/main/latest.json"
 );
+//Meteoblue Layers constants
+const metbluT = window.metbluT;
+const model = "NEMSIN";
+const modelanomaly = "SA-ENSEMBLE";
+//export let domain = "NEMSAUTO";
+const level = "2 m above gnd";
+
 // Defining the layer of temporal data
 const dwd_layers = generateDWDSatelliteLayers();
 const ecmwf_temp_layers = generateECMWFTempLayers();
@@ -269,6 +287,17 @@ const ocean_salinity_layers = generateOceanSalinityLayers();
 const ocean_temperature_layers = generateOceanTemperatureLayers();
 const ocean_currents_layers = generateOceanCurrentsLayers();
 const ocean_surface_height_layers = generateOceanSurfaceHeightLayers();
+const nems_layers_weeklycloudprecip = generateMeteoblueNEMSCloudPrecipLayers(model, metbluT);
+const mbx_hourly_cloudprecip = generateMBX_MeteoblueHourlyCloudPrecipLayers(model, metbluT);
+const mbx_hourly_temp       = generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT);
+const mbx_radar_composite   = generateMBX_MeteoblueRadarCompositeLayers(metbluT);
+const mbx_snow_hourly       = generateMBX_MeteoblueSnowfallHourlyLayers(model, metbluT);
+const mbx_cape_hourly       = generateMBX_MeteoblueCAPEHourlyLayers(model, metbluT);
+const mbx_helicity_hourly   = generateMBX_MeteoblueStormHelicityHourlyLayers(model, metbluT);
+const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, metbluT);
+const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
+const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
+const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
 window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
@@ -289,6 +318,17 @@ window.ocean_salinity = ocean_salinity_layers;
 window.ocean_temperature = ocean_temperature_layers;
 window.ocean_surface_currents = ocean_currents_layers;
 window.ocean_surface_height = ocean_surface_height_layers;
+window.weekly_precipitation_2m_above_ground = nems_layers_weeklycloudprecip;
+window.hourly_precipitation_2m_above_ground = mbx_hourly_cloudprecip;
+window.temperature_2m_above_ground = mbx_hourly_temp;
+window.precipitation_radar = mbx_radar_composite;
+window.hourly_snowfall_forecast = mbx_snow_hourly;
+window.cape_hourly_forecast = mbx_cape_hourly;
+window.storm_helicity_forecast_0_3km = mbx_helicity_hourly;
+window.weekly_snowfall_forecast = mbx_snow_daily;
+window.cape_weekly_forecast = mbx_cape_daily;
+window.official_weather_warnings_forecast = mbx_warn_official;
+window.meteorological_risks_forecast = mbx_warn_forecast;
 console.log(
   "✅ DWD layers created:",
   window.dwd_satellite_infrared.length,
@@ -794,7 +834,7 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
         },
-        "storm_helicity_forecast_0-3km": {
+        storm_helicity_forecast_0_3km: {
           label: "Storm Helicity Forecast (0-3km)",
           image: getImage("nems_storms_helicity_forecast.webp"),
           type: "raster",
