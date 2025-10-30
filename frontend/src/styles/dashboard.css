@@ -2465,18 +2465,23 @@ button.custom-nav-btn.terrain-active:hover {
     flex-direction: column;
     align-items: center;
     color: white;
-    font-size: 12px;
     line-height: 1.2;
+}
+
+.news-info hr {
+    width: 75%;
+    margin: 5px 0;
+    border-color: var(--border-dark);
 }
 
 .news-title {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .news-time {
     font-family: monospace;
-    opacity: 0.85;
+    color: var(--text-secondary);
     font-size: 12px;
 }
 

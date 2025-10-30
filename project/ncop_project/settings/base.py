@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_vite",
     "ncop_internal",
+    "django_extensions",
 ]
 
 # --- Middleware ---
