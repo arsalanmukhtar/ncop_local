@@ -1655,6 +1655,10 @@ button.custom-nav-btn.terrain-active:hover {
     pointer-events: none;
 }
 
+.mapboxgl-popup-close-button {
+    display: none;
+}
+
 /* ===========================
    RESPONSIVE ADJUSTMENTS
 =========================== */

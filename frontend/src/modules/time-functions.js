@@ -231,7 +231,10 @@ function getLatestSatelliteTime() {
   }
   return fallback;
 }
-// LAYER definations and additions 
+//---------------------------------------------------------------------------------------------
+/******************************************************
+ LAYER definations and additions 
+ ******************************************************/
 export function generateDWDSatelliteLayers() {
   const dwdSatellite = [];
 
@@ -305,7 +308,6 @@ export function generateDWDSatelliteLayers() {
   return dwdSatellite;
 }
 // LAYER definitions and additions
-
 // Generate ECMWF Temperature Layers
 export function generateECMWFTempLayers() {
   const ecmwfTemp = [];
@@ -357,7 +359,6 @@ export function generateECMWFTempLayers() {
 
   return ecmwfTemp;
 }
-
 // Generate ECMWF Cyclone Layers
 export function generateECMWFCycloneLayers() {
   const ecmwfCyclone = [];
@@ -405,8 +406,6 @@ export function generateECMWFCycloneLayers() {
 
   return ecmwfCyclone;
 }
-
-
 // Generate ECMWF Lightning Layers
 export function generateECMWFLightningLayers() {
   const ecmwfLight = [];
@@ -2199,6 +2198,60 @@ export function generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT)
               60, "rgba(157, 121, 210, 1.0)",
               90, "rgba(148, 0, 166, 1.0)"
             ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Imerger Weather Layers
+ ***********************************************************************/
+/************************************************************
+ * NASA GPM IMERG — Precipitation Rate (raster) | Functional A
+ * Window: last 13 days to today (14 frames; 0 = 13 days ago … 13 = today)
+ * returns: Array<{ source, layers, date }>
+ ************************************************************/
+export function generateMBX_IMERGPrecipRateLayers() {
+  const out = [];
+
+  Array.from({ length: 14 }, (_, dayOffset) => {
+    // Map 0..13 -> -13..0 where 0 == today
+    const actualDayOffset = dayOffset - 13;
+    const isToday = actualDayOffset === 0;
+    const date = getNextNDays(actualDayOffset, "short");
+
+    const suffix =
+      actualDayOffset === 0 ? "today" : `${Math.abs(actualDayOffset)}daysago`;
+    const sourceId = `mbx_imerg_precip_rate_${suffix}`;
+
+    const tileUrl =
+      `https://gitc.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi` +
+      `?service=WMS&version=1.3.0&request=GetMap` +
+      `&layers=IMERG_Precipitation_Rate&styles=` +
+      `&format=image/png&transparent=true` +
+      `&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256` +
+      `&time=${getNextNDays(actualDayOffset)}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [tileUrl],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          // keep "visible" and fade with opacity like your original
+          layout: { visibility: "visible" },
+          paint: {
+            "raster-opacity": isToday ? 1.0 : 0.0,
+            "raster-opacity-transition": { duration: 500 },
           },
         },
       ],

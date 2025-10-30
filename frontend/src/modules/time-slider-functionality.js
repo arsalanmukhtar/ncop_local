@@ -3,6 +3,7 @@
 // Adds: clean Lucide play/pause toggle with two buttons, and restoration on map 'style.load'.
 // ADDED: Drag and Resize functionality
 // IMPROVED: Table-based popup with advanced styling and CSS variables
+// ENHANCED: HTML escaping, property prioritization, and better value formatting
 
 import { legends } from "./temporal-layer-legends";
 
@@ -49,20 +50,62 @@ function getMap() {
 
 // ===== POPUP FORMATTING UTILITIES =====
 
+// Property priority for consistent ordering
+const PROPERTY_PRIORITY = {
+  event: 1,
+  headline: 2,
+  info: 3,
+  description: 4,
+  expire: 5,
+  severity: 6,
+  urgency: 7,
+  name: 8,
+  title: 9,
+  type: 10,
+};
+
+// Security: Escape HTML to prevent XSS
+function escapeHtml(text) {
+  if (!text) return "";
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return String(text).replace(/[&<>"']/g, (m) => map[m]);
+}
+
+// Format URL values as clickable links
+function isUrlValue(value) {
+  if (typeof value !== "string") return false;
+  return /^https?:\/\//.test(value);
+}
+
 function formatPropertyValue(value) {
   if (value === null || value === undefined || value === "") {
     return "";
   }
 
+  // Handle URLs
+  if (isUrlValue(value)) {
+    return `<a href="${escapeHtml(
+      value
+    )}" target="_blank" style="color: #0066cc; text-decoration: none; word-break: break-all;">Link</a>`;
+  }
+
   // Format numbers with thousands separator
   if (typeof value === "number") {
     if (Number.isInteger(value)) {
-      return value.toLocaleString();
+      return escapeHtml(value.toLocaleString());
     } else {
-      return value.toLocaleString(undefined, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      });
+      return escapeHtml(
+        value.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })
+      );
     }
   }
 
@@ -73,19 +116,34 @@ function formatPropertyValue(value) {
       try {
         const date = new Date(value);
         if (!isNaN(date.getTime())) {
-          return date.toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-          });
+          return escapeHtml(
+            date.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          );
         }
       } catch (e) {
-        return value;
+        return escapeHtml(value);
       }
     }
   }
 
-  return value;
+  // Handle objects/arrays (stringify with truncation)
+  if (typeof value === "object") {
+    try {
+      const str = JSON.stringify(value);
+      const truncated = str.length > 100 ? str.substring(0, 100) + "..." : str;
+      return `<span style="font-family: monospace; font-size: 11px;">${escapeHtml(
+        truncated
+      )}</span>`;
+    } catch (e) {
+      return escapeHtml(String(value));
+    }
+  }
+
+  return escapeHtml(String(value));
 }
 
 function formatPropertyKey(key) {
@@ -99,13 +157,25 @@ function formatPropertyKey(key) {
 }
 
 function buildPopupContent(layerId, feature) {
+  const properties = feature.properties || {};
+
+  // Sort properties by priority, then alphabetically
+  const sortedEntries = Object.entries(properties)
+    .filter(([, v]) => v != null && v !== "")
+    .sort(([keyA], [keyB]) => {
+      const priorityA = PROPERTY_PRIORITY[keyA.toLowerCase()] || 99;
+      const priorityB = PROPERTY_PRIORITY[keyB.toLowerCase()] || 99;
+      if (priorityA !== priorityB) return priorityA - priorityB;
+      return keyA.localeCompare(keyB);
+    });
+
   let tableRows = `
-    <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.08);">
+    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.5);">
       <td style="
         padding: 8px 0;
         padding-right: 12px;
         font-weight: 600;
-        color: rgba(0, 0, 0, 0.6);
+        color: #2ecc71;
         text-transform: uppercase;
         font-size: 11px;
         letter-spacing: 0.5px;
@@ -113,45 +183,46 @@ function buildPopupContent(layerId, feature) {
       ">Layer</td>
       <td style="
         padding: 8px 0;
-        color: rgba(0, 0, 0, 0.85);
+        color: rgba(255, 255, 255, 0.75);
         font-weight: 500;
         word-break: break-word;
-      ">${layerId}</td>
+      ">${escapeHtml(layerId)}</td>
     </tr>
   `;
 
-  if (feature.properties && Object.keys(feature.properties).length > 0) {
-    Object.entries(feature.properties).forEach(([key, value]) => {
-      if (value !== null && value !== undefined && value !== "") {
-        const formattedKey = formatPropertyKey(key);
-        const formattedValue = formatPropertyValue(value);
+  if (sortedEntries.length > 0) {
+    sortedEntries.forEach(([key, value], index) => {
+      const formattedKey = formatPropertyKey(key);
+      const formattedValue = formatPropertyValue(value);
+      const isLast = index === sortedEntries.length - 1;
 
-        tableRows += `
-          <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.05);">
-            <td style="
-              padding: 8px 0;
-              padding-right: 12px;
-              font-weight: 600;
-              color: rgba(0, 0, 0, 0.6);
-              white-space: nowrap;
-              vertical-align: top;
-            ">${formattedKey}:</td>
-            <td style="
-              padding: 8px 0;
-              color: rgba(0, 0, 0, 0.85);
-              word-break: break-word;
-              max-width: 250px;
-            ">${formattedValue}</td>
-          </tr>
-        `;
-      }
+      tableRows += `
+        <tr style="border-bottom: 1px solid rgba(255, 255, 255, ${
+          isLast ? "0" : "0.5"
+        });">
+          <td style="
+            padding: 8px 0;
+            padding-right: 12px;
+            font-weight: 600;
+            color: #2ecc71;
+            white-space: nowrap;
+            vertical-align: top;
+          ">${escapeHtml(formattedKey)}:</td>
+          <td style="
+            padding: 8px 0;
+            color: rgba(255, 255, 255, 0.75);
+            word-break: break-word;
+            max-width: 250px;
+          ">${formattedValue}</td>
+        </tr>
+      `;
     });
   } else {
     tableRows += `
       <tr>
         <td colspan="2" style="
           padding: 8px 0;
-          color: rgba(0, 0, 0, 0.4);
+          color: rgba(255, 255, 255, 0.75);
           font-size: 12px;
           font-style: italic;
           text-align: center;
@@ -178,8 +249,10 @@ function buildPopupContent(layerId, feature) {
       flex-direction: column;
       transform: translate(-50%, -100%);
       min-width: 280px;
+      height: 25rem;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       line-height: 1.4;
+      overflow-y: auto;
     ">
       <table style="
         width: 100%;

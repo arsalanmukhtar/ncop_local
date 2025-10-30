@@ -8,6 +8,7 @@ from .views import (
     password_reset_confirm_view,
     WeatherDataPMDFFDView,
     GdeltNewsEventsApi,
+    WAQIgeojson,
     
 )
 
@@ -21,5 +22,6 @@ urlpatterns = [
     path("password-reset/", password_reset_view, name="password_reset"),
     path("password-reset-confirm/<uidb64>/<token>/", password_reset_confirm_view, name="password_reset_confirm"),
     path("get-weather-pmdffd-data/", WeatherDataPMDFFDView.as_view(), name="get-weather-pmdffd-data",),
+    path("get-waqi-global-airquality/", WAQIgeojson.as_view(), name="waqi_global_aqi"),
     path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
 ]

@@ -12,6 +12,7 @@ environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env"))  # repo/.env
 # --- Core ---
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
 METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
+WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])

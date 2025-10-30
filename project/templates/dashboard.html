@@ -12,8 +12,8 @@
         window.MAPBOX_ACCESS_TOKEN = "{{ mapbox_token|escapejs }}";
         window.USER_ID = "{{ user.id|escapejs }}";
         window.USERNAME = "{{ user.username|escapejs }}";
-        window.metbluT = "{{ metblut|escapejs }}";  <!-- add this line -->
-        console.log("✅ Meteoblue Token present:", !!window.metbluT);
+        window.metbluT = "{{ metblut|escapejs }}";
+        window.waqiT = "{{ waqi_token|escapejs }}";
     </script>
 
     {# Vite HMR + bundle #}

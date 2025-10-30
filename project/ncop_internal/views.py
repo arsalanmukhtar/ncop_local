@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext as _
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404,HttpResponseServerError
 from django.views import View
 from django.core.serializers import serialize
 from rest_framework.response import Response
@@ -55,7 +55,7 @@ from functools import lru_cache
 # )
 # from .serializers import IncidentsMediaSerializer
 from ncop_project.settings.base import (
-    MAPBOX_ACCESS_TOKEN, METEOBLUE_TOKEN
+    MAPBOX_ACCESS_TOKEN, METEOBLUE_TOKEN, WAQI_API_TOKEN
 )
 
 import os
@@ -104,6 +104,7 @@ def dashboard_view(request):
     return render(request, "dashboard.html", {
         "mapbox_token": settings.MAPBOX_ACCESS_TOKEN,
         "metblut": settings.METEOBLUE_TOKEN,  # ← add this line
+        "waqi_token": settings.WAQI_API_TOKEN,  # ← add this line
     })
 
 
@@ -248,7 +249,667 @@ def password_reset_confirm_view(request, uidb64, token):
         return redirect("login")
 
     return render(request, "auth/password_reset_confirm.html")
-#GDELT AND SOCIAL MEDIA VIEWS HERE
+
+# PMD WEATHER DATA STATION RECORDS UPDATED DAILY
+class WeatherDataPMDFFDView(View):
+    # Cache data for 5 minutes to reduce API calls
+    CACHE_DURATION = timedelta(minutes=5)
+    _cache = {}
+
+    ENDPOINTS = {
+        "rainfall": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=DailyRainfall",
+        "temperature": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=Temperature",
+        "wind": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=Wind",
+    }
+
+    def _fetch_endpoint(self, endpoint_name, url):
+        """Fetch data from a single endpoint"""
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return endpoint_name, response.json()
+        except Exception as e:
+            print(f"Error fetching {endpoint_name}: {e}")
+        return endpoint_name, []
+
+    def _get_cached_data(self):
+        """Get cached data if still valid"""
+        if "data" in self._cache and "timestamp" in self._cache:
+            if datetime.now() - self._cache["timestamp"] < self.CACHE_DURATION:
+                return self._cache["data"]
+        return None
+
+    def _merge_data(self, rainfall_data, temperature_data, wind_data):
+        """Merge data from all endpoints by station name"""
+        merged = {}
+
+        # Process rainfall data
+        for item in rainfall_data:
+            name = item.get("name")
+            if name and item.get("location"):
+                merged[name] = {
+                    "name": name,
+                    "location": item["location"],
+                    "rainfall": item.get("totalRainfall", 0),
+                    "rainfall_date": item.get("date"),
+                    "rainfall_time": item.get("time"),
+                }
+
+        # Add temperature data
+        for item in temperature_data:
+            name = item.get("name")
+            if name in merged:
+                merged[name].update(
+                    {
+                        "temperature": (
+                            float(item.get("temperature", 0))
+                            if item.get("temperature")
+                            else 0
+                        ),
+                        "dewPoint": (
+                            float(item.get("dewPoint", 0))
+                            if item.get("dewPoint")
+                            else 0
+                        ),
+                        "humidity": float(item.get("RH", 0)) if item.get("RH") else 0,
+                        "pressure": (
+                            float(item.get("airPressure", 0))
+                            if item.get("airPressure")
+                            else 0
+                        ),
+                        "temp_date": item.get("date"),
+                        "temp_time": item.get("time"),
+                    }
+                )
+            elif name and item.get("location"):
+                # Station not in rainfall data, create new entry
+                merged[name] = {
+                    "name": name,
+                    "location": item["location"],
+                    "temperature": (
+                        float(item.get("temperature", 0))
+                        if item.get("temperature")
+                        else 0
+                    ),
+                    "dewPoint": (
+                        float(item.get("dewPoint", 0)) if item.get("dewPoint") else 0
+                    ),
+                    "humidity": float(item.get("RH", 0)) if item.get("RH") else 0,
+                    "pressure": (
+                        float(item.get("airPressure", 0))
+                        if item.get("airPressure")
+                        else 0
+                    ),
+                    "temp_date": item.get("date"),
+                    "temp_time": item.get("time"),
+                    "rainfall": 0,
+                }
+
+        # Add wind data
+        for item in wind_data:
+            name = item.get("name")
+            if name in merged:
+                merged[name].update(
+                    {
+                        "windSpeed": (
+                            float(item.get("windspeed_knot", 0))
+                            if item.get("windspeed_knot")
+                            else 0
+                        ),
+                        "windDirection": (
+                            float(item.get("windDirection", 0))
+                            if item.get("windDirection")
+                            else 0
+                        ),
+                        "wind_date": item.get("date"),
+                        "wind_time": item.get("time"),
+                    }
+                )
+            elif name and item.get("location"):
+                # Station not in previous data, create new entry
+                merged[name] = {
+                    "name": name,
+                    "location": item["location"],
+                    "windSpeed": (
+                        float(item.get("windspeed_knot", 0))
+                        if item.get("windspeed_knot")
+                        else 0
+                    ),
+                    "windDirection": (
+                        float(item.get("windDirection", 0))
+                        if item.get("windDirection")
+                        else 0
+                    ),
+                    "wind_date": item.get("date"),
+                    "wind_time": item.get("time"),
+                    "temperature": 0,
+                    "rainfall": 0,
+                }
+
+        return merged
+
+    def get(self, request, *args, **kwargs):
+        # Check cache first
+        cached_data = self._get_cached_data()
+        if cached_data:
+            return JsonResponse(cached_data)
+
+        # Fetch all endpoints in parallel
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(self._fetch_endpoint, name, url): name
+                for name, url in self.ENDPOINTS.items()
+            }
+
+            results = {}
+            for future in as_completed(futures):
+                endpoint_name, data = future.result()
+                results[endpoint_name] = data
+
+        # Merge all data
+        merged_data = self._merge_data(
+            results.get("rainfall", []),
+            results.get("temperature", []),
+            results.get("wind", []),
+        )
+
+        # Convert to GeoJSON
+        features = []
+        for station_name, data in merged_data.items():
+            location = data.get("location", [])
+            if len(location) >= 2:
+                try:
+                    lon = float(location[0])
+                    lat = float(location[1])
+
+                    # Only include stations with valid coordinates and some data
+                    if -180 <= lon <= 180 and -90 <= lat <= 90:
+                        feature = {
+                            "type": "Feature",
+                            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                            "properties": {
+                                "name": station_name,
+                                "temperature": data.get("temperature", 0),
+                                "dewPoint": data.get("dewPoint", 0),
+                                "humidity": data.get("humidity", 0),
+                                "pressure": data.get("pressure", 0),
+                                "windSpeed": data.get("windSpeed", 0),
+                                "windDirection": data.get("windDirection", 0),
+                                "rainfall": data.get("rainfall", 0),
+                                # Add date/time fields
+                                "temp_date": data.get("temp_date"),
+                                "temp_time": data.get("temp_time"),
+                                "wind_date": data.get("wind_date"),
+                                "wind_time": data.get("wind_time"),
+                                "rainfall_date": data.get("rainfall_date"),
+                                "rainfall_time": data.get("rainfall_time"),
+                            },
+                        }
+                        features.append(feature)
+                except (ValueError, TypeError):
+                    continue
+
+        geojson = {"type": "FeatureCollection", "features": features}
+
+        # Cache the result
+        self._cache = {"data": geojson, "timestamp": datetime.now()}
+
+        return JsonResponse(geojson)
+    
+#WAQI LOCAL PAKISTAN STATION SMOG VIEW
+
+class WAQIgeojson(View):
+    MAX_WORKERS = 8
+    REQUEST_TIMEOUT = 5
+    DETAIL_PER_STATION = False
+    STATION_DETAIL_TIMEOUT = 4
+    AIRNET_TIMEOUT = 5
+
+    FORCE_UIDS = [
+        511660,
+        541396,
+        544699,
+        545356,
+        544681,
+        545149,
+        547342,
+        558319,
+        544708,
+        545395,
+        545503,
+        544966,
+        545332,
+        546253,
+        546205,
+        554545,
+        544084,
+        544297,
+        544321,
+        544111,
+        544294,
+        544291,
+        561409,
+        544114,
+        544450,
+        544315,
+        544300,
+        544288,
+        544972,
+        544720,
+        544462,
+        545143,
+        544960,
+        544678,
+        545977,
+        545968,
+        545857,
+        545347,
+        545326,
+        544087,
+        541369,
+        541762,
+        541186,
+        543349,
+        541198,
+        569905,
+        540817,
+        541213,
+        546370,
+        545734,
+        545536,
+        545302,
+        545494,
+        544723,
+        543562,
+        542482,
+        544693,
+        563377,
+        541366,
+        541363,
+        541375,
+        541180,
+        521242,
+    ]
+
+    # High-priority micro city boxes
+    CITY_TILES = [
+        {"lat1": 24.4, "lng1": 66.5, "lat2": 25.4, "lng2": 67.7},  # Karachi
+        {"lat1": 30.9, "lng1": 72.5, "lat2": 31.9, "lng2": 73.7},  # Faisalabad
+        {"lat1": 29.7, "lng1": 70.8, "lat2": 30.7, "lng2": 72.0},  # Multan
+        {"lat1": 29.7, "lng1": 66.3, "lat2": 30.7, "lng2": 67.6},  # Quetta
+        {"lat1": 31.2, "lng1": 74.0, "lat2": 31.8, "lng2": 74.6},  # Lahore
+        {"lat1": 33.4, "lng1": 72.9, "lat2": 34.1, "lng2": 73.6},  # Islamabad/Rawalpindi
+    ]
+
+    # Pakistan-wide tiles
+    PAKISTAN_TILES = [
+        {"lat1": 23.0, "lng1": 66.0, "lat2": 28.5, "lng2": 71.0},
+        {"lat1": 27.0, "lng1": 70.0, "lat2": 34.0, "lng2": 75.5},
+        {"lat1": 31.0, "lng1": 70.0, "lat2": 37.5, "lng2": 74.5},
+        {"lat1": 23.0, "lng1": 60.0, "lat2": 29.5, "lng2": 67.5},
+        {"lat1": 33.0, "lng1": 73.0, "lat2": 37.8, "lng2": 78.0},
+    ]
+
+    def get(self, request, *args, **kwargs):
+        features = self.fetch_waqi_global_data()
+
+        if not features:
+            logger.error("No WAQI data could be fetched at all.")
+            return HttpResponseServerError(
+                JsonResponse(
+                    {
+                        "error": "Failed to fetch air quality data from WAQI.",
+                        "detail": "Upstream returned empty for all regions.",
+                    }
+                ).content,
+                content_type="application/json",
+            )
+
+        api_key = getattr(settings, "WAQI_API_TOKEN", "")
+        forced_features = self.fetch_forced_uids(api_key, features)
+
+        features.extend(forced_features)
+
+        geojson = {"type": "FeatureCollection", "features": features}
+        return JsonResponse(geojson, safe=False)
+
+    def fetch_waqi_global_data(self):
+        api_key = getattr(settings, "WAQI_API_TOKEN", "")
+        if not api_key:
+            logger.error("WAQI_API_TOKEN not configured")
+            return []
+
+        # Only Pakistan (city tiles + national tiles). Global chunks removed.
+        chunks = self.CITY_TILES + self.PAKISTAN_TILES
+
+        features = []
+        seen_uids = set()
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = [executor.submit(self.fetch_chunk, api_key, bbox) for bbox in chunks]
+
+            for future in as_completed(futures):
+                try:
+                    for feat in future.result():
+                        uid = feat["properties"]["uid"]
+                        if uid not in seen_uids:
+                            seen_uids.add(uid)
+                            features.append(feat)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch one bbox: {e}")
+
+        if self.DETAIL_PER_STATION and features:
+            features = self.enrich_features(api_key, features)
+
+        return features
+
+    def fetch_chunk(self, api_key, bbox):
+        latlng = f"{bbox['lat1']},{bbox['lng1']},{bbox['lat2']},{bbox['lng2']}"
+        url = (
+            "https://api.waqi.info/v2/map/bounds"
+            f"?latlng={latlng}&networks=all&token={api_key}"
+        )
+        try:
+            r = requests.get(url, timeout=self.REQUEST_TIMEOUT)
+            data = r.json()
+        except requests.Timeout:
+            logger.warning(f"Timeout fetching bbox {bbox}")
+            return []
+        except Exception as e:
+            logger.error(f"Error fetching bbox {bbox}: {e}")
+            return []
+
+        if data.get("status") != "ok":
+            logger.warning(f"WAQI status not ok for bbox {bbox}: {data}")
+            return []
+
+        out = []
+        for st in data.get("data", []):
+            feat = self.create_feature_basic(st)
+            if feat:
+                out.append(feat)
+        return out
+
+    def normalize_aqi(self, raw_aqi):
+        if raw_aqi is None:
+            return None
+        if isinstance(raw_aqi, (int, float)):
+            return int(raw_aqi) if raw_aqi >= 0 else None
+        if isinstance(raw_aqi, str):
+            m = re.match(r"^\s*(-?\d+)", raw_aqi)
+            if m:
+                try:
+                    val = int(m.group(1))
+                    return val if val >= 0 else None
+                except ValueError:
+                    return None
+        return None
+
+    def create_feature_basic(self, station):
+        try:
+            lat = station.get("lat")
+            lon = station.get("lon")
+            if lat is None or lon is None:
+                return None
+
+            aqi_val = self.normalize_aqi(station.get("aqi"))
+            if aqi_val is None:
+                return None
+
+            raw_uid = station.get("uid", 0)
+            try:
+                uid_clean = abs(int(str(raw_uid).strip()))
+            except (ValueError, TypeError):
+                uid_clean = 0
+
+            props = {
+                "aqi": aqi_val,
+                "uid": uid_clean,
+                "name": station.get("station", {}).get("name", "Unknown Station"),
+                "time": station.get("station", {}).get("time", ""),
+            }
+
+            return {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [float(lon), float(lat)],
+                },
+                "properties": props,
+            }
+        except Exception as e:
+            logger.debug(f"Error creating feature_basic: {e}")
+            return None
+
+    def enrich_features(self, api_key, features):
+        def fetch_detail(uid):
+            url = f"https://api.waqi.info/feed/@{uid}/?token={api_key}"
+            try:
+                r = requests.get(url, timeout=self.STATION_DETAIL_TIMEOUT)
+                d = r.json()
+                if d.get("status") != "ok":
+                    return None
+                return d.get("data")
+            except Exception as e:
+                logger.debug(f"Detail fetch failed uid {uid}: {e}")
+                return None
+
+        uid_list = [f["properties"]["uid"] for f in features]
+        details_map = {}
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            future_map = {executor.submit(fetch_detail, uid): uid for uid in uid_list}
+            for fut in as_completed(future_map):
+                uid = future_map[fut]
+                details_map[uid] = fut.result()
+
+        for f in features:
+            uid = f["properties"]["uid"]
+            detail = details_map.get(uid)
+            if not detail:
+                continue
+            iaqi = detail.get("iaqi", {})
+            f["properties"].update(
+                {
+                    "dominantpol": detail.get("dominentpol")
+                    or detail.get("dominent_pol")
+                    or detail.get("dominantpol"),
+                    "pm25": iaqi.get("pm25", {}).get("v"),
+                    "pm10": iaqi.get("pm10", {}).get("v"),
+                    "no2": iaqi.get("no2", {}).get("v"),
+                    "so2": iaqi.get("so2", {}).get("v"),
+                    "o3": iaqi.get("o3", {}).get("v"),
+                    "co": iaqi.get("co", {}).get("v"),
+                    "attribution": detail.get("attributions", []),
+                }
+            )
+
+        return features
+
+    def fetch_airnet_station_feature(self, uid):
+        """
+        Fetch one AirNet hourly feed, pick the most recent datapoint from pm25/pm10/etc,
+        and convert it into a Feature.
+        """
+        url = f"https://airnet.waqi.info/airnet/feed/hourly/{uid}"
+        try:
+            r = requests.get(url, timeout=self.AIRNET_TIMEOUT)
+            data = r.json()
+        except Exception as e:
+            logger.debug(f"AirNet fetch failed uid {uid}: {e}")
+            return None
+
+        if data.get("status") != "ok":
+            return None
+
+        meta = data.get("meta", {})
+        loiq = data.get("loiq", {})
+        data_block = data.get("data", {})
+
+        lat = None
+        lon = None
+        if "geo" in meta:
+            try:
+                lat = meta["geo"][0]
+                lon = meta["geo"][1]
+            except Exception:
+                lat = None
+                lon = None
+        elif "display_name" in loiq:
+            lat = None
+            lon = None
+
+        def latest_series_value(series_name):
+            series = data_block.get(series_name)
+            if not series or not isinstance(series, list):
+                return None, None
+            try:
+                last_entry = series[-1]
+            except Exception:
+                return None, None
+            ts = last_entry.get("time")
+            mean_val = last_entry.get("mean")
+            return mean_val, ts
+
+        pm25_val, ts_pm25 = latest_series_value("pm25")
+        pm10_val, ts_pm10 = latest_series_value("pm10")
+        co2_val, ts_co2 = latest_series_value("co2")
+        tvoc_val, ts_tvoc = latest_series_value("tvoc")
+        t_val, ts_t = latest_series_value("met.t")
+        h_val, ts_h = latest_series_value("met.h")
+
+        ts_final = ts_pm25 or ts_pm10 or ts_co2 or ts_tvoc or ts_t or ts_h or ""
+
+        try:
+            aqi_val = pm25_val if isinstance(pm25_val, (int, float)) else None
+        except Exception:
+            aqi_val = None
+
+        if aqi_val is None:
+            aqi_val = pm10_val if isinstance(pm10_val, (int, float)) else None
+
+        if aqi_val is None:
+            return None
+
+        try:
+            uid_clean = abs(int(str(meta.get("id", uid)).strip()))
+        except Exception:
+            try:
+                uid_clean = abs(int(str(uid).strip()))
+            except Exception:
+                uid_clean = 0
+
+        name_val = meta.get("name") or loiq.get("display_name") or "Unknown Station"
+
+        if lat is None or lon is None:
+            return None
+
+        props = {
+            "aqi": int(aqi_val) if isinstance(aqi_val, (int, float)) else aqi_val,
+            "uid": uid_clean,
+            "name": name_val,
+            "time": ts_final or "",
+            "pm25": pm25_val,
+            "pm10": pm10_val,
+            "co2": co2_val,
+            "tvoc": tvoc_val,
+            "temp": t_val,
+            "rh": h_val,
+        }
+
+        feat = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [float(lon), float(lat)],
+            },
+            "properties": props,
+        }
+        return feat
+
+    def fetch_single_station_detail(self, api_key, uid):
+        """
+        Fetch one WAQI /feed/@<uid> and convert it into a Feature with enrichment.
+        """
+        url = f"https://api.waqi.info/feed/@{uid}/?token={api_key}"
+        try:
+            r = requests.get(url, timeout=self.STATION_DETAIL_TIMEOUT)
+            data = r.json()
+        except Exception as e:
+            logger.debug(f"Forced UID {uid} fetch failed: {e}")
+            return None
+
+        if data.get("status") != "ok":
+            return None
+
+        d = data.get("data", {})
+        if not d:
+            return None
+
+        station_like = {
+            "lat": d.get("city", {}).get("geo", [None, None])[0],
+            "lon": d.get("city", {}).get("geo", [None, None])[1],
+            "aqi": d.get("aqi"),
+            "uid": uid,
+            "station": {
+                "name": d.get("city", {}).get("name", "Unknown Station"),
+                "time": d.get("time", {}).get("s", ""),
+            },
+        }
+
+        feat = self.create_feature_basic(station_like)
+        if not feat:
+            return None
+
+        iaqi = d.get("iaqi", {})
+        feat["properties"].update(
+            {
+                "dominantpol": d.get("dominentpol")
+                or d.get("dominent_pol")
+                or d.get("dominantpol"),
+                "pm25": iaqi.get("pm25", {}).get("v"),
+                "pm10": iaqi.get("pm10", {}).get("v"),
+                "no2": iaqi.get("no2", {}).get("v"),
+                "so2": iaqi.get("so2", {}).get("v"),
+                "o3": iaqi.get("o3", {}).get("v"),
+                "co": iaqi.get("co", {}).get("v"),
+                "attribution": d.get("attributions", []),
+            }
+        )
+        return feat
+
+    def fetch_forced_uids(self, api_key, existing_features):
+        """
+        Fetch all FORCE_UIDS by first trying AirNet hourly, and if that fails, falling back to WAQI /feed/@.
+        Deduplicate against stations already in existing_features.
+        """
+        present = {f["properties"]["uid"] for f in existing_features}
+        want = [uid for uid in self.FORCE_UIDS if uid not in present]
+
+        if not want:
+            return []
+
+        forced_out = []
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            future_map = {}
+            for uid in want:
+                future_map[executor.submit(self.fetch_airnet_station_feature, uid)] = (
+                    uid,
+                    "airnet",
+                )
+            for fut in as_completed(future_map):
+                feat = fut.result()
+                uid_val, _src = future_map[fut]
+                if feat:
+                    forced_out.append(feat)
+                else:
+                    waqi_feat = self.fetch_single_station_detail(api_key, uid_val)
+                    if waqi_feat:
+                        forced_out.append(waqi_feat)
+
+        return forced_out
+#GDELT AND SOCIAL MEDIA VIEWS HERE-----------------------------------------------
 class RateLimiter:
     """Thread-safe rate limiter for API requests"""
     def __init__(self, max_requests_per_minute=60):
@@ -1566,208 +2227,3 @@ if __name__ == "__main__":
     print("\n=== Production Notes ===")
     configure_for_production()
 
-# PMD WEATHER DATA STATION RECORDS UPDATED DAILY
-class WeatherDataPMDFFDView(View):
-    # Cache data for 5 minutes to reduce API calls
-    CACHE_DURATION = timedelta(minutes=5)
-    _cache = {}
-
-    ENDPOINTS = {
-        "rainfall": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=DailyRainfall",
-        "temperature": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=Temperature",
-        "wind": "http://faws.pmd.gov.pk/faws/new/api/loadLatestData.php?product=Wind",
-    }
-
-    def _fetch_endpoint(self, endpoint_name, url):
-        """Fetch data from a single endpoint"""
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                return endpoint_name, response.json()
-        except Exception as e:
-            print(f"Error fetching {endpoint_name}: {e}")
-        return endpoint_name, []
-
-    def _get_cached_data(self):
-        """Get cached data if still valid"""
-        if "data" in self._cache and "timestamp" in self._cache:
-            if datetime.now() - self._cache["timestamp"] < self.CACHE_DURATION:
-                return self._cache["data"]
-        return None
-
-    def _merge_data(self, rainfall_data, temperature_data, wind_data):
-        """Merge data from all endpoints by station name"""
-        merged = {}
-
-        # Process rainfall data
-        for item in rainfall_data:
-            name = item.get("name")
-            if name and item.get("location"):
-                merged[name] = {
-                    "name": name,
-                    "location": item["location"],
-                    "rainfall": item.get("totalRainfall", 0),
-                    "rainfall_date": item.get("date"),
-                    "rainfall_time": item.get("time"),
-                }
-
-        # Add temperature data
-        for item in temperature_data:
-            name = item.get("name")
-            if name in merged:
-                merged[name].update(
-                    {
-                        "temperature": (
-                            float(item.get("temperature", 0))
-                            if item.get("temperature")
-                            else 0
-                        ),
-                        "dewPoint": (
-                            float(item.get("dewPoint", 0))
-                            if item.get("dewPoint")
-                            else 0
-                        ),
-                        "humidity": float(item.get("RH", 0)) if item.get("RH") else 0,
-                        "pressure": (
-                            float(item.get("airPressure", 0))
-                            if item.get("airPressure")
-                            else 0
-                        ),
-                        "temp_date": item.get("date"),
-                        "temp_time": item.get("time"),
-                    }
-                )
-            elif name and item.get("location"):
-                # Station not in rainfall data, create new entry
-                merged[name] = {
-                    "name": name,
-                    "location": item["location"],
-                    "temperature": (
-                        float(item.get("temperature", 0))
-                        if item.get("temperature")
-                        else 0
-                    ),
-                    "dewPoint": (
-                        float(item.get("dewPoint", 0)) if item.get("dewPoint") else 0
-                    ),
-                    "humidity": float(item.get("RH", 0)) if item.get("RH") else 0,
-                    "pressure": (
-                        float(item.get("airPressure", 0))
-                        if item.get("airPressure")
-                        else 0
-                    ),
-                    "temp_date": item.get("date"),
-                    "temp_time": item.get("time"),
-                    "rainfall": 0,
-                }
-
-        # Add wind data
-        for item in wind_data:
-            name = item.get("name")
-            if name in merged:
-                merged[name].update(
-                    {
-                        "windSpeed": (
-                            float(item.get("windspeed_knot", 0))
-                            if item.get("windspeed_knot")
-                            else 0
-                        ),
-                        "windDirection": (
-                            float(item.get("windDirection", 0))
-                            if item.get("windDirection")
-                            else 0
-                        ),
-                        "wind_date": item.get("date"),
-                        "wind_time": item.get("time"),
-                    }
-                )
-            elif name and item.get("location"):
-                # Station not in previous data, create new entry
-                merged[name] = {
-                    "name": name,
-                    "location": item["location"],
-                    "windSpeed": (
-                        float(item.get("windspeed_knot", 0))
-                        if item.get("windspeed_knot")
-                        else 0
-                    ),
-                    "windDirection": (
-                        float(item.get("windDirection", 0))
-                        if item.get("windDirection")
-                        else 0
-                    ),
-                    "wind_date": item.get("date"),
-                    "wind_time": item.get("time"),
-                    "temperature": 0,
-                    "rainfall": 0,
-                }
-
-        return merged
-
-    def get(self, request, *args, **kwargs):
-        # Check cache first
-        cached_data = self._get_cached_data()
-        if cached_data:
-            return JsonResponse(cached_data)
-
-        # Fetch all endpoints in parallel
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {
-                executor.submit(self._fetch_endpoint, name, url): name
-                for name, url in self.ENDPOINTS.items()
-            }
-
-            results = {}
-            for future in as_completed(futures):
-                endpoint_name, data = future.result()
-                results[endpoint_name] = data
-
-        # Merge all data
-        merged_data = self._merge_data(
-            results.get("rainfall", []),
-            results.get("temperature", []),
-            results.get("wind", []),
-        )
-
-        # Convert to GeoJSON
-        features = []
-        for station_name, data in merged_data.items():
-            location = data.get("location", [])
-            if len(location) >= 2:
-                try:
-                    lon = float(location[0])
-                    lat = float(location[1])
-
-                    # Only include stations with valid coordinates and some data
-                    if -180 <= lon <= 180 and -90 <= lat <= 90:
-                        feature = {
-                            "type": "Feature",
-                            "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                            "properties": {
-                                "name": station_name,
-                                "temperature": data.get("temperature", 0),
-                                "dewPoint": data.get("dewPoint", 0),
-                                "humidity": data.get("humidity", 0),
-                                "pressure": data.get("pressure", 0),
-                                "windSpeed": data.get("windSpeed", 0),
-                                "windDirection": data.get("windDirection", 0),
-                                "rainfall": data.get("rainfall", 0),
-                                # Add date/time fields
-                                "temp_date": data.get("temp_date"),
-                                "temp_time": data.get("temp_time"),
-                                "wind_date": data.get("wind_date"),
-                                "wind_time": data.get("wind_time"),
-                                "rainfall_date": data.get("rainfall_date"),
-                                "rainfall_time": data.get("rainfall_time"),
-                            },
-                        }
-                        features.append(feature)
-                except (ValueError, TypeError):
-                    continue
-
-        geojson = {"type": "FeatureCollection", "features": features}
-
-        # Cache the result
-        self._cache = {"data": geojson, "timestamp": datetime.now()}
-
-        return JsonResponse(geojson)

@@ -1,3 +1,4 @@
+import { Popup } from "mapbox-gl";
 import {map_icons} from "./map-icons.js"
 
 import {
@@ -31,13 +32,11 @@ import {
   generateMBX_MeteoblueDailyCAPELayers,
   generateMBX_MeteoblueOfficialWeatherWarningsLayers,
   generateMBX_MeteoblueForecastWarningsDailyLayers,
+  generateMBX_IMERGPrecipRateLayers,
 } from "./time-functions.js";
-
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
-console.log('🌐 Global baseUrl:', window.baseUrl);
 export const baseUrl = window.baseUrl;
-
 // Layer thumbnails can be added in loop by importing images like below
 const images = import.meta.glob("@assets/images/layer_thumbnails/*.webp", { eager: true });
 // Use this function name with image name to load it e.g. getImage('airports.webp')
@@ -298,6 +297,8 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const mbx_imerg_precip_rate = generateMBX_IMERGPrecipRateLayers();
+
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
 window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
@@ -329,11 +330,12 @@ window.weekly_snowfall_forecast = mbx_snow_daily;
 window.cape_weekly_forecast = mbx_cape_daily;
 window.official_weather_warnings_forecast = mbx_warn_official;
 window.meteorological_risks_forecast = mbx_warn_forecast;
-console.log(
-  "✅ DWD layers created:",
-  window.dwd_satellite_infrared.length,
-  "steps"
-);
+window.imerg_precipitation_rate_14_days = mbx_imerg_precip_rate;
+// console.log(
+//   "✅ DWD layers created:",
+//   window.dwd_satellite_infrared.length,
+//   "steps"
+// );
 
 export const ncop_menu_items = {
   gis_layers: {
@@ -489,7 +491,7 @@ export const ncop_menu_items = {
               },
             },
           ],
-          popup: false,
+          popup: true,
           information:
             "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
         },
@@ -925,7 +927,7 @@ export const ncop_menu_items = {
   flood: {
     "Flood Forecasting Division (FFD-Data)": {
       toggle: {
-        ffd_data : {
+        ffd_data: {
           label: "FFD Data",
           theme: null,
           source: {
@@ -943,37 +945,37 @@ export const ncop_menu_items = {
                 "circle-color": [
                   "match",
                   ["get", "status"],
-        
+
                   "Normal",
                   "#28a745", // Green - Normal Flow
                   "NORMAL",
                   "#28a745", // Green - Normal Flow
-        
+
                   "Low",
                   "#17a2b8", // Teal - Low Flood
                   "LOW",
                   "#17a2b8", // Teal - Low Flood
-        
+
                   "Medium",
                   "#ffc107", // Yellow - Medium Flood
                   "MEDIUM",
                   "#ffc107", // Yellow - Medium Flood
-        
+
                   "High",
                   "#fd7e14", // Orange - High Flood
                   "HIGH",
                   "#fd7e14", // Orange - High Flood
-        
+
                   "Very High",
                   "#dc3545", // Red - Very High Flood
                   "VERY_HIGH",
                   "#dc3545", // Red - Very High Flood
-        
+
                   "Exceptionally High",
                   "#6f42c1", // Purple - Exceptionally High Flood
                   "EX_HIGH",
                   "#6f42c1", // Purple - Exceptionally High Flood
-        
+
                   "#999999", // default gray if none match
                 ],
                 "circle-opacity": 1,
@@ -1149,6 +1151,164 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Methane (ppbv)",
+        },
+      },
+      toggle: {
+        waqi_stations: {
+          label: "WAQI-Stations Air Quality",
+          source: {
+            id: "waqi_stations-source",
+            type: "geojson",
+            data: `${baseUrl}/get-waqi-global-airquality/`,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "waqi_stations-circle",
+              type: "circle",
+              source: "waqi_stations-source",
+              paint: {
+                // Radius increases with AQI = visually proportional
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  4, // clean air -> small
+                  50,
+                  6,
+                  100,
+                  8,
+                  150,
+                  10,
+                  200,
+                  12,
+                  300,
+                  14,
+                  500,
+                  16, // terrible -> big
+                ],
+
+                // Color by AQI category
+                "circle-color": [
+                  "step",
+                  ["get", "aqi"],
+                  "#00e400", // 0-50   Good
+                  51,
+                  "#ffff00", // 51-100  Moderate
+                  101,
+                  "#ff7e00", // 101-150 Unhealthy (SG)
+                  151,
+                  "#ff0000", // 151-200 Unhealthy
+                  201,
+                  "#8f3f97", // 201-300 Very Unhealthy
+                  301,
+                  "#7e0023", // 301+    Hazardous
+                ],
+
+                // White outline so dots pop on satellite/dark basemap
+                "circle-stroke-width": 1.5,
+                "circle-stroke-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "#ffffff", // high AQI (dark fill) -> white stroke edge
+                  "#000000", // low AQI (bright fill) -> dark stroke edge
+                ],
+
+                // Slight transparency so overlapping cities (e.g. Lahore cluster) are readable
+                "circle-opacity": 0.85,
+              },
+            },
+
+            // optional glow layer to make high AQI feel scary
+            {
+              id: "waqi_stations-glow",
+              type: "circle",
+              source: "waqi_stations-source",
+              paint: {
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  8,
+                  100,
+                  12,
+                  200,
+                  16,
+                  300,
+                  20,
+                  500,
+                  24,
+                ],
+                "circle-color": [
+                  "step",
+                  ["get", "aqi"],
+                  "rgba(0,228,0,0.15)", // Good
+                  51,
+                  "rgba(255,255,0,0.18)", // Moderate
+                  101,
+                  "rgba(255,126,0,0.22)", // Unhealthy SG
+                  151,
+                  "rgba(255,0,0,0.25)", // Unhealthy
+                  201,
+                  "rgba(143,63,151,0.28)", // Very Unhealthy
+                  301,
+                  "rgba(126,0,35,0.32)", // Hazardous
+                ],
+                "circle-blur": 1.2,
+                "circle-opacity": 0.6,
+              }
+            },
+
+            // AQI number label
+            {
+              id: "waqi_stations-label",
+              type: "symbol",
+              source: "waqi_stations-source",
+              minzoom: 4, // hide labels when zoomed way out to avoid clutter
+              paint: {
+                // Text color switches for contrast: dark text on light dots, light text on dark dots
+                "text-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "#ffffff", // high AQI dots are dark -> white text
+                  "#000000", // low AQI dots are bright -> black text
+                ],
+                "text-halo-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "rgba(0,0,0,0.6)", // dark halo for very bright text
+                  "rgba(255,255,255,0.8)", // light halo for dark text
+                ],
+                "text-halo-width": 1.5,
+                "text-halo-blur": 0.5,
+              },
+              layout: {
+                "text-field": ["to-string", ["get", "aqi"]],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  9,
+                  150,
+                  11,
+                  300,
+                  13,
+                  500,
+                  14,
+                ],
+                "text-anchor": "center",
+                "text-allow-overlap": false,
+                "text-ignore-placement": false,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "The WAQI-Stations Air Quality layer displays real-time air quality data from the World Air Quality Index (WAQI) project. This layer is essential for monitoring pollution levels and assessing health risks associated with air quality in various locations worldwide.",
         },
       },
     },
