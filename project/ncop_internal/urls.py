@@ -7,6 +7,8 @@ from .views import (
     password_reset_view,
     password_reset_confirm_view,
     WeatherDataPMDFFDView,
+    GdeltNewsEventsApi,
+    
 )
 
 
@@ -16,7 +18,8 @@ urlpatterns = [
     path("login/", login_view, name="login"),
     path("signup/", signup_view, name="signup"),
     path("logout/", logout_view, name="logout"),
-    path("get-weather-pmdffd-data/", WeatherDataPMDFFDView.as_view(), name="get-weather-pmdffd-data",),
     path("password-reset/", password_reset_view, name="password_reset"),
     path("password-reset-confirm/<uidb64>/<token>/", password_reset_confirm_view, name="password_reset_confirm"),
+    path("get-weather-pmdffd-data/", WeatherDataPMDFFDView.as_view(), name="get-weather-pmdffd-data",),
+    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
 ]

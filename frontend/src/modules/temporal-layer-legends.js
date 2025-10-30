@@ -97,7 +97,7 @@ export const legends = {
     ],
     ["0.1", "0.5", "1", "2", "5", "10", "20", "30", "50", "100", "150"]
   ),
-  gdpsRelHum: gradientLegendBar(
+  specific_humidity_2m_above_ground: gradientLegendBar(
     [
       "#FFFFFF",
       "#0010CC",
@@ -118,7 +118,7 @@ export const legends = {
     ["#001AB4", "#1AA3E3", "#B4FE4B", "#FE7201", "#AD1300"],
     ["Very Low", "Low", "Moderate", "High", "Very High"]
   ),
-  gdpsAccPreci: gradientLegendBar(
+  gdps_accumulated_precipitation: gradientLegendBar(
     [
       "#FFFFFF",
       "#B8D5FF",
@@ -156,7 +156,7 @@ export const legends = {
       "150",
     ]
   ),
-  gdpsPreciTypes: gradientLegendBar(
+  precipitation_type_3hrs: gradientLegendBar(
     ["#007700", "#EECC00", "#FF0000", "#FF06FF", "#005599"],
     ["Rain", "Rain-Snow", "Freezing Rain", "Ice-Pellets", "Snow"]
   ),
@@ -466,7 +466,7 @@ export const legends = {
     ],
     ["0", "1780", "1840", "1900", "1960", "2020", "2080", "2140", "10000"]
   ),
-  oceanSal: gradientLegendBar(
+  ocean_salinity: gradientLegendBar(
     [
       "#000DB9",
       "#0014ED",
@@ -504,7 +504,7 @@ export const legends = {
       "33-37",
     ]
   ),
-  oceanTemp: gradientLegendBar(
+  ocean_temperature: gradientLegendBar(
     [
       "#00067F",
       "#012EDC",
@@ -517,7 +517,7 @@ export const legends = {
     ],
     ["271K", "278K", "284K", "290K", "296K", "297K", "303K", "400K"]
   ),
-  oceanSurCur: gradientLegendBar(
+  ocean_surface_currents: gradientLegendBar(
     [
       "#99E8FD",
       "#9994FF",
@@ -547,7 +547,7 @@ export const legends = {
       "2.50",
     ]
   ),
-  oceanSurHeight: gradientLegendBar(
+  ocean_surface_height: gradientLegendBar(
     [
       "#000892",
       "#000EBD",
@@ -593,7 +593,7 @@ export const legends = {
       "3.0",
     ]
   ),
-  nemsinLayers: gradientLegendBar(
+  weekly_precipitation_2m_above_ground: gradientLegendBar(
     [
       "#C2FBFA",
       "#87A9FD",
@@ -611,7 +611,25 @@ export const legends = {
     ],
     ["0", "0.25", "1", "2", "4", "6", "10", "15", "20", "30", "50", "70", "100"]
   ),
-  meteobluetemperatureLayers: gradientLegendBar(
+  hourly_precipitation_2m_above_ground: gradientLegendBar(
+    [
+      "#C2FBFA",
+      "#87A9FD",
+      "#7B95F9",
+      "#3496FE",
+      "#3686DD",
+      "#35AC9F",
+      "#35D14D",
+      "#BEFE35",
+      "#5CFDA1",
+      "#BE46EB",
+      "#FF8134",
+      "#FD6334",
+      "#FC4335",
+    ],
+    ["0", "0.25", "1", "2", "4", "6", "10", "15", "20", "30", "50", "70", "100"]
+  ),
+  temperature_2m_above_ground: gradientLegendBar(
     [
       "#348CFE",
       "#51D4D9",
@@ -645,11 +663,11 @@ export const legends = {
       "46",
     ]
   ),
-  meteoblueRadarLayers: gradientLegendBar(
+  precipitation_radar: gradientLegendBar(
     ["#7AE1E8", "#02C8D8", "#2D7BEA", "#BE46EB", "#E60B0B"],
     ["Drizzle", "Light", "Moderate", "Heavy", "Extreme"]
   ),
-  meteoblueDailySnowfallLayers: gradientLegendBar(
+  weekly_snowfall_forecast: gradientLegendBar(
     [
       "rgba(230, 250, 255, 0.8)",
       "rgba(191, 236, 243, 1.0)",
@@ -689,7 +707,7 @@ export const legends = {
       "360",
     ]
   ),
-  meteoblueSnowfallHourlyLayers: gradientLegendBar(
+  hourly_snowfall_forecast: gradientLegendBar(
     [
       "rgba(230, 250, 255, 0.8)",
       "rgba(191, 236, 243, 1.0)",
@@ -729,7 +747,7 @@ export const legends = {
       "140",
     ]
   ),
-  meteoblueCapeHourlyLayers: gradientLegendBar(
+  cape_hourly_forecast: gradientLegendBar(
     [
       "rgba(180, 170, 255, 0.8)",
       "rgba(130, 120, 255, 1.0)",
@@ -775,7 +793,7 @@ export const legends = {
       "5000",
     ]
   ),
-  meteoblueDailyCAPELayers: gradientLegendBar(
+  cape_weekly_forecast: gradientLegendBar(
     [
       "rgba(180, 170, 255, 0.8)",
       "rgba(130, 120, 255, 1.0)",
@@ -821,7 +839,7 @@ export const legends = {
       "5000",
     ]
   ),
-  meteoblueForecastWarningsLayers: gradientLegendBar(
+  meteorological_risks_forecast: gradientLegendBar(
     [
       "rgba(248, 246, 0, 1.0)",
       "rgba(255, 173, 0, 1.0)",
@@ -839,7 +857,7 @@ export const legends = {
       "Severe Precip",
     ]
   ),
-  meteoblueWeatherWarningsLayers: gradientLegendBar(
+  official_weather_warnings_forecast: gradientLegendBar(
     [
       "rgba(255, 0, 0, 0.6)",
       "rgba(255, 125, 0, 0.6)",
@@ -849,7 +867,7 @@ export const legends = {
     ],
     ["Extreme", "Severe", "Moderate", "Minor", "Unknown"]
   ),
-  meteoblueStormHelicityHourlyLayers: gradientLegendBar(
+  storm_helicity_forecast_0_3km: gradientLegendBar(
     [
       "rgba(170, 255, 102, 1.0)",
       "rgba(214, 255, 0, 1.0)",

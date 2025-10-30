@@ -1684,7 +1684,7 @@ button.custom-nav-btn.terrain-active:hover {
     height: 7.35rem;
     background-color: var(--primary-bg);
     border-radius: 5px;
-    outline: solid 2px var(--border-dark);
+    border: solid 2px var(--glass-lighter);
     display: none;
     animation: nrotateMenu 3s;
     backdrop-filter: blur(10px);
@@ -2353,5 +2353,208 @@ button.custom-nav-btn.terrain-active:hover {
     .ncop-row-checkbox {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+    }
+}
+
+/* ========================================================================
+   NEWS SECTION STYLES
+   ======================================================================== */
+
+.news-modal {
+    position: absolute;
+    display: none;
+    /* ⬅ hidden by default */
+    align-items: center;
+    bottom: 11px;
+    left: 20%;
+    height: 80px;
+    width: 75%;
+    border-radius: 8px;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    z-index: 999;
+    background-color: var(--primary-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--glass-lighter);
+    box-shadow: 0 8px 32px var(--shadow-soft);
+    padding: 0 12px;
+}
+
+.news-modal.show {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.news-scroll-wrapper {
+    overflow: hidden;
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.news-scroll {
+    display: flex;
+    gap: 12px;
+    animation: scroll-left 520s linear infinite;
+    padding: 10px;
+    white-space: nowrap;
+    height: 90px;
+}
+
+.news-box {
+    display: inline-block;
+    min-width: max-content;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    padding: 5px 10px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.news-box:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.news-box.selected {
+    background: rgba(255, 255, 255, 0.35);
+    color: black;
+    font-weight: bold;
+}
+
+@keyframes scroll-left {
+    0% {
+        transform: translateX(0%);
+    }
+
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+.news-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.logo-container {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rotating-logo {
+    width: 36px;
+    height: 36px;
+    animation: rotate-logo 5s linear infinite;
+}
+
+.news-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+    line-height: 1.2;
+}
+
+.news-info hr {
+    width: 75%;
+    margin: 5px 0;
+    border-color: var(--border-dark);
+}
+
+.news-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.news-time {
+    font-family: monospace;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.divider-line {
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.3);
+    height: 80%;
+}
+
+.news-toggle-buttons {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.toggle-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.35);
+}
+
+.toggle-btn.active {
+    background-color: #28a745;
+    color: white;
+    font-weight: bold;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .news-modal {
+        left: 2%;
+        right: 2%;
+        padding: 0 8px;
+        height: auto;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .news-header {
+        border-right: none;
+        padding-right: 0;
+        gap: 8px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        width: 100%;
+        justify-content: center;
+    }
+
+    .news-scroll-wrapper {
+        width: 100%;
+    }
+
+    .news-scroll {
+        gap: 10px;
+        padding: 8px;
+    }
+
+    .toggle-btn {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    .news-box {
+        font-size: 12px;
+        padding: 4px 8px;
     }
 }

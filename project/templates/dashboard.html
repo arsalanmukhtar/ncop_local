@@ -12,6 +12,8 @@
         window.MAPBOX_ACCESS_TOKEN = "{{ mapbox_token|escapejs }}";
         window.USER_ID = "{{ user.id|escapejs }}";
         window.USERNAME = "{{ user.username|escapejs }}";
+        window.metbluT = "{{ metblut|escapejs }}";  <!-- add this line -->
+        console.log("✅ Meteoblue Token present:", !!window.metbluT);
     </script>
 
     {# Vite HMR + bundle #}
@@ -161,12 +163,39 @@
             </button>
             <button id="speedControlButton" class="speed-btn" title="Change animation speed">1x</button>
         </div>
-        
+
         <input type="range" min="0" step="1" value="0" class="slider1" id="slider1" title="Drag to change time step">
         <div class="year-labels1"></div>
         <div class="legend-container1">
             <div id="legend-container-slider1"></div>
             <p></p>
+        </div>
+    </div>
+
+    <!--NEWS Modal-->
+    <div id="news-modal" class="news-modal bg-glass">
+        <!-- Left section: Logo + Global News + Time -->
+        <!-- Left: Logo + Title + Time -->
+        <div class="news-header">
+            <div class="logo-container">
+                <img data-asset="ndmaLogo" alt="NDMA Logo" class="logo-spin" />
+            </div>
+            <div class="news-info">
+                <div class="news-title">Local News</div>
+                <hr>
+                <div class="news-time" id="news-time">--:--:--</div>
+            </div>
+            <div class="news-toggle-buttons">
+                <button id="toggle-social-btn" title="Toggle Social Media News" class="toggle-btn"><img
+                        data-asset="socialMediaIcon" alt="Toggle Social Media News"></button>
+                <button id="fetch-regular-btn" title="Fetch News Only" class="toggle-btn"><img data-asset="newsIcon"
+                        alt="Fetch News Only"></button>
+            </div>
+            <div class="divider-line"></div>
+        </div>
+        <!-- Right: Scrolling news -->
+        <div class="news-scroll-wrapper">
+            <div class="news-scroll" id="news-scroll"></div>
         </div>
     </div>
 </body>

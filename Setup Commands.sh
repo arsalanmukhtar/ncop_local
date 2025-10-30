@@ -1,7 +1,11 @@
 # To take the latest pull from main dev dm arsalan to keep your branch updated
 git pull origin dev-arsalan
 # Setup the environment (python version=3.11)
-python -m venv ncopenv311
+winget install Python.Python.3.11
+# Confirm installation
+py -3.11 --version
+# Create virtual environment
+py -3.11 -m venv ncopenv311
 ncopenv311/Scripts/activate
 # Deactivate the environment
 deactivate
@@ -38,7 +42,7 @@ setx PATH "$($env:PATH);C:\OSGeo4W\bin"
 GDAL_LIBRARY_PATH = r'C:\OSGeo4W\bin\gdal311.dll'
 GEOS_LIBRARY_PATH = r'C:\OSGeo4W\bin\geos_c.dll'
 # Test your GDAL binaries setup
-(ncopenv311) PS D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin> python -c "from django.contrib.gis import gdal; print(gdal.GDAL_VERSION)"
+(ncopenv311) PS D:\muhammad_arsalan\ncop_v1\ncop_local\ncopenv311\Lib\site-packages\GDAL-3.4.3.dist-info\bin> python -c "from osgeo import gdal; print(gdal.__version__)"
 
 # -------------------------- #
 # Paths for dev-ahadkhan

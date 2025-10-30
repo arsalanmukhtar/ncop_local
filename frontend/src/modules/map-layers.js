@@ -13,6 +13,24 @@ import {
   generateCOLayers,
   generateDustLayers,
   generateCH4300Layers,
+  generateGDPSHumLayers,
+  generateGDPSAccPreciLayers,
+  generateGDPSPreciTypesLayers,
+  generateOceanSalinityLayers,
+  generateOceanTemperatureLayers,
+  generateOceanCurrentsLayers,
+  generateOceanSurfaceHeightLayers,
+  generateMeteoblueNEMSCloudPrecipLayers,
+  generateMBX_MeteoblueHourlyCloudPrecipLayers,
+  generateMBX_MeteoblueHourlyTemperatureLayers,
+  generateMBX_MeteoblueRadarCompositeLayers,
+  generateMBX_MeteoblueSnowfallHourlyLayers,
+  generateMBX_MeteoblueCAPEHourlyLayers,
+  generateMBX_MeteoblueStormHelicityHourlyLayers,
+  generateMBX_MeteoblueDailySnowfallLayers,
+  generateMBX_MeteoblueDailyCAPELayers,
+  generateMBX_MeteoblueOfficialWeatherWarningsLayers,
+  generateMBX_MeteoblueForecastWarningsDailyLayers,
 } from "./time-functions.js";
 
 // Global baseUrl for the entire application
@@ -28,6 +46,228 @@ function getImage(filename) {
     return match ? match[1].default : null;
 }
 
+// ======================================================
+// Sync JSON → GeoJSON helpers (no async/await required)
+// ======================================================
+//
+// main use:
+// const fc = jsonUrlToGeoJsonSync("https://.../latest.json");
+// map.addSource("...", { type: "geojson", data: fc });
+//
+// NOTE: This uses a synchronous XHR (blocking). That's intentional
+// because we need data immediately at config-build time.
+//
+
+/**
+ * Fetch remote JSON synchronously, convert it to a GeoJSON FeatureCollection.
+ * Always returns a valid FeatureCollection, even on error.
+ */
+function jsonUrlToGeoJsonSync(url) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", url, false); // false => block until done
+
+  try {
+    xhr.send(null);
+  } catch (e) {
+    console.error("jsonUrlToGeoJsonSync: network error for", url, e);
+    return emptyFC();
+  }
+
+  if (xhr.status < 200 || xhr.status >= 300) {
+    console.error("jsonUrlToGeoJsonSync:", url, "bad status", xhr.status);
+    return emptyFC();
+  }
+
+  let data;
+  try {
+    data = JSON.parse(xhr.responseText);
+  } catch (err) {
+    console.error("jsonUrlToGeoJsonSync:", url, "invalid JSON", err);
+    return emptyFC();
+  }
+
+  return buildFC(data);
+}
+
+/**
+ * Small helper: return an empty but valid FeatureCollection.
+ */
+function emptyFC() {
+  return { type: "FeatureCollection", features: [] };
+}
+
+/**
+ * Turn an arbitrary nested object into a FeatureCollection.
+ * We scan for any arrays whose objects look like they have coordinates.
+ */
+function buildFC(obj) {
+  const arrays = collectGeoArrays(obj);
+  const features = [];
+
+  for (const arr of arrays) {
+    for (const item of arr) {
+      const feat = toPointFeature(item);
+      if (feat) features.push(feat);
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * Recursively walk the object, collecting arrays that appear "geospatial".
+ * "Geospatial" = at least one element that looks like it has lon/lat.
+ */
+function collectGeoArrays(root) {
+  const found = [];
+
+  (function walk(node) {
+    if (!node) return;
+
+    if (Array.isArray(node)) {
+      // If array contains point-like objects, record it.
+      if (looksGeospatial(node)) found.push(node);
+
+      // Still descend in case there are nested arrays deeper.
+      for (const child of node) {
+        if (child && typeof child === "object") walk(child);
+      }
+      return;
+    }
+
+    if (typeof node === "object") {
+      for (const k in node) {
+        if (Object.prototype.hasOwnProperty.call(node, k)) {
+          walk(node[k]);
+        }
+      }
+    }
+  })(root);
+
+  return found;
+}
+
+/**
+ * Quick heuristic: check first object-like element in array and see
+ * if we can extract coords from it.
+ */
+function looksGeospatial(arr) {
+  const firstObj = arr.find(
+    (el) => el && typeof el === "object" && !Array.isArray(el)
+  );
+  return !!firstObj && !!extractCoords(firstObj);
+}
+
+/**
+ * Convert one data record into a GeoJSON Point feature.
+ * Returns null if no usable coords.
+ */
+function toPointFeature(props) {
+  const coords = extractCoords(props);
+  if (!coords) return null;
+
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: coords },
+    properties: { ...props },
+  };
+}
+
+/**
+ * Try to pull [lon, lat] from flexible field names like:
+ * long/lat, lon/lat, lng/lat, longitude/latitude, x/y, etc.
+ *
+ * Returns [lon, lat] as numbers, or null if invalid.
+ */
+function extractCoords(obj) {
+  if (!obj || typeof obj !== "object") return null;
+
+  // Preferred explicit pairs to test in order.
+  const pairs = [
+    ["long", "lat"],
+    ["lon", "lat"],
+    ["lng", "lat"],
+    ["longitude", "latitude"],
+    ["x", "y"],
+    ["Long", "Lat"],
+    ["LONG", "LAT"],
+  ];
+
+  for (const [lonKey, latKey] of pairs) {
+    if (lonKey in obj && latKey in obj) {
+      const lon = toNum(obj[lonKey]);
+      const lat = toNum(obj[latKey]);
+      if (validCoord(lon, lat)) return [lon, lat];
+    }
+  }
+
+  // Loose fallback: find any plausible lon-ish / lat-ish keys.
+  const lonKeys = ["long", "lng", "lon", "longitude", "x", "LONG", "Long"];
+  const latKeys = ["lat", "latitude", "y", "LAT", "Lat"];
+
+  let lon, lat;
+
+  for (const k of lonKeys) {
+    if (k in obj) {
+      lon = toNum(obj[k]);
+      if (!Number.isNaN(lon)) break;
+    }
+  }
+  for (const k of latKeys) {
+    if (k in obj) {
+      lat = toNum(obj[k]);
+      if (!Number.isNaN(lat)) break;
+    }
+  }
+
+  return validCoord(lon, lat) ? [lon, lat] : null;
+}
+
+/**
+ * toNum(val):
+ * - number → number
+ * - "34,900" → 34900
+ * - "72.7338000" → 72.7338
+ * otherwise NaN
+ */
+function toNum(val) {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const num = Number(val.trim().replace(/,/g, ""));
+    if (!Number.isNaN(num)) return num;
+  }
+  return NaN;
+}
+
+/**
+ * Basic lon/lat sanity (WGS84-ish).
+ */
+function validCoord(lon, lat) {
+  return (
+    typeof lon === "number" &&
+    typeof lat === "number" &&
+    !Number.isNaN(lon) &&
+    !Number.isNaN(lat) &&
+    lon >= -180 &&
+    lon <= 180 &&
+    lat >= -90 &&
+    lat <= 90
+  );
+}
+///
+// This call BLOCKS until the JSON is fetched + converted.
+// After this line, __FFD_GEOJSON__ is a real FeatureCollection.
+const __FFD_GEOJSON__ = jsonUrlToGeoJsonSync(
+  "https://raw.githubusercontent.com/Ibrahom1/hydrosituation/main/latest.json"
+);
+//Meteoblue Layers constants
+const metbluT = window.metbluT;
+const model = "NEMSIN";
+const modelanomaly = "SA-ENSEMBLE";
+//export let domain = "NEMSAUTO";
+const level = "2 m above gnd";
+
+// Defining the layer of temporal data
 const dwd_layers = generateDWDSatelliteLayers();
 const ecmwf_temp_layers = generateECMWFTempLayers();
 const ecmwf_cyclone_layers = generateECMWFCycloneLayers();
@@ -40,6 +280,24 @@ const o3_layers = generateO3Layers();
 const co_layers = generateCOLayers();
 const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
+const gdps_hum_layers = generateGDPSHumLayers();
+const gdps_accu_precip_layers = generateGDPSAccPreciLayers();
+const gdps_preci_types_layers = generateGDPSPreciTypesLayers();
+const ocean_salinity_layers = generateOceanSalinityLayers();
+const ocean_temperature_layers = generateOceanTemperatureLayers();
+const ocean_currents_layers = generateOceanCurrentsLayers();
+const ocean_surface_height_layers = generateOceanSurfaceHeightLayers();
+const nems_layers_weeklycloudprecip = generateMeteoblueNEMSCloudPrecipLayers(model, metbluT);
+const mbx_hourly_cloudprecip = generateMBX_MeteoblueHourlyCloudPrecipLayers(model, metbluT);
+const mbx_hourly_temp       = generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT);
+const mbx_radar_composite   = generateMBX_MeteoblueRadarCompositeLayers(metbluT);
+const mbx_snow_hourly       = generateMBX_MeteoblueSnowfallHourlyLayers(model, metbluT);
+const mbx_cape_hourly       = generateMBX_MeteoblueCAPEHourlyLayers(model, metbluT);
+const mbx_helicity_hourly   = generateMBX_MeteoblueStormHelicityHourlyLayers(model, metbluT);
+const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, metbluT);
+const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
+const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
+const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
 window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
@@ -53,6 +311,24 @@ window.ozone = o3_layers;
 window.carbon_monoxide = co_layers;
 window.dust = dust_layers;
 window.methane_at_300hPa = ch4300_layers;
+window.specific_humidity_2m_above_ground = gdps_hum_layers;
+window.gdps_accumulated_precipitation = gdps_accu_precip_layers;
+window.precipitation_type_3hrs = gdps_preci_types_layers;
+window.ocean_salinity = ocean_salinity_layers;
+window.ocean_temperature = ocean_temperature_layers;
+window.ocean_surface_currents = ocean_currents_layers;
+window.ocean_surface_height = ocean_surface_height_layers;
+window.weekly_precipitation_2m_above_ground = nems_layers_weeklycloudprecip;
+window.hourly_precipitation_2m_above_ground = mbx_hourly_cloudprecip;
+window.temperature_2m_above_ground = mbx_hourly_temp;
+window.precipitation_radar = mbx_radar_composite;
+window.hourly_snowfall_forecast = mbx_snow_hourly;
+window.cape_hourly_forecast = mbx_cape_hourly;
+window.storm_helicity_forecast_0_3km = mbx_helicity_hourly;
+window.weekly_snowfall_forecast = mbx_snow_daily;
+window.cape_weekly_forecast = mbx_cape_daily;
+window.official_weather_warnings_forecast = mbx_warn_official;
+window.meteorological_risks_forecast = mbx_warn_forecast;
 console.log(
   "✅ DWD layers created:",
   window.dwd_satellite_infrared.length,
@@ -99,7 +375,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information:"The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
+          information:
+            "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
         },
         provincial_boundary: {
           label: "Provincial Boundary",
@@ -257,7 +534,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
-          information: "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
+          information:
+            "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
         // hospitals: {
         //     label: "Hospitals",
@@ -462,7 +740,7 @@ export const ncop_menu_items = {
           image: getImage("specific_humidity_weekly_2m_forecast.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Specific Humidity (g/kg)",
         },
         relative_humidity_percent: {
           label: "Relative Humidity (%)",
@@ -471,19 +749,19 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
         },
-        accumulated_precipitation: {
+        gdps_accumulated_precipitation: {
           label: "Accumulated Precipitation",
           image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        "precipitation_type_/_3hrs": {
+        precipitation_type_3hrs: {
           label: "Precipitation Type / 3hrs",
           image: getImage("Precipitation_3hourly_forecast.webp"),
           type: "raster",
           theme: "slider",
-          geometry: null,
+          title: "Precipitation Type",
         },
       },
     },
@@ -556,7 +834,7 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
         },
-        "storm_helicity_forecast_0-3km": {
+        storm_helicity_forecast_0_3km: {
           label: "Storm Helicity Forecast (0-3km)",
           image: getImage("nems_storms_helicity_forecast.webp"),
           type: "raster",
@@ -645,6 +923,89 @@ export const ncop_menu_items = {
     },
   },
   flood: {
+    "Flood Forecasting Division (FFD-Data)": {
+      toggle: {
+        ffd_data : {
+          label: "FFD Data",
+          theme: null,
+          source: {
+            id: "ffd_data-source",
+            type: "geojson",
+            data: __FFD_GEOJSON__, // fully populated FeatureCollection, synchronously created
+          },
+          layers: [
+            {
+              id: "ffd_data-circle",
+              type: "circle",
+              // Critical: must match source.id so SourceLayerControl wires it correctly
+              source: "ffd_data-source",
+              paint: {
+                "circle-color": [
+                  "match",
+                  ["get", "status"],
+        
+                  "Normal",
+                  "#28a745", // Green - Normal Flow
+                  "NORMAL",
+                  "#28a745", // Green - Normal Flow
+        
+                  "Low",
+                  "#17a2b8", // Teal - Low Flood
+                  "LOW",
+                  "#17a2b8", // Teal - Low Flood
+        
+                  "Medium",
+                  "#ffc107", // Yellow - Medium Flood
+                  "MEDIUM",
+                  "#ffc107", // Yellow - Medium Flood
+        
+                  "High",
+                  "#fd7e14", // Orange - High Flood
+                  "HIGH",
+                  "#fd7e14", // Orange - High Flood
+        
+                  "Very High",
+                  "#dc3545", // Red - Very High Flood
+                  "VERY_HIGH",
+                  "#dc3545", // Red - Very High Flood
+        
+                  "Exceptionally High",
+                  "#6f42c1", // Purple - Exceptionally High Flood
+                  "EX_HIGH",
+                  "#6f42c1", // Purple - Exceptionally High Flood
+        
+                  "#999999", // default gray if none match
+                ],
+                "circle-opacity": 1,
+                "circle-radius": 7,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#FFFFFF",
+              },
+            },
+            {
+              id: "ffd_data-labels",
+              type: "symbol",
+              source: "ffd_data-source",
+              layout: {
+                "text-field": "{name} \n {outflow_discharge}",
+                "text-size": 12,
+                "text-offset": [0, -0.5],
+                "text-anchor": "bottom",
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+              },
+              paint: {
+                "text-color": "white",
+                "text-halo-color": "black",
+                "text-halo-width": 1,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "The FFD Data layer displays real-time flood monitoring data from the Flood Forecasting Division (FFD). This layer is crucial for flood risk assessment and management, providing vital information on water levels and flood status across various locations.",
+        },
+      },
+    },
     "Global Flood Awareness System (GloFAS)": {
       temporal: {
         precipitation_probability_50mm_10days: {
@@ -795,28 +1156,28 @@ export const ncop_menu_items = {
   "ocean/coastal": {
     Oceanography: {
       temporal: {
-        ocean_surface_salinity_10m: {
+        ocean_salinity: {
           label: "Ocean Surface Salinity (10m)",
           image: getImage("Sea_Water_salinity_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_temperature_10m: {
+        ocean_temperature: {
           label: "Ocean Surface Temperature (10m)",
           image: getImage("Sea_Water_Potential_Temperature_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_currents_10m: {
+        ocean_surface_currents: {
           label: "Ocean Surface Currents (10m)",
           image: getImage("Sea_Water_Potential_currents_10m_forecast.webp"),
           type: "raster",
           theme: "slider",
           geometry: null,
         },
-        ocean_surface_height_wrt_geoid: {
+        ocean_surface_height: {
           label: "Ocean Surface Height w.r.t Geoid",
           image: getImage("Sea_Water_Potential_Height_2mgeoid_forecast.webp"),
           type: "raster",
@@ -836,7 +1197,8 @@ export const ncop_menu_items = {
           attribute: "remarks",
           type: "geojson",
           popup: true,
-          information: "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
+          information:
+            "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
         },
       },
     },
