@@ -45,6 +45,12 @@ function getImage(filename) {
     return match ? match[1].default : null;
 }
 
+const legend_images = import.meta.glob("@assets/images/layer_legends/*.webp", { eager: true });
+function getLegendImage(filename) {
+  const match = Object.entries(legend_images).find(([path]) => path.includes(filename));
+  return match ? match[1].default : null;
+}
+
 // ======================================================
 // Sync JSON → GeoJSON helpers (no async/await required)
 // ======================================================
@@ -536,6 +542,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
+          legend: true,
+          legendPath: getLegendImage("airports.webp"),
           information:
             "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
@@ -1258,7 +1266,7 @@ export const ncop_menu_items = {
                 ],
                 "circle-blur": 1.2,
                 "circle-opacity": 0.6,
-              }
+              },
             },
 
             // AQI number label
@@ -1307,6 +1315,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
+          legend: true,
+          legendPath: getLegendImage("World_AirQuality.webp"),
           information:
             "The WAQI-Stations Air Quality layer displays real-time air quality data from the World Air Quality Index (WAQI) project. This layer is essential for monitoring pollution levels and assessing health risks associated with air quality in various locations worldwide.",
         },
