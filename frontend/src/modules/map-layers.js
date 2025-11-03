@@ -14,7 +14,8 @@ import {
   generateCOLayers,
   generateDustLayers,
   generateCH4300Layers,
-  generateGDPSHumLayers,
+  generateGDPSRelHumLayers,
+  generateGDPSSpecHumLayers,
   generateGDPSAccPreciLayers,
   generateGDPSPreciTypesLayers,
   generateOceanSalinityLayers,
@@ -44,12 +45,16 @@ function getImage(filename) {
     const match = Object.entries(images).find(([path]) => path.includes(filename));
     return match ? match[1].default : null;
 }
-
 const legend_images = import.meta.glob("@assets/images/layer_legends/*.webp", { eager: true });
 function getLegendImage(filename) {
   const match = Object.entries(legend_images).find(([path]) => path.includes(filename));
   return match ? match[1].default : null;
 }
+
+// GloFAS Layers baseURL
+const glofaswmsurl =
+  "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE";
+// console.log("✅ GloFAS WMS URL set:", glofaswmsurl + "");
 
 // ======================================================
 // Sync JSON → GeoJSON helpers (no async/await required)
@@ -285,7 +290,8 @@ const o3_layers = generateO3Layers();
 const co_layers = generateCOLayers();
 const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
-const gdps_hum_layers = generateGDPSHumLayers();
+const gdps_relhum_layers = generateGDPSRelHumLayers();
+const gdps_spechum_layers = generateGDPSSpecHumLayers();
 const gdps_accu_precip_layers = generateGDPSAccPreciLayers();
 const gdps_preci_types_layers = generateGDPSPreciTypesLayers();
 const ocean_salinity_layers = generateOceanSalinityLayers();
@@ -318,7 +324,8 @@ window.ozone = o3_layers;
 window.carbon_monoxide = co_layers;
 window.dust = dust_layers;
 window.methane_at_300hPa = ch4300_layers;
-window.specific_humidity_2m_above_ground = gdps_hum_layers;
+window.specific_humidity_2m_above_ground = gdps_spechum_layers;
+window.relative_humidity_2m_above_ground = gdps_relhum_layers;
 window.gdps_accumulated_precipitation = gdps_accu_precip_layers;
 window.precipitation_type_3hrs = gdps_preci_types_layers;
 window.ocean_salinity = ocean_salinity_layers;
@@ -752,7 +759,7 @@ export const ncop_menu_items = {
           theme: "slider",
           title: "Specific Humidity (g/kg)",
         },
-        relative_humidity_percent: {
+        relative_humidity_2m_above_ground: {
           label: "Relative Humidity (%)",
           image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
           type: "raster",
@@ -1017,48 +1024,143 @@ export const ncop_menu_items = {
       },
     },
     "Global Flood Awareness System (GloFAS)": {
-      temporal: {
+      static: {
         precipitation_probability_50mm_10days: {
-          label: "Precipitation Probability > 50mm (10 Days)",
+          label: "Likely Heavy Precipitation > 50mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-50.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt50-source",
+            type: "raster",
+            tiles: [
+              // Optimized URL with smaller tile size and better format
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=512&HEIGHT=512&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 512, // Use 512 for better performance
+            maxzoom: 18, // Reduce max zoom if not needed
+            minzoom: 0,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt50",
+              type: "raster",
+              source: "EGE_probRgt50-source",
+              paint: {
+                "raster-fade-duration": 0, // Disable fade for faster loading
+              },
+            },
+          ],
         },
         precipitation_probability_150mm_10days: {
           label: "Precipitation Probability > 150mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-150.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt150-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt150&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt150",
+              type: "raster",
+              source: "EGE_probRgt150-source",
+            },
+          ],
         },
         precipitation_probability_300mm_10days: {
           label: "Precipitation Probability > 300mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-300.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt300-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt300&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt300",
+              type: "raster",
+              source: "EGE_probRgt300-source",
+            },
+          ],
         },
         accumulated_precipitation: {
           label: "Accumulated Precipitation",
           image: getImage("glofas-accu-precip.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_AccuPrecip-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_AccuPrecip&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_AccuPrecip",
+              type: "raster",
+              source: "EGE_AccuPrecip-source",
+            },
+          ],
         },
         flood_summary_day_1_3: {
           label: "Flood Summary (Day 1-3)",
           image: getImage("glofas-flood-sum-1-30d.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_FloodSum1_3-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum1_3&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_FloodSum1_3",
+              type: "raster",
+              source: "EGE_FloodSum1_3-source",
+            },
+          ],
         },
         flood_summary_day_4_10: {
           label: "Flood Summary (Day 4-10)",
           image: getImage("glofas-flood-sum-1-30d.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_FloodSum4_10-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum4_10&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_FloodSum4_10",
+              type: "raster",
+              source: "EGE_FloodSum4_10-source",
+            },
+          ],
         },
       },
       toggle: {

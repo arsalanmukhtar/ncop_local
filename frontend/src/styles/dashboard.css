@@ -661,7 +661,8 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* Temporal items - vertical layout centered */
-.ncop-item-temporal {
+.ncop-item-temporal,
+.ncop-item-static {
     flex-direction: column;
     justify-content: center;
     text-align: center;
@@ -733,13 +734,15 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* Temporal item labels - centered below image */
-.ncop-item-temporal .ncop-item-label {
+.ncop-item-temporal .ncop-item-label,
+.ncop-item-static .ncop-item-label {
     margin-top: 8px;
     font-size: 10px;
 }
 
 /* Remove right margin from images in temporal items */
-.ncop-item-temporal .ncop-item-image {
+.ncop-item-temporal .ncop-item-image,
+.ncop-item-static .ncop-item-image {
     margin-right: 0;
 }
 
@@ -2137,16 +2140,21 @@ button.custom-nav-btn.terrain-active:hover {
     cursor: nwse-resize;
 }
 
-/* Button container: vertical stack on the left */
 #tempslider-controls {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    margin-top: 3.5rem;
-    width: 40px;
+  position: relative;
+
+  /* Switch to grid */
+  display: grid;
+  grid-auto-flow: column;                 /* fill rows first, then add a new column */
+  grid-template-rows: repeat(2, max-content); /* exactly 2 rows per column */
+  grid-auto-columns: 30px;                /* each column is 40px wide to match your buttons */
+
+  align-items: center;                    /* vertical align within each grid cell */
+  justify-items: center;                  /* horizontal align within each grid cell */
+
+  gap: 7px 5px;                           /* row-gap 7px, column-gap 8px */
+  margin-top: 3.5rem;
+  width: max-content;                     /* allow columns to expand as needed */
 }
 
 /* Shared button styling */
@@ -2195,7 +2203,7 @@ button.custom-nav-btn.terrain-active:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 95%;
+    width: 90%;
     height: auto;
     z-index: 2;
 }
@@ -2273,6 +2281,64 @@ button.custom-nav-btn.terrain-active:hover {
     color: var(--white);
     font-weight: 500;
 }
+/* ===== Opacity Control (additive) ===== */
+#opacityControlButton {
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+}
+
+#opacityControlButton i {
+    font-size: 12px !important;
+    color: var(--white) !important;
+}
+
+/* Popover container sits inside #temp-slider1 so it moves with drag/resize */
+#opacityControlPopover {
+    /* position: absolute; */
+    /* absolutely positioned within the panel */
+    display: none;
+    /* toggled by JS */
+    padding: 8px 10px;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    z-index: 9999;
+    /* min-width: 170px; */
+    width: 100%;
+    margin-top: 11px;
+    pointer-events: auto;
+}
+
+#opacityControlPopover .opacity-popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#opacityControlPopover .opacity-popover-label {
+    font-size: 13px;
+    color: var(--white);
+    white-space: nowrap;
+}
+
+#opacityControlPopover #opacityRange {
+    flex: 1;
+    accent-color: #2ecc71;
+    /* matches your green highlights */
+}
+
+#opacityControlPopover .opacity-popover-value {
+    font-size: 13px;
+    color: var(--white);
+    width: 32px;
+    text-align: right; }
 
 /* ========================================================================
    TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
@@ -2953,3 +3019,34 @@ button.custom-nav-btn.terrain-active:hover {
         padding: 4px 8px;
     }
 }
+
+/* ======================================= */
+/* NCOP STATIC TYPE STYLES */
+/* ======================================= */
+.ncop-item-thumb {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.ncop-item-thumb:hover {
+    background: #f0f4fa;
+}
+
+.ncop-thumb-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+.ncop-thumb-label {
+    font-size: 15px;
+    color: #222;
+    font-weight: 500; }

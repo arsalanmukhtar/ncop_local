@@ -755,35 +755,24 @@ export function generateCH4300Layers() {
 
 
 // GDPS Layers
-export function generateGDPSHumLayers() {
-  const gdpsHumLayers = [];
+// Relative Humidity only
+export function generateGDPSRelHumLayers() {
+  const gdpsRelHumLayers = [];
 
-  // Iterate 11 times (index 0 to 10) to cover "today" and "onedayahead" through "tendayahead"
   Array.from({ length: 11 }, (_, index) => {
-    // Determine the ID suffix based on the index
     const idSuffixes = [
-      "today",
-      "onedayahead",
-      "twodayahead",
-      "threedayahead",
-      "fourdayahead",
-      "fivedayahead",
-      "sixdayahead",
-      "sevendayahead",
-      "eightdayahead",
-      "ninedayahead",
-      "tendayahead",
+      "today", "onedayahead", "twodayahead", "threedayahead", "fourdayahead",
+      "fivedayahead", "sixdayahead", "sevendayahead", "eightdayahead", 
+      "ninedayahead", "tendayahead",
     ];
 
     const suffix = idSuffixes[index];
     const date = getNextNDays(index, "short");
-    // Assuming getNextNDaysWithTime(index, "00", "00", "00") provides the time parameter
-    const timeParam = getNextNDaysWithTime(index, "00", "00", "00"); 
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
 
-    // --- Relative Humidity Layer Entry ---
     const idRelHum = `gdps_rel_hum_${suffix}`;
     const relHumEntry = {
-      date, // The date property is moved up one level
+      date,
       source: {
         id: idRelHum,
         type: "raster",
@@ -800,17 +789,36 @@ export function generateGDPSHumLayers() {
           layout: { visibility: "none" },
           paint: {
             "raster-opacity": 1,
-            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
-            "raster-opacity-transition": { duration: 1000 }, 
+            "raster-opacity-transition": { duration: 1000 },
           },
         },
       ],
     };
 
-    // --- Specific Humidity Layer Entry ---
+    gdpsRelHumLayers.push(relHumEntry); // Only push one entry
+  });
+
+  return gdpsRelHumLayers;
+}
+
+// Specific Humidity only
+export function generateGDPSSpecHumLayers() {
+  const gdpsSpecHumLayers = [];
+
+  Array.from({ length: 11 }, (_, index) => {
+    const idSuffixes = [
+      "today", "onedayahead", "twodayahead", "threedayahead", "fourdayahead",
+      "fivedayahead", "sixdayahead", "sevendayahead", "eightdayahead", 
+      "ninedayahead", "tendayahead",
+    ];
+
+    const suffix = idSuffixes[index];
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
+
     const idSpecHum = `gdps_spec_hum_${suffix}`;
     const specHumEntry = {
-      date, // The date property is moved up one level
+      date,
       source: {
         id: idSpecHum,
         type: "raster",
@@ -827,18 +835,16 @@ export function generateGDPSHumLayers() {
           layout: { visibility: "none" },
           paint: {
             "raster-opacity": 1,
-            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
             "raster-opacity-transition": { duration: 1000 },
           },
         },
       ],
     };
 
-    // Push both entries to the final array
-    gdpsHumLayers.push(relHumEntry, specHumEntry);
+    gdpsSpecHumLayers.push(specHumEntry); // Only push one entry
   });
 
-  return gdpsHumLayers;
+  return gdpsSpecHumLayers;
 }
 
 // Precipitation Layer (GDPS)

@@ -138,6 +138,15 @@ export class SourceLayerControl {
             }
           }
         }
+
+        if (subcategory.static && subcategory.static[layerKey]) {
+          return {
+            config: subcategory.static[layerKey],
+            categoryKey,
+            subcategoryKey,
+            itemType: "static",
+          };
+        }
       }
     }
 
@@ -158,6 +167,7 @@ export class SourceLayerControl {
           subcategory.temporal,
           subcategory.button,
           subcategory.dropdown,
+          subcategory.static,
         ].filter(Boolean);
         items.forEach((item) => {
           if (typeof item === "object") {
@@ -269,27 +279,50 @@ export class SourceLayerControl {
    */
   addMapboxSource(sourceConfig) {
     try {
-      const { id, type, data, tiles, scheme, maxzoom } = sourceConfig;
+      const { id, type, data, tiles, scheme, maxzoom, minzoom, tileSize } =
+        sourceConfig;
 
       // Check if source already exists
       if (this.map.getSource(id)) {
+        console.log(`⚠️ Source ${id} already exists, skipping...`);
         return true;
       }
 
       const sourceDefinition = {
         type: type,
         ...(data && { data }), // For GeoJSON sources
-        ...(tiles && { tiles }), // For vector tile sources
+        ...(tiles && { tiles }), // For vector/raster tile sources
         ...(scheme && { scheme }), // For vector tile sources (e.g., 'tms')
-        ...(maxzoom && { maxzoom }),
+        ...(maxzoom !== undefined && { maxzoom }),
+        ...(minzoom !== undefined && { minzoom }),
+        ...(tileSize && { tileSize }), // Now properly destructured
       };
 
-      // console.log('🔧 Source Definition:', { id, ...sourceDefinition });
-      this.map.addSource(id, sourceDefinition);
+      // For raster sources, ensure we have proper defaults
+      if (type === "raster") {
+        // Set default tileSize if not provided
+        if (!sourceDefinition.tileSize) {
+          sourceDefinition.tileSize = 256; // Default tile size
+        }
 
+        // Add attribution if needed
+        if (!sourceDefinition.attribution) {
+          sourceDefinition.attribution = "";
+        }
+      }
+
+      console.log(`🔧 Adding ${type} source:`, {
+        id,
+        type,
+        tileSize: sourceDefinition.tileSize,
+        tiles: tiles ? `${tiles.length} tile URLs` : "no tiles",
+      });
+
+      this.map.addSource(id, sourceDefinition);
       return true;
     } catch (error) {
       console.error("❌ Error adding source:", error);
+      console.error("❌ Source config:", sourceConfig);
       return false;
     }
   }
