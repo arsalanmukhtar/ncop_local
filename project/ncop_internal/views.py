@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext as _
-from django.http import JsonResponse, Http404,HttpResponseServerError
+from django.http import JsonResponse, Http404,HttpResponseServerError,HttpResponseBadRequest, HttpResponseNotAllowed
 from django.views import View
 from django.core.serializers import serialize
 from rest_framework.response import Response
@@ -55,7 +55,7 @@ from functools import lru_cache
 # )
 # from .serializers import IncidentsMediaSerializer
 from ncop_project.settings.base import (
-    MAPBOX_ACCESS_TOKEN, METEOBLUE_TOKEN, WAQI_API_TOKEN
+    MAPBOX_ACCESS_TOKEN, METEOBLUE_TOKEN, WAQI_API_TOKEN,STORY_JSON_DIR
 )
 
 import os
@@ -95,8 +95,17 @@ try:
     CERT_PATH = certifi.where()
 except Exception:
     CERT_PATH = True  # fallback to system trust if certifi not present
+# Use the repo-relative STORY_JSON_DIR from base.py
+STORY_DIR = STORY_JSON_DIR
+
+if not STORY_DIR.exists():
+    raise RuntimeError(f"STORY_JSON_DIR not found at: {STORY_DIR}")
+
+# Slug validation (lowercase, digits, dash, underscore)
+SLUG_RE = re.compile(r"^[a-z0-9-_]+$")
 
 User = get_user_model()
+
 
 
 @login_required(login_url="login")
@@ -250,6 +259,127 @@ def password_reset_confirm_view(request, uidb64, token):
 
     return render(request, "auth/password_reset_confirm.html")
 
+
+#STORY MODE LOGIC _______________________------------------------------------------------------
+def _story_path(slug: str) -> Optional[os.PathLike]:
+    """Constructs the path for a story JSON file by slug."""
+    if not SLUG_RE.match(slug):
+        return None
+    return STORY_DIR / f"{slug}.json"
+
+
+def _list_slugs():
+    """Lists all available story JSON files as slugs."""
+    out = []
+    for name in os.listdir(STORY_DIR):
+        if name.lower().endswith(".json"):
+            out.append(os.path.splitext(name)[0])
+    return sorted(out)
+
+
+def _load_json(path: os.PathLike):
+    """Safely load a JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_json(path: os.PathLike, obj):
+    """Safely save a JSON object."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class StoriesView(View):
+    """
+    GET  /stories/            -> list all stories (slugs)
+    GET  /stories/?full=1     -> return full story objects as {slug: obj}
+    POST /stories/            -> create/overwrite one story ({slug, story})
+    """
+
+    def get(self, request):
+        slugs = _list_slugs()
+
+        # ?full=1 => return all story contents
+        if request.GET.get("full") == "1":
+            data = {}
+            for s in slugs:
+                p = _story_path(s)
+                try:
+                    data[s] = _load_json(p)
+                except Exception as e:
+                    data[s] = {"error": f"failed to load: {e}"}
+            return JsonResponse(data, safe=True)
+
+        return JsonResponse({"stories": slugs})
+
+    def post(self, request):
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return HttpResponseBadRequest("Invalid JSON")
+
+        slug = payload.get("slug")
+        obj = payload.get("story")
+
+        if not slug or not isinstance(slug, str) or not SLUG_RE.match(slug):
+            return HttpResponseBadRequest("Missing/invalid 'slug' (use lowercase letters, digits, - or _)")
+
+        if not isinstance(obj, dict):
+            return HttpResponseBadRequest("'story' must be a JSON object")
+
+        path = _story_path(slug)
+        if not path:
+            return HttpResponseBadRequest("Invalid slug")
+
+        try:
+            _save_json(path, obj)
+            return JsonResponse({"slug": slug, "saved": True})
+        except Exception as e:
+            return JsonResponse({"detail": f"Failed to save: {e}"}, status=500)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class StoryDetailView(View):
+    """
+    GET  /stories/<slug>/     -> fetch story json
+    PUT  /stories/<slug>/     -> replace with body json
+    """
+
+    def get(self, request, slug):
+        path = _story_path(slug)
+        if not path or not path.exists():
+            return JsonResponse({"detail": "Not found"}, status=404)
+        try:
+            obj = _load_json(path)
+            return JsonResponse(obj, safe=False)
+        except Exception as e:
+            return JsonResponse({"detail": f"Failed to load: {e}"}, status=500)
+
+    def put(self, request, slug):
+        path = _story_path(slug)
+        if not path or not path.exists():
+            return JsonResponse({"detail": "Not found"}, status=404)
+
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return HttpResponseBadRequest("Invalid JSON")
+
+        if not isinstance(payload, dict):
+            return HttpResponseBadRequest("Body must be a JSON object")
+
+        try:
+            _save_json(path, payload)
+            return JsonResponse({"slug": slug, "saved": True})
+        except Exception as e:
+            return JsonResponse({"detail": f"Failed to save: {e}"}, status=500)
+
+    def post(self, request, slug):
+        return HttpResponseNotAllowed(["GET", "PUT"])
+
+    def delete(self, request, slug):
+        return HttpResponseNotAllowed(["GET", "PUT"])
 # PMD WEATHER DATA STATION RECORDS UPDATED DAILY
 class WeatherDataPMDFFDView(View):
     # Cache data for 5 minutes to reduce API calls

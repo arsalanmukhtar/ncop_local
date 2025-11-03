@@ -122,3 +122,7 @@ DJANGO_VITE = {
         "dev_server_port": env.int("VITE_DEV_SERVER_PORT", default=5173),
     }
 }
+# Prefer ENV override; otherwise use repo-relative path (same pattern as other paths)
+STORY_JSON_DIR = Path(
+    env("STORY_JSON_DIR", default=BASE_DIR.parent / "frontend" / "src" / "assets" / "story_jasons")
+)

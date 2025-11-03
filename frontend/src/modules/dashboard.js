@@ -38,7 +38,11 @@ import "./time-slider-functionality.js"; // Exposes global functions
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 // ===================================================
 
-import { MapControls } from "./map-controls.js";
+import {
+  MapControls,
+  initStoryManager,
+  startStoryBySlug,
+} from "./map-controls.js";
 import { NavigationPanel } from "./navigation-panel.js";
 import { ProjectionPanel } from "./projection-panel.js";
 import { BasemapPanel } from "./basemap-panel.js";
@@ -91,23 +95,26 @@ class DashboardManager {
     }
 
     this.#initializeMap();
-    // MOVE GLOBAL ASSIGNMENTS HERE (after map is created)
+
+    // Expose globals (you already do this)
     window.map = this.#map;
     window.ncop_map = this.#map;
 
-    // Initialize SourceLayerControl for layer management
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
-    this.#layerAttributePopup = this.#sourceLayerControl.layerAttributePopup;
-    // === NEW: Ensure a global popup instance is available ===
-    if (!this.#layerAttributePopup) {
-      this.#layerAttributePopup = new LayerAttributePopup(this.#map); // SAFE now (deferred)
-    }
-    // Make it globally reachable anywhere in your app:
-    window.layerAttributePopup = this.#layerAttributePopup; // short, generic global
-    window.ncop_popup = this.#layerAttributePopup; // namespaced alias (optional)
-    // ========================================================
+    // SourceLayerControl (your existing)
+    const slc = new SourceLayerControl(window.ncop_map);
+    window.sourceLayerControl = slc;
 
-    // Initialize SourceLayerControl reference for interaction handlers
+    // MapControls (your existing)
+    const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
+
+    // Keep your existing initializations…
+    this.#sourceLayerControl = new SourceLayerControl(this.#map);
+    this.#layerAttributePopup =
+      this.#sourceLayerControl.layerAttributePopup ||
+      new LayerAttributePopup(this.#map);
+    window.layerAttributePopup = this.#layerAttributePopup;
+    window.ncop_popup = this.#layerAttributePopup;
+
     initializeSourceLayerControl(this.#sourceLayerControl);
 
     this.#map.on("load", this.#onMapLoad.bind(this));
@@ -116,11 +123,11 @@ class DashboardManager {
 
     this.#mapControls = new MapControls(this.#map, this.#storage);
 
-    // ProjectionPanel must be initialized before NavigationPanel to pass its instance
     const projectionPanel = new ProjectionPanel(this.#map, this.#mapControls);
 
-    // Initialize UI components
+    // IMPORTANT: NavigationPanel builds the story modal shell (#story-modal with #story-root)
     new NavigationPanel(this.#map, this.#mapControls, projectionPanel);
+
     new UserControl();
     new BasemapPanel(this.#map, this.#mapControls);
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
@@ -131,6 +138,26 @@ class DashboardManager {
     if (this.#storage) {
       this.#storage.updateLastLogin();
     }
+
+    // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
+    waitForEl("#story-root")
+      .then(() => {
+        // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
+        const mgr = initStoryManager({
+          map: window.ncop_map,
+          sourceLayerControl: window.sourceLayerControl, // you created `slc` earlier
+          fetchBase: window.baseUrl, // ✅ use your global baseUrl 
+        });
+
+        // Optional: make a one-liner available globally to start by slug
+        window.startStoryBySlug = (slug) => startStoryBySlug(slug, "");
+
+        // Optional auto-start (leave commented to avoid changing behavior)
+        // startStoryBySlug('meteorological', '');
+      })
+      .catch(() => {
+        console.warn("Story root not found (timed out).");
+      });
   }
 
   #initializeMap() {
@@ -221,7 +248,28 @@ class DashboardManager {
     }
   }
 }
+// Utility: wait for a DOM element to exist before resolving
+function waitForEl(selector, timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    const el = document.querySelector(selector);
+    if (el) return resolve(el);
 
+    const observer = new MutationObserver(() => {
+      const found = document.querySelector(selector);
+      if (found) {
+        observer.disconnect();
+        resolve(found);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`waitForEl: Timeout waiting for ${selector}`));
+    }, timeout);
+  });
+}
 // Ensure only one control panel is open at a time inside .map-controls-wrapper
 function setupMapControlsExclusivePanels() {
   const wrapper = document.querySelector(".map-controls-wrapper");

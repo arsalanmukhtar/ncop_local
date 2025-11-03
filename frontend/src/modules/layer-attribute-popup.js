@@ -322,7 +322,9 @@ function handleWaqiPopupClick(e) {
 }
 
 function buildWaqiPopupContent(props) {
-  const popupUID = props.uid;
+  const popupUID = `waqi-${props.uid}-${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
   let stationDetailsHtml = "";
 
   if (props.uid !== undefined && props.uid !== null && props.uid >= 0) {
@@ -340,7 +342,7 @@ function buildWaqiPopupContent(props) {
       }" data-popup-id="${popupUID}" data-expanded="false" data-loaded="false" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;font-size:11px;line-height:1.2;cursor:pointer;">Show Station Infograph</button>
       ${stationDetailsHtml}
     </div>
-    <div id="aqi-inline-metrics-${popupUID}" style="display:none;margin-top:8px;flex-wrap:wrap;gap:4px;">
+    <div id="aqi-inline-metrics-${popupUID}" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
       <button class="aqi-inline-metric-btn" data-metric="pm25" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM2.5</button>
       <button class="aqi-inline-metric-btn" data-metric="pm10" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM10</button>
       <button class="aqi-inline-metric-btn" data-metric="co2" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">CO₂</button>
