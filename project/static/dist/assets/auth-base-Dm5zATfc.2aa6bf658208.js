@@ -1,1 +1,0 @@
-document.addEventListener(`DOMContentLoaded`,function(){lucide.createIcons(),document.querySelectorAll(`.alert-message`).forEach(function(e){setTimeout(function(){e.style.opacity=`0`,setTimeout(function(){e.remove()},500)},3e3)})});
