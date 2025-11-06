@@ -857,10 +857,6 @@ class WAQIgeojson(View):
         return features
 
     def fetch_airnet_station_feature(self, uid):
-        """
-        Fetch one AirNet hourly feed, pick the most recent datapoint from pm25/pm10/etc,
-        and convert it into a Feature.
-        """
         url = f"https://airnet.waqi.info/airnet/feed/hourly/{uid}"
         try:
             r = requests.get(url, timeout=self.AIRNET_TIMEOUT)
@@ -869,16 +865,22 @@ class WAQIgeojson(View):
             logger.debug(f"AirNet fetch failed uid {uid}: {e}")
             return None
 
+        # Must be ok
         if data.get("status") != "ok":
             return None
 
-        meta = data.get("meta", {})
-        loiq = data.get("loiq", {})
-        data_block = data.get("data", {})
+        meta = data.get("meta", {}) or {}
+        loiq = data.get("loiq", {}) or {}
+
+        # IMPORTANT: AirNet sometimes returns "data": null
+        data_block = data.get("data")
+        if not isinstance(data_block, dict):
+            # No usable time series -> let fallback (/feed/@uid) handle it
+            return None
 
         lat = None
         lon = None
-        if "geo" in meta:
+        if "geo" in meta and isinstance(meta.get("geo"), (list, tuple)) and len(meta["geo"]) >= 2:
             try:
                 lat = meta["geo"][0]
                 lon = meta["geo"][1]
@@ -894,7 +896,7 @@ class WAQIgeojson(View):
             if not series or not isinstance(series, list):
                 return None, None
             try:
-                last_entry = series[-1]
+                last_entry = series[-1] or {}
             except Exception:
                 return None, None
             ts = last_entry.get("time")
@@ -903,10 +905,10 @@ class WAQIgeojson(View):
 
         pm25_val, ts_pm25 = latest_series_value("pm25")
         pm10_val, ts_pm10 = latest_series_value("pm10")
-        co2_val, ts_co2 = latest_series_value("co2")
+        co2_val, ts_co2   = latest_series_value("co2")
         tvoc_val, ts_tvoc = latest_series_value("tvoc")
-        t_val, ts_t = latest_series_value("met.t")
-        h_val, ts_h = latest_series_value("met.h")
+        t_val, ts_t       = latest_series_value("met.t")
+        h_val, ts_h       = latest_series_value("met.h")
 
         ts_final = ts_pm25 or ts_pm10 or ts_co2 or ts_tvoc or ts_t or ts_h or ""
 
@@ -914,10 +916,8 @@ class WAQIgeojson(View):
             aqi_val = pm25_val if isinstance(pm25_val, (int, float)) else None
         except Exception:
             aqi_val = None
-
         if aqi_val is None:
             aqi_val = pm10_val if isinstance(pm10_val, (int, float)) else None
-
         if aqi_val is None:
             return None
 
@@ -949,10 +949,7 @@ class WAQIgeojson(View):
 
         feat = {
             "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [float(lon), float(lat)],
-            },
+            "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
             "properties": props,
         }
         return feat
