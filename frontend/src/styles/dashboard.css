@@ -661,7 +661,8 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* Temporal items - vertical layout centered */
-.ncop-item-temporal {
+.ncop-item-temporal,
+.ncop-item-static {
     flex-direction: column;
     justify-content: center;
     text-align: center;
@@ -733,13 +734,15 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* Temporal item labels - centered below image */
-.ncop-item-temporal .ncop-item-label {
+.ncop-item-temporal .ncop-item-label,
+.ncop-item-static .ncop-item-label {
     margin-top: 8px;
     font-size: 10px;
 }
 
 /* Remove right margin from images in temporal items */
-.ncop-item-temporal .ncop-item-image {
+.ncop-item-temporal .ncop-item-image,
+.ncop-item-static .ncop-item-image {
     margin-right: 0;
 }
 
@@ -1456,8 +1459,9 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* ===========================
-   LAYER INFO PANEL
+   LAYER INFO PANEL WITH LEGEND SUPPORT
 =========================== */
+
 .custom-layer-info-control {
     position: relative;
     color: var(--white);
@@ -1491,6 +1495,12 @@ button.custom-nav-btn.terrain-active:hover {
     pointer-events: none;
 }
 
+/* Dynamic sizing when legends are visible */
+.layer-info-panel.has-legend {
+    width: 320px;
+    max-height: 600px;
+}
+
 .layer-info-panel.visible {
     pointer-events: auto;
     transform: translateX(0);
@@ -1522,6 +1532,10 @@ button.custom-nav-btn.terrain-active:hover {
     overflow-y: auto;
 }
 
+.layer-info-panel.has-legend .layer-info-list {
+    max-height: 500px;
+}
+
 .layer-info-item {
     background: var(--secondary-bg);
     border: 1px solid var(--border-dark);
@@ -1546,6 +1560,64 @@ button.custom-nav-btn.terrain-active:hover {
     text-align: justify;
 }
 
+/* Legend Toggle Button */
+.legend-toggle-btn {
+    display: inline-block;
+    background: var(--border-dark);
+    color: var(--white);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 6px 0 8px 0;
+    transition: all 0.2s ease;
+}
+
+.legend-toggle-btn:hover {
+    background: var(--border-light);
+    border-color: var(--white);
+}
+
+.legend-toggle-btn:active {
+    opacity: 0.8;
+}
+
+/* Legend Image Container */
+.legend-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 8px 0;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    max-width: 100%;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        max-height: 0;
+        overflow: hidden;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 500px;
+        overflow: visible;
+    }
+}
+
+.legend-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    object-fit: contain;
+}
+
 .custom-layer-info-control.panel-collapsed .control-content {
     display: none;
 }
@@ -1555,6 +1627,328 @@ button.custom-nav-btn.terrain-active:hover {
     width: 100%;
 }
 
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .layer-info-panel {
+        width: 260px;
+        max-height: 350px;
+    }
+
+    .layer-info-panel.has-legend {
+        width: 280px;
+        max-height: 500px;
+    }
+
+    .legend-image-container {
+        padding: 6px;
+    }
+}
+/* 
+ * layer-info-panel-legend.css
+ * Styling for the Layer Info Panel with Legend support
+ * Import this file in your main stylesheet or dashboard HTML
+ */
+
+/* ============================================
+   LEGEND SECTION STYLING
+   ============================================ */
+
+.layer-legend-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.legend-toggle-btn {
+    padding: 4px 8px;
+    margin-top: 10px;
+    background-color: var(--tertiary-bg);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.legend-toggle-btn:hover {
+    background-color: var(--ndma-green);
+    border: 1px solid transparent;
+}
+
+.legend-toggle-btn:active {
+    background-color: var(--ndma-green);
+}
+
+.legend-toggle-btn:focus {
+    outline: none;
+}
+
+/* Legend image container */
+.legend-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 10px;
+    background-color: var(--secondary-bg);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    overflow: auto;
+    max-height: 400px;
+    animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.layer-legend-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+/* ============================================
+   LAYER INFO ITEM REFINEMENTS
+   ============================================ */
+
+.layer-info-item {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.layer-info-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.layer-info-header-item {
+    margin-bottom: 5px;
+}
+
+.layer-info-label {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.layer-info-details {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
+    margin-top: 5px;
+}
+
+/* ============================================
+   PANEL SCROLLING & OVERFLOW HANDLING
+   ============================================ */
+
+.layer-info-panel {
+    transition: max-height 0.3s ease, height 0.3s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Webkit scrollbar customization (Chrome, Safari, Edge) */
+.layer-info-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.layer-info-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.layer-info-panel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.layer-info-panel::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* Firefox scrollbar customization */
+.layer-info-panel {
+    scrollbar-color: #ccc #f1f1f1;
+    scrollbar-width: thin;
+}
+
+/* ============================================
+   NO LAYERS MESSAGE
+   ============================================ */
+
+.no-layers-message {
+    padding: 15px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ============================================
+   LAYER INFO LIST
+   ============================================ */
+
+.layer-info-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* ============================================
+   RESPONSIVE & MOBILE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    .layer-legend-image-container {
+        max-height: 300px;
+    }
+
+    .layer-legend-toggle-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    .layer-info-label {
+        font-size: 13px;
+    }
+
+    .layer-info-details {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .layer-legend-image-container {
+        max-height: 250px;
+        padding: 8px;
+    }
+
+    .layer-legend-toggle-btn {
+        font-size: 11px;
+        padding: 5px 8px;
+    }
+
+    .layer-legend-section {
+        gap: 8px;
+        margin-top: 8px;
+        padding-top: 8px;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+    .layer-legend-toggle-btn {
+        border-width: 2px;
+        font-weight: 700;
+    }
+
+    .layer-legend-image-container {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+
+    .layer-legend-toggle-btn,
+    .layer-legend-image-container,
+    .layer-info-panel {
+        transition: none;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+    .layer-legend-section {
+        border-top-color: #444;
+    }
+
+    .layer-legend-toggle-btn {
+        background-color: #333;
+        border-color: #555;
+        color: #e0e0e0;
+    }
+
+    .layer-legend-toggle-btn:hover {
+        background-color: #444;
+        border-color: #777;
+    }
+
+    .layer-legend-toggle-btn:active {
+        background-color: #555;
+    }
+
+    .layer-legend-image-container {
+        background-color: #2a2a2a;
+        border-color: #444;
+    }
+
+    .layer-info-item {
+        border-bottom-color: #333;
+    }
+
+    .layer-info-label {
+        color: #e0e0e0;
+    }
+
+    .layer-info-details {
+        color: #b0b0b0;
+    }
+
+    .no-layers-message {
+        color: #666;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-track {
+        background: #2a2a2a;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-thumb {
+        background: #555;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-thumb:hover {
+        background: #777;
+    }
+
+    .layer-info-panel {
+        scrollbar-color: #555 #2a2a2a;
+    }
+}
 /* ===========================
    LAYER ATTRIBUTE POPUP
 =========================== */
@@ -1655,6 +2049,10 @@ button.custom-nav-btn.terrain-active:hover {
     pointer-events: none;
 }
 
+.mapboxgl-popup-close-button {
+    display: none;
+}
+
 /* ===========================
    RESPONSIVE ADJUSTMENTS
 =========================== */
@@ -1742,16 +2140,21 @@ button.custom-nav-btn.terrain-active:hover {
     cursor: nwse-resize;
 }
 
-/* Button container: vertical stack on the left */
 #tempslider-controls {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    margin-top: 3.5rem;
-    width: 40px;
+  position: relative;
+
+  /* Switch to grid */
+  display: grid;
+  grid-auto-flow: column;                 /* fill rows first, then add a new column */
+  grid-template-rows: repeat(2, max-content); /* exactly 2 rows per column */
+  grid-auto-columns: 30px;                /* each column is 40px wide to match your buttons */
+
+  align-items: center;                    /* vertical align within each grid cell */
+  justify-items: center;                  /* horizontal align within each grid cell */
+
+  gap: 7px 5px;                           /* row-gap 7px, column-gap 8px */
+  margin-top: 3.5rem;
+  width: max-content;                     /* allow columns to expand as needed */
 }
 
 /* Shared button styling */
@@ -1800,7 +2203,7 @@ button.custom-nav-btn.terrain-active:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 95%;
+    width: 90%;
     height: auto;
     z-index: 2;
 }
@@ -1878,6 +2281,64 @@ button.custom-nav-btn.terrain-active:hover {
     color: var(--white);
     font-weight: 500;
 }
+/* ===== Opacity Control (additive) ===== */
+#opacityControlButton {
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+}
+
+#opacityControlButton i {
+    font-size: 12px !important;
+    color: var(--white) !important;
+}
+
+/* Popover container sits inside #temp-slider1 so it moves with drag/resize */
+#opacityControlPopover {
+    /* position: absolute; */
+    /* absolutely positioned within the panel */
+    display: none;
+    /* toggled by JS */
+    padding: 8px 10px;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    z-index: 9999;
+    /* min-width: 170px; */
+    width: 100%;
+    margin-top: 11px;
+    pointer-events: auto;
+}
+
+#opacityControlPopover .opacity-popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#opacityControlPopover .opacity-popover-label {
+    font-size: 13px;
+    color: var(--white);
+    white-space: nowrap;
+}
+
+#opacityControlPopover #opacityRange {
+    flex: 1;
+    accent-color: #2ecc71;
+    /* matches your green highlights */
+}
+
+#opacityControlPopover .opacity-popover-value {
+    font-size: 13px;
+    color: var(--white);
+    width: 32px;
+    text-align: right; }
 
 /* ========================================================================
    TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
@@ -2558,3 +3019,34 @@ button.custom-nav-btn.terrain-active:hover {
         padding: 4px 8px;
     }
 }
+
+/* ======================================= */
+/* NCOP STATIC TYPE STYLES */
+/* ======================================= */
+.ncop-item-thumb {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.ncop-item-thumb:hover {
+    background: #f0f4fa;
+}
+
+.ncop-thumb-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+.ncop-thumb-label {
+    font-size: 15px;
+    color: #222;
+    font-weight: 500; }

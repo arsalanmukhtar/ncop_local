@@ -246,6 +246,9 @@ export class NavigationPanel {
           <button id="homeExtent" class="custom-nav-btn" title="Zoom to South Asia Region">
               <i data-lucide="house"></i>
           </button>
+          <button id="storyBtn" class="custom-nav-btn" title="Open Story Panel">
+            <i data-lucide="book-open"></i>
+          </button>
           
           <!-- COLLAPSE/EXPAND -->
           <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
@@ -255,6 +258,26 @@ export class NavigationPanel {
     `;
 
     mapContainer.appendChild(navWrapper);
+    // Story modal shell (kept dumb; logic handled elsewhere)
+    const storyModal = document.createElement("div");
+    storyModal.id = "story-modal";
+    storyModal.style.cssText = `
+    position: absolute; right: 16px; bottom: 72px; z-index: 3;
+    display: none; width: 380px; max-height: 70vh; overflow: auto;
+    background: rgba(20,20,24,.96); border: 1px solid #2a2a2a; border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); color: #eaeaea; backdrop-filter: blur(6px);
+  `;
+      storyModal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #2a2a2a">
+        <div>
+          <div style="font-weight:700;font-size:14px">Story</div>
+          <div style="font-size:11px;opacity:.7">Create, pick and play interactive chapters</div>
+        </div>
+        <button id="storyCloseBtn" class="custom-nav-btn" title="Close"><i data-lucide="x"></i></button>
+      </div>
+      <div id="story-root" style="padding:10px 12px;"></div>
+    `;
+    mapContainer.appendChild(storyModal);
     lucide.createIcons();
   }
 
@@ -309,6 +332,20 @@ export class NavigationPanel {
     document
       .getElementById("localNews")
       ?.addEventListener("click", this.#handleNewsToggle.bind(this));
+
+    // In addEventListeners()
+    document.getElementById("storyBtn")?.addEventListener("click", () => {
+      const modal = document.getElementById("story-modal");
+      if (!modal) return;
+      modal.style.display =
+        modal.style.display === "none" || !modal.style.display
+          ? "block"
+          : "none";
+    });
+    document.getElementById("storyCloseBtn")?.addEventListener("click", () => {
+      const modal = document.getElementById("story-modal");
+      if (modal) modal.style.display = "none";
+    });
   }
 
   /**

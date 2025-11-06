@@ -216,7 +216,7 @@ export const legends = {
       "44",
     ]
   ),
-  imergPrecipRateLayers: gradientLegendBar(
+  imerg_precipitation_rate_14_days: gradientLegendBar(
     [
       "rgba(56,160,58,1.0)",
       "rgba(141,198,63,1.0)",

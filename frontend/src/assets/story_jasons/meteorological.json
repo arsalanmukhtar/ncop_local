@@ -1,0 +1,141 @@
+{
+  "title": "Current Monsoon Condition of Pakistan",
+  "subtitle": "Interactive Weather Picture",
+  "theme": "dark",
+  "chapters": [
+    {
+      "id": "Chapter 1",
+      "title": "Weather Conditions of last 24 hours & Next 72 hours",
+      "subtitle": "Recorded Rainfall (Last 24 hours)",
+      "alignment": "center",
+      "description": "This briefing covers the current monsoon situation, including the record of the last 24 hours and the forecast of the next 72 hours. This data is sourced from both open-source weather layers and PMD ground sensors. This supports a proactive approach to disaster mitigation where needed.\n\nThe comprehensive monitoring system integrates real-time observations with advanced forecasting models to provide accurate precipitation tracking and early warning capabilities across Pakistan's diverse geographical regions.\n\n**🗺️ Getting Started:** Scroll down to begin.",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [67.0011, 24.8607],
+        "zoom": 4.5,
+        "pitch": 0,
+        "bearing": 0
+      },
+      "layers": []
+    },
+    {
+      "id": "Chapter 2",
+      "title": "Administrative Meteorological Outlook",
+      "alignment": "left",
+      "description": "Monitoring precipitation within administrative boundaries using PMD weather stations:\n\n- **Provincial Level:** Coordination across major regions\n- **District Level:** Local implementation and response\n- **Tehsil Level:** Community-based monitoring\n- **PMD Weather Stations:** Ground-observed precipitation\n\n**📊 View administrative boundaries with station/rainfall layers:** Toggle below to explore.",
+      "image": "https://i.ibb.co/DZ1xzRN/gettyimages-2224810741.jpg",
+      "video": "",
+      "location": {
+        "center": [70.0, 28.0],
+        "zoom": 5.5,
+        "pitch": 0,
+        "bearing": 0
+      },
+      "layers": [
+        { "id": "provincial_boundary", "opacity": 0.85 },
+        { "id": "district_boundary", "opacity": 0.8 },
+        { "id": "tehsil_boundary", "opacity": 0.8 },
+        { "id": "pmd_weather_stations", "opacity": 1.0 }
+      ]
+    },
+    {
+      "id": "Chapter 3",
+      "title": "Satellite Data and Radar Record",
+      "alignment": "left",
+      "description": "These satellite and radar layers provide records of the unfolded weather system as predicted. These layers show the cloud cover and precipitation records of last 24 hours.\n\n- **Satellite Data:** Real-time cloud formation/motion\n- **Radar Records:** Precipitation intensity & distribution\n\n**📡 Satellite & Radar Analysis:**",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [70.0, 28.0],
+        "zoom": 5.5,
+        "pitch": 0,
+        "bearing": 0
+      },
+      "layers": ["temporal:dwd_satellite_infrared"]
+    },
+    {
+      "id": "Chapter 4",
+      "title": "Regions with Maximum Recorded Precipitation",
+      "alignment": "right",
+      "description": "Significant rainfall zones by station observation and recent radar estimate.",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [74.3587, 31.5204],
+        "zoom": 7,
+        "pitch": 30,
+        "bearing": 0
+      },
+      "layers": [{ "id": "pmd_weather_stations", "opacity": 1.0 }]
+    },
+    {
+      "id": "Chapter 5",
+      "title": "Recent Precipitation Nowcast",
+      "alignment": "right",
+      "description": "Radar composite provides a near-real-time picture of ongoing precipitation.",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [74.3587, 31.5204],
+        "zoom": 7,
+        "pitch": 30,
+        "bearing": 0
+      },
+      "layers": ["temporal:precipitation_radar"]
+    },
+    {
+      "id": "Chapter 6",
+      "title": "Real-Time Monitoring & 7-Day Forecast",
+      "alignment": "left",
+      "description": "Meteoblue NEMS-IN outlook for the upcoming period.",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [73.0479, 33.6844],
+        "zoom": 6,
+        "pitch": 45,
+        "bearing": -20
+      },
+      "layers": ["temporal:weekly_precipitation_2m_above_ground"]
+    },
+    {
+      "id": "Chapter 7",
+      "title": "Vulnerable Areas based on Meteorological Conditions",
+      "alignment": "center",
+      "description": "GloFAS thresholds and summaries to identify areas at risk.",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [71.5249, 34.0151],
+        "zoom": 6.5,
+        "pitch": 60,
+        "bearing": 45
+      },
+      "layers": [
+        { "id": "precipitation_probability_50mm_10days", "opacity": 0.45 },
+        { "id": "precipitation_probability_150mm_10days", "opacity": 0.45 },
+        { "id": "accumulated_precipitation", "opacity": 0.5 }
+      ]
+    },
+    {
+      "id": "Chapter 8",
+      "title": "Critical Assets & Services",
+      "alignment": "center",
+      "description": "Key assets near flood-prone corridors (proxy layers shown).",
+      "image": "",
+      "video": "",
+      "location": {
+        "center": [67.0011, 24.8607],
+        "zoom": 5,
+        "pitch": 0,
+        "bearing": 0
+      },
+      "layers": [
+        { "id": "airports", "opacity": 1.0 },
+        { "id": "schools", "opacity": 1.0 },
+        { "id": "settlements", "opacity": 1.0 }
+      ]
+    }
+  ]
+}

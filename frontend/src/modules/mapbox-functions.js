@@ -220,7 +220,64 @@ export function handleTemporalInteraction(
     }
   }
 }
+//static handler
 
+/**
+ * Handle static item interactions (WMS raster layers)
+ */
+export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isChecked) {
+  const stateKey = initializeItemState(categoryKey, subcategoryKey, itemKey);
+  const itemData = getItemData(categoryKey, subcategoryKey, itemKey, 'static');
+  
+  // Update state
+  layerStates.set(stateKey, { active: isChecked });
+  
+  // Log the interaction with full item data
+  console.log('🗺️ STATIC INTERACTION:', {
+      category: categoryKey,
+      subcategory: subcategoryKey,
+      itemKey: itemKey,
+      itemData: itemData,
+      active: isChecked,
+      stateKey: stateKey
+  });
+
+  // Handle layer management using SourceLayerControl
+  if (sourceLayerControl && itemData) {
+    if (!itemData.source || !itemData.layers) {
+      console.error(`❌ Static layer "${itemKey}" missing source or layers configuration:`, itemData);
+      return;
+    }
+
+    try {
+      if (isChecked) {
+        // Add layer to map
+        console.log(`✅ Adding static layer "${itemKey}" to map`);
+        const success = sourceLayerControl.addLayerByKey(itemKey);
+        if (!success) {
+          console.error(`❌ Failed to add static layer "${itemKey}" to map`);
+        } else {
+          console.log(`✅ Successfully added static layer "${itemKey}" to map`);
+        }
+      } else {
+        // Remove layer from map
+        console.log(`🔴 Removing static layer "${itemKey}" from map`);
+        const success = sourceLayerControl.removeLayerByKey(itemKey);
+        if (!success) {
+          console.error(`❌ Failed to remove static layer "${itemKey}" from map`);
+        } else {
+          console.log(`✅ Successfully removed static layer "${itemKey}" from map`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error handling static layer "${itemKey}":`, error);
+    }
+  } else {
+    console.error(`❌ SourceLayerControl not available or itemData missing for "${itemKey}"`);
+    console.log('sourceLayerControl:', sourceLayerControl);
+    console.log('itemData:', itemData);
+  }
+}
 /**
  * DEW Exposure Dropdown Checkbox Handler
  * Handles checkbox interactions for exposure items in the dropdown

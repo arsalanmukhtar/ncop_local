@@ -1,3 +1,4 @@
+import { Popup } from "mapbox-gl";
 import {map_icons} from "./map-icons.js"
 
 import {
@@ -13,7 +14,8 @@ import {
   generateCOLayers,
   generateDustLayers,
   generateCH4300Layers,
-  generateGDPSHumLayers,
+  generateGDPSRelHumLayers,
+  generateGDPSSpecHumLayers,
   generateGDPSAccPreciLayers,
   generateGDPSPreciTypesLayers,
   generateOceanSalinityLayers,
@@ -31,13 +33,11 @@ import {
   generateMBX_MeteoblueDailyCAPELayers,
   generateMBX_MeteoblueOfficialWeatherWarningsLayers,
   generateMBX_MeteoblueForecastWarningsDailyLayers,
+  generateMBX_IMERGPrecipRateLayers,
 } from "./time-functions.js";
-
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
-console.log('🌐 Global baseUrl:', window.baseUrl);
 export const baseUrl = window.baseUrl;
-
 // Layer thumbnails can be added in loop by importing images like below
 const images = import.meta.glob("@assets/images/layer_thumbnails/*.webp", { eager: true });
 // Use this function name with image name to load it e.g. getImage('airports.webp')
@@ -45,6 +45,17 @@ function getImage(filename) {
     const match = Object.entries(images).find(([path]) => path.includes(filename));
     return match ? match[1].default : null;
 }
+const legend_images = import.meta.glob("@assets/images/layer_legends/*.webp", { eager: true });
+function getLegendImage(filename) {
+  const match = Object.entries(legend_images).find(([path]) => path.includes(filename));
+  return match ? match[1].default : null;
+}
+console.log(window.baseUrl);
+fetch(`${window.baseUrl}/stories/?full=1`).then((r) => r.status);
+// GloFAS Layers baseURL
+const glofaswmsurl =
+  "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE";
+// console.log("✅ GloFAS WMS URL set:", glofaswmsurl + "");
 
 // ======================================================
 // Sync JSON → GeoJSON helpers (no async/await required)
@@ -280,7 +291,8 @@ const o3_layers = generateO3Layers();
 const co_layers = generateCOLayers();
 const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
-const gdps_hum_layers = generateGDPSHumLayers();
+const gdps_relhum_layers = generateGDPSRelHumLayers();
+const gdps_spechum_layers = generateGDPSSpecHumLayers();
 const gdps_accu_precip_layers = generateGDPSAccPreciLayers();
 const gdps_preci_types_layers = generateGDPSPreciTypesLayers();
 const ocean_salinity_layers = generateOceanSalinityLayers();
@@ -298,6 +310,8 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const mbx_imerg_precip_rate = generateMBX_IMERGPrecipRateLayers();
+
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
 window.ecmwf_temperature_850hPa = ecmwf_temp_layers;
@@ -311,7 +325,8 @@ window.ozone = o3_layers;
 window.carbon_monoxide = co_layers;
 window.dust = dust_layers;
 window.methane_at_300hPa = ch4300_layers;
-window.specific_humidity_2m_above_ground = gdps_hum_layers;
+window.specific_humidity_2m_above_ground = gdps_spechum_layers;
+window.relative_humidity_2m_above_ground = gdps_relhum_layers;
 window.gdps_accumulated_precipitation = gdps_accu_precip_layers;
 window.precipitation_type_3hrs = gdps_preci_types_layers;
 window.ocean_salinity = ocean_salinity_layers;
@@ -329,11 +344,12 @@ window.weekly_snowfall_forecast = mbx_snow_daily;
 window.cape_weekly_forecast = mbx_cape_daily;
 window.official_weather_warnings_forecast = mbx_warn_official;
 window.meteorological_risks_forecast = mbx_warn_forecast;
-console.log(
-  "✅ DWD layers created:",
-  window.dwd_satellite_infrared.length,
-  "steps"
-);
+window.imerg_precipitation_rate_14_days = mbx_imerg_precip_rate;
+// console.log(
+//   "✅ DWD layers created:",
+//   window.dwd_satellite_infrared.length,
+//   "steps"
+// );
 
 export const ncop_menu_items = {
   gis_layers: {
@@ -489,7 +505,7 @@ export const ncop_menu_items = {
               },
             },
           ],
-          popup: false,
+          popup: true,
           information:
             "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
         },
@@ -534,6 +550,8 @@ export const ncop_menu_items = {
             },
           ],
           popup: true,
+          legend: true,
+          legendPath: getLegendImage("airports.webp"),
           information:
             "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
         },
@@ -742,7 +760,7 @@ export const ncop_menu_items = {
           theme: "slider",
           title: "Specific Humidity (g/kg)",
         },
-        relative_humidity_percent: {
+        relative_humidity_2m_above_ground: {
           label: "Relative Humidity (%)",
           image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
           type: "raster",
@@ -925,7 +943,7 @@ export const ncop_menu_items = {
   flood: {
     "Flood Forecasting Division (FFD-Data)": {
       toggle: {
-        ffd_data : {
+        ffd_data: {
           label: "FFD Data",
           theme: null,
           source: {
@@ -943,37 +961,37 @@ export const ncop_menu_items = {
                 "circle-color": [
                   "match",
                   ["get", "status"],
-        
+
                   "Normal",
                   "#28a745", // Green - Normal Flow
                   "NORMAL",
                   "#28a745", // Green - Normal Flow
-        
+
                   "Low",
                   "#17a2b8", // Teal - Low Flood
                   "LOW",
                   "#17a2b8", // Teal - Low Flood
-        
+
                   "Medium",
                   "#ffc107", // Yellow - Medium Flood
                   "MEDIUM",
                   "#ffc107", // Yellow - Medium Flood
-        
+
                   "High",
                   "#fd7e14", // Orange - High Flood
                   "HIGH",
                   "#fd7e14", // Orange - High Flood
-        
+
                   "Very High",
                   "#dc3545", // Red - Very High Flood
                   "VERY_HIGH",
                   "#dc3545", // Red - Very High Flood
-        
+
                   "Exceptionally High",
                   "#6f42c1", // Purple - Exceptionally High Flood
                   "EX_HIGH",
                   "#6f42c1", // Purple - Exceptionally High Flood
-        
+
                   "#999999", // default gray if none match
                 ],
                 "circle-opacity": 1,
@@ -1007,48 +1025,143 @@ export const ncop_menu_items = {
       },
     },
     "Global Flood Awareness System (GloFAS)": {
-      temporal: {
+      static: {
         precipitation_probability_50mm_10days: {
-          label: "Precipitation Probability > 50mm (10 Days)",
+          label: "Likely Heavy Precipitation > 50mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-50.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt50-source",
+            type: "raster",
+            tiles: [
+              // Optimized URL with smaller tile size and better format
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=512&HEIGHT=512&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 512, // Use 512 for better performance
+            maxzoom: 18, // Reduce max zoom if not needed
+            minzoom: 0,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt50",
+              type: "raster",
+              source: "EGE_probRgt50-source",
+              paint: {
+                "raster-fade-duration": 0, // Disable fade for faster loading
+              },
+            },
+          ],
         },
         precipitation_probability_150mm_10days: {
           label: "Precipitation Probability > 150mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-150.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt150-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt150&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt150",
+              type: "raster",
+              source: "EGE_probRgt150-source",
+            },
+          ],
         },
         precipitation_probability_300mm_10days: {
           label: "Precipitation Probability > 300mm (10 Days)",
           image: getImage("glofas-precip-prob-gt-300.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_probRgt300-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt300&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_probRgt300",
+              type: "raster",
+              source: "EGE_probRgt300-source",
+            },
+          ],
         },
         accumulated_precipitation: {
           label: "Accumulated Precipitation",
           image: getImage("glofas-accu-precip.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_AccuPrecip-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_AccuPrecip&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_AccuPrecip",
+              type: "raster",
+              source: "EGE_AccuPrecip-source",
+            },
+          ],
         },
         flood_summary_day_1_3: {
           label: "Flood Summary (Day 1-3)",
           image: getImage("glofas-flood-sum-1-30d.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_FloodSum1_3-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum1_3&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_FloodSum1_3",
+              type: "raster",
+              source: "EGE_FloodSum1_3-source",
+            },
+          ],
         },
         flood_summary_day_4_10: {
           label: "Flood Summary (Day 4-10)",
           image: getImage("glofas-flood-sum-1-30d.webp"),
           type: "raster",
           theme: "legend",
-          geometry: null,
+          source: {
+            id: "EGE_FloodSum4_10-source",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum4_10&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "EGE_FloodSum4_10",
+              type: "raster",
+              source: "EGE_FloodSum4_10-source",
+            },
+          ],
         },
       },
       toggle: {
@@ -1149,6 +1262,166 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Methane (ppbv)",
+        },
+      },
+      toggle: {
+        waqi_stations: {
+          label: "WAQI-Stations Air Quality",
+          source: {
+            id: "waqi_stations-source",
+            type: "geojson",
+            data: `${baseUrl}/get-waqi-global-airquality/`,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "waqi_stations-circle",
+              type: "circle",
+              source: "waqi_stations-source",
+              paint: {
+                // Radius increases with AQI = visually proportional
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  4, // clean air -> small
+                  50,
+                  6,
+                  100,
+                  8,
+                  150,
+                  10,
+                  200,
+                  12,
+                  300,
+                  14,
+                  500,
+                  16, // terrible -> big
+                ],
+
+                // Color by AQI category
+                "circle-color": [
+                  "step",
+                  ["get", "aqi"],
+                  "#00e400", // 0-50   Good
+                  51,
+                  "#ffff00", // 51-100  Moderate
+                  101,
+                  "#ff7e00", // 101-150 Unhealthy (SG)
+                  151,
+                  "#ff0000", // 151-200 Unhealthy
+                  201,
+                  "#8f3f97", // 201-300 Very Unhealthy
+                  301,
+                  "#7e0023", // 301+    Hazardous
+                ],
+
+                // White outline so dots pop on satellite/dark basemap
+                "circle-stroke-width": 1.5,
+                "circle-stroke-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "#ffffff", // high AQI (dark fill) -> white stroke edge
+                  "#000000", // low AQI (bright fill) -> dark stroke edge
+                ],
+
+                // Slight transparency so overlapping cities (e.g. Lahore cluster) are readable
+                "circle-opacity": 0.85,
+              },
+            },
+
+            // optional glow layer to make high AQI feel scary
+            {
+              id: "waqi_stations-glow",
+              type: "circle",
+              source: "waqi_stations-source",
+              paint: {
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  8,
+                  100,
+                  12,
+                  200,
+                  16,
+                  300,
+                  20,
+                  500,
+                  24,
+                ],
+                "circle-color": [
+                  "step",
+                  ["get", "aqi"],
+                  "rgba(0,228,0,0.15)", // Good
+                  51,
+                  "rgba(255,255,0,0.18)", // Moderate
+                  101,
+                  "rgba(255,126,0,0.22)", // Unhealthy SG
+                  151,
+                  "rgba(255,0,0,0.25)", // Unhealthy
+                  201,
+                  "rgba(143,63,151,0.28)", // Very Unhealthy
+                  301,
+                  "rgba(126,0,35,0.32)", // Hazardous
+                ],
+                "circle-blur": 1.2,
+                "circle-opacity": 0.6,
+              },
+            },
+
+            // AQI number label
+            {
+              id: "waqi_stations-label",
+              type: "symbol",
+              source: "waqi_stations-source",
+              minzoom: 4, // hide labels when zoomed way out to avoid clutter
+              paint: {
+                // Text color switches for contrast: dark text on light dots, light text on dark dots
+                "text-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "#ffffff", // high AQI dots are dark -> white text
+                  "#000000", // low AQI dots are bright -> black text
+                ],
+                "text-halo-color": [
+                  "case",
+                  [">=", ["get", "aqi"], 151],
+                  "rgba(0,0,0,0.6)", // dark halo for very bright text
+                  "rgba(255,255,255,0.8)", // light halo for dark text
+                ],
+                "text-halo-width": 1.5,
+                "text-halo-blur": 0.5,
+              },
+              layout: {
+                "text-field": ["to-string", ["get", "aqi"]],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "aqi"],
+                  0,
+                  9,
+                  150,
+                  11,
+                  300,
+                  13,
+                  500,
+                  14,
+                ],
+                "text-anchor": "center",
+                "text-allow-overlap": false,
+                "text-ignore-placement": false,
+              },
+            },
+          ],
+          popup: true,
+          legend: true,
+          legendPath: getLegendImage("World_AirQuality.webp"),
+          information:
+            "The WAQI-Stations Air Quality layer displays real-time air quality data from the World Air Quality Index (WAQI) project. This layer is essential for monitoring pollution levels and assessing health risks associated with air quality in various locations worldwide.",
         },
       },
     },

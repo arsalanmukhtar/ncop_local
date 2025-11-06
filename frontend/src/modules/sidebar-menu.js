@@ -4,8 +4,9 @@ import {
   handleToggleInteraction,
   handleTemporalInteraction,
   handleDropdownInteraction,
-  handleButtonInteraction
-} from './mapbox-functions.js';
+  handleButtonInteraction,
+  handleStaticInteraction,
+} from "./mapbox-functions.js";
 import { handleDewExposureCheckbox } from "./mapbox-functions.js";
 import gisLayersIcon from "@assets/images/accordion_icons/gis-layers.webp";
 import weatherSystemsIcon from "@assets/images/accordion_icons/weather-systems.webp";
@@ -321,6 +322,30 @@ export class SidebarMenu {
         });
         itemsContainer.appendChild(grid);
       }
+      // --- STATIC CASE ---
+      // JSON: { static: { itemKey: { label: ..., image: ... }, ... } }
+      else if (typeKey === "static") {
+        // console.log(`✅ Creating static items for ${typeKey}:`, Object.keys(items));
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          // console.log(`🔍 Creating static item: ${itemKey}`, items[itemKey]);
+          const staticElement = this.#createStaticItem(
+            categoryKey,
+            subcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (staticElement) {
+            // console.log(`✅ Created static element:`, staticElement);
+            grid.appendChild(staticElement);
+          } else {
+            console.error(`❌ Failed to create static element for ${itemKey}`);
+          }
+        });
+        itemsContainer.appendChild(grid);
+      }
+
       // --- OTHER CASES ---
       // If new types are added in map-layers.js, add their logic here.
       else {
@@ -399,8 +424,9 @@ export class SidebarMenu {
     itemDiv.className = "ncop-item ncop-item-temporal";
     itemDiv.innerHTML = `
             <div class="ncop-item-image">
-                <img src="${itemData.image || "/static/images/placeholder.png"
-      }" alt="${itemData.label}" />
+                <img src="${
+                  itemData.image || "/static/images/placeholder.png"
+                }" alt="${itemData.label}" />
             </div>
             <span class="ncop-item-label">${itemData.label}</span>
         `;
@@ -425,7 +451,6 @@ export class SidebarMenu {
     return itemDiv;
   }
 
-
   #createDropdownItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // Main container for all dropdowns in this item
     const itemDiv = document.createElement("div");
@@ -440,7 +465,11 @@ export class SidebarMenu {
       // ===== STEP 1: Extract endpoint =====
       let endpoint = "";
       for (const k in dropdownConfig) {
-        if (k.endsWith('_endpoint') && typeof dropdownConfig[k] === 'string' && dropdownConfig[k].startsWith('http')) {
+        if (
+          k.endsWith("_endpoint") &&
+          typeof dropdownConfig[k] === "string" &&
+          dropdownConfig[k].startsWith("http")
+        ) {
           endpoint = dropdownConfig[k];
           break;
         }
@@ -580,7 +609,9 @@ export class SidebarMenu {
 
             // Attribute field header
             const attrHeader = document.createElement("th");
-            attrHeader.textContent = attributeField.replace(/_/g, " ").toUpperCase();
+            attrHeader.textContent = attributeField
+              .replace(/_/g, " ")
+              .toUpperCase();
             attrHeader.style.flex = "1";
             headerRow.appendChild(attrHeader);
 
@@ -724,6 +755,41 @@ export class SidebarMenu {
     });
 
     // console.log(`✅ Button item created successfully:`, itemDiv);
+    return itemDiv;
+  }
+
+  #createStaticItem(categoryKey, subcategoryKey, itemKey, itemData) {
+    if (!itemData || !itemData.label) return null;
+
+    const itemDiv = document.createElement("div");
+    itemDiv.className = "ncop-item ncop-item-static";
+    itemDiv.title = itemData.label;
+
+    itemDiv.innerHTML = `
+      <div class="ncop-item-image">
+        <img 
+          src="${itemData.image}" 
+          alt="${itemData.label}" 
+        />
+      </div>
+      <span class="ncop-item-label">${itemData.label}</span>
+    `;
+
+    // Track layer state locally
+    let isActive = false;
+
+    // Click handler for the static layer
+    itemDiv.addEventListener("click", () => {
+      isActive = !isActive;
+
+      console.log(`🔄 Static layer "${itemKey}" toggling to:`, isActive);
+
+      handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
+
+      // Toggle "selected" visual state
+      itemDiv.classList.toggle("selected", isActive);
+    });
+
     return itemDiv;
   }
 
