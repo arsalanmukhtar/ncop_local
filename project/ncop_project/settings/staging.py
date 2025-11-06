@@ -16,3 +16,10 @@ SECURE_HSTS_SECONDS = 60
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+
+DJANGO_VITE = {
+    "default": {
+        "dev_mode": False,
+        "manifest_path": BASE_DIR / "static" / "dist" / "manifest.json",
+    }
+}
