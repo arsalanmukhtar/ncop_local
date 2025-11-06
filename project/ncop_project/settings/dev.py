@@ -12,3 +12,10 @@ DEFAULT_FROM_EMAIL = "no-reply@ncop.local"
 # VITE_DEV_SERVER_HOST=0.0.0.0
 # VITE_DEV_SERVER_PORT=5173
 # (django-vite will still talk to the host/IP you put in templates via HMR client)
+DJANGO_VITE = {
+    "default": {
+        "dev_mode": True,
+        "dev_server_host": "localhost",
+        "dev_server_port": 5173,
+    }
+}

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build-and-copy": "vite build && copy dist\\.vite\\manifest.json ..\\project\\static\\dist\\manifest.json"
   },
   "dependencies": {
     "@jindin/mapbox-gl-wind-layer": "^0.0.2",
