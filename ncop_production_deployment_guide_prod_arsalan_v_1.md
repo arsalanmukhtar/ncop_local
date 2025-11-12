@@ -521,3 +521,199 @@ curl -I http://172.18.7.36/static/admin/css/base.css
 **Known Items**
 - Old templates referencing `/static/assets/*` are supported by Nginx, but should be updated to `/assets/*` or use `django-vite` tags for manifest‑hashed URLs.
 - Enable HTTPS and HSTS in fronting reverse proxy when certs are available.
+
+---
+
+## 12) Quick Deployment Commands (stage-arsalan → prod-arsalan)
+> **Purpose:** Minimal, copy‑pasteable commands to pull from `stage-arsalan`, rebuild the frontend, collect static, and control services on production.
+
+### 12.1 Pull Latest Code from `stage-arsalan`
+```bash
+# Navigate to production directory
+cd /home/cladmin/ncop_local/ncop_local_prod
+
+# Activate virtual environment
+source /home/cladmin/ncop_local/ncopenv311/bin/activate
+
+# Pull latest code from stage-arsalan branch
+# (optional) ensure you are on the branch you intend to deploy
+# git checkout stage-arsalan
+
+git fetch origin
+git pull --ff-only origin stage-arsalan
+```
+
+### 12.2 Build Frontend Assets (Vite)
+```bash
+# Navigate to frontend directory
+cd /home/cladmin/ncop_local/ncop_local_prod/frontend
+
+# Clean old build (recommended)
+rm -rf dist/
+
+# (optional) install deps if package.json changed
+npm install
+
+# Build Vite assets
+npm run build
+
+# Verify build succeeded
+ls -lh dist/assets/ | head -10
+```
+
+### 12.3 Collect Django Static Files
+```bash
+# Navigate to Django project directory
+cd /home/cladmin/ncop_local/ncop_local_prod/project
+
+# Remove old collected static (recommended)
+rm -rf static/dist/
+
+# Collect static files (admin, DRF, etc.)
+python manage.py collectstatic --noinput --settings=ncop_project.settings.prod
+
+# Verify collection succeeded
+ls -la static/dist/
+```
+
+### 12.4 Fix File Permissions (after build)
+```bash
+# Allow Nginx to read Vite assets
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/frontend/dist
+
+# Allow Nginx to read Django static files
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/project/static/dist
+```
+
+### 12.5 Service Control Commands
+**Waitress (Django App Server)**
+```bash
+# Stop / Start / Restart / Status / Logs
+sudo systemctl stop    ncop-waitress.service
+sudo systemctl start   ncop-waitress.service
+sudo systemctl restart ncop-waitress.service
+sudo systemctl status  ncop-waitress.service
+sudo journalctl -u ncop-waitress.service -f
+```
+
+**Nginx (Web Server)**
+```bash
+# Stop / Start / Restart / Reload / Status / Test Config
+sudo systemctl stop    nginx
+sudo systemctl start   nginx
+sudo systemctl restart nginx
+sudo systemctl reload  nginx
+sudo systemctl status  nginx
+sudo nginx -t
+```
+
+### 12.6 Complete Deployment Sequence (Copy‑Paste)
+```bash
+# 1) Navigate & activate
+cd /home/cladmin/ncop_local/ncop_local_prod
+source /home/cladmin/ncop_local/ncopenv311/bin/activate
+
+# 2) Pull latest from stage-arsalan
+git fetch origin
+git pull --ff-only origin stage-arsalan
+
+# 3) Build frontend
+cd frontend
+rm -rf dist/
+npm install
+npm run build
+cd ..
+
+# 4) Collect static
+cd project
+rm -rf static/dist/
+python manage.py collectstatic --noinput --settings=ncop_project.settings.prod
+cd ..
+
+# 5) Fix permissions
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/frontend/dist
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/project/static/dist
+
+# 6) Restart services (reload Nginx; restart Waitress)
+sudo systemctl reload nginx
+sudo systemctl restart ncop-waitress.service
+
+# 7) Verify
+sleep 3
+sudo systemctl status ncop-waitress.service
+curl -I http://172.18.7.36/login/
+```
+
+### 12.7 Quick Verification Commands
+```bash
+# Check if services are running
+sudo systemctl is-active ncop-waitress.service && echo "✅ Waitress running" || echo "❌ Waitress stopped"
+sudo systemctl is-active nginx && echo "✅ Nginx running" || echo "❌ Nginx stopped"
+
+# Test application via Nginx
+curl -I http://172.18.7.36/
+
+# Recent app errors
+sudo journalctl -u ncop-waitress.service --since "5 minutes ago" | grep -i error || echo "✅ No errors"
+
+# Test asset loading (Vite + Django admin)
+curl -I http://172.18.7.36/assets/auth_login-y_ywPWRi.js
+curl -I http://172.18.7.36/static/admin/css/base.css
+```
+
+### 12.8 Quick Troubleshooting
+```bash
+# Waitress won’t start → view logs
+sudo journalctl -u ncop-waitress.service -n 50 --no-pager
+
+# Nginx issues → test config + check error log
+sudo nginx -t
+sudo tail -50 /var/log/nginx/ncop_error.log
+
+# Assets 403 → fix permissions
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/frontend/dist
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/project/static/dist
+
+# Assets 404 → rebuild
+cd /home/cladmin/ncop_local/ncop_local_prod/frontend
+npm run build
+
+# Force restart order
+sudo systemctl stop ncop-waitress.service
+sudo systemctl stop nginx
+sleep 2
+sudo systemctl start nginx
+sudo systemctl start ncop-waitress.service
+```
+
+### 12.9 Service Command Reference Card
+| Action | Waitress | Nginx |
+|---|---|---|
+| Stop | `sudo systemctl stop ncop-waitress.service` | `sudo systemctl stop nginx` |
+| Start | `sudo systemctl start ncop-waitress.service` | `sudo systemctl start nginx` |
+| Restart | `sudo systemctl restart ncop-waitress.service` | `sudo systemctl restart nginx` |
+| Reload Config | _N/A (restart instead)_ | `sudo systemctl reload nginx` |
+| Status | `sudo systemctl status ncop-waitress.service` | `sudo systemctl status nginx` |
+| Logs | `sudo journalctl -u ncop-waitress.service -f` | `sudo tail -f /var/log/nginx/ncop_error.log` |
+| Test Config | _N/A_ | `sudo nginx -t` |
+
+**Pro Tips**
+```bash
+# Only reload Nginx if config test passes
+sudo nginx -t && sudo systemctl reload nginx || echo "Config test failed!"
+
+# Restart app, then tail last 20 log lines
+sudo systemctl restart ncop-waitress.service
+sudo journalctl -u ncop-waitress.service -n 20 --no-pager
+
+# Quick health check
+curl -I http://172.18.7.36/ && echo "✅ App is responding"
+```
+
+---
+
+## 13) Appendix: Security & SSL (Next Steps)
+- Terminate HTTPS at Nginx with valid certificates (LetsEncrypt or internal CA).
+- Enable `SECURE_*` flags in Django once HTTPS is active (HSTS, cookie security).
+- Consider separate read‑only system user for build artifacts.
+
