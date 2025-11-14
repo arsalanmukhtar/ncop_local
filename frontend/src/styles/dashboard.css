@@ -1445,7 +1445,7 @@ button.custom-nav-btn.terrain-active:hover {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    /* white-space: nowrap; */
 }
 
 .layer-visibility {

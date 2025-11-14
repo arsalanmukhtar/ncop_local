@@ -179,7 +179,7 @@ export function handleTemporalInteraction(
   isActive,
   layerConfig  // Add this parameter to receive the config object
 ) {
-  console.log(`🔄 Temporal interaction: ${itemKey}, isActive: ${isActive}`);
+  // console.log(`🔄 Temporal interaction: ${itemKey}, isActive: ${isActive}`);
 
   if (isActive) {
     // Get layer array from window
@@ -190,7 +190,7 @@ export function handleTemporalInteraction(
       return;
     }
 
-    console.log(`✅ Found layer array:`, layerArray.length, "steps");
+    // console.log(`✅ Found layer array:`, layerArray.length, "steps");
 
     // Extract title from layer config
     const title = layerConfig?.title || subcategoryKey; // Fallback to subcategoryKey if no title
@@ -198,13 +198,13 @@ export function handleTemporalInteraction(
     // Call the global function with the title
     if (typeof window.updateTempSlider === "function") {
       window.updateTempSlider(layerArray, title, itemKey, null);
-      console.log(`✅ Slider initialized`);
+      // console.log(`✅ Slider initialized`);
     } else {
       console.error("❌ updateTempSlider function not found");
     }
   } else {
     // Hide slider when deselected
-    console.log(`🔴 Hiding slider for: ${itemKey}`);
+    // console.log(`🔴 Hiding slider for: ${itemKey}`);
 
     const tempSlider = document.getElementById("temp-slider1");
     if (tempSlider) {
@@ -233,14 +233,14 @@ export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, is
   layerStates.set(stateKey, { active: isChecked });
   
   // Log the interaction with full item data
-  console.log('🗺️ STATIC INTERACTION:', {
-      category: categoryKey,
-      subcategory: subcategoryKey,
-      itemKey: itemKey,
-      itemData: itemData,
-      active: isChecked,
-      stateKey: stateKey
-  });
+  // console.log('🗺️ STATIC INTERACTION:', {
+  //     category: categoryKey,
+  //     subcategory: subcategoryKey,
+  //     itemKey: itemKey,
+  //     itemData: itemData,
+  //     active: isChecked,
+  //     stateKey: stateKey
+  // });
 
   // Handle layer management using SourceLayerControl
   if (sourceLayerControl && itemData) {
@@ -252,21 +252,21 @@ export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, is
     try {
       if (isChecked) {
         // Add layer to map
-        console.log(`✅ Adding static layer "${itemKey}" to map`);
+        // console.log(`✅ Adding static layer "${itemKey}" to map`);
         const success = sourceLayerControl.addLayerByKey(itemKey);
         if (!success) {
           console.error(`❌ Failed to add static layer "${itemKey}" to map`);
         } else {
-          console.log(`✅ Successfully added static layer "${itemKey}" to map`);
+          // console.log(`✅ Successfully added static layer "${itemKey}" to map`);
         }
       } else {
         // Remove layer from map
-        console.log(`🔴 Removing static layer "${itemKey}" from map`);
+        // console.log(`🔴 Removing static layer "${itemKey}" from map`);
         const success = sourceLayerControl.removeLayerByKey(itemKey);
         if (!success) {
           console.error(`❌ Failed to remove static layer "${itemKey}" from map`);
         } else {
-          console.log(`✅ Successfully removed static layer "${itemKey}" from map`);
+          // console.log(`✅ Successfully removed static layer "${itemKey}" from map`);
         }
       }
     } catch (error) {
@@ -274,8 +274,8 @@ export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, is
     }
   } else {
     console.error(`❌ SourceLayerControl not available or itemData missing for "${itemKey}"`);
-    console.log('sourceLayerControl:', sourceLayerControl);
-    console.log('itemData:', itemData);
+    // console.log('sourceLayerControl:', sourceLayerControl);
+    // console.log('itemData:', itemData);
   }
 }
 /**
@@ -330,7 +330,7 @@ function removeExposureLayersById(exposureId) {
   if (window.exposureLayersMap) {
     window.exposureLayersMap.delete(exposureId);
   }
-  console.log(`🗑️ Exposure layers removed for ID: ${exposureId}`);
+  // console.log(`🗑️ Exposure layers removed for ID: ${exposureId}`);
 }
 
 /**
@@ -407,7 +407,7 @@ function addExposurePolygonToMap(exposureId, geojson) {
     );
     map.fitBounds(bounds, { padding: 40 });
 
-    console.log(`✅ Exposure ${exposureId} added to map`);
+    // console.log(`✅ Exposure ${exposureId} added to map`);
   } catch (error) {
     console.error(`❌ Error adding exposure polygon:`, error);
   }
@@ -419,13 +419,13 @@ function addExposurePolygonToMap(exposureId, geojson) {
  * @param {boolean} isChecked - Checkbox state
  */
 export async function handleDewExposureCheckbox(exposureId, isChecked) {
-  console.log(`🔄 DEW Exposure: ID=${exposureId}, checked=${isChecked}`);
+  // console.log(`🔄 DEW Exposure: ID=${exposureId}, checked=${isChecked}`);
 
   if (isChecked) {
     // Fetch and add to map
     try {
       const endpoint = `http://172.18.1.108:8000/get-exposures/?exposure_id=${exposureId}`;
-      console.log(`📡 Fetching: ${endpoint}`);
+      // console.log(`📡 Fetching: ${endpoint}`);
       
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -450,7 +450,7 @@ export async function handleDewExposureCheckbox(exposureId, isChecked) {
  */
 export function clearAllExposureLayersFromMap() {
   exposureLayersMap.forEach((_, exposureId) => {
-    console.log(`🗑️ Clearing exposure ID: ${exposureId}`);
+    // console.log(`🗑️ Clearing exposure ID: ${exposureId}`);
     removeExposureLayersById(exposureId);
   });
 }
