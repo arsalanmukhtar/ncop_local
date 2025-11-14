@@ -1103,19 +1103,19 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_AccuPrecip-source",
+            id: "AccRainEGE",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_AccuPrecip&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=AccRainEGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_AccuPrecip",
+              id: "AccRainEGE",
               type: "raster",
-              source: "EGE_AccuPrecip-source",
+              source: "EAccRainEGE-source",
             },
           ],
         },
@@ -1125,19 +1125,19 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_FloodSum1_3-source",
+            id: "sumAL41EGE-source",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum1_3&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=sumAL41EGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_FloodSum1_3",
+              id: "sumAL41EGE",
               type: "raster",
-              source: "EGE_FloodSum1_3-source",
+              source: "sumAL41EGE-source",
             },
           ],
         },
@@ -1147,19 +1147,19 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_FloodSum4_10-source",
+            id: "sumAL42EGE-source",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum4_10&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=sumAL42EGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_FloodSum4_10",
+              id: "sumAL42EGE",
               type: "raster",
-              source: "EGE_FloodSum4_10-source",
+              source: "sumAL42EGE-source",
             },
           ],
         },
