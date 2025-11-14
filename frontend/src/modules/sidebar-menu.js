@@ -778,7 +778,22 @@ export class SidebarMenu {
     // Track layer state locally
     let isActive = false;
 
-    // Click handler for the static layer
+    const imageElement = itemDiv.querySelector(".ncop-item-image");
+    if (imageElement) {
+      // Image click: use existing selection handler and prevent bubbling to itemDiv
+      imageElement.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const wasSelected = imageElement.classList.contains("selected");
+        // Reuse central selection logic
+        this.#handleImageSelection(imageElement);
+        // keep isActive in sync with visual state
+        isActive = !wasSelected;
+        // trigger static interaction to keep behavior consistent
+        handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
+      });
+    }
+
+    // Click handler for the static layer (click outside image)
     itemDiv.addEventListener("click", () => {
       isActive = !isActive;
 
@@ -786,8 +801,13 @@ export class SidebarMenu {
 
       handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
 
-      // Toggle "selected" visual state
-      itemDiv.classList.toggle("selected", isActive);
+      // Toggle selection class on the image element so CSS .ncop-item-image.selected img applies
+      if (imageElement) {
+        imageElement.classList.toggle("selected", isActive);
+      } else {
+        // fallback: toggle on whole item (preserve previous behavior if image not present)
+        itemDiv.classList.toggle("selected", isActive);
+      }
     });
 
     return itemDiv;

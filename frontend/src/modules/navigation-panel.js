@@ -455,11 +455,13 @@ export class NavigationPanel {
    * Handle home extent - Zoom to South Asia region
    */
   #handleHomeExtent() {
-    const southAsiaBounds = SOUTH_ASIA_COORDS.bounds.southAsia;
-
-    this.#map.fitBounds([southAsiaBounds.sw, southAsiaBounds.ne], {
-      padding: 40,
-      duration: 2000,
+    // Zoom to Pakistan center
+    const pakistanCenter = SOUTH_ASIA_COORDS.regions.pakistan; // [lng, lat]
+    console.log({ pakistanCenter, SOUTH_ASIA_COORDS });
+    this.#map.flyTo({
+      center: pakistanCenter,
+      zoom: 5, // adjust as needed
+      duration: 1500,
       essential: true,
     });
 
