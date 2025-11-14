@@ -1052,6 +1052,12 @@ export const ncop_menu_items = {
               },
             },
           ],
+          legend: true,
+          legendPath: getLegendImage(
+            "Precipitation Probability 50mm (10 Days).webp"
+          ),
+          information:
+            "The Likely Heavy Precipitation > 50mm (10 Days) layer from GloFAS provides a forecast of areas expected to receive heavy rainfall exceeding 50mm within the next 10 days. This layer is crucial for flood risk assessment and preparedness, helping authorities and communities to anticipate and respond to potential flooding events.",
         },
         precipitation_probability_150mm_10days: {
           label: "Precipitation Probability > 150mm (10 Days)",
@@ -1074,6 +1080,10 @@ export const ncop_menu_items = {
               source: "EGE_probRgt150-source",
             },
           ],
+          legend: true,
+          legendPath: getLegendImage("precip3Days.webp"),
+          information:
+            "The Precipitation Probability > 150mm (10 Days) layer from GloFAS provides a forecast of areas expected to receive heavy rainfall exceeding 150mm within the next 10 days. This layer is crucial for flood risk assessment and preparedness, helping authorities and communities to anticipate and respond to potential flooding events.",
         },
         precipitation_probability_300mm_10days: {
           label: "Precipitation Probability > 300mm (10 Days)",
@@ -1096,6 +1106,12 @@ export const ncop_menu_items = {
               source: "EGE_probRgt300-source",
             },
           ],
+          legend: true,
+          legendPath: getLegendImage(
+            "Precipitation Probability 300mm (10 Days).webp"
+          ),
+          information:
+            "The Precipitation Probability > 300mm (10 Days) layer from GloFAS provides a forecast of areas expected to receive heavy rainfall exceeding 300mm within the next 10 days. This layer is crucial for flood risk assessment and preparedness, helping authorities and communities to anticipate and respond to potential flooding events.",
         },
         accumulated_precipitation: {
           label: "Accumulated Precipitation",
@@ -1103,21 +1119,25 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_AccuPrecip-source",
+            id: "AccRainEGE",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_AccuPrecip&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=AccRainEGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_AccuPrecip",
+              id: "AccRainEGE",
               type: "raster",
-              source: "EGE_AccuPrecip-source",
+              source: "EAccRainEGE-source",
             },
           ],
+          legend: true,
+          legendPath: getLegendImage("precip3Days.webp"),
+          information:
+            "The Precipitation Probability > 300mm (10 Days) layer from GloFAS provides a forecast of areas expected to receive heavy rainfall exceeding 300mm within the next 10 days. This layer is crucial for flood risk assessment and preparedness, helping authorities and communities to anticipate and respond to potential flooding events.",
         },
         flood_summary_day_1_3: {
           label: "Flood Summary (Day 1-3)",
@@ -1125,21 +1145,25 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_FloodSum1_3-source",
+            id: "sumAL41EGE-source",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum1_3&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=sumAL41EGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_FloodSum1_3",
+              id: "sumAL41EGE",
               type: "raster",
-              source: "EGE_FloodSum1_3-source",
+              source: "sumAL41EGE-source",
             },
           ],
+          legend: true,
+          legendPath: getLegendImage("sumAL41EGE.webp"),
+          information:
+            "The Flood Summary (Day 1-3) layer from GloFAS provides a summary of flood events expected to occur within the first three days of the forecast period. This layer is essential for early warning and response efforts, allowing authorities and communities to prepare for potential flooding impacts.",
         },
         flood_summary_day_4_10: {
           label: "Flood Summary (Day 4-10)",
@@ -1147,59 +1171,177 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "legend",
           source: {
-            id: "EGE_FloodSum4_10-source",
+            id: "sumAL42EGE-source",
             type: "raster",
             tiles: [
-              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_FloodSum4_10&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=sumAL42EGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
             ],
             tileSize: 256,
             maxzoom: 22,
           },
           layers: [
             {
-              id: "EGE_FloodSum4_10",
+              id: "sumAL42EGE",
               type: "raster",
-              source: "EGE_FloodSum4_10-source",
+              source: "sumAL42EGE-source",
             },
           ],
+          legend: true,
+          legendPath: getLegendImage("sumAL41EGE.webp"),
+          information:
+            "The Flood Summary (Day 4-10) layer from GloFAS provides a summary of flood events expected to occur within the fourth to tenth days of the forecast period. This layer is essential for early warning and response efforts, allowing authorities and communities to prepare for potential flooding impacts.",
         },
       },
       toggle: {
         initial_temperature_at_2m: {
           label: "Initial Temperature at 2m",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "sumAL43EGE",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=sumAL43EGE&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "sumAL43EGE",
+              type: "raster",
+              source: "sumAL43EGE-source",
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("glofas-initial-temp-2m.webp"),
+          information:
+            "The Initial Temperature at 2m layer from GloFAS provides information on the initial temperature conditions at a height of 2 meters above ground level. This layer is important for understanding the thermal state of the atmosphere, which can influence weather patterns and flood dynamics.",
         },
         major_rivers: {
           label: "Major Rivers",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "MajorRivers1",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=MajorRivers1&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "MajorRivers1",
+              type: "raster",
+              source: "MajorRivers1-source",
+            },
+          ],
+          legend: false,
+          // legendPath: getLegendImage("sumAL43EGE.webp"),
+          information:
+            "The Major Rivers layer from GloFAS provides information on the location and extent of major rivers within the region. This layer is important for understanding the hydrological context of flood events and for planning flood management strategies.",
         },
         major_river_basins: {
           label: "Major River Basins",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "MajorRiverBasins",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=MajorRiverBasins&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "MajorRiverBasins",
+              type: "raster",
+              source: "MajorRiverBasins-source",
+            },
+          ],
+          legend: false,
+          // legendPath: getLegendImage("sumAL43EGE.webp"),
+          information:
+            "The Major River Basins layer from GloFAS provides information on the boundaries and extents of major river basins within the region. This layer is important for understanding the hydrological context of flood events and for planning flood management strategies.",
         },
         lakes_and_reservoirs: {
           label: "Lakes and Reservoirs",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "GlofasLakesReservoirs",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=GlofasLakesReservoirs&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "GlofasLakesReservoirs",
+              type: "raster",
+              source: "GlofasLakesReservoirs-source",
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("glofas-lakes-reservoirs.webp"),
+          information:
+            "The Lakes and Reservoirs layer from GloFAS provides information on the location and extent of lakes and reservoirs within the region. This layer is important for understanding the hydrological context of flood events and for planning flood management strategies.",
         },
         soil_moisture_at_2m: {
           label: "Soil Moisture at 2m",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "soilMoistureInst",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=soilMoistureInst&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "soilMoistureInst",
+              type: "raster",
+              source: "soilMoistureInst-source",
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("glofas-soil-moisture-2m.webp"),
+          information:
+            "The Soil Moisture layer from GloFAS provides information on the moisture content in the soil at a depth of 2 meters. This layer is important for understanding the hydrological context of flood events and for planning flood management strategies.",
         },
         soil_moisture_anomaly_at_2m: {
           label: "Soil Moisture Anomaly at 2m",
-          type: "geojson",
-          theme: null,
-          geometry: null,
+          type: "raster",
+          theme: "legend",
+          source: {
+            id: "soilMoistureInstAnomaly",
+            type: "raster",
+            tiles: [
+              "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=soilMoistureInstAnomaly&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE",
+            ],
+            tileSize: 256,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "soilMoistureInstAnomaly",
+              type: "raster",
+              source: "soilMoistureInstAnomaly-source",
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("glofas-soil-moisture-anomaly-2m.webp"),
+          information:
+            "The Soil Moisture Anomaly layer from GloFAS provides information on the deviation of soil moisture from the long-term average at a depth of 2 meters. This layer is important for understanding the hydrological context of flood events and for planning flood management strategies.",
         },
       },
     },

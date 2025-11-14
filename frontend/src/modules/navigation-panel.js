@@ -180,7 +180,7 @@ export class NavigationPanel {
     this.#mapControls = mapControlsInstance;
     this.projectionPanel = projectionPanelInstance;
 
-    console.log("🌏 Initializing NavigationPanel for South Asia scope");
+    // console.log("🌏 Initializing NavigationPanel for South Asia scope");
 
     this.render();
     this.addEventListeners();
@@ -360,7 +360,7 @@ export class NavigationPanel {
       return;
     }
 
-    console.log("✅ News modal detected - integrating with navigation");
+    // console.log("✅ News modal detected - integrating with navigation");
 
     // Keep reference for later usage
     this.newsModal = newsModal;
@@ -390,9 +390,7 @@ export class NavigationPanel {
       lucide.createIcons();
     }
 
-    console.log(
-      `📍 Navigation panel ${isCollapsed ? "collapsed" : "expanded"}`
-    );
+    // console.log(`📍 Navigation panel ${isCollapsed ? "collapsed" : "expanded"}`);
   }
 
   /**
@@ -404,7 +402,7 @@ export class NavigationPanel {
       pitch: 0,
       duration: 500,
     });
-    console.log("🧭 Bearing and tilt reset");
+    // console.log("🧭 Bearing and tilt reset");
   }
 
   /**
@@ -422,7 +420,7 @@ export class NavigationPanel {
     }
 
     this.restoreToggle3DState(newTerrainState);
-    console.log(`🏔️ 3D Terrain ${newTerrainState ? "enabled" : "disabled"}`);
+    // console.log(`🏔️ 3D Terrain ${newTerrainState ? "enabled" : "disabled"}`);
   }
 
   /**
@@ -448,7 +446,7 @@ export class NavigationPanel {
       )
       .addTo(this.#map);
 
-    console.log("🎯 Located to Islamabad, Pakistan");
+    // console.log("🎯 Located to Islamabad, Pakistan");
   }
 
   /**
@@ -457,7 +455,7 @@ export class NavigationPanel {
   #handleHomeExtent() {
     // Zoom to Pakistan center
     const pakistanCenter = SOUTH_ASIA_COORDS.regions.pakistan; // [lng, lat]
-    console.log({ pakistanCenter, SOUTH_ASIA_COORDS });
+    // console.log({ pakistanCenter, SOUTH_ASIA_COORDS });
     this.#map.flyTo({
       center: pakistanCenter,
       zoom: 5, // adjust as needed
@@ -465,9 +463,7 @@ export class NavigationPanel {
       essential: true,
     });
 
-    console.log(
-      "🏠 Zoomed to South Asia region (Pakistan, India, Iran, Afghanistan, Bangladesh, Nepal, Sri Lanka, Myanmar, Thailand, Vietnam, Cambodia, Laos, Malaysia, Singapore, Indonesia, Philippines)"
-    );
+    // console.log("🏠 Zoomed to South Asia region (Pakistan, India, Iran, Afghanistan, Bangladesh, Nepal, Sri Lanka, Myanmar, Thailand, Vietnam, Cambodia, Laos, Malaysia, Singapore, Indonesia, Philippines)");
   }
 
   /**
@@ -487,11 +483,11 @@ export class NavigationPanel {
     if (isVisible) {
       newsModal.style.display = "none";
       localNewsBtn?.classList.remove("active-news");
-      console.log("📰 News modal hidden");
+      // console.log("📰 News modal hidden");
     } else {
       newsModal.style.display = "flex";
       localNewsBtn?.classList.add("active-news");
-      console.log("📰 News modal shown");
+      // console.log("📰 News modal shown");
     }
   }
 
@@ -532,7 +528,7 @@ export class NavigationPanel {
       essential: true,
     });
 
-    console.log(`🗺️ Jumped to ${cityName}`);
+    // console.log(`🗺️ Jumped to ${cityName}`);
   }
 
   /**
@@ -555,7 +551,7 @@ export class NavigationPanel {
       essential: true,
     });
 
-    console.log(`🌏 Jumped to ${regionName}`);
+    // console.log(`🌏 Jumped to ${regionName}`);
   }
 
   /**
@@ -576,7 +572,7 @@ export class NavigationPanel {
    * - We ONLY mark a button as active after it triggers a fetch.
    */
   #initializeNewsModal() {
-    console.log("🗞️ Initializing News Modal for South Asia");
+    // console.log("🗞️ Initializing News Modal for South Asia");
 
     const socialBtn = document.getElementById("toggle-social-btn");
     const regularBtn = document.getElementById("fetch-regular-btn");
@@ -595,7 +591,7 @@ export class NavigationPanel {
       this.#fetchNews(true); // 🔥 fetch social feed
       this.#updateNewsButtonStates(socialBtn, regularBtn);
 
-      console.log("📱 Switched to Social Media mode");
+      // console.log("📱 Switched to Social Media mode");
     });
 
     // Regular News Button Click
@@ -607,7 +603,7 @@ export class NavigationPanel {
       this.#fetchNews(false); // 🔥 fetch regular news
       this.#updateNewsButtonStates(regularBtn, socialBtn);
 
-      console.log("📰 Switched to Regular News mode");
+      // console.log("📰 Switched to Regular News mode");
     });
 
     // ⛔ DO NOT set default active state here.
@@ -635,7 +631,7 @@ export class NavigationPanel {
    */
   async #fetchNews(includeSM = false) {
     try {
-      console.log(`📡 Fetching news (Social Media: ${includeSM})...`);
+      // console.log(`📡 Fetching news (Social Media: ${includeSM})...`);
 
       // pick URL based on mode
       const url = includeSM
@@ -670,13 +666,11 @@ export class NavigationPanel {
               <small>Try switching between Social Media and Regular News</small>
           </div>
         `;
-        console.log("ℹ️ No articles found");
+        // console.log("ℹ️ No articles found");
         return;
       }
 
-      console.log(
-        `✅ Fetched ${geojson.features.length} articles for South Asia`
-      );
+      // console.log(`✅ Fetched ${geojson.features.length} articles for South Asia`);
 
       // populate ticker with boxes
       geojson.features.forEach((feature, index) => {
@@ -729,13 +723,13 @@ export class NavigationPanel {
 
       // Log metadata if available
       if (geojson.metadata) {
-        console.log("📊 Metadata:", {
-          total_features: geojson.metadata.total_features,
-          gdelt_articles: geojson.metadata.gdelt_articles,
-          social_media_posts: geojson.metadata.social_media_posts,
-          sources: geojson.metadata.sources,
-          geographic_scope: geojson.metadata.geographic_scope,
-        });
+        // console.log("📊 Metadata:", {
+        //   total_features: geojson.metadata.total_features,
+        //   gdelt_articles: geojson.metadata.gdelt_articles,
+        //   social_media_posts: geojson.metadata.social_media_posts,
+        //   sources: geojson.metadata.sources,
+        //   geographic_scope: geojson.metadata.geographic_scope,
+        // });
       }
     } catch (error) {
       console.error("❌ Error fetching news:", error);
@@ -840,7 +834,7 @@ export class NavigationPanel {
         ?.classList.remove("active");
 
       this.#resumeScroll();
-      console.log(`❌ Marker ${index} removed`);
+      // console.log(`❌ Marker ${index} removed`);
       return;
     }
 
@@ -924,7 +918,7 @@ export class NavigationPanel {
 
     document.querySelector(`[data-index="${index}"]`)?.classList.add("active");
 
-    console.log(`✅ Marker ${index} created at [${coords[0]}, ${coords[1]}]`);
+    // console.log(`✅ Marker ${index} created at [${coords[0]}, ${coords[1]}]`);
   }
 
   /**
@@ -936,7 +930,7 @@ export class NavigationPanel {
       if (scrollElement) {
         scrollElement.style.animationPlayState = "paused";
         this.#scrollPaused = true;
-        console.log("⏸️ News scroll paused");
+        // console.log("⏸️ News scroll paused");
       }
     }
   }
@@ -950,7 +944,7 @@ export class NavigationPanel {
       if (scrollElement) {
         scrollElement.style.animationPlayState = "running";
         this.#scrollPaused = false;
-        console.log("▶️ News scroll resumed");
+        // console.log("▶️ News scroll resumed");
       }
     }
   }

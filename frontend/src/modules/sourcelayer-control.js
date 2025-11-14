@@ -284,7 +284,7 @@ export class SourceLayerControl {
 
       // Check if source already exists
       if (this.map.getSource(id)) {
-        console.log(`⚠️ Source ${id} already exists, skipping...`);
+        // console.log(`⚠️ Source ${id} already exists, skipping...`);
         return true;
       }
 
@@ -311,12 +311,12 @@ export class SourceLayerControl {
         }
       }
 
-      console.log(`🔧 Adding ${type} source:`, {
-        id,
-        type,
-        tileSize: sourceDefinition.tileSize,
-        tiles: tiles ? `${tiles.length} tile URLs` : "no tiles",
-      });
+      // console.log(`🔧 Adding ${type} source:`, {
+      //   id,
+      //   type,
+      //   tileSize: sourceDefinition.tileSize,
+      //   tiles: tiles ? `${tiles.length} tile URLs` : "no tiles",
+      // });
 
       this.map.addSource(id, sourceDefinition);
       return true;

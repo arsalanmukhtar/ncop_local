@@ -180,7 +180,7 @@ class DashboardManager {
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
-    console.log("✅ Map exposed as window.ncop_map");
+    // console.log("✅ Map exposed as window.ncop_map");
   }
 
   #onMapLoad() {

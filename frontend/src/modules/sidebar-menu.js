@@ -797,7 +797,7 @@ export class SidebarMenu {
     itemDiv.addEventListener("click", () => {
       isActive = !isActive;
 
-      console.log(`🔄 Static layer "${itemKey}" toggling to:`, isActive);
+      // console.log(`🔄 Static layer "${itemKey}" toggling to:`, isActive);
 
       handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
 
