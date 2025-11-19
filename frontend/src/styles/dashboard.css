@@ -1238,7 +1238,6 @@ button.custom-nav-btn.terrain-active:hover {
     position: absolute;
     top: 0;
     right: 42px;
-    /* Move panel 42px from right when opened */
     width: 280px;
     max-height: 400px;
     background: var(--primary-bg);
@@ -1247,7 +1246,6 @@ button.custom-nav-btn.terrain-active:hover {
     padding: 12px;
     backdrop-filter: blur(15px);
     transform: translateX(100%);
-    /* Start hidden, slide in from right */
     opacity: 0;
     transition: all 0.3s ease;
     overflow-y: auto;
@@ -1264,7 +1262,6 @@ button.custom-nav-btn.terrain-active:hover {
     top: 0;
     right: 42px;
     transform: translateX(0);
-    /* Slide in from right when visible */
 }
 
 /* Responsive adjustments for mobile */
@@ -1476,7 +1473,7 @@ button.custom-nav-btn.terrain-active:hover {
     align-items: flex-end;
 }
 
-.layer-info-panel {
+/* .layer-info-panel {
     position: absolute;
     top: 0;
     right: 0;
@@ -1493,7 +1490,7 @@ button.custom-nav-btn.terrain-active:hover {
     overflow-y: auto;
     z-index: 1001;
     pointer-events: none;
-}
+} */
 
 /* Dynamic sizing when legends are visible */
 .layer-info-panel.has-legend {
@@ -1501,11 +1498,11 @@ button.custom-nav-btn.terrain-active:hover {
     max-height: 600px;
 }
 
-.layer-info-panel.visible {
+/* .layer-info-panel.visible {
     pointer-events: auto;
     transform: translateX(0);
     opacity: 1;
-}
+} */
 
 .layer-info-header {
     margin-bottom: 12px;
@@ -1761,11 +1758,11 @@ button.custom-nav-btn.terrain-active:hover {
    PANEL SCROLLING & OVERFLOW HANDLING
    ============================================ */
 
-.layer-info-panel {
+/* .layer-info-panel {
     transition: max-height 0.3s ease, height 0.3s ease;
     overflow-y: auto;
     overflow-x: hidden;
-}
+} */
 
 /* Webkit scrollbar customization (Chrome, Safari, Edge) */
 .layer-info-panel::-webkit-scrollbar {
@@ -1875,8 +1872,7 @@ button.custom-nav-btn.terrain-active:hover {
 @media (prefers-reduced-motion: reduce) {
 
     .layer-legend-toggle-btn,
-    .layer-legend-image-container,
-    .layer-info-panel {
+    .layer-legend-image-container {
         transition: none;
     }
 

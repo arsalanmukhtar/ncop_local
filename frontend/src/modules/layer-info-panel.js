@@ -43,14 +43,10 @@ export class LayerInfoPanel {
     infoToggle?.addEventListener("click", (e) => {
       e.stopPropagation();
       this.togglePanel();
-      // Collapse layer order panel if open
-      const orderPanelDiv = document.querySelector(".custom-layer-control");
-      if (
-        orderPanelDiv &&
-        !orderPanelDiv.classList.contains("panel-collapsed")
-      ) {
-        orderPanelDiv.classList.add("panel-collapsed");
-      }
+      // Hide layer order panel
+      document.getElementById("layerOrderPanel")?.classList.remove("visible");
+      // Hide basemap panel
+      document.getElementById("basemapPanel")?.classList.remove("visible");
     });
     // Hide when basemap panel opens
     const basemapToggle = document.getElementById("basemapToggle");
@@ -68,12 +64,17 @@ export class LayerInfoPanel {
     );
     this.#sourceLayerControl.addLayerByKey = (...args) => {
       const result = originalAddLayer(...args);
-      if (this.#isVisible) setTimeout(() => this.updateLayerList(), 100);
+      // Only update if not a temporal layer animation
+      if (this.#isVisible && !window.isTemporalAnimating) {
+        setTimeout(() => this.updateLayerList(), 100);
+      }
       return result;
     };
     this.#sourceLayerControl.removeLayerByKey = (...args) => {
       const result = originalRemoveLayer(...args);
-      if (this.#isVisible) setTimeout(() => this.updateLayerList(), 100);
+      if (this.#isVisible && !window.isTemporalAnimating) {
+        setTimeout(() => this.updateLayerList(), 100);
+      }
       return result;
     };
   }
@@ -102,6 +103,9 @@ export class LayerInfoPanel {
   }
 
   updateLayerList() {
+    // Prevent rerender/scroll-to-top during temporal animation
+    if (window.isTemporalAnimating) return;
+
     const infoList = document.getElementById("layerInfoList");
     if (!infoList) return;
     const activeLayerKeys = this.#sourceLayerControl.getActiveLayerKeys();
