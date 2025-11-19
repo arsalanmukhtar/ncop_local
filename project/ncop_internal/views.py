@@ -1036,7 +1036,33 @@ class WAQIgeojson(View):
                         forced_out.append(waqi_feat)
 
         return forced_out
+# OIl SLicks 
+class SlickPlusGeojsonApi(View):
+    def get(self, request, *args, **kwargs):
+        # Calculate the end date as today's date with time set to 00:00:00
+        end_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
+        # Calculate the start date as 20 days before the end date, also with time set to 00:00:00
+        start_date = (end_date - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_date = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # API URL with dynamic datetime parameter
+        api_url = (
+            "https://api.cerulean.skytruth.org/collections/public.slick_plus/items"
+            f"?sortby=slick_timestamp&datetime={start_date}/{end_date}&bbox=59.458008,17.266728,68.818359,25.363882&limit=10&f=geojson"
+        )
+        # Fetch the data from the API
+        response = requests.get(api_url)
+        # Check if the request was successful
+        if response.status_code == 200:
+            data = response.json()  # Parse the JSON response
+            return JsonResponse(data)  # Return the data as JSON
+        else:
+            # If the request failed, return an error message
+            return JsonResponse(
+                {"error": "Failed to fetch data from the API"},
+                status=response.status_code,
+            )
 #GDELT AND SOCIAL MEDIA VIEWS HERE-----------------------------------------------
 # ENHANCED VERSION - Increased Pakistan Focus for Climate, Weather, and Natural Hazards
 class RateLimiter:

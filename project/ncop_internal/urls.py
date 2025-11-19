@@ -11,6 +11,7 @@ from .views import (
     WeatherDataPMDFFDView,
     GdeltNewsEventsApi,
     WAQIgeojson,
+    SlickPlusGeojsonApi,
     
 )
 
@@ -27,5 +28,6 @@ urlpatterns = [
     path("stories/<slug:slug>/", StoryDetailView.as_view(), name="story-detail"),
     path("get-weather-pmdffd-data/", WeatherDataPMDFFDView.as_view(), name="get-weather-pmdffd-data",),
     path("get-waqi-global-airquality/", WAQIgeojson.as_view(), name="waqi_global_aqi"),
+    path("api/slick-plus/", SlickPlusGeojsonApi.as_view(), name="slick_plus_geojson"),
     path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
 ]

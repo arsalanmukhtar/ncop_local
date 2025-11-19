@@ -1600,6 +1600,98 @@ export const ncop_menu_items = {
           geometry: null,
         },
       },
+      toggle: {
+        slick_plus_oil_spills: {
+          label: "Oil Spills – SkyTruth Slick+ (Last 7 days)",
+          source: {
+            id: "slick-plus-oil-spills-source",
+            type: "geojson",
+            // Django view: path("api/slick-plus-geojson/", SlickPlusGeojsonApi.as_view(), ...)
+            data: `${baseUrl}/api/slick-plus/`,
+            maxzoom: 22,
+          },
+          layers: [
+            // 1) Filled polygons = oil slick footprint
+            {
+              id: "slick-plus-oil-spills-fill",
+              type: "fill",
+              source: "slick-plus-oil-spills-source",
+              paint: {
+                // Color by slick area – bigger slicks = stronger color
+                "fill-color": [
+                  "step",
+                  ["get", "area"],
+                  "#fff5f0", // < 1M
+                  1_000_000,
+                  "#fee0d2",
+                  5_000_000,
+                  "#fcbba1",
+                  10_000_000,
+                  "#fc9272",
+                  20_000_000,
+                  "#fb6a4a",
+                  40_000_000,
+                  "#de2d26",
+                  80_000_000,
+                  "#a50f15", // very large slick
+                ],
+                "fill-opacity": 0.65,
+              },
+            },
+
+            // 2) Polygon outline
+            {
+              id: "slick-plus-oil-spills-outline",
+              type: "line",
+              source: "slick-plus-oil-spills-source",
+              paint: {
+                "line-color": "#111111",
+                "line-width": 1.5,
+                "line-opacity": 0.9,
+              },
+            },
+
+            // 3) Labels inside polygons (use ID + date)
+            {
+              id: "slick-plus-oil-spills-label",
+              type: "symbol",
+              source: "slick-plus-oil-spills-source",
+              minzoom: 5,
+              layout: {
+                "text-field": [
+                  "concat",
+                  "ID: ",
+                  ["to-string", ["get", "id"]],
+                  "\n",
+                  [
+                    "slice",
+                    ["to-string", ["get", "slick_timestamp"]],
+                    0,
+                    10, // YYYY-MM-DD
+                  ],
+                ],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 10,
+                "text-anchor": "center",
+                "text-allow-overlap": false,
+              },
+              paint: {
+                "text-color": "#ffffff",
+                "text-halo-color": "rgba(0,0,0,0.8)",
+                "text-halo-width": 1.5,
+                "text-halo-blur": 0.5,
+              },
+            },
+          ],
+
+          // keep popup behaviour ON (your popup handler will use the feature properties)
+          popup: true, // (or ispopup: true if that’s what your code expects)
+          legend: true,
+          legendPath: getLegendImage("Oil_Spills_SlickPlus.webp"),
+          information:
+            "This layer shows satellite-detected marine oil slicks from SkyTruth’s Slick+ dataset over Pakistan’s EEZ for the last 7 days. Polygon color reflects slick area; outlines highlight the footprint. Click a slick for detailed attributes (timestamp, area, source hints, etc.).",
+        },
+      },
     },
   },
   "Disaster Early Warning (DEW)": {
