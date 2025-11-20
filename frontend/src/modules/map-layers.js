@@ -725,6 +725,8 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Radar",
+          information:
+            "The Realtime Radar layer provides up-to-the-minute radar imagery, allowing users to monitor precipitation patterns and intensity in real-time. This layer is crucial for tracking weather events such as storms, rainfall, and severe weather conditions.",
         },
         satellite_infrared: {
           label: "Satellite Infrared",
@@ -732,6 +734,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Radar Clouds",
+          information:"The Satellite Infrared layer provides real-time infrared satellite imagery, allowing users to monitor cloud cover and atmospheric conditions. This layer is essential for tracking weather patterns and forecasting.",
         },
         dwd_satellite_infrared: {
           label: "DWD Satellite Infrared",
@@ -739,8 +742,7 @@ export const ncop_menu_items = {
           theme: "slider",
           type: "raster",
           title: "DWD Radar (°C)",
-          information:
-            "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
+          information:"The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
         },
         imerg_precipitation_rate_14_days: {
           label: "IMERG Precipitation Rate (14 Days)",
@@ -748,6 +750,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: null,
+          information:"The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
         },
       },
     },
@@ -759,6 +762,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Specific Humidity (g/kg)",
+          information:"The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
         relative_humidity_2m_above_ground: {
           label: "Relative Humidity (%)",
@@ -766,6 +770,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
         gdps_accumulated_precipitation: {
           label: "Accumulated Precipitation",
@@ -773,6 +778,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
         },
         precipitation_type_3hrs: {
           label: "Precipitation Type / 3hrs",
@@ -780,6 +786,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Precipitation Type",
+          information:"The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
         },
       },
     },
@@ -791,6 +798,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Temperature (°C)",
+          information:"The Temperature (850hPa) layer displays the temperature levels at 850 hPa pressure level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
         },
         ecmwf_lightning: {
           label: "Lightning Forecast",
@@ -798,6 +806,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Probability %",
+          information:"The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
         },
         ecmwf_cyclone: {
           label: "Tropical Cyclone Strike Probability",
@@ -805,6 +814,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Probability %",
+          information:"The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
         },
       },
     },
@@ -816,6 +826,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
         },
         hourly_precipitation_2m_above_ground: {
           label: "Hourly Precipitation (2m Above Ground)",
@@ -823,6 +834,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Hourly Precipitation (2m Above Ground) layer displays the precipitation levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term rainfall patterns and their impact on the environment.",
         },
         hourly_snowfall_forecast: {
           label: "Hourly Snowfall (Forecast)",
@@ -830,6 +842,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Hourly Snowfall (Forecast) layer displays the snowfall levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term snowfall patterns and their impact on the environment.",
         },
         weekly_snowfall_forecast: {
           label: "Weekly Snow (Forecast)",
@@ -837,6 +850,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Weekly Snow (Forecast) layer displays the total snowfall accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly snowfall patterns and their impact on the environment.",
         },
         cape_hourly_forecast: {
           label: "CAPE Hourly (Forecast)",
@@ -844,6 +858,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The CAPE Hourly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on an hourly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
         },
         cape_weekly_forecast: {
           label: "CAPE Weekly (Forecast)",
@@ -851,6 +866,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The CAPE Weekly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on a weekly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
         },
         storm_helicity_forecast_0_3km: {
           label: "Storm Helicity Forecast (0-3km)",
@@ -858,6 +874,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Storm Helicity Forecast (0-3km) layer displays the storm helicity levels in the 0-3 km atmospheric layer. This layer is essential for understanding the potential for rotating storms and severe weather development.",
         },
         precipitation_radar: {
           label: "Precipitation Radar",
@@ -865,6 +882,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Precipitation Radar layer provides real-time precipitation data using radar technology. This layer is crucial for monitoring rainfall intensity and tracking storm systems.",
         },
         temperature_2m_above_ground: {
           label: "Temperature (2m Above Ground)",
@@ -872,6 +890,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
         },
         official_weather_warnings_forecast: {
           label: "Official Weather Warnings (Forecast)",
@@ -879,6 +898,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
         },
         meteorological_risks_forecast: {
           label: "Meteorological Risks (Forecast)",
@@ -886,6 +906,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
         },
       },
     },
@@ -1355,6 +1376,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "PM2.5 (µg/m³)",
+          information: "The PM2.5 layer displays the concentration of particulate matter with a diameter of 2.5 micrometers or less. This layer is essential for understanding air quality and its impact on human health.",
         },
         particulate_matter_10: {
           label: "Particulate Matter (10)",
@@ -1362,6 +1384,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "PM10 (µg/m³)",
+          information: "The PM10 layer displays the concentration of particulate matter with a diameter of 10 micrometers or less. This layer is essential for understanding air quality and its impact on human health.",
         },
         nitrogen_dioxide_850hPa: {
           label: "Nitrogen Dioxide (850hPa)",
@@ -1369,6 +1392,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Nitrogen Dioxide (ppbv)",
+          information: "The Nitrogen Dioxide layer displays the concentration of nitrogen dioxide at 850 hPa pressure level. This layer is essential for understanding air quality and its impact on human health.",
         },
         ozone: {
           label: "Ozone",
@@ -1376,6 +1400,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Ozone (µg/m³)",
+          information: "The Ozone layer displays the concentration of ozone in the atmosphere. This layer is essential for understanding air quality and its impact on human health.",
         },
         sulphur_dioxide_850hPa: {
           label: "Sulphur Dioxide (850hPa)",
@@ -1383,6 +1408,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Sulphur Dioxide (µg/m³)",
+          information: "The Sulphur Dioxide layer displays the concentration of sulphur dioxide at 850 hPa pressure level. This layer is essential for understanding air quality and its impact on human health.",
         },
         carbon_monoxide: {
           label: "Carbon Monoxide",
@@ -1390,6 +1416,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Carbon Monoxide (ppbv)",
+          information: "The Carbon Monoxide layer displays the concentration of carbon monoxide in the atmosphere. This layer is essential for understanding air quality and its impact on human health.",
         },
         dust: {
           label: "Dust",
@@ -1397,6 +1424,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Dust",
+          information: "The Dust layer displays the concentration of dust particles in the atmosphere. This layer is essential for understanding air quality and its impact on human health.",
         },
         methane_at_300hPa: {
           label: "Methane at 300hPa",
@@ -1404,6 +1432,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Methane (ppbv)",
+          information: "The Methane at 300hPa layer displays the concentration of methane at 300 hPa pressure level. This layer is essential for understanding air quality and its impact on human health.",
         },
       },
       toggle: {
@@ -1577,6 +1606,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Ocean Surface Salinity layer displays the salinity levels of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_temperature: {
           label: "Ocean Surface Temperature (10m)",
@@ -1584,6 +1614,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Ocean Surface Temperature layer displays the temperature of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_currents: {
           label: "Ocean Surface Currents (10m)",
@@ -1591,6 +1622,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Ocean Surface Currents layer displays the surface currents of the ocean at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_height: {
           label: "Ocean Surface Height w.r.t Geoid",
@@ -1598,6 +1630,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          information:"The Ocean Surface Height layer displays the height of the ocean surface with respect to the geoid. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
       },
       toggle: {
@@ -2198,3 +2231,4 @@ export const ncop_menu_items = {
     },
   },
 };
+window.ncop_menu_items = ncop_menu_items;
