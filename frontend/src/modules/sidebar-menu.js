@@ -344,6 +344,21 @@ export class SidebarMenu {
           }
         });
         itemsContainer.appendChild(grid);
+      } else if (typeKey === "nested") {
+        // 🆕 NEW: Nested sub-accordions (e.g., "GDACS Alerts", "Regional Alerts")
+        Object.keys(items).forEach((nestedSubKey) => {
+          const nestedSubData = items[nestedSubKey];
+          const nestedElement = this.#createNestedSubSection(
+            categoryKey,
+            subcategoryKey,
+            nestedSubKey,
+            nestedSubData
+          );
+          if (nestedElement) {
+            itemsContainer.appendChild(nestedElement);
+          }
+        });
+        // Handle other item types
       }
 
       // --- OTHER CASES ---
@@ -379,6 +394,114 @@ export class SidebarMenu {
     subcategoryDiv.appendChild(subcategoryHeader);
     subcategoryDiv.appendChild(itemsContainer);
     return subcategoryDiv;
+  }
+  /**
+   * 🆕 NEW: Create nested sub-accordion sections
+   * Handles sub-accordions within subcategories (e.g., "GDACS Alerts" inside "Hazard Alerts")
+   */
+  #createNestedSubSection(
+    categoryKey,
+    parentSubcategoryKey,
+    nestedSubKey,
+    nestedSubData
+  ) {
+    const nestedDiv = document.createElement("div");
+    nestedDiv.className = "ncop-nested-subsection";
+
+    const nestedHeader = document.createElement("div");
+    nestedHeader.className = "ncop-nested-header";
+    nestedHeader.innerHTML = `<span>${nestedSubKey}</span><i data-lucide="chevron-right" class="nested-chevron"></i>`;
+
+    const nestedItemsContainer = document.createElement("div");
+    nestedItemsContainer.className = "ncop-nested-items-container";
+
+    // Render items within the nested section
+    Object.keys(nestedSubData).forEach((typeKey) => {
+      const items = nestedSubData[typeKey];
+
+      if (typeKey === "static") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const staticElement = this.#createStaticItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (staticElement) grid.appendChild(staticElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else if (typeKey === "toggle") {
+        Object.keys(items).forEach((itemKey) => {
+          const toggleElement = this.#createToggleItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (toggleElement) nestedItemsContainer.appendChild(toggleElement);
+        });
+      } else if (typeKey === "temporal") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const temporalElement = this.#createTemporalItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (temporalElement) grid.appendChild(temporalElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else if (typeKey === "button") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const buttonElement = this.#createButtonItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (buttonElement) grid.appendChild(buttonElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else {
+        console.warn(`⚠️ Unknown nested item type: ${typeKey}`, items);
+      }
+    });
+
+    // Event handler for nested header click
+    nestedHeader.addEventListener("click", function () {
+      const isExpanded = this.classList.contains("expanded");
+
+      // Close other nested sections at the same level
+      const parentContainer = this.closest(".ncop-items-container");
+      const otherNestedHeaders = parentContainer?.querySelectorAll(
+        ".ncop-nested-header"
+      );
+
+      otherNestedHeaders?.forEach((header) => {
+        if (header !== this) {
+          header.classList.remove("expanded");
+          header.nextElementSibling?.classList.remove("visible");
+        }
+      });
+
+      if (!isExpanded) {
+        this.classList.add("expanded");
+        nestedItemsContainer.classList.add("visible");
+      } else {
+        this.classList.remove("expanded");
+        nestedItemsContainer.classList.remove("visible");
+      }
+    });
+
+    nestedDiv.appendChild(nestedHeader);
+    nestedDiv.appendChild(nestedItemsContainer);
+    return nestedDiv;
   }
   #createToggleItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // console.log(`🔧 Creating toggle item: ${itemKey}`, itemData);

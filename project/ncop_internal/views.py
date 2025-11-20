@@ -1063,6 +1063,331 @@ class SlickPlusGeojsonApi(View):
                 {"error": "Failed to fetch data from the API"},
                 status=response.status_code,
             )
+
+#-------------------------GDACS--------------------------------------------------
+# GDACS
+# return: Geojson(Feature Collection)
+# ---------- helpers ----------
+
+
+def deep_get(obj: Dict[str, Any], path: List[str], default=None):
+    cur = obj
+    for key in path:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(key)
+        if cur is None:
+            return default
+    return cur
+
+
+def try_number(v: Any):
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    s = str(v).strip()
+    # dbnulls or blanks → None
+    if s == "" or s.upper() == "DBNULL":
+        return None
+    try:
+        if "." in s:
+            return float(s)
+        return int(s)
+    except Exception:
+        return s
+
+
+def get_json(url: str, timeout: float = 20.0) -> Dict[str, Any]:
+    r = requests.get(url, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
+
+
+# flatten the datums/scalars payloads returned by /export/getimpact & friends
+def parse_impact_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for block in payload.get("datums", []):
+        alias = block.get("alias") or block.get("source")
+        for datum in block.get("datum", []):
+            scalars = {
+                s.get("name"): try_number(s.get("value"))
+                for s in (datum.get("scalars", {}) or {}).get("scalar", [])  # tolerant
+            }
+            out.append(
+                {
+                    "dataset_alias": alias,
+                    "datasource": datum.get("datasource"),
+                    "type": datum.get("type"),
+                    "io": datum.get("io"),
+                    "scalars": scalars,
+                }
+            )
+    return out
+
+
+def extract_impact_links(
+    event_type: str, details: Dict[str, Any]
+) -> List[Tuple[str, str]]:
+    # impacts usually live under details.properties.impacts
+    impacts = (
+        deep_get(details, ["details", "properties", "impacts"], default=None)
+        or deep_get(details, ["properties", "impacts"], default=None)
+        or details.get("impacts")
+        or []
+    )
+
+    links: List[Tuple[str, str]] = []
+    for imp in impacts or []:
+        src = imp.get("source") or "UNKNOWN"
+        res = imp.get("resource", {}) or {}
+        if event_type == "EQ":
+            for key in ("impact", "shake_preliminary", "shakemap"):
+                url = res.get(key)
+                if isinstance(url, str) and url.startswith("http"):
+                    links.append((f"{src}:{key}", url))
+        elif event_type == "TC":
+            # buffer39 contains the POP* sums; timeline/locations optional
+            for key in ("buffer39", "timeline", "locations"):
+                url = res.get(key)
+                if isinstance(url, str) and url.startswith("http"):
+                    links.append((f"{src}:{key}", url))
+        elif event_type == "WF":
+            url = res.get("impact")
+            if isinstance(url, str) and url.startswith("http"):
+                links.append((f"{src}:impact", url))
+        else:
+            # fallback: grab any http-ish field
+            for k, v in res.items():
+                if isinstance(v, str) and v.startswith("http"):
+                    links.append((f"{src}:{k}", v))
+    return links
+
+
+def parse_sendai_records(details: Dict[str, Any]) -> List[Dict[str, Any]]:
+    sendai = (
+        deep_get(details, ["details", "properties", "sendai"])
+        or deep_get(details, ["properties", "sendai"])
+        or details.get("sendai")
+        or []
+    )
+    out: List[Dict[str, Any]] = []
+    for s in sendai:
+        out.append(
+            {
+                "source": "SENDAI",
+                "latest": bool(s.get("latest")),
+                "category": s.get("sendaitype"),  # A/B/C
+                "metric": s.get(
+                    "sendainame"
+                ),  # e.g., death, injured, houses damaged, displaced, rescued, affected
+                "value": try_number(s.get("sendaivalue")),
+                "country": s.get("country"),
+                "region": s.get("region"),
+                "onset_date": s.get("onset_date"),
+                "expires_date": s.get("expires_date"),
+                "effective_date": s.get("effective_date"),
+                "description": s.get("description"),
+                "raw": s,  # keep the raw if you need it
+            }
+        )
+    return out
+
+
+def summarize_flat_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Lightweight summary across common scalar names used by EQ/TC/WF payloads.
+    (You can expand this to fit your UI.)
+    """
+    summary: Dict[str, Any] = {
+        "population_affected": None,
+        "sum_pop_bands": {},  # e.g. {"SUMPOP200.0": 2181, "SUMPOP175.0": 2121, ...}
+    }
+    # prefer POPAFFECTED if present
+    for b in blocks:
+        scalars = b.get("scalars", {})
+        if "POPAFFECTED" in scalars:
+            summary["population_affected"] = scalars["POPAFFECTED"]
+        # collect SUMPOP* bands
+        for k, v in scalars.items():
+            if k.upper().startswith("SUMPOP"):
+                summary["sum_pop_bands"][k] = v
+    return summary
+
+
+# ---------- main entry ----------
+
+
+def normalize_gdacs_impacts(event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Returns a normalized dict you can rely on for any GDACS event:
+    {
+      "event_type": "EQ|TC|FL|WF|...",
+      "datasets": [  # for EQ/TC/WF: flattened results of impact URLs
+         {"label": "NEIC:impact", "url": "...", "blocks": [...]} , ...
+      ],
+      "sendai": [...],   # for FL (and any event that happens to include Sendai)
+      "summary": {...}   # quick high-level metrics extracted from datasets
+    }
+    """
+    out: Dict[str, Any] = {
+        "event_type": event_type,
+        "datasets": [],
+        "sendai": [],
+        "summary": {},
+    }
+
+    # FL: use sendai (impacts may be empty)
+    if event_type == "FL":
+        out["sendai"] = parse_sendai_records(details)
+        out["summary"] = {}  # you can compute totals here if you want
+        return out
+
+    # others: follow impact links
+    links = extract_impact_links(event_type, details)
+    datasets = []
+    all_blocks: List[Dict[str, Any]] = []
+    for label, url in links:
+        try:
+            payload = get_json(url)
+            blocks = parse_impact_payload(payload)
+            datasets.append({"label": label, "url": url, "blocks": blocks})
+            all_blocks.extend(blocks)
+        except Exception as e:
+            datasets.append({"label": label, "url": url, "error": str(e), "blocks": []})
+
+    out["datasets"] = datasets
+    out["sendai"] = parse_sendai_records(
+        details
+    )  # some events also include sendai; harmless to add
+    out["summary"] = summarize_flat_blocks(all_blocks)
+    return out
+
+# ---------- example usage ----------
+
+# details_json = get_json("http://127.0.0.1:8000/get-gdacs-event-details/EQ/1497545/1657308/?expand_impacts=1&include_media=1")
+# event_type = deep_get(details_json, ["details", "properties", "eventtype"]) or details_json.get("eventtype")
+# normalized = normalize_gdacs_impacts(event_type, details_json)
+# print(normalized)
+GDACS_BASE = "https://www.gdacs.org/gdacsapi/api"
+
+
+def _safe_get_json(url, params=None, timeout=15):
+    try:
+        r = requests.get(url, params=params, timeout=timeout)
+        if r.ok:
+            return r.json()
+    except requests.RequestException as e:
+        print("GDACS JSON error:", url, e)
+    return None
+
+
+def _try_fetch_geojson(url, timeout=20):
+    """
+    Best-effort: some GDACS 'impact' endpoints return JSON/GeoJSON,
+    others return zipped shapefiles or images. We only accept JSON here.
+    """
+    try:
+        r = requests.get(url, timeout=timeout)
+        ctype = r.headers.get("Content-Type", "")
+        if r.ok and "application/json" in ctype:
+            data = r.json()
+            if isinstance(data, dict) and data.get("type") in (
+                "Feature",
+                "FeatureCollection",
+            ):
+                if data["type"] == "Feature":
+                    return {"type": "FeatureCollection", "features": [data]}
+                return data
+    except requests.RequestException as e:
+        print("Impact fetch failed:", url, e)
+    except ValueError:
+        pass
+    return None
+
+
+# ---- Existing list endpoint (unchanged behavior) ----
+class GdacsEventsGeojsonApi(View):
+    def get(self, request, event_slug):
+        url = f"{GDACS_BASE}/events/geteventlist/MAP"
+        params = {"eventtypes": event_slug}
+        response_data = _safe_get_json(url, params) or {
+            "type": "FeatureCollection",
+            "features": [],
+        }
+        return JsonResponse(response_data)
+
+
+# ---- NEW: per-event details + optional impact polygons/media ----
+class GdacsEventDetailsApi(View):
+    """
+    GET /get-gdacs-event-details/<eventtype>/<eventid>[/<episodeid>]/?expand_impacts=1&include_media=1
+    Returns: { details: {...}, impacts_geojson?: FeatureCollection, media?: <GDACS EMM JSON> }
+    """
+
+    def get(self, request, event_type, event_id, episode_id=None):
+        details = (
+            _safe_get_json(
+                f"{GDACS_BASE}/events/geteventdata",
+                {"eventtype": event_type, "eventid": event_id},
+            )
+            or {}
+        )
+
+        expand_impacts = str(request.GET.get("expand_impacts", "")).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        include_media = str(request.GET.get("include_media", "")).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+
+        result = {"details": details}
+        # add a normalized summary usable by all hazards
+        try:
+            result["normalized_impacts"] = normalize_gdacs_impacts(event_type, details)
+        except Exception as e:
+            result["normalized_impacts_error"] = str(e)
+
+        # Try to expand impact polygons (if any endpoint returns GeoJSON)
+        if expand_impacts and isinstance(details, dict):
+            collected = []
+            for imp in details.get("impacts", []):
+                res = (imp or {}).get("resource", {})
+                # Typical keys we’ve seen in GDACS JSON
+                for key in ("shakemap", "shake_preliminary", "impact"):
+                    u = res.get(key)
+                    if not u:
+                        continue
+                    gj = _try_fetch_geojson(u)
+                    if gj and isinstance(gj.get("features"), list):
+                        for f in gj["features"]:
+                            props = f.setdefault("properties", {})
+                            props.setdefault("eventtype", event_type)
+                            props.setdefault("eventid", int(event_id))
+                            props.setdefault("episodeid", int(episode_id or 0))
+                            props.setdefault(
+                                "impact_source", (imp.get("source") or key).upper()
+                            )
+                        collected.extend(gj["features"])
+            if collected:
+                result["impacts_geojson"] = {
+                    "type": "FeatureCollection",
+                    "features": collected,
+                }
+
+        # Optionally return media list (GDACS EMM) so you can render links inside popups
+        if include_media:
+            media_url = (details.get("url") or {}).get("media")
+            if media_url:
+                media_items = _safe_get_json(media_url)  # returns EMM JSON
+                if media_items:
+                    result["media"] = media_items
+
+        return JsonResponse(result)
 #GDELT AND SOCIAL MEDIA VIEWS HERE-----------------------------------------------
 # ENHANCED VERSION - Increased Pakistan Focus for Climate, Weather, and Natural Hazards
 class RateLimiter:

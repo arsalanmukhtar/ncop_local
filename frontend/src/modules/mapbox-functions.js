@@ -21,26 +21,40 @@ function initializeItemState(categoryKey, subcategoryKey, itemKey) {
 }
 
 /**
- * Get the item data from map-layers.js configuration
+ * Get the item data from map-layers.js configuration (updated to handle nested sections)
  */
 function getItemData(categoryKey, subcategoryKey, itemKey, itemType) {
-    try {
-        const categoryData = ncop_menu_items[categoryKey];
-        if (!categoryData) return null;
-        
-        const subcategoryData = categoryData[subcategoryKey];
-        if (!subcategoryData) return null;
-        
-        const typeData = subcategoryData[itemType];
-        if (!typeData) return null;
-        
-        return typeData[itemKey];
-    } catch (error) {
-        console.error(`❌ Error getting item data for ${categoryKey}.${subcategoryKey}.${itemKey}:`, error);
-        return null;
-    }
-}
+  try {
+      const categoryData = ncop_menu_items[categoryKey];
+      if (!categoryData) return null;
+      
+      const subcategoryData = categoryData[subcategoryKey];
+      if (!subcategoryData) return null;
+      
+      // First check direct items
+      const typeData = subcategoryData[itemType];
+      if (typeData && typeData[itemKey]) {
+          return typeData[itemKey];
+      }
 
+      // 🔥 NEW: Check nested sections (for GDACS)
+      const nestedSections = subcategoryData.nested || subcategoryData.subsections;
+      if (nestedSections && typeof nestedSections === "object") {
+          for (const nestedKey in nestedSections) {
+              const nestedSection = nestedSections[nestedKey];
+              const nestedTypeData = nestedSection[itemType];
+              if (nestedTypeData && nestedTypeData[itemKey]) {
+                  return nestedTypeData[itemKey];
+              }
+          }
+      }
+      
+      return null;
+  } catch (error) {
+      console.error(`❌ Error getting item data for ${categoryKey}.${subcategoryKey}.${itemKey}:`, error);
+      return null;
+  }
+}
 /**
  * Initialize the SourceLayerControl instance
  */
@@ -220,19 +234,327 @@ export function handleTemporalInteraction(
     }
   }
 }
-//static handler
-
+// Replace the loadGdacsImagesFromData function (around line 217):
 /**
- * Handle static item interactions (WMS raster layers)
+ * Load GDACS images from GeoJSON data dynamically
  */
-export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isChecked) {
+async function loadGdacsImagesFromData(map, itemKey, itemData) {
+  if (!itemKey.includes('gdacs_') || !itemData.source?.data) {
+    return;
+  }
+
+  try {
+    //console.log(`🔄 Fetching GDACS data from: ${itemData.source.data}`);
+    
+    // Fetch the GeoJSON data to extract icon URLs
+    const response = await fetch(itemData.source.data);
+    if (!response.ok) {
+      console.warn(`⚠️ Failed to fetch GDACS data: ${response.status}`);
+      return;
+    }
+    
+    const geojson = await response.json();
+    const imageUrls = new Set();
+    
+    // Extract all unique icon URLs from features
+    if (geojson.features) {
+      geojson.features.forEach(feature => {
+        if (feature.properties) {
+          const iconUrl = feature.properties.icon || 
+                         feature.properties.iconeventlink || 
+                         feature.properties.iconitemlink;
+          if (iconUrl && iconUrl.startsWith('http')) {
+            imageUrls.add(iconUrl);
+          }
+        }
+      });
+    }
+
+    //console.log(`🖼️ Found ${imageUrls.size} unique GDACS icon URLs to load`);
+
+    // Special handling for TC events - check if no images found but we have TC data
+    if (imageUrls.size === 0 && itemKey === 'gdacs_tc_events' && geojson.features?.length > 0) {
+      //console.log(`🔄 TC events found but no icon URLs, creating default TC icons`);
+      // Create default TC icon URLs for common alert levels
+      const defaultTcIcons = [
+        'https://www.gdacs.org/images/gdacs_icons/maps/Green/TC.png',
+        'https://www.gdacs.org/images/gdacs_icons/maps/Orange/TC.png',
+        'https://www.gdacs.org/images/gdacs_icons/maps/Red/TC.png'
+      ];
+      defaultTcIcons.forEach(url => imageUrls.add(url));
+    }
+
+    // Load each unique image using the full URL as the image ID
+    const loadPromises = Array.from(imageUrls).map(async (iconUrl) => {
+      try {
+        if (!map.hasImage(iconUrl)) {
+          //console.log(`🔄 Loading image: ${iconUrl}`);
+          
+          // Try to load the image
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          return new Promise((resolve) => {
+            img.onload = () => {
+              try {
+                map.addImage(iconUrl, img); // Use full URL as image ID
+                //console.log(`✅ Successfully loaded image: ${iconUrl}`);
+                resolve();
+              } catch (e) {
+                console.warn(`⚠️ Failed to add image ${iconUrl}:`, e);
+                resolve(); // Don't reject, continue with other images
+              }
+            };
+            
+            img.onerror = () => {
+              console.warn(`⚠️ Failed to load image from URL: ${iconUrl}, creating fallback`);
+              
+              try {
+                // Create fallback image if loading fails
+                const size = 24;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, size, size);
+                
+                // Color based on alert level and hazard type
+                const alertColor = iconUrl.includes('Green') ? '#00FF00' : 
+                                 iconUrl.includes('Orange') ? '#FFA500' : 
+                                 iconUrl.includes('Red') ? '#FF0000' : '#666666';
+                
+                ctx.fillStyle = alertColor;
+                ctx.beginPath();
+                ctx.arc(size/2, size/2, (size/2) - 2, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Add border
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Add hazard type text
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 8px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Extract hazard type from URL
+                let hazardType = '?';
+                if (iconUrl.includes('/TC.png')) hazardType = 'TC';
+                else if (iconUrl.includes('/FL.png')) hazardType = 'FL';
+                else if (iconUrl.includes('/EQ.png')) hazardType = 'EQ';
+                else if (iconUrl.includes('/VO.png')) hazardType = 'VO';
+                else if (iconUrl.includes('/WF.png')) hazardType = 'WF';
+                else if (iconUrl.includes('/DR.png')) hazardType = 'DR';
+                
+                ctx.fillText(hazardType, size/2, size/2);
+                
+                // Get image data and add to map
+                const imageData = ctx.getImageData(0, 0, size, size);
+                map.addImage(iconUrl, {
+                  width: size,
+                  height: size,
+                  data: imageData.data
+                });
+                
+                //console.log(`✅ Created fallback image: ${iconUrl}`);
+              } catch (e) {
+                console.warn(`⚠️ Failed to add fallback image ${iconUrl}:`, e);
+              }
+              
+              resolve();
+            };
+            
+            img.src = iconUrl;
+          });
+        } else {
+          //console.log(`ℹ️ Image already exists: ${iconUrl}`);
+          return Promise.resolve();
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error processing image ${iconUrl}:`, error);
+        return Promise.resolve();
+      }
+    });
+
+    // Wait for all images to load
+    await Promise.all(loadPromises);
+    //console.log(`✅ All GDACS images processed for ${itemKey}`);
+    
+  } catch (error) {
+    console.warn(`⚠️ Error loading GDACS images for ${itemKey}:`, error);
+  }
+}
+
+
+// Add this event listener for missing images (place this after the existing functions)
+// Replace the setupGdacsMissingImageHandler function (around line 365):
+/**
+ * Handle missing images dynamically
+ */
+function setupGdacsMissingImageHandler() {
+  // Use the correct global map reference
+  const map = window.ncop_map || window.map;
+  if (!map || typeof map.on !== 'function') {
+    console.warn('Map not ready for GDACS image handler setup');
+    return;
+  }
+
+  //console.log('🔄 Setting up GDACS missing image handler');
+
+  map.on('styleimagemissing', (e) => {
+    const imageId = e.id;
+    
+    //console.log(`⚠️ Missing image detected: ${imageId}`);
+    
+    // Handle GDACS image URLs
+    if (imageId.startsWith('https://www.gdacs.org/images/gdacs_icons/maps/')) {
+      //console.log(`🔄 Creating fallback for GDACS image: ${imageId}`);
+      
+      try {
+        // Create a properly sized canvas for Mapbox
+        const size = 24;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        
+        // Clear the canvas with transparent background
+        ctx.clearRect(0, 0, size, size);
+        
+        // Color based on alert level
+        let color = '#666666';
+        let text = '?';
+        
+        if (imageId.includes('Green')) {
+          color = '#00FF00';
+        } else if (imageId.includes('Orange')) {
+          color = '#FFA500';
+        } else if (imageId.includes('Red')) {
+          color = '#FF0000';
+        }
+        
+        // Extract hazard type from URL
+        if (imageId.includes('/TC.png')) text = 'TC';
+        else if (imageId.includes('/FL.png')) text = 'FL';
+        else if (imageId.includes('/EQ.png')) text = 'EQ';
+        else if (imageId.includes('/VO.png')) text = 'VO';
+        else if (imageId.includes('/WF.png')) text = 'WF';
+        else if (imageId.includes('/DR.png')) text = 'DR';
+        
+        // Draw the circle
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, (size/2) - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Add border
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Add text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 8px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, size/2, size/2);
+        
+        // Create ImageData object with proper format for Mapbox
+        const imageData = ctx.getImageData(0, 0, size, size);
+        
+        // Add image to map using ImageData
+        map.addImage(imageId, {
+          width: size,
+          height: size,
+          data: imageData.data
+        });
+        
+        //console.log(`✅ Created missing image fallback: ${imageId}`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to create fallback image ${imageId}:`, error);
+        
+        // Try alternative fallback method
+        try {
+          const alternativeCanvas = document.createElement('canvas');
+          alternativeCanvas.width = 20;
+          alternativeCanvas.height = 20;
+          const altCtx = alternativeCanvas.getContext('2d');
+          
+          altCtx.fillStyle = '#FF0000';
+          altCtx.fillRect(0, 0, 20, 20);
+          
+          const altImageData = altCtx.getImageData(0, 0, 20, 20);
+          map.addImage(imageId, {
+            width: 20,
+            height: 20,
+            data: altImageData.data
+          });
+          
+          //console.log(`✅ Created simple fallback for: ${imageId}`);
+        } catch (altError) {
+          console.warn(`⚠️ Even alternative fallback failed for ${imageId}:`, altError);
+        }
+      }
+    }
+  });
+  
+  //console.log('✅ GDACS missing image handler setup complete');
+}
+// Initialize GDACS image handler when map is ready
+function initGdacsImageHandler() {
+  const map = window.ncop_map || window.map;
+  if (map && typeof map.on === 'function') {
+    setupGdacsMissingImageHandler();
+    return;
+  }
+  
+  // Wait for map to be available
+  let attempts = 0;
+  const maxAttempts = 50; // 5 seconds max wait
+  const checkMapInterval = setInterval(() => {
+    attempts++;
+    const map = window.ncop_map || window.map;
+    if (map && typeof map.on === 'function') {
+      setupGdacsMissingImageHandler();
+      clearInterval(checkMapInterval);
+    } else if (attempts >= maxAttempts) {
+      console.warn('Failed to setup GDACS image handler: map not available after 5 seconds');
+      clearInterval(checkMapInterval);
+    }
+  }, 100);
+}
+
+// Initialize when the module loads
+if (typeof window !== 'undefined') {
+  // Try immediate setup
+  initGdacsImageHandler();
+  
+  // Also setup on DOMContentLoaded as fallback
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGdacsImageHandler);
+  }
+}
+
+// Export the function if needed by other modules
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { loadGdacsImagesFromData, setupGdacsMissingImageHandler };
+}
+//static handler
+/**
+ * Handle static item interactions (WMS raster layers + GDACS GeoJSON layers)
+ */
+export async function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isChecked) {
   const stateKey = initializeItemState(categoryKey, subcategoryKey, itemKey);
   const itemData = getItemData(categoryKey, subcategoryKey, itemKey, 'static');
   
   // Update state
   layerStates.set(stateKey, { active: isChecked });
   
-  // Log the interaction with full item data
+  // // Log the interaction with full item data
   // console.log('🗺️ STATIC INTERACTION:', {
   //     category: categoryKey,
   //     subcategory: subcategoryKey,
@@ -242,42 +564,131 @@ export function handleStaticInteraction(categoryKey, subcategoryKey, itemKey, is
   //     stateKey: stateKey
   // });
 
-  // Handle layer management using SourceLayerControl
-  if (sourceLayerControl && itemData) {
-    if (!itemData.source || !itemData.layers) {
-      console.error(`❌ Static layer "${itemKey}" missing source or layers configuration:`, itemData);
-      return;
-    }
+  // 🔥 IMPROVED: Better error handling for missing configurations
+  if (!sourceLayerControl) {
+    console.error(`❌ SourceLayerControl not available for "${itemKey}"`);
+    return;
+  }
 
+  if (!itemData) {
+    console.error(`❌ Item data missing for "${itemKey}". Checking nested sections...`);
+    
+    // Try to find the item in nested sections manually
     try {
-      if (isChecked) {
-        // Add layer to map
-        // console.log(`✅ Adding static layer "${itemKey}" to map`);
-        const success = sourceLayerControl.addLayerByKey(itemKey);
-        if (!success) {
-          console.error(`❌ Failed to add static layer "${itemKey}" to map`);
-        } else {
-          // console.log(`✅ Successfully added static layer "${itemKey}" to map`);
-        }
-      } else {
-        // Remove layer from map
-        // console.log(`🔴 Removing static layer "${itemKey}" from map`);
-        const success = sourceLayerControl.removeLayerByKey(itemKey);
-        if (!success) {
-          console.error(`❌ Failed to remove static layer "${itemKey}" from map`);
-        } else {
-          // console.log(`✅ Successfully removed static layer "${itemKey}" from map`);
+      const categoryData = ncop_menu_items[categoryKey];
+      const subcategoryData = categoryData[subcategoryKey];
+      const nestedSections = subcategoryData.nested || subcategoryData.subsections;
+      
+      if (nestedSections) {
+        console.debug(`🔍 Searching nested sections for "${itemKey}":`, Object.keys(nestedSections));
+        
+        for (const nestedKey in nestedSections) {
+          const nestedSection = nestedSections[nestedKey];
+          if (nestedSection.static && nestedSection.static[itemKey]) {
+            console.debug(`✅ Found "${itemKey}" in nested section: ${nestedKey}`);
+            const nestedItemData = nestedSection.static[itemKey];
+            
+            // Handle the nested item data
+            await handleNestedStaticLayer(itemKey, nestedItemData, isChecked);
+            return;
+          }
         }
       }
     } catch (error) {
-      console.error(`❌ Error handling static layer "${itemKey}":`, error);
+      console.error(`❌ Error searching nested sections:`, error);
     }
-  } else {
-    console.error(`❌ SourceLayerControl not available or itemData missing for "${itemKey}"`);
-    // console.log('sourceLayerControl:', sourceLayerControl);
-    // console.log('itemData:', itemData);
+    
+    console.error(`❌ Could not find configuration for "${itemKey}" anywhere`);
+    return;
+  }
+
+  // Handle regular static layers
+  await handleRegularStaticLayer(itemKey, itemData, isChecked);
+}
+/**
+ * Handle nested static layers (like GDACS)
+ */
+async function handleNestedStaticLayer(itemKey, itemData, isChecked) {
+  if (!itemData.source || !itemData.layers) {
+    console.error(`❌ Nested static layer "${itemKey}" missing source or layers configuration:`, itemData);
+    return;
+  }
+
+  try {
+    if (isChecked) {
+      // Load GDACS images first if this is a GDACS layer
+      if (itemKey.includes('gdacs_')) {
+        const map = window.ncop_map || window.map;
+        if (map && typeof map.addImage === 'function') {
+          await loadGdacsImagesFromData(map, itemKey, itemData);
+        }
+      }
+      
+      // console.log(`✅ Adding nested static layer "${itemKey}" to map`);
+      const success = sourceLayerControl.addLayerByKey(itemKey);
+      if (!success) {
+        console.error(`❌ Failed to add nested static layer "${itemKey}" to map`);
+      } else {
+        // console.log(`✅ Successfully added nested static layer "${itemKey}" to map`);
+      }
+    } else {
+      //console.log(`🔴 Removing nested static layer "${itemKey}" from map`);
+      const success = sourceLayerControl.removeLayerByKey(itemKey);
+      if (!success) {
+        console.error(`❌ Failed to remove nested static layer "${itemKey}" from map`);
+      } else {
+        //console.log(`✅ Successfully removed nested static layer "${itemKey}" from map`);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Error handling nested static layer "${itemKey}":`, error);
   }
 }
+
+
+/**
+ * Handle regular static layers (non-nested)
+ */
+async function handleRegularStaticLayer(itemKey, itemData, isChecked) {
+  if (!itemData.source || !itemData.layers) {
+    console.error(`❌ Static layer "${itemKey}" missing source or layers configuration:`, itemData);
+    return;
+  }
+
+  try {
+    if (isChecked) {
+      // Load GDACS images first if this is a GDACS layer
+      if (itemKey.includes('gdacs_')) {
+        const map = window.ncop_map || window.map;
+        if (map && typeof map.addImage === 'function') {
+          //console.log(`🔄 Loading GDACS images for "${itemKey}"...`);
+          await loadGdacsImagesFromData(map, itemKey, itemData);
+          //console.log(`✅ GDACS images loaded for "${itemKey}"`);
+        }
+      }
+      
+      //console.log(`✅ Adding static layer "${itemKey}" to map`);
+      const success = sourceLayerControl.addLayerByKey(itemKey);
+      if (!success) {
+        console.error(`❌ Failed to add static layer "${itemKey}" to map`);
+      } else {
+        //console.log(`✅ Successfully added static layer "${itemKey}" to map`);
+      }
+    } else {
+      //console.log(`🔴 Removing static layer "${itemKey}" from map`);
+      const success = sourceLayerControl.removeLayerByKey(itemKey);
+      if (!success) {
+        console.error(`❌ Failed to remove static layer "${itemKey}" from map`);
+      } else {
+        //console.log(`✅ Successfully removed static layer "${itemKey}" from map`);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Error handling static layer "${itemKey}":`, error);
+  }
+}
+
+
 /**
  * DEW Exposure Dropdown Checkbox Handler
  * Handles checkbox interactions for exposure items in the dropdown

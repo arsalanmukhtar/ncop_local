@@ -9,9 +9,12 @@ from .views import (
     StoriesView,
     StoryDetailView,
     WeatherDataPMDFFDView,
-    GdeltNewsEventsApi,
+    GdacsEventsGeojsonApi,
+    GdacsEventDetailsApi,
     WAQIgeojson,
     SlickPlusGeojsonApi,
+    GdeltNewsEventsApi,
+
     
 )
 
@@ -29,5 +32,8 @@ urlpatterns = [
     path("get-weather-pmdffd-data/", WeatherDataPMDFFDView.as_view(), name="get-weather-pmdffd-data",),
     path("get-waqi-global-airquality/", WAQIgeojson.as_view(), name="waqi_global_aqi"),
     path("api/slick-plus/", SlickPlusGeojsonApi.as_view(), name="slick_plus_geojson"),
+    path("get-gdacs-events/<str:event_slug>/",GdacsEventsGeojsonApi.as_view(),name="get-gdacs-events",),
+    path("get-gdacs-event-details/<str:event_type>/<int:event_id>/",GdacsEventDetailsApi.as_view(),name="gdacs-event-details",),
+    path("get-gdacs-event-details/<str:event_type>/<int:event_id>/<int:episode_id>/",GdacsEventDetailsApi.as_view(),name="gdacs-event-details-ep",),
     path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
 ]
