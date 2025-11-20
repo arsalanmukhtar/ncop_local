@@ -99,6 +99,491 @@
     --shadow-glow-red: 0 0 12px 2px var(--ndma-red-glow);
 }
 
+/* ===========================
+   NIGHT MODE THEME TOGGLE
+=========================== */
+
+/* Night mode root variables */
+[data-theme="night"] {
+    /* ===========================
+       NIGHT MODE COLORS
+    =========================== */
+    /* Glass-like white/gray backgrounds */
+    --primary-bg: rgba(255, 255, 255, 0.15);
+    --secondary-bg: rgba(255, 255, 255, 0.25);
+    --tertiary-bg: rgba(255, 255, 255, 0.35);
+    --accent-bg-green: rgba(255, 255, 255, 0.3);
+    --accent-bg-blue: rgba(255, 255, 255, 0.3);
+    --accent-bg-red: rgba(255, 255, 255, 0.3);
+    --overlay-bg: rgba(255, 255, 255, 0.1);
+    --frost-bg: rgba(255, 255, 255, 0.2);
+
+    /* Black text colors */
+    --text-primary: rgba(0, 0, 0, 0.95);
+    --text-secondary: rgba(0, 0, 0, 0.75);
+    --text-muted: rgba(0, 0, 0, 0.55);
+    --text-inverse: rgba(255, 255, 255, 0.85);
+    --text-accent-green: #1a5e1a;
+    --text-accent-blue: #1a4a7a;
+    --text-accent-red: #7a1a1a;
+
+    /* White/gray glass borders */
+    --border-dark: rgba(255, 255, 255, 0.3);
+    --border-light: rgba(255, 255, 255, 0.5);
+    --border-strong: rgba(255, 255, 255, 0.7);
+    --border-green: rgba(255, 255, 255, 0.4);
+    --border-blue: rgba(255, 255, 255, 0.4);
+    --border-red: rgba(255, 255, 255, 0.4);
+
+    /* Button states with white glass */
+    --btn-green-bg: rgba(255, 255, 255, 0.3);
+    --btn-green-hover: rgba(255, 255, 255, 0.4);
+    --btn-blue-bg: rgba(255, 255, 255, 0.3);
+    --btn-blue-hover: rgba(255, 255, 255, 0.4);
+    --btn-red-bg: rgba(255, 255, 255, 0.3);
+    --btn-red-hover: rgba(255, 255, 255, 0.4);
+
+    /* Interaction states */
+    --hover-bg: rgba(255, 255, 255, 0.15);
+    --active-bg: rgba(255, 255, 255, 0.25);
+    --focus-ring: rgba(255, 255, 255, 0.5);
+
+    /* Glass highlights */
+    --glass-highlight: rgba(255, 255, 255, 0.45);
+}
+
+/* ===========================
+   NIGHT MODE SPECIFIC OVERRIDES
+=========================== */
+
+[data-theme="night"] .sidebar-title,
+[data-theme="night"] .accordion-title,
+[data-theme="night"] .ncop-item-label,
+[data-theme="night"] .custom-nav-btn,
+[data-theme="night"] .custom-user-btn,
+[data-theme="night"] .custom-menu-btn,
+[data-theme="night"] .custom-basemap-btn,
+[data-theme="night"] .custom-layer-btn,
+[data-theme="night"] .basemap-name,
+[data-theme="night"] .layer-name,
+[data-theme="night"] .layer-info-title,
+[data-theme="night"] .layer-info-label,
+[data-theme="night"] .projection-name,
+[data-theme="night"] .ncop-subcategory-header span,
+[data-theme="night"] .ncop-nested-header span,
+[data-theme="night"] .news-title {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+[data-theme="night"] .sidebar-search-container .search-input,
+[data-theme="night"] .layer-info-subtitle,
+[data-theme="night"] .layer-order-subtitle,
+[data-theme="night"] .projection-desc,
+[data-theme="night"] .news-time {
+    color: var(--text-secondary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .layer-info-details,
+[data-theme="night"] .no-layers-message,
+[data-theme="night"] .accordion-body,
+[data-theme="night"] .ncop-dropdown-label {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+/* ===========================
+   NIGHT MODE GLASS EFFECTS
+=========================== */
+
+[data-theme="night"] .ncop-container,
+[data-theme="night"] .sidebar-panel,
+[data-theme="night"] .basemap-panel,
+[data-theme="night"] .layer-order-panel,
+[data-theme="night"] .layer-info-panel,
+[data-theme="night"] .projection-panel,
+[data-theme="night"] #temp-slider1,
+[data-theme="night"] .news-modal {
+    background: var(--primary-bg) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-color: var(--border-light) !important;
+}
+
+[data-theme="night"] .accordion-header,
+[data-theme="night"] .ncop-subcategory-header,
+[data-theme="night"] .ncop-nested-header,
+[data-theme="night"] .layer-item,
+[data-theme="night"] .layer-info-item,
+[data-theme="night"] .basemap-item,
+[data-theme="night"] .projection-item,
+[data-theme="night"] .ncop-dropdown-wrapper {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(15px) saturate(160%) !important;
+    border-color: var(--border-dark) !important;
+}
+
+[data-theme="night"] .custom-nav-btn,
+[data-theme="night"] .custom-user-btn,
+[data-theme="night"] .custom-menu-btn,
+[data-theme="night"] .custom-basemap-btn,
+[data-theme="night"] .custom-layer-btn,
+[data-theme="night"] .dragresizecontrol-btn,
+[data-theme="night"] #tempslider-controls button,
+[data-theme="night"] .legend-toggle-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) !important;
+    border-color: var(--border-dark) !important;
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+/* ===========================
+   NIGHT MODE HOVER STATES
+=========================== */
+
+[data-theme="night"] .accordion-header:hover,
+[data-theme="night"] .ncop-subcategory-header:hover,
+[data-theme="night"] .ncop-nested-header:hover,
+[data-theme="night"] .basemap-item:hover,
+[data-theme="night"] .projection-item:hover,
+[data-theme="night"] .layer-item:hover {
+    background: rgba(255, 255, 255, 0.4) !important;
+    border-color: var(--border-light) !important;
+}
+
+[data-theme="night"] .custom-nav-btn:hover,
+[data-theme="night"] .custom-user-btn:hover,
+[data-theme="night"] .custom-menu-btn:hover,
+[data-theme="night"] .custom-basemap-btn:hover,
+[data-theme="night"] .custom-layer-btn:hover,
+[data-theme="night"] .legend-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ===========================
+   NIGHT MODE ACTIVE STATES
+=========================== */
+
+[data-theme="night"] .accordion-header.active,
+[data-theme="night"] .ncop-subcategory-header.expanded,
+[data-theme="night"] .ncop-nested-header.expanded,
+[data-theme="night"] .basemap-item.active,
+[data-theme="night"] .projection-item.active {
+    background: rgba(255, 255, 255, 0.45) !important;
+    border-color: var(--border-strong) !important;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ===========================
+   NIGHT MODE SEARCH & INPUTS
+=========================== */
+
+[data-theme="night"] .search-input {
+    background: transparent !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .search-input::placeholder {
+    color: var(--text-secondary) !important;
+    font-weight: 500 !important;
+}
+
+[data-theme="night"] .ncop-dropdown {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--border-dark) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+/* ===========================
+   NIGHT MODE TOGGLES & CONTROLS
+=========================== */
+
+[data-theme="night"] .ncop-toggle-slider {
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-color: var(--border-dark) !important;
+}
+
+[data-theme="night"] .ncop-toggle input:checked+.ncop-toggle-slider {
+    background: rgba(255, 255, 255, 0.6) !important;
+}
+
+[data-theme="night"] .toggle-switch {
+    background: var(--tertiary-bg) !important;
+}
+
+[data-theme="night"] .toggle-switch.active {
+    background: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ===========================
+   NIGHT MODE ICONS & SYMBOLS
+=========================== */
+
+[data-theme="night"] .accordion-icon,
+[data-theme="night"] .accordion-chevron,
+[data-theme="night"] .subcategory-chevron,
+[data-theme="night"] .nested-chevron,
+[data-theme="night"] .search-icon,
+[data-theme="night"] .clear-icon {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+/* ===========================
+   NIGHT MODE SPECIAL ELEMENTS
+=========================== */
+
+[data-theme="night"] .no-results-message {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--border-dark) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .layer-attribute-popup {
+    background: var(--primary-bg) !important;
+    border-color: var(--border-light) !important;
+    backdrop-filter: blur(25px) saturate(200%) !important;
+}
+
+[data-theme="night"] .layer-attribute-popup .popup-label {
+    color: var(--text-primary) !important;
+    font-weight: 800 !important;
+    text-shadow: none !important;
+}
+
+[data-theme="night"] .attr-key {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+[data-theme="night"] .attr-value {
+    color: var(--text-secondary) !important;
+    font-weight: 600 !important;
+}
+
+/* ===========================
+   NIGHT MODE TIME SLIDER
+=========================== */
+
+[data-theme="night"] #opacityControlPopover {
+    background: var(--secondary-bg) !important;
+    border-color: var(--border-dark) !important;
+    backdrop-filter: blur(15px) !important;
+}
+
+[data-theme="night"] .opacity-popover-label,
+[data-theme="night"] .opacity-popover-value {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+[data-theme="night"] .year-labels1 span,
+[data-theme="night"] .legend-container1 p {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+/* ===========================
+   NIGHT MODE DATA TABLES
+=========================== */
+
+[data-theme="night"] .ncop-data-table {
+    background: var(--secondary-bg) !important;
+}
+
+[data-theme="night"] .ncop-data-table th {
+    background: rgba(255, 255, 255, 0.4) !important;
+    color: var(--text-primary) !important;
+    font-weight: 800 !important;
+}
+
+[data-theme="night"] .ncop-data-table td {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .ncop-data-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ===========================
+   NIGHT MODE NEWS SECTION
+=========================== */
+
+[data-theme="night"] .news-box {
+    background: rgba(255, 255, 255, 0.25) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .news-box:hover {
+    background: rgba(255, 255, 255, 0.4) !important;
+}
+
+[data-theme="night"] .news-box.selected {
+    background: rgba(255, 255, 255, 0.6) !important;
+    color: var(--text-primary) !important;
+    font-weight: 800 !important;
+}
+
+[data-theme="night"] .toggle-btn {
+    background: rgba(255, 255, 255, 0.3) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+[data-theme="night"] .toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.45) !important;
+}
+
+[data-theme="night"] .toggle-btn.active {
+    background: rgba(255, 255, 255, 0.7) !important;
+    color: var(--text-primary) !important;
+    font-weight: 800 !important;
+}
+
+/* ===========================
+   NIGHT MODE TRANSITION
+=========================== */
+
+[data-theme="night"] * {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
+}
+
+/* ===========================
+   THEME TOGGLE BUTTON (Add to controls)
+=========================== */
+
+.theme-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--primary-bg);
+}
+
+.theme-toggle-btn i {
+    width: 16px;
+    height: 16px;
+}
+
+[data-theme="night"] .theme-toggle-btn {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+/* Add this CSS after the existing .theme-toggle-btn styles (around line 487) */
+
+/* ===========================
+   THEME TOGGLE IN NCOP CONTAINER
+=========================== */
+
+.theme-toggle-wrapper {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1000;
+}
+
+.theme-toggle-wrapper .theme-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+    position: relative;
+    top: 74px;
+    left: 5px;
+}
+
+.theme-toggle-wrapper .theme-toggle-btn:hover {
+    background: var(--primary-bg);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.theme-toggle-wrapper .theme-toggle-btn:active {
+    transform: scale(0.95);
+}
+
+.theme-toggle-wrapper .theme-toggle-btn .theme-icon {
+    width: 16px;
+    height: 16px;
+    transition: all 0.3s ease;
+}
+
+/* Day mode specific styling */
+.theme-toggle-wrapper .theme-toggle-btn:not([data-theme="night"]) {
+    color: #fbbf24;
+    /* Golden sun color */
+}
+
+.theme-toggle-wrapper .theme-toggle-btn:not([data-theme="night"]):hover {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.3);
+}
+
+/* Night mode overrides for the toggle button */
+[data-theme="night"] .theme-toggle-wrapper .theme-toggle-btn {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+    background: var(--tertiary-bg) !important;
+}
+
+[data-theme="night"] .theme-toggle-wrapper .theme-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.5) !important;
+    transform: scale(1.05);
+}
+
+/* Icon rotation animation */
+.theme-toggle-wrapper .theme-toggle-btn .theme-icon {
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.theme-toggle-wrapper .theme-toggle-btn:hover .theme-icon {
+    transform: rotate(15deg);
+}
+
+/* Smooth theme transition */
+html {
+    transition: background-color 0.3s ease;
+}
+
+/* ===========================
+   END THEME TOGGLE STYLES
+=========================== */
+
 /* Universal Scrollbar Styling */
 * {
     scrollbar-width: none;
