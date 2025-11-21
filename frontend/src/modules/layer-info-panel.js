@@ -7,6 +7,7 @@ export class LayerInfoPanel {
   #sourceLayerControl;
   #isVisible = false;
   #legendsVisible = new Map(); // Track which legends are visible
+  #temporalObserver = null; // MutationObserver for temporal items
 
   constructor(map, sourceLayerControl) {
     this.#map = map;
@@ -14,6 +15,7 @@ export class LayerInfoPanel {
     this.render();
     this.addEventListeners();
     this.setupLayerChangeListener();
+    this.setupTemporalLayerMonitoring(); // NEW: Monitor temporal layer changes
   }
 
   render() {
@@ -60,7 +62,7 @@ export class LayerInfoPanel {
       this.hidePanel();
     });
 
-    // 🔹 NEW: When temporal items are clicked in the sidebar, refresh the info list
+    // Keep existing click listener for backward compatibility
     document.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -71,12 +73,64 @@ export class LayerInfoPanel {
       if (!temporalImage) return;
       if (!this.#isVisible) return;
 
-      // Let sidebar-menu.js finish toggling .selected, then update
+      // Update after a short delay to let the DOM update
       setTimeout(() => {
         if (!window.isTemporalAnimating) {
           this.updateLayerList();
         }
-      }, 120);
+      }, 150);
+    });
+  }
+
+  // NEW: Setup MutationObserver to monitor temporal layer state changes
+  setupTemporalLayerMonitoring() {
+    // Disconnect existing observer if any
+    if (this.#temporalObserver) {
+      this.#temporalObserver.disconnect();
+    }
+
+    // Create a new MutationObserver to watch for class changes on temporal items
+    this.#temporalObserver = new MutationObserver((mutations) => {
+      // Only process if panel is visible and not animating
+      if (!this.#isVisible || window.isTemporalAnimating) return;
+
+      // Check if any mutation affected the 'selected' class on temporal items
+      let shouldUpdate = false;
+      for (const mutation of mutations) {
+        if (
+          mutation.type === "attributes" &&
+          mutation.attributeName === "class"
+        ) {
+          const target = mutation.target;
+          if (
+            target instanceof Element &&
+            (target.classList.contains("ncop-item-image") ||
+              target.closest(".ncop-item-temporal"))
+          ) {
+            shouldUpdate = true;
+            break;
+          }
+        }
+      }
+
+      if (shouldUpdate) {
+        // Debounce the update to avoid multiple rapid calls
+        if (this._updateTimeout) {
+          clearTimeout(this._updateTimeout);
+        }
+        this._updateTimeout = setTimeout(() => {
+          this.updateLayerList();
+        }, 100);
+      }
+    });
+
+    // Start observing the sidebar for changes
+    const observeTarget =
+      document.querySelector(".sidebar-panel") || document.body;
+    this.#temporalObserver.observe(observeTarget, {
+      attributes: true,
+      attributeFilter: ["class"],
+      subtree: true,
     });
   }
 
@@ -129,7 +183,7 @@ export class LayerInfoPanel {
     this.updateLayerList();
   }
 
-  // 🔹 PRIVATE: find temporal config in ncop_menu_items based on label
+  // PRIVATE: find temporal config in ncop_menu_items based on label
   #findTemporalConfigByLabel(label) {
     if (!label) return null;
     const trimmed = label.trim();
@@ -162,7 +216,7 @@ export class LayerInfoPanel {
     return null;
   }
 
-  // 🔹 PRIVATE: read active temporal items from sidebar DOM (.selected state)
+  // PRIVATE: read active temporal items from sidebar DOM (.selected state)
   #getActiveTemporalConfigsFromDOM() {
     const results = [];
     const seen = new Set();
@@ -196,7 +250,7 @@ export class LayerInfoPanel {
     // --- 1) Standard active layers from SourceLayerControl (toggle/static etc.) ---
     const activeLayerKeys = this.#sourceLayerControl.getActiveLayerKeys();
 
-    // --- 2) NEW: Active temporal layers based on sidebar selection ---
+    // --- 2) Active temporal layers based on sidebar selection ---
     const activeTemporalInfos = this.#getActiveTemporalConfigsFromDOM();
 
     if (activeLayerKeys.length === 0 && activeTemporalInfos.length === 0) {
@@ -277,8 +331,8 @@ export class LayerInfoPanel {
       }
 
       htmlItems.push(`
-                <div class="layer-info-item" data-layer-key="${layerKey}">
-                    <div class="layer-info-label">${label}</div>
+                <div class="layer-info-item temporal-layer" data-layer-key="${layerKey}">
+                    <div class="layer-info-label">${label} <span class="temporal-indicator">⏱</span></div>
                     <div class="layer-info-details">${info}</div>
                     ${legendHtml}
                 </div>
@@ -314,6 +368,17 @@ export class LayerInfoPanel {
     } else {
       // Remove class if no legends are visible
       infoPanel.classList.remove("has-legend");
+    }
+  }
+
+  // NEW: Cleanup method to disconnect observer
+  destroy() {
+    if (this.#temporalObserver) {
+      this.#temporalObserver.disconnect();
+      this.#temporalObserver = null;
+    }
+    if (this._updateTimeout) {
+      clearTimeout(this._updateTimeout);
     }
   }
 }

@@ -100,489 +100,874 @@
 }
 
 /* ===========================
-   NIGHT MODE THEME TOGGLE
+   NIGHT MODE THEME - OPTIMIZED WITH NESTED CSS
 =========================== */
 
-/* Night mode root variables */
 [data-theme="night"] {
     /* ===========================
-       NIGHT MODE COLORS
+       CSS VARIABLES - DARKER GRAY GLASSMORPHISM
     =========================== */
-    /* Glass-like white/gray backgrounds */
-    --primary-bg: rgba(255, 255, 255, 0.15);
-    --secondary-bg: rgba(255, 255, 255, 0.25);
-    --tertiary-bg: rgba(255, 255, 255, 0.35);
-    --accent-bg-green: rgba(255, 255, 255, 0.3);
-    --accent-bg-blue: rgba(255, 255, 255, 0.3);
-    --accent-bg-red: rgba(255, 255, 255, 0.3);
-    --overlay-bg: rgba(255, 255, 255, 0.1);
-    --frost-bg: rgba(255, 255, 255, 0.2);
+    /* Backgrounds */
+    --primary-bg: rgba(190, 190, 190, 0.88);
+    --secondary-bg: rgba(180, 180, 180, 0.85);
+    --tertiary-bg: rgba(200, 200, 200, 0.90);
+    --accent-bg-green: rgba(190, 210, 190, 0.85);
+    --accent-bg-blue: rgba(190, 205, 220, 0.85);
+    --accent-bg-red: rgba(220, 190, 190, 0.85);
+    --overlay-bg: rgba(195, 195, 195, 0.75);
+    --frost-bg: rgba(205, 205, 205, 0.80);
 
-    /* Black text colors */
+    /* Text Colors */
     --text-primary: rgba(0, 0, 0, 0.95);
-    --text-secondary: rgba(0, 0, 0, 0.75);
-    --text-muted: rgba(0, 0, 0, 0.55);
-    --text-inverse: rgba(255, 255, 255, 0.85);
-    --text-accent-green: #1a5e1a;
-    --text-accent-blue: #1a4a7a;
-    --text-accent-red: #7a1a1a;
+    --text-secondary: rgba(20, 20, 20, 0.90);
+    --text-muted: rgba(40, 40, 40, 0.85);
+    --text-inverse: rgba(255, 255, 255, 0.95);
+    --text-accent-green: #0a5f0a;
+    --text-accent-blue: #0d4a7a;
+    --text-accent-red: #a00000;
 
-    /* White/gray glass borders */
-    --border-dark: rgba(255, 255, 255, 0.3);
-    --border-light: rgba(255, 255, 255, 0.5);
-    --border-strong: rgba(255, 255, 255, 0.7);
-    --border-green: rgba(255, 255, 255, 0.4);
-    --border-blue: rgba(255, 255, 255, 0.4);
-    --border-red: rgba(255, 255, 255, 0.4);
+    /* Borders */
+    --border-dark: rgba(100, 100, 100, 0.90);
+    --border-light: rgba(80, 80, 80, 0.92);
+    --border-strong: rgba(60, 60, 60, 0.95);
+    --border-green: rgba(40, 150, 40, 0.60);
+    --border-blue: rgba(30, 120, 200, 0.60);
+    --border-red: rgba(200, 40, 40, 0.60);
 
-    /* Button states with white glass */
-    --btn-green-bg: rgba(255, 255, 255, 0.3);
-    --btn-green-hover: rgba(255, 255, 255, 0.4);
-    --btn-blue-bg: rgba(255, 255, 255, 0.3);
-    --btn-blue-hover: rgba(255, 255, 255, 0.4);
-    --btn-red-bg: rgba(255, 255, 255, 0.3);
-    --btn-red-hover: rgba(255, 255, 255, 0.4);
+    /* Button States */
+    --btn-green-bg: rgba(195, 215, 195, 0.90);
+    --btn-green-hover: rgba(185, 210, 185, 0.93);
+    --btn-blue-bg: rgba(195, 205, 220, 0.90);
+    --btn-blue-hover: rgba(185, 200, 215, 0.93);
+    --btn-red-bg: rgba(220, 195, 195, 0.90);
+    --btn-red-hover: rgba(215, 185, 185, 0.93);
 
-    /* Interaction states */
-    --hover-bg: rgba(255, 255, 255, 0.15);
-    --active-bg: rgba(255, 255, 255, 0.25);
-    --focus-ring: rgba(255, 255, 255, 0.5);
+    /* Interaction States */
+    --hover-bg: rgba(170, 170, 170, 0.88);
+    --active-bg: rgba(155, 155, 155, 0.92);
+    --focus-ring: rgba(70, 70, 70, 0.75);
+    --glass-highlight: rgba(210, 210, 210, 0.92);
 
-    /* Glass highlights */
-    --glass-highlight: rgba(255, 255, 255, 0.45);
+
+    /* ===========================
+           STORY MODAL
+        =========================== */
+        #story-modal {
+            background: var(--primary-bg) !important;
+            border: 2px solid var(--border-light) !important;
+            backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25),
+                0 4px 12px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+            color: var(--text-primary) !important;
+    
+            /* Story Modal Header */
+            >div:first-child {
+                border-bottom: 1.5px solid var(--border-dark) !important;
+                background: var(--secondary-bg) !important;
+                backdrop-filter: blur(15px) !important;
+    
+                >div {
+                    >div:first-child {
+                        font-weight: 900 !important;
+                        color: var(--text-primary) !important;
+                        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+                    }
+    
+                    >div:last-child {
+                        color: var(--text-secondary) !important;
+                        font-weight: 700 !important;
+                        opacity: 1 !important;
+                    }
+                }
+            }
+    
+            /* Story Root Container */
+            #story-root {
+                background: transparent !important;
+    
+                /* Story Select Dropdown */
+                #storySelect {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 800 !important;
+                    padding: 8px 10px !important;
+                    border-radius: 6px !important;
+    
+                    option {
+                        background: var(--secondary-bg) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                    }
+    
+                    &:focus {
+                        outline: 2px solid var(--focus-ring) !important;
+                        outline-offset: 1px !important;
+                    }
+    
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        border-color: var(--border-strong) !important;
+                    }
+                }
+    
+                /* Story Edit Button */
+                #storyEdit {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 900 !important;
+                    backdrop-filter: blur(12px) saturate(105%) !important;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+                        0 1px 2px rgba(0, 0, 0, 0.10),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        transform: translateY(-1px) !important;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                            0 2px 4px rgba(0, 0, 0, 0.12),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                    }
+    
+                    svg {
+                        color: var(--text-primary) !important;
+                        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+                    }
+                }
+    
+                /* Story Meta */
+                #storyMeta {
+                    color: var(--text-secondary) !important;
+                    font-weight: 700 !important;
+                    opacity: 1 !important;
+                }
+    
+                /* Story Chapters Container */
+                #storyChapters {
+    
+                    /* Scrollbar styling */
+                    &::-webkit-scrollbar {
+                        width: 6px;
+                    }
+    
+                    &::-webkit-scrollbar-track {
+                        background: var(--tertiary-bg);
+                        border-radius: 3px;
+                    }
+    
+                    &::-webkit-scrollbar-thumb {
+                        background: var(--border-dark);
+                        border-radius: 3px;
+    
+                        &:hover {
+                            background: var(--border-strong);
+                        }
+                    }
+    
+                    /* Firefox scrollbar */
+                    scrollbar-width: thin;
+                    scrollbar-color: var(--border-dark) var(--tertiary-bg);
+    
+                    /* Empty state / placeholder */
+                    >div {
+                        border: 2px dashed var(--border-dark) !important;
+                        background: var(--secondary-bg) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                        opacity: 1 !important;
+                        backdrop-filter: blur(10px) !important;
+                    }
+    
+                    /* Chapter items (when populated) */
+                    .chapter-item {
+                        background: var(--secondary-bg) !important;
+                        border: 1.5px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 800 !important;
+                        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
+                        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+                            0 1px 3px rgba(0, 0, 0, 0.10),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+    
+                        &:hover {
+                            background: var(--glass-highlight) !important;
+                            border-color: var(--border-strong) !important;
+                            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.20),
+                                0 2px 6px rgba(0, 0, 0, 0.12),
+                                inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+                        }
+    
+                        &.active,
+                        &.selected {
+                            background: rgba(170, 195, 215, 0.90) !important;
+                            border: 2px solid rgba(30, 120, 200, 0.75) !important;
+                            box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
+                                0 4px 12px rgba(0, 0, 0, 0.15),
+                                inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                        }
+                    }
+                }
+    
+                /* Story Editor */
+                #storyEditor {
+                    border-top: 1.5px solid var(--border-dark) !important;
+                    background: var(--secondary-bg) !important;
+                    backdrop-filter: blur(15px) !important;
+                    padding: 12px !important;
+                    border-radius: 6px !important;
+                    margin-top: 12px !important;
+    
+                    /* Editor text elements */
+                    * {
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                    }
+    
+                    /* Editor inputs */
+                    input,
+                    textarea,
+                    select {
+                        background: var(--tertiary-bg) !important;
+                        border: 2px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                        border-radius: 6px !important;
+                        padding: 6px 8px !important;
+    
+                        &:focus {
+                            outline: 2px solid var(--focus-ring) !important;
+                            outline-offset: 1px !important;
+                            border-color: var(--border-strong) !important;
+                        }
+    
+                        &::placeholder {
+                            color: var(--text-secondary) !important;
+                            font-weight: 600 !important;
+                        }
+                    }
+    
+                    /* Editor buttons */
+                    button {
+                        background: var(--tertiary-bg) !important;
+                        border: 2px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 800 !important;
+                        padding: 6px 12px !important;
+                        border-radius: 6px !important;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+    
+                        &:hover {
+                            background: var(--glass-highlight) !important;
+                            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
+                            transform: translateY(-1px) !important;
+                        }
+    
+                        &:active {
+                            transform: translateY(0) !important;
+                        }
+    
+                        &.primary,
+                        &.save {
+                            background: rgba(40, 150, 40, 0.90) !important;
+                            color: var(--text-inverse) !important;
+                            border-color: rgba(30, 130, 30, 0.75) !important;
+    
+                            &:hover {
+                                background: rgba(35, 140, 35, 0.93) !important;
+                            }
+                        }
+    
+                        &.danger,
+                        &.delete {
+                            background: rgba(200, 40, 40, 0.90) !important;
+                            color: var(--text-inverse) !important;
+                            border-color: rgba(180, 30, 30, 0.75) !important;
+    
+                            &:hover {
+                                background: rgba(190, 35, 35, 0.93) !important;
+                            }
+                        }
+                    }
+    
+                    /* Editor labels */
+                    label {
+                        color: var(--text-primary) !important;
+                        font-weight: 900 !important;
+                    }
+    
+                    /* Editor descriptions/hints */
+                    .hint,
+                    .description,
+                    small {
+                        color: var(--text-secondary) !important;
+                        font-weight: 600 !important;
+                    }
+                }
+            }
+    
+            /* Close Button (custom-nav-btn) */
+            #storyCloseBtn {
+                background: var(--tertiary-bg) !important;
+                border: 2px solid var(--border-dark) !important;
+                color: var(--text-primary) !important;
+                font-weight: 900 !important;
+    
+                svg {
+                    color: var(--text-primary) !important;
+                    filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+                }
+    
+                &:hover {
+                    background: rgba(220, 190, 190, 0.90) !important;
+                    border-color: rgba(200, 40, 40, 0.60) !important;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                        0 2px 4px rgba(0, 0, 0, 0.12) !important;
+                }
+            }
+        }
+
+    /* ===========================
+       GLOBAL TRANSITIONS
+    =========================== */
+    * {
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+            box-shadow 0.3s ease, transform 0.2s ease !important;
+    }
+
+    /* ===========================
+       PRIMARY TEXT STYLES
+    =========================== */
+    .sidebar-title,
+    .accordion-title,
+    .ncop-item-label,
+    .custom-nav-btn,
+    .custom-user-btn,
+    .custom-menu-btn,
+    .custom-basemap-btn,
+    .custom-layer-btn,
+    .basemap-name,
+    .layer-name,
+    .layer-info-title,
+    .layer-info-label,
+    .projection-name,
+    .ncop-subcategory-header span,
+    .ncop-nested-header span,
+    .news-title {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+    }
+
+    /* Secondary Text */
+    .sidebar-search-container .search-input,
+    .layer-info-subtitle,
+    .layer-order-subtitle,
+    .projection-desc,
+    .news-time {
+        color: var(--text-secondary) !important;
+        font-weight: 800 !important;
+    }
+
+    /* Tertiary Text */
+    .layer-info-details,
+    .no-layers-message,
+    .accordion-body,
+    .ncop-dropdown-label {
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+    }
+
+    /* ===========================
+       GLASS PANELS - PRIMARY CONTAINERS
+    =========================== */
+    .ncop-container,
+    .sidebar-panel,
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel,
+    .projection-panel,
+    #temp-slider1,
+    .news-modal {
+        background: var(--primary-bg) !important;
+        backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        border: 2px solid var(--border-light) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.20),
+            0 2px 8px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       GLASS PANELS - SECONDARY ELEMENTS
+    =========================== */
+    .accordion-header,
+    .ncop-subcategory-header,
+    .ncop-nested-header,
+    .layer-item,
+    .layer-info-item,
+    .basemap-item,
+    .projection-item,
+    .ncop-dropdown-wrapper {
+        background: var(--secondary-bg) !important;
+        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
+        border: 1.5px solid var(--border-dark) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+            0 1px 3px rgba(0, 0, 0, 0.10),
+            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+
+        &:hover {
+            background: var(--glass-highlight) !important;
+        }
+    }
+
+    /* ===========================
+       BUTTONS - CONTROL ELEMENTS
+    =========================== */
+    .custom-nav-btn,
+    .custom-user-btn,
+    .custom-menu-btn,
+    .custom-basemap-btn,
+    .custom-layer-btn,
+    .dragresizecontrol-btn,
+    #tempslider-controls button,
+    .legend-toggle-btn {
+        background: var(--tertiary-bg) !important;
+        backdrop-filter: blur(12px) saturate(105%) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+            0 1px 2px rgba(0, 0, 0, 0.10),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       ACTIVE STATES
+    =========================== */
+    .accordion-header.active,
+    .ncop-subcategory-header.expanded,
+    .ncop-nested-header.expanded,
+    .basemap-item.active,
+    .projection-item.active {
+        background: rgba(170, 195, 215, 0.90) !important;
+        border: 2px solid rgba(30, 120, 200, 0.75) !important;
+        box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+    }
+
+    /* ===========================
+       INPUTS & SEARCH
+    =========================== */
+    .search-input {
+        background: rgba(205, 205, 205, 0.88) !important;
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+        border: 1.5px solid var(--border-dark) !important;
+        border-radius: 6px !important;
+
+        &::placeholder {
+            color: var(--text-secondary) !important;
+            font-weight: 600 !important;
+        }
+    }
+
+    .ncop-dropdown {
+        background: var(--tertiary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+    }
+
+    /* ===========================
+       TOGGLES & SWITCHES
+    =========================== */
+    .ncop-toggle-slider {
+        background: rgba(175, 175, 175, 0.88) !important;
+        border: 2px solid var(--border-dark) !important;
+    }
+
+    .ncop-toggle input:checked+.ncop-toggle-slider {
+        background: rgba(40, 150, 40, 0.88) !important;
+        border-color: rgba(30, 130, 30, 0.75) !important;
+    }
+
+    .toggle-switch {
+        background: var(--tertiary-bg) !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &.active {
+            background: rgba(30, 120, 200, 0.88) !important;
+        }
+    }
+
+    /* ===========================
+       ICONS & SYMBOLS
+    =========================== */
+    .accordion-icon,
+    .accordion-chevron,
+    .subcategory-chevron,
+    .nested-chevron,
+    .search-icon,
+    .clear-icon {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+    }
+
+    /* ===========================
+       SPECIAL ELEMENTS
+    =========================== */
+    .no-results-message {
+        background: var(--tertiary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .layer-attribute-popup {
+        background: var(--primary-bg) !important;
+        border: 2px solid var(--border-strong) !important;
+        backdrop-filter: blur(25px) saturate(110%) brightness(1.0) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+
+        .popup-label {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+        }
+
+        .attr-key {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .attr-value {
+            color: var(--text-secondary) !important;
+            font-weight: 800 !important;
+        }
+    }
+
+    /* ===========================
+       TIME SLIDER
+    =========================== */
+    #opacityControlPopover {
+        background: var(--secondary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        backdrop-filter: blur(18px) saturate(105%) !important;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    .opacity-popover-label,
+    .opacity-popover-value,
+    .year-labels1 span,
+    .legend-container1 p {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       DATA TABLES
+    =========================== */
+    .ncop-data-table {
+        background: var(--secondary-bg) !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        th {
+            background: rgba(185, 185, 185, 0.93) !important;
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            border-bottom: 2px solid var(--border-strong) !important;
+        }
+
+        td {
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+        }
+
+        tbody tr:hover {
+            background: rgba(175, 175, 175, 0.88) !important;
+        }
+    }
+
+    /* ===========================
+       NEWS SECTION
+    =========================== */
+    .news-box {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        &.selected {
+            background: rgba(170, 195, 215, 0.92) !important;
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 120, 200, 0.75) !important;
+        }
+    }
+
+    .toggle-btn {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        &.active {
+            background: rgba(40, 150, 40, 0.90) !important;
+            color: var(--text-inverse) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 130, 30, 0.75) !important;
+        }
+    }
+
+    /* ===========================
+       NEWS TOGGLE BUTTONS & ICONS
+    =========================== */
+    #toggle-social-btn,
+    #fetch-regular-btn {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
+            transform: translateY(-1px);
+
+            img {
+                opacity: 1 !important;
+                filter: brightness(0) saturate(100%) invert(0%) !important;
+                transform: scale(1.05);
+            }
+        }
+
+        &.active {
+            background: rgba(40, 150, 40, 0.90) !important;
+            color: var(--text-inverse) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 130, 30, 0.75) !important;
+            box-shadow: 0 0 15px rgba(40, 150, 40, 0.4),
+                0 3px 10px rgba(0, 0, 0, 0.15) !important;
+
+            img {
+                filter: brightness(0) saturate(100%) invert(100%) !important;
+                opacity: 1 !important;
+            }
+        }
+
+        &:active img {
+            transform: scale(0.95);
+        }
+
+        img {
+            filter: brightness(0) saturate(100%) invert(0%) !important;
+            opacity: 0.85 !important;
+            transition: all 0.3s ease !important;
+            display: block;
+            width: 16px;
+            height: 16px;
+            margin: 0 auto;
+            drop-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+    }
+
+    /* ===========================
+       NCOP CONTAINER - COMPREHENSIVE TEXT STYLING
+    =========================== */
+    .ncop-container {
+
+        &,
+        & * {
+            color: var(--text-primary) !important;
+        }
+
+        .ncop-item-label,
+        .ncop-dropdown-label,
+        .ncop-subcategory-header span,
+        .ncop-nested-header span,
+        .accordion-title,
+        .sidebar-title,
+        label,
+        span,
+        p,
+        div {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-dropdown,
+        select,
+        option {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-data-table {
+
+            th,
+            td,
+            .ncop-key-cell,
+            .ncop-attribute-cell {
+                color: var(--text-primary) !important;
+                font-weight: 800 !important;
+            }
+
+            thead th {
+                font-weight: 900 !important;
+            }
+
+            tbody td {
+                font-weight: 700 !important;
+            }
+        }
+
+        .ncop-dropdown-label,
+        .ncop-dropdown-count {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-empty-state-text,
+        .ncop-loading-state {
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+        }
+
+        input::placeholder,
+        select::placeholder {
+            color: var(--text-secondary) !important;
+            font-weight: 700 !important;
+        }
+
+        i,
+        .accordion-icon,
+        .accordion-chevron,
+        .subcategory-chevron,
+        .nested-chevron {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .ncop-nested-subsection,
+        .ncop-nested-subsection * {
+            color: var(--text-primary) !important;
+        }
+
+        .ncop-nested-header span {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .ncop-dropdown-wrapper,
+        .ncop-dropdown-wrapper * {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        table,
+        table * {
+            color: var(--text-primary) !important;
+        }
+    }
+
+    /* ===========================
+       THEME TOGGLE BUTTON
+    =========================== */
+    .theme-toggle-btn,
+    .theme-toggle-wrapper .theme-toggle-btn {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        background: var(--tertiary-bg) !important;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn:hover {
+        background: rgba(185, 185, 185, 0.92) !important;
+        transform: scale(1.05);
+    }
 }
 
 /* ===========================
-   NIGHT MODE SPECIFIC OVERRIDES
+   THEME TOGGLE WRAPPER (DAY MODE)
 =========================== */
-
-[data-theme="night"] .sidebar-title,
-[data-theme="night"] .accordion-title,
-[data-theme="night"] .ncop-item-label,
-[data-theme="night"] .custom-nav-btn,
-[data-theme="night"] .custom-user-btn,
-[data-theme="night"] .custom-menu-btn,
-[data-theme="night"] .custom-basemap-btn,
-[data-theme="night"] .custom-layer-btn,
-[data-theme="night"] .basemap-name,
-[data-theme="night"] .layer-name,
-[data-theme="night"] .layer-info-title,
-[data-theme="night"] .layer-info-label,
-[data-theme="night"] .projection-name,
-[data-theme="night"] .ncop-subcategory-header span,
-[data-theme="night"] .ncop-nested-header span,
-[data-theme="night"] .news-title {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-[data-theme="night"] .sidebar-search-container .search-input,
-[data-theme="night"] .layer-info-subtitle,
-[data-theme="night"] .layer-order-subtitle,
-[data-theme="night"] .projection-desc,
-[data-theme="night"] .news-time {
-    color: var(--text-secondary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .layer-info-details,
-[data-theme="night"] .no-layers-message,
-[data-theme="night"] .accordion-body,
-[data-theme="night"] .ncop-dropdown-label {
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-/* ===========================
-   NIGHT MODE GLASS EFFECTS
-=========================== */
-
-[data-theme="night"] .ncop-container,
-[data-theme="night"] .sidebar-panel,
-[data-theme="night"] .basemap-panel,
-[data-theme="night"] .layer-order-panel,
-[data-theme="night"] .layer-info-panel,
-[data-theme="night"] .projection-panel,
-[data-theme="night"] #temp-slider1,
-[data-theme="night"] .news-modal {
-    background: var(--primary-bg) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-    border-color: var(--border-light) !important;
-}
-
-[data-theme="night"] .accordion-header,
-[data-theme="night"] .ncop-subcategory-header,
-[data-theme="night"] .ncop-nested-header,
-[data-theme="night"] .layer-item,
-[data-theme="night"] .layer-info-item,
-[data-theme="night"] .basemap-item,
-[data-theme="night"] .projection-item,
-[data-theme="night"] .ncop-dropdown-wrapper {
-    background: var(--secondary-bg) !important;
-    backdrop-filter: blur(15px) saturate(160%) !important;
-    border-color: var(--border-dark) !important;
-}
-
-[data-theme="night"] .custom-nav-btn,
-[data-theme="night"] .custom-user-btn,
-[data-theme="night"] .custom-menu-btn,
-[data-theme="night"] .custom-basemap-btn,
-[data-theme="night"] .custom-layer-btn,
-[data-theme="night"] .dragresizecontrol-btn,
-[data-theme="night"] #tempslider-controls button,
-[data-theme="night"] .legend-toggle-btn {
-    background: var(--tertiary-bg) !important;
-    backdrop-filter: blur(12px) !important;
-    border-color: var(--border-dark) !important;
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-/* ===========================
-   NIGHT MODE HOVER STATES
-=========================== */
-
-[data-theme="night"] .accordion-header:hover,
-[data-theme="night"] .ncop-subcategory-header:hover,
-[data-theme="night"] .ncop-nested-header:hover,
-[data-theme="night"] .basemap-item:hover,
-[data-theme="night"] .projection-item:hover,
-[data-theme="night"] .layer-item:hover {
-    background: rgba(255, 255, 255, 0.4) !important;
-    border-color: var(--border-light) !important;
-}
-
-[data-theme="night"] .custom-nav-btn:hover,
-[data-theme="night"] .custom-user-btn:hover,
-[data-theme="night"] .custom-menu-btn:hover,
-[data-theme="night"] .custom-basemap-btn:hover,
-[data-theme="night"] .custom-layer-btn:hover,
-[data-theme="night"] .legend-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.5) !important;
-}
-
-/* ===========================
-   NIGHT MODE ACTIVE STATES
-=========================== */
-
-[data-theme="night"] .accordion-header.active,
-[data-theme="night"] .ncop-subcategory-header.expanded,
-[data-theme="night"] .ncop-nested-header.expanded,
-[data-theme="night"] .basemap-item.active,
-[data-theme="night"] .projection-item.active {
-    background: rgba(255, 255, 255, 0.45) !important;
-    border-color: var(--border-strong) !important;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3) !important;
-}
-
-/* ===========================
-   NIGHT MODE SEARCH & INPUTS
-=========================== */
-
-[data-theme="night"] .search-input {
-    background: transparent !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .search-input::placeholder {
-    color: var(--text-secondary) !important;
-    font-weight: 500 !important;
-}
-
-[data-theme="night"] .ncop-dropdown {
-    background: var(--tertiary-bg) !important;
-    border-color: var(--border-dark) !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-/* ===========================
-   NIGHT MODE TOGGLES & CONTROLS
-=========================== */
-
-[data-theme="night"] .ncop-toggle-slider {
-    background: rgba(255, 255, 255, 0.3) !important;
-    border-color: var(--border-dark) !important;
-}
-
-[data-theme="night"] .ncop-toggle input:checked+.ncop-toggle-slider {
-    background: rgba(255, 255, 255, 0.6) !important;
-}
-
-[data-theme="night"] .toggle-switch {
-    background: var(--tertiary-bg) !important;
-}
-
-[data-theme="night"] .toggle-switch.active {
-    background: rgba(255, 255, 255, 0.5) !important;
-}
-
-/* ===========================
-   NIGHT MODE ICONS & SYMBOLS
-=========================== */
-
-[data-theme="night"] .accordion-icon,
-[data-theme="night"] .accordion-chevron,
-[data-theme="night"] .subcategory-chevron,
-[data-theme="night"] .nested-chevron,
-[data-theme="night"] .search-icon,
-[data-theme="night"] .clear-icon {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-/* ===========================
-   NIGHT MODE SPECIAL ELEMENTS
-=========================== */
-
-[data-theme="night"] .no-results-message {
-    background: var(--tertiary-bg) !important;
-    border-color: var(--border-dark) !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .layer-attribute-popup {
-    background: var(--primary-bg) !important;
-    border-color: var(--border-light) !important;
-    backdrop-filter: blur(25px) saturate(200%) !important;
-}
-
-[data-theme="night"] .layer-attribute-popup .popup-label {
-    color: var(--text-primary) !important;
-    font-weight: 800 !important;
-    text-shadow: none !important;
-}
-
-[data-theme="night"] .attr-key {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-[data-theme="night"] .attr-value {
-    color: var(--text-secondary) !important;
-    font-weight: 600 !important;
-}
-
-/* ===========================
-   NIGHT MODE TIME SLIDER
-=========================== */
-
-[data-theme="night"] #opacityControlPopover {
-    background: var(--secondary-bg) !important;
-    border-color: var(--border-dark) !important;
-    backdrop-filter: blur(15px) !important;
-}
-
-[data-theme="night"] .opacity-popover-label,
-[data-theme="night"] .opacity-popover-value {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-[data-theme="night"] .year-labels1 span,
-[data-theme="night"] .legend-container1 p {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-/* ===========================
-   NIGHT MODE DATA TABLES
-=========================== */
-
-[data-theme="night"] .ncop-data-table {
-    background: var(--secondary-bg) !important;
-}
-
-[data-theme="night"] .ncop-data-table th {
-    background: rgba(255, 255, 255, 0.4) !important;
-    color: var(--text-primary) !important;
-    font-weight: 800 !important;
-}
-
-[data-theme="night"] .ncop-data-table td {
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .ncop-data-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.3) !important;
-}
-
-/* ===========================
-   NIGHT MODE NEWS SECTION
-=========================== */
-
-[data-theme="night"] .news-box {
-    background: rgba(255, 255, 255, 0.25) !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .news-box:hover {
-    background: rgba(255, 255, 255, 0.4) !important;
-}
-
-[data-theme="night"] .news-box.selected {
-    background: rgba(255, 255, 255, 0.6) !important;
-    color: var(--text-primary) !important;
-    font-weight: 800 !important;
-}
-
-[data-theme="night"] .toggle-btn {
-    background: rgba(255, 255, 255, 0.3) !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-[data-theme="night"] .toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.45) !important;
-}
-
-[data-theme="night"] .toggle-btn.active {
-    background: rgba(255, 255, 255, 0.7) !important;
-    color: var(--text-primary) !important;
-    font-weight: 800 !important;
-}
-
-/* ===========================
-   NIGHT MODE TRANSITION
-=========================== */
-
-[data-theme="night"] * {
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
-}
-
-/* ===========================
-   THEME TOGGLE BUTTON (Add to controls)
-=========================== */
-
-.theme-toggle-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: var(--secondary-bg);
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(10px);
-    border: 2px solid var(--border-dark);
-    padding: 4px;
-    color: var(--white);
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 1000;
-}
-
-.theme-toggle-btn:hover {
-    background: var(--primary-bg);
-}
-
-.theme-toggle-btn i {
-    width: 16px;
-    height: 16px;
-}
-
-[data-theme="night"] .theme-toggle-btn {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-}
-
-/* Add this CSS after the existing .theme-toggle-btn styles (around line 487) */
-
-/* ===========================
-   THEME TOGGLE IN NCOP CONTAINER
-=========================== */
-
 .theme-toggle-wrapper {
     position: absolute;
     top: 8px;
     right: 8px;
     z-index: 1000;
+
+    .theme-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: var(--secondary-bg);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--border-dark);
+        padding: 4px;
+        color: var(--white);
+        position: relative;
+        top: 74px;
+        left: 5px;
+
+        &:hover {
+            background: var(--primary-bg);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
+            .theme-icon {
+                transform: rotate(15deg);
+            }
+        }
+
+        &:active {
+            transform: scale(0.95);
+        }
+
+        &:not([data-theme="night"]) {
+            color: #fbbf24;
+
+            &:hover {
+                background: rgba(251, 191, 36, 0.1);
+                border-color: rgba(251, 191, 36, 0.3);
+            }
+        }
+
+        .theme-icon {
+            width: 16px;
+            height: 16px;
+            transition: all 0.3s ease;
+        }
+    }
 }
 
-.theme-toggle-wrapper .theme-toggle-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: var(--secondary-bg);
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-dark);
-    padding: 4px;
-    color: var(--white);
-    position: relative;
-    top: 74px;
-    left: 5px;
-}
-
-.theme-toggle-wrapper .theme-toggle-btn:hover {
-    background: var(--primary-bg);
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.theme-toggle-wrapper .theme-toggle-btn:active {
-    transform: scale(0.95);
-}
-
-.theme-toggle-wrapper .theme-toggle-btn .theme-icon {
-    width: 16px;
-    height: 16px;
-    transition: all 0.3s ease;
-}
-
-/* Day mode specific styling */
-.theme-toggle-wrapper .theme-toggle-btn:not([data-theme="night"]) {
-    color: #fbbf24;
-    /* Golden sun color */
-}
-
-.theme-toggle-wrapper .theme-toggle-btn:not([data-theme="night"]):hover {
-    background: rgba(251, 191, 36, 0.1);
-    border-color: rgba(251, 191, 36, 0.3);
-}
-
-/* Night mode overrides for the toggle button */
-[data-theme="night"] .theme-toggle-wrapper .theme-toggle-btn {
-    color: var(--text-primary) !important;
-    font-weight: 700 !important;
-    background: var(--tertiary-bg) !important;
-}
-
-[data-theme="night"] .theme-toggle-wrapper .theme-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.5) !important;
-    transform: scale(1.05);
-}
-
-/* Icon rotation animation */
-.theme-toggle-wrapper .theme-toggle-btn .theme-icon {
-    transition: transform 0.3s ease, color 0.3s ease;
-}
-
-.theme-toggle-wrapper .theme-toggle-btn:hover .theme-icon {
-    transform: rotate(15deg);
-}
-
-/* Smooth theme transition */
 html {
     transition: background-color 0.3s ease;
 }
-
-/* ===========================
-   END THEME TOGGLE STYLES
-=========================== */
 
 /* Universal Scrollbar Styling */
 * {
