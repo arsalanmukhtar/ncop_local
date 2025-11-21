@@ -85,6 +85,7 @@ class DashboardManager {
   #mapControls;
   #sourceLayerControl;
   #layerAttributePopup;
+  #themeToggler;
 
   init() {
     if (!window.mapboxgl?.accessToken) {
@@ -99,6 +100,9 @@ class DashboardManager {
     // Expose globals (you already do this)
     window.map = this.#map;
     window.ncop_map = this.#map;
+
+    // Initialize theme toggler early
+    this.#themeToggler = new ThemeToggler();
 
     // SourceLayerControl (your existing)
     const slc = new SourceLayerControl(window.ncop_map);
@@ -146,7 +150,7 @@ class DashboardManager {
         const mgr = initStoryManager({
           map: window.ncop_map,
           sourceLayerControl: window.sourceLayerControl, // you created `slc` earlier
-          fetchBase: window.baseUrl, // ✅ use your global baseUrl 
+          fetchBase: window.baseUrl, // ✅ use your global baseUrl
         });
 
         // Optional: make a one-liner available globally to start by slug
@@ -246,6 +250,114 @@ class DashboardManager {
         );
       }
     }
+  }
+}
+
+// THEME CHANGING TOGGLER
+class ThemeToggler {
+  #currentTheme = 'day';
+  #storage = window.ncop_storage;
+
+  constructor() {
+    this.#loadSavedTheme();
+    this.#createToggleButton();
+    this.#attachEventListeners();
+  }
+
+  #loadSavedTheme() {
+    if (this.#storage) {
+      const savedTheme = this.#storage.getSetting('theme') || 'day';
+      this.#currentTheme = savedTheme;
+      this.#applyTheme(savedTheme);
+    }
+  }
+
+  #createToggleButton() {
+    // Wait for NCOP container to exist
+    const checkForContainer = () => {
+      const ncopContainer = document.querySelector('.ncop-container');
+      if (ncopContainer) {
+        this.#renderToggleButton(ncopContainer);
+      } else {
+        setTimeout(checkForContainer, 100);
+      }
+    };
+    checkForContainer();
+  }
+
+  #renderToggleButton(container) {
+    const toggleButton = document.createElement('div');
+    toggleButton.className = 'theme-toggle-wrapper';
+    toggleButton.innerHTML = `
+      <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Day/Night Mode">
+        <i data-lucide="${this.#currentTheme === 'day' ? 'sun' : 'moon'}" class="theme-icon"></i>
+      </button>
+    `;
+    
+    // Insert at the top of the NCOP container
+    container.insertBefore(toggleButton, container.firstChild);
+    
+    // Initialize lucide icons
+    if (window.lucide?.createIcons) {
+      window.lucide.createIcons();
+    }
+  }
+
+  #attachEventListeners() {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#themeToggleBtn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.#toggleTheme();
+      }
+    });
+  }
+
+  #toggleTheme() {
+    const newTheme = this.#currentTheme === 'day' ? 'night' : 'day';
+    this.#currentTheme = newTheme;
+    this.#applyTheme(newTheme);
+    this.#updateButtonIcon();
+    this.#saveTheme(newTheme);
+  }
+
+  #applyTheme(theme) {
+    const htmlElement = document.documentElement;
+    if (theme === 'night') {
+      htmlElement.setAttribute('data-theme', 'night');
+    } else {
+      htmlElement.removeAttribute('data-theme');
+    }
+  }
+
+  #updateButtonIcon() {
+    const iconElement = document.querySelector('#themeToggleBtn .theme-icon');
+    if (iconElement) {
+      // Update the icon attribute
+      iconElement.setAttribute('data-lucide', this.#currentTheme === 'day' ? 'sun' : 'moon');
+      
+      // Recreate the icon
+      if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+      }
+      
+      // Update the button title
+      const buttonElement = document.getElementById('themeToggleBtn');
+      if (buttonElement) {
+        buttonElement.setAttribute('title', `Switch to ${this.#currentTheme === 'day' ? 'Night' : 'Day'} Mode`);
+      }
+    }
+  }
+
+  #saveTheme(theme) {
+    if (this.#storage) {
+      this.#storage.saveSetting('theme', theme);
+    }
+  }
+
+  // Public method to get current theme
+  getCurrentTheme() {
+    return this.#currentTheme;
   }
 }
 // Utility: wait for a DOM element to exist before resolving

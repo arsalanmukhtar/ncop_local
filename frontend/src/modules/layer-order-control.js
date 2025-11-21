@@ -15,25 +15,26 @@ export class LayerOrderControl {
         this.render();
         this.addEventListeners();
         this.setupLayerChangeListener();
-    }    render() {
+    }
+    render() {
         const mapContainer = document.getElementById("map");
-        
+
         // Check if wrapper already exists
         let controlsWrapper = document.querySelector(".map-controls-wrapper");
         const basemapControl = document.querySelector(".custom-basemap-control");
-        
+
         if (!controlsWrapper && basemapControl) {
             // Create wrapper div
             controlsWrapper = document.createElement("div");
             controlsWrapper.className = "map-controls-wrapper";
-            
+
             // Insert wrapper before basemap control
             basemapControl.parentNode.insertBefore(controlsWrapper, basemapControl);
-            
+
             // Move basemap control into wrapper
             controlsWrapper.appendChild(basemapControl);
         }
-        
+
         if (controlsWrapper) {
             // Create layer control
             const layerControl = document.createElement("div");
@@ -52,24 +53,26 @@ export class LayerOrderControl {
                     </div>
                 </div>
             `;
-            
+
             // Add layer control to wrapper
             controlsWrapper.appendChild(layerControl);
-            
+
             lucide.createIcons();
         }
-    }    addEventListeners() {
+    }
+    addEventListeners() {
         const layerToggle = document.getElementById("layerOrderToggle");
         const layerPanel = document.getElementById("layerOrderPanel");
 
         layerToggle?.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.togglePanel();
-            // Collapse info panel if open
-            const infoPanelDiv = document.querySelector('.custom-layer-info-control');
-            if (infoPanelDiv && !infoPanelDiv.classList.contains('panel-collapsed')) {
-                infoPanelDiv.classList.add('panel-collapsed');
-            }
+          e.stopPropagation();
+          this.togglePanel();
+          // Hide layer info panel
+          document
+            .getElementById("layerInfoPanel")
+            ?.classList.remove("visible");
+          // Hide basemap panel
+          document.getElementById("basemapPanel")?.classList.remove("visible");
         });
 
         // Don't close panel when clicking outside - let user manually toggle
@@ -105,15 +108,21 @@ export class LayerOrderControl {
             });
         });
         observer.observe(userPanel, { attributes: true });
-    }    setupLayerChangeListener() {
-        // Listen for layer changes and update the list
-        const originalAddLayer = this.#sourceLayerControl.addLayerByKey.bind(this.#sourceLayerControl);
-        const originalRemoveLayer = this.#sourceLayerControl.removeLayerByKey.bind(this.#sourceLayerControl);
+    }
+
+    setupLayerChangeListener() {
+        // Only update layer list for add/remove, not for temporal animation
+        const originalAddLayer = this.#sourceLayerControl.addLayerByKey.bind(
+            this.#sourceLayerControl
+        );
+        const originalRemoveLayer = this.#sourceLayerControl.removeLayerByKey.bind(
+            this.#sourceLayerControl
+        );
 
         this.#sourceLayerControl.addLayerByKey = (...args) => {
             const result = originalAddLayer(...args);
-            // Keep panel visible if it was already visible
-            if (this.#isVisible) {
+            // Only update if not a temporal layer animation
+            if (this.#isVisible && !window.isTemporalAnimating) {
                 setTimeout(() => this.updateLayerList(), 100);
             }
             return result;
@@ -121,8 +130,7 @@ export class LayerOrderControl {
 
         this.#sourceLayerControl.removeLayerByKey = (...args) => {
             const result = originalRemoveLayer(...args);
-            // Keep panel visible if it was already visible, just update the list
-            if (this.#isVisible) {
+            if (this.#isVisible && !window.isTemporalAnimating) {
                 setTimeout(() => this.updateLayerList(), 100);
             }
             return result;
@@ -132,7 +140,7 @@ export class LayerOrderControl {
     togglePanel() {
         this.#isVisible = !this.#isVisible;
         const layerPanel = document.getElementById("layerOrderPanel");
-        
+
         if (this.#isVisible) {
             this.updateLayerList();
             layerPanel.classList.add("visible");
@@ -145,27 +153,36 @@ export class LayerOrderControl {
         this.#isVisible = false;
         const layerPanel = document.getElementById("layerOrderPanel");
         layerPanel?.classList.remove("visible");
-    }    updateLayerList() {
+    }
+    updateLayerList() {
         const layerList = document.getElementById("layerOrderList");
         if (!layerList) return;
 
-        const activeLayerKeys = new Set(this.#sourceLayerControl.getActiveLayerKeys());
+        const activeLayerKeys = new Set(
+            this.#sourceLayerControl.getActiveLayerKeys()
+        );
         const layerOrder = [...this.#sourceLayerControl.layerOrder]; // Get current order from source control
-        
+
         // Filter to only show active layers and maintain their order
-        const orderedActiveLayers = layerOrder.filter(layerKey => activeLayerKeys.has(layerKey));
-        
+        const orderedActiveLayers = layerOrder.filter((layerKey) =>
+            activeLayerKeys.has(layerKey)
+        );
+
         if (orderedActiveLayers.length === 0) {
-            layerList.innerHTML = '<div class="no-layers-message">No active layers</div>';
+            layerList.innerHTML =
+                '<div class="no-layers-message">No active layers</div>';
             return;
         }
 
         // Create layer items in reverse order (top layers first in UI)
-        const layerItems = orderedActiveLayers.slice().reverse().map(layerKey => {
-            const layerInfo = this.#sourceLayerControl.findLayerConfig(layerKey);
-            const label = layerInfo?.config?.label || layerKey;
-            
-            return `
+        const layerItems = orderedActiveLayers
+            .slice()
+            .reverse()
+            .map((layerKey) => {
+                const layerInfo = this.#sourceLayerControl.findLayerConfig(layerKey);
+                const label = layerInfo?.config?.label || layerKey;
+
+                return `
                 <div class="layer-item" data-layer-key="${layerKey}" draggable="true">
                     <div class="layer-drag-handle">
                         <i data-lucide="grip-vertical"></i>
@@ -175,67 +192,70 @@ export class LayerOrderControl {
                     </div>
                 </div>
             `;
-        }).join('');
+            })
+            .join("");
 
         layerList.innerHTML = layerItems;
         lucide.createIcons();
         this.setupDragAndDrop();
-    }    setupDragAndDrop() {
-        const layerItems = document.querySelectorAll('.layer-item');
+    }
+    setupDragAndDrop() {
+        const layerItems = document.querySelectorAll(".layer-item");
         let draggedElement = null;
 
         // console.log(`🔧 Setting up drag and drop for ${layerItems.length} items`);
 
-        layerItems.forEach(item => {
-            item.addEventListener('dragstart', (e) => {
+        layerItems.forEach((item) => {
+            item.addEventListener("dragstart", (e) => {
                 draggedElement = item;
-                item.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
+                item.classList.add("dragging");
+                e.dataTransfer.effectAllowed = "move";
                 // console.log(`🟢 Drag started for: ${item.dataset.layerKey}`);
             });
 
-            item.addEventListener('dragend', () => {
-                item.classList.remove('dragging');
+            item.addEventListener("dragend", () => {
+                item.classList.remove("dragging");
                 draggedElement = null;
                 // console.log(`🔴 Drag ended for: ${item.dataset.layerKey}`);
             });
 
-            item.addEventListener('dragover', (e) => {
+            item.addEventListener("dragover", (e) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
+                e.dataTransfer.dropEffect = "move";
                 // Add visual feedback
                 if (draggedElement && draggedElement !== item) {
-                    item.style.borderTop = '2px solid #00ff00';
+                    item.style.borderTop = "2px solid #00ff00";
                 }
             });
 
-            item.addEventListener('dragleave', (e) => {
+            item.addEventListener("dragleave", (e) => {
                 // Remove visual feedback
-                item.style.borderTop = '';
+                item.style.borderTop = "";
             });
 
-            item.addEventListener('drop', (e) => {
+            item.addEventListener("drop", (e) => {
                 e.preventDefault();
                 // Remove visual feedback
-                item.style.borderTop = '';
-                
+                item.style.borderTop = "";
+
                 if (draggedElement && draggedElement !== item) {
                     // console.log(`🔄 Reordering: ${draggedElement.dataset.layerKey} -> ${item.dataset.layerKey}`);
                     this.reorderLayers(draggedElement, item);
                 }
             });
         });
-    }reorderLayers(draggedItem, targetItem) {
+    }
+    reorderLayers(draggedItem, targetItem) {
         const draggedKey = draggedItem.dataset.layerKey;
         const targetKey = targetItem.dataset.layerKey;
-        
+
         // Get the current UI order (which is reversed in display)
-        const layerItems = Array.from(document.querySelectorAll('.layer-item'));
-        const uiOrder = layerItems.map(item => item.dataset.layerKey);
-        
+        const layerItems = Array.from(document.querySelectorAll(".layer-item"));
+        const uiOrder = layerItems.map((item) => item.dataset.layerKey);
+
         // Convert UI order back to actual layer order (reverse it)
         const actualOrder = [...uiOrder].reverse();
-        
+
         // Find positions in the actual order
         const draggedIndex = actualOrder.indexOf(draggedKey);
         const targetIndex = actualOrder.indexOf(targetKey);
@@ -251,7 +271,7 @@ export class LayerOrderControl {
 
         // Reorder layers on map
         this.applyLayerOrder(actualOrder);
-        
+
         // Update UI immediately to reflect the new order
         this.updateLayerList();
     }
@@ -259,42 +279,45 @@ export class LayerOrderControl {
     applyLayerOrder(newOrder) {
         // Remove all layers first
         const activeLayers = [...this.#sourceLayerControl.activeLayers.keys()];
-        activeLayers.forEach(key => {
+        activeLayers.forEach((key) => {
             const layerInfo = this.#sourceLayerControl.activeLayers.get(key);
             if (layerInfo) {
                 // Remove layers from map without updating tracking
-                layerInfo.layerIds.forEach(layerId => {
+                layerInfo.layerIds.forEach((layerId) => {
                     if (this.#map.getLayer(layerId)) {
                         this.#map.removeLayer(layerId);
                     }
                 });
             }
-        });        // Re-add layers in new order
-        newOrder.forEach(layerKey => {
+        }); // Re-add layers in new order
+        newOrder.forEach((layerKey) => {
             const layerInfo = this.#sourceLayerControl.activeLayers.get(layerKey);
-            if (layerInfo) {                // Re-add layers to map
-                layerInfo.config.layers.forEach(layerConfig => {
+            if (layerInfo) {
+                // Re-add layers to map
+                layerInfo.config.layers.forEach((layerConfig) => {
                     const layer = {
                         id: layerConfig.id,
                         type: layerConfig.type,
                         source: layerInfo.sourceId,
-                        ...(layerConfig['source-layer'] && { 'source-layer': layerConfig['source-layer'] }),
+                        ...(layerConfig["source-layer"] && {
+                            "source-layer": layerConfig["source-layer"],
+                        }),
                         ...(layerConfig.paint && { paint: layerConfig.paint }),
-                        ...(layerConfig.layout && { layout: layerConfig.layout })
+                        ...(layerConfig.layout && { layout: layerConfig.layout }),
                     };
-                    
+
                     if (!this.#map.getLayer(layerConfig.id)) {
                         this.#map.addLayer(layer);
                     }
                 });
             }
-        });        // Ensure labels stay on top after reordering
+        }); // Ensure labels stay on top after reordering
         try {
-            if (typeof this.#sourceLayerControl.ensureLabelsOnTop === 'function') {
+            if (typeof this.#sourceLayerControl.ensureLabelsOnTop === "function") {
                 this.#sourceLayerControl.ensureLabelsOnTop();
             }
         } catch (error) {
-            console.warn('Labels on top function not available:', error);
+            console.warn("Labels on top function not available:", error);
         }
     }
 }

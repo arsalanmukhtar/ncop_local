@@ -741,6 +741,7 @@ document.addEventListener("DOMContentLoaded", function () {
     playBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       isPlaying = true;
+      window.isTemporalAnimating = true; // <-- ADD THIS LINE
       clearInterval(interval);
       playAnimation();
       playBtn.style.display = "none";
@@ -754,6 +755,7 @@ document.addEventListener("DOMContentLoaded", function () {
     pauseBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       isPlaying = false;
+      window.isTemporalAnimating = false; // <-- ADD THIS LINE
       clearInterval(interval);
       if (playBtn) playBtn.style.display = "inline-block";
       pauseBtn.style.display = "none";

@@ -99,6 +99,876 @@
     --shadow-glow-red: 0 0 12px 2px var(--ndma-red-glow);
 }
 
+/* ===========================
+   NIGHT MODE THEME - OPTIMIZED WITH NESTED CSS
+=========================== */
+
+[data-theme="night"] {
+    /* ===========================
+       CSS VARIABLES - DARKER GRAY GLASSMORPHISM
+    =========================== */
+    /* Backgrounds */
+    --primary-bg: rgba(190, 190, 190, 0.88);
+    --secondary-bg: rgba(180, 180, 180, 0.85);
+    --tertiary-bg: rgba(200, 200, 200, 0.90);
+    --accent-bg-green: rgba(190, 210, 190, 0.85);
+    --accent-bg-blue: rgba(190, 205, 220, 0.85);
+    --accent-bg-red: rgba(220, 190, 190, 0.85);
+    --overlay-bg: rgba(195, 195, 195, 0.75);
+    --frost-bg: rgba(205, 205, 205, 0.80);
+
+    /* Text Colors */
+    --text-primary: rgba(0, 0, 0, 0.95);
+    --text-secondary: rgba(20, 20, 20, 0.90);
+    --text-muted: rgba(40, 40, 40, 0.85);
+    --text-inverse: rgba(255, 255, 255, 0.95);
+    --text-accent-green: #0a5f0a;
+    --text-accent-blue: #0d4a7a;
+    --text-accent-red: #a00000;
+
+    /* Borders */
+    --border-dark: rgba(100, 100, 100, 0.90);
+    --border-light: rgba(80, 80, 80, 0.92);
+    --border-strong: rgba(60, 60, 60, 0.95);
+    --border-green: rgba(40, 150, 40, 0.60);
+    --border-blue: rgba(30, 120, 200, 0.60);
+    --border-red: rgba(200, 40, 40, 0.60);
+
+    /* Button States */
+    --btn-green-bg: rgba(195, 215, 195, 0.90);
+    --btn-green-hover: rgba(185, 210, 185, 0.93);
+    --btn-blue-bg: rgba(195, 205, 220, 0.90);
+    --btn-blue-hover: rgba(185, 200, 215, 0.93);
+    --btn-red-bg: rgba(220, 195, 195, 0.90);
+    --btn-red-hover: rgba(215, 185, 185, 0.93);
+
+    /* Interaction States */
+    --hover-bg: rgba(170, 170, 170, 0.88);
+    --active-bg: rgba(155, 155, 155, 0.92);
+    --focus-ring: rgba(70, 70, 70, 0.75);
+    --glass-highlight: rgba(210, 210, 210, 0.92);
+
+
+    /* ===========================
+           STORY MODAL
+        =========================== */
+        #story-modal {
+            background: var(--primary-bg) !important;
+            border: 2px solid var(--border-light) !important;
+            backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25),
+                0 4px 12px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+            color: var(--text-primary) !important;
+    
+            /* Story Modal Header */
+            >div:first-child {
+                border-bottom: 1.5px solid var(--border-dark) !important;
+                background: var(--secondary-bg) !important;
+                backdrop-filter: blur(15px) !important;
+    
+                >div {
+                    >div:first-child {
+                        font-weight: 900 !important;
+                        color: var(--text-primary) !important;
+                        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+                    }
+    
+                    >div:last-child {
+                        color: var(--text-secondary) !important;
+                        font-weight: 700 !important;
+                        opacity: 1 !important;
+                    }
+                }
+            }
+    
+            /* Story Root Container */
+            #story-root {
+                background: transparent !important;
+    
+                /* Story Select Dropdown */
+                #storySelect {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 800 !important;
+                    padding: 8px 10px !important;
+                    border-radius: 6px !important;
+    
+                    option {
+                        background: var(--secondary-bg) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                    }
+    
+                    &:focus {
+                        outline: 2px solid var(--focus-ring) !important;
+                        outline-offset: 1px !important;
+                    }
+    
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        border-color: var(--border-strong) !important;
+                    }
+                }
+    
+                /* Story Edit Button */
+                #storyEdit {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 900 !important;
+                    backdrop-filter: blur(12px) saturate(105%) !important;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+                        0 1px 2px rgba(0, 0, 0, 0.10),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        transform: translateY(-1px) !important;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                            0 2px 4px rgba(0, 0, 0, 0.12),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                    }
+    
+                    svg {
+                        color: var(--text-primary) !important;
+                        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+                    }
+                }
+    
+                /* Story Meta */
+                #storyMeta {
+                    color: var(--text-secondary) !important;
+                    font-weight: 700 !important;
+                    opacity: 1 !important;
+                }
+    
+                /* Story Chapters Container */
+                #storyChapters {
+    
+                    /* Scrollbar styling */
+                    &::-webkit-scrollbar {
+                        width: 6px;
+                    }
+    
+                    &::-webkit-scrollbar-track {
+                        background: var(--tertiary-bg);
+                        border-radius: 3px;
+                    }
+    
+                    &::-webkit-scrollbar-thumb {
+                        background: var(--border-dark);
+                        border-radius: 3px;
+    
+                        &:hover {
+                            background: var(--border-strong);
+                        }
+                    }
+    
+                    /* Firefox scrollbar */
+                    scrollbar-width: thin;
+                    scrollbar-color: var(--border-dark) var(--tertiary-bg);
+    
+                    /* Empty state / placeholder */
+                    >div {
+                        border: 2px dashed var(--border-dark) !important;
+                        background: var(--secondary-bg) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                        opacity: 1 !important;
+                        backdrop-filter: blur(10px) !important;
+                    }
+    
+                    /* Chapter items (when populated) */
+                    .chapter-item {
+                        background: var(--secondary-bg) !important;
+                        border: 1.5px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 800 !important;
+                        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
+                        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+                            0 1px 3px rgba(0, 0, 0, 0.10),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+    
+                        &:hover {
+                            background: var(--glass-highlight) !important;
+                            border-color: var(--border-strong) !important;
+                            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.20),
+                                0 2px 6px rgba(0, 0, 0, 0.12),
+                                inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+                        }
+    
+                        &.active,
+                        &.selected {
+                            background: rgba(170, 195, 215, 0.90) !important;
+                            border: 2px solid rgba(30, 120, 200, 0.75) !important;
+                            box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
+                                0 4px 12px rgba(0, 0, 0, 0.15),
+                                inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                        }
+                    }
+                }
+    
+                /* Story Editor */
+                #storyEditor {
+                    border-top: 1.5px solid var(--border-dark) !important;
+                    background: var(--secondary-bg) !important;
+                    backdrop-filter: blur(15px) !important;
+                    padding: 12px !important;
+                    border-radius: 6px !important;
+                    margin-top: 12px !important;
+    
+                    /* Editor text elements */
+                    * {
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                    }
+    
+                    /* Editor inputs */
+                    input,
+                    textarea,
+                    select {
+                        background: var(--tertiary-bg) !important;
+                        border: 2px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 700 !important;
+                        border-radius: 6px !important;
+                        padding: 6px 8px !important;
+    
+                        &:focus {
+                            outline: 2px solid var(--focus-ring) !important;
+                            outline-offset: 1px !important;
+                            border-color: var(--border-strong) !important;
+                        }
+    
+                        &::placeholder {
+                            color: var(--text-secondary) !important;
+                            font-weight: 600 !important;
+                        }
+                    }
+    
+                    /* Editor buttons */
+                    button {
+                        background: var(--tertiary-bg) !important;
+                        border: 2px solid var(--border-dark) !important;
+                        color: var(--text-primary) !important;
+                        font-weight: 800 !important;
+                        padding: 6px 12px !important;
+                        border-radius: 6px !important;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+    
+                        &:hover {
+                            background: var(--glass-highlight) !important;
+                            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
+                            transform: translateY(-1px) !important;
+                        }
+    
+                        &:active {
+                            transform: translateY(0) !important;
+                        }
+    
+                        &.primary,
+                        &.save {
+                            background: rgba(40, 150, 40, 0.90) !important;
+                            color: var(--text-inverse) !important;
+                            border-color: rgba(30, 130, 30, 0.75) !important;
+    
+                            &:hover {
+                                background: rgba(35, 140, 35, 0.93) !important;
+                            }
+                        }
+    
+                        &.danger,
+                        &.delete {
+                            background: rgba(200, 40, 40, 0.90) !important;
+                            color: var(--text-inverse) !important;
+                            border-color: rgba(180, 30, 30, 0.75) !important;
+    
+                            &:hover {
+                                background: rgba(190, 35, 35, 0.93) !important;
+                            }
+                        }
+                    }
+    
+                    /* Editor labels */
+                    label {
+                        color: var(--text-primary) !important;
+                        font-weight: 900 !important;
+                    }
+    
+                    /* Editor descriptions/hints */
+                    .hint,
+                    .description,
+                    small {
+                        color: var(--text-secondary) !important;
+                        font-weight: 600 !important;
+                    }
+                }
+            }
+    
+            /* Close Button (custom-nav-btn) */
+            #storyCloseBtn {
+                background: var(--tertiary-bg) !important;
+                border: 2px solid var(--border-dark) !important;
+                color: var(--text-primary) !important;
+                font-weight: 900 !important;
+    
+                svg {
+                    color: var(--text-primary) !important;
+                    filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+                }
+    
+                &:hover {
+                    background: rgba(220, 190, 190, 0.90) !important;
+                    border-color: rgba(200, 40, 40, 0.60) !important;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                        0 2px 4px rgba(0, 0, 0, 0.12) !important;
+                }
+            }
+        }
+
+    /* ===========================
+       GLOBAL TRANSITIONS
+    =========================== */
+    * {
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+            box-shadow 0.3s ease, transform 0.2s ease !important;
+    }
+
+    /* ===========================
+       PRIMARY TEXT STYLES
+    =========================== */
+    .sidebar-title,
+    .accordion-title,
+    .ncop-item-label,
+    .custom-nav-btn,
+    .custom-user-btn,
+    .custom-menu-btn,
+    .custom-basemap-btn,
+    .custom-layer-btn,
+    .basemap-name,
+    .layer-name,
+    .layer-info-title,
+    .layer-info-label,
+    .projection-name,
+    .ncop-subcategory-header span,
+    .ncop-nested-header span,
+    .news-title {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+    }
+
+    /* Secondary Text */
+    .sidebar-search-container .search-input,
+    .layer-info-subtitle,
+    .layer-order-subtitle,
+    .projection-desc,
+    .news-time {
+        color: var(--text-secondary) !important;
+        font-weight: 800 !important;
+    }
+
+    /* Tertiary Text */
+    .layer-info-details,
+    .no-layers-message,
+    .accordion-body,
+    .ncop-dropdown-label {
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+    }
+
+    /* ===========================
+       GLASS PANELS - PRIMARY CONTAINERS
+    =========================== */
+    .ncop-container,
+    .sidebar-panel,
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel,
+    .projection-panel,
+    #temp-slider1,
+    .news-modal {
+        background: var(--primary-bg) !important;
+        backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        border: 2px solid var(--border-light) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.20),
+            0 2px 8px rgba(0, 0, 0, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       GLASS PANELS - SECONDARY ELEMENTS
+    =========================== */
+    .accordion-header,
+    .ncop-subcategory-header,
+    .ncop-nested-header,
+    .layer-item,
+    .layer-info-item,
+    .basemap-item,
+    .projection-item,
+    .ncop-dropdown-wrapper {
+        background: var(--secondary-bg) !important;
+        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
+        border: 1.5px solid var(--border-dark) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+            0 1px 3px rgba(0, 0, 0, 0.10),
+            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+
+        &:hover {
+            background: var(--glass-highlight) !important;
+        }
+    }
+
+    /* ===========================
+       BUTTONS - CONTROL ELEMENTS
+    =========================== */
+    .custom-nav-btn,
+    .custom-user-btn,
+    .custom-menu-btn,
+    .custom-basemap-btn,
+    .custom-layer-btn,
+    .dragresizecontrol-btn,
+    #tempslider-controls button,
+    .legend-toggle-btn {
+        background: var(--tertiary-bg) !important;
+        backdrop-filter: blur(12px) saturate(105%) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+            0 1px 2px rgba(0, 0, 0, 0.10),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       ACTIVE STATES
+    =========================== */
+    .accordion-header.active,
+    .ncop-subcategory-header.expanded,
+    .ncop-nested-header.expanded,
+    .basemap-item.active,
+    .projection-item.active {
+        background: rgba(170, 195, 215, 0.90) !important;
+        border: 2px solid rgba(30, 120, 200, 0.75) !important;
+        box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+    }
+
+    /* ===========================
+       INPUTS & SEARCH
+    =========================== */
+    .search-input {
+        background: rgba(205, 205, 205, 0.88) !important;
+        color: var(--text-primary) !important;
+        font-weight: 700 !important;
+        border: 1.5px solid var(--border-dark) !important;
+        border-radius: 6px !important;
+
+        &::placeholder {
+            color: var(--text-secondary) !important;
+            font-weight: 600 !important;
+        }
+    }
+
+    .ncop-dropdown {
+        background: var(--tertiary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+    }
+
+    /* ===========================
+       TOGGLES & SWITCHES
+    =========================== */
+    .ncop-toggle-slider {
+        background: rgba(175, 175, 175, 0.88) !important;
+        border: 2px solid var(--border-dark) !important;
+    }
+
+    .ncop-toggle input:checked+.ncop-toggle-slider {
+        background: rgba(40, 150, 40, 0.88) !important;
+        border-color: rgba(30, 130, 30, 0.75) !important;
+    }
+
+    .toggle-switch {
+        background: var(--tertiary-bg) !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &.active {
+            background: rgba(30, 120, 200, 0.88) !important;
+        }
+    }
+
+    /* ===========================
+       ICONS & SYMBOLS
+    =========================== */
+    .accordion-icon,
+    .accordion-chevron,
+    .subcategory-chevron,
+    .nested-chevron,
+    .search-icon,
+    .clear-icon {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+    }
+
+    /* ===========================
+       SPECIAL ELEMENTS
+    =========================== */
+    .no-results-message {
+        background: var(--tertiary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .layer-attribute-popup {
+        background: var(--primary-bg) !important;
+        border: 2px solid var(--border-strong) !important;
+        backdrop-filter: blur(25px) saturate(110%) brightness(1.0) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+
+        .popup-label {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+        }
+
+        .attr-key {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .attr-value {
+            color: var(--text-secondary) !important;
+            font-weight: 800 !important;
+        }
+    }
+
+    /* ===========================
+       TIME SLIDER
+    =========================== */
+    #opacityControlPopover {
+        background: var(--secondary-bg) !important;
+        border: 2px solid var(--border-dark) !important;
+        backdrop-filter: blur(18px) saturate(105%) !important;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    .opacity-popover-label,
+    .opacity-popover-value,
+    .year-labels1 span,
+    .legend-container1 p {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* ===========================
+       DATA TABLES
+    =========================== */
+    .ncop-data-table {
+        background: var(--secondary-bg) !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        th {
+            background: rgba(185, 185, 185, 0.93) !important;
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            border-bottom: 2px solid var(--border-strong) !important;
+        }
+
+        td {
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+        }
+
+        tbody tr:hover {
+            background: rgba(175, 175, 175, 0.88) !important;
+        }
+    }
+
+    /* ===========================
+       NEWS SECTION
+    =========================== */
+    .news-box {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        &.selected {
+            background: rgba(170, 195, 215, 0.92) !important;
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 120, 200, 0.75) !important;
+        }
+    }
+
+    .toggle-btn {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        &.active {
+            background: rgba(40, 150, 40, 0.90) !important;
+            color: var(--text-inverse) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 130, 30, 0.75) !important;
+        }
+    }
+
+    /* ===========================
+       NEWS TOGGLE BUTTONS & ICONS
+    =========================== */
+    #toggle-social-btn,
+    #fetch-regular-btn {
+        background: rgba(190, 190, 190, 0.90) !important;
+        color: var(--text-primary) !important;
+        font-weight: 800 !important;
+        border: 1.5px solid var(--border-dark) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+
+        &:hover {
+            background: rgba(180, 180, 180, 0.93) !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
+            transform: translateY(-1px);
+
+            img {
+                opacity: 1 !important;
+                filter: brightness(0) saturate(100%) invert(0%) !important;
+                transform: scale(1.05);
+            }
+        }
+
+        &.active {
+            background: rgba(40, 150, 40, 0.90) !important;
+            color: var(--text-inverse) !important;
+            font-weight: 900 !important;
+            border-color: rgba(30, 130, 30, 0.75) !important;
+            box-shadow: 0 0 15px rgba(40, 150, 40, 0.4),
+                0 3px 10px rgba(0, 0, 0, 0.15) !important;
+
+            img {
+                filter: brightness(0) saturate(100%) invert(100%) !important;
+                opacity: 1 !important;
+            }
+        }
+
+        &:active img {
+            transform: scale(0.95);
+        }
+
+        img {
+            filter: brightness(0) saturate(100%) invert(0%) !important;
+            opacity: 0.85 !important;
+            transition: all 0.3s ease !important;
+            display: block;
+            width: 16px;
+            height: 16px;
+            margin: 0 auto;
+            drop-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+    }
+
+    /* ===========================
+       NCOP CONTAINER - COMPREHENSIVE TEXT STYLING
+    =========================== */
+    .ncop-container {
+
+        &,
+        & * {
+            color: var(--text-primary) !important;
+        }
+
+        .ncop-item-label,
+        .ncop-dropdown-label,
+        .ncop-subcategory-header span,
+        .ncop-nested-header span,
+        .accordion-title,
+        .sidebar-title,
+        label,
+        span,
+        p,
+        div {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-dropdown,
+        select,
+        option {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-data-table {
+
+            th,
+            td,
+            .ncop-key-cell,
+            .ncop-attribute-cell {
+                color: var(--text-primary) !important;
+                font-weight: 800 !important;
+            }
+
+            thead th {
+                font-weight: 900 !important;
+            }
+
+            tbody td {
+                font-weight: 700 !important;
+            }
+        }
+
+        .ncop-dropdown-label,
+        .ncop-dropdown-count {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        .ncop-empty-state-text,
+        .ncop-loading-state {
+            color: var(--text-primary) !important;
+            font-weight: 700 !important;
+        }
+
+        input::placeholder,
+        select::placeholder {
+            color: var(--text-secondary) !important;
+            font-weight: 700 !important;
+        }
+
+        i,
+        .accordion-icon,
+        .accordion-chevron,
+        .subcategory-chevron,
+        .nested-chevron {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .ncop-nested-subsection,
+        .ncop-nested-subsection * {
+            color: var(--text-primary) !important;
+        }
+
+        .ncop-nested-header span {
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+        }
+
+        .ncop-dropdown-wrapper,
+        .ncop-dropdown-wrapper * {
+            color: var(--text-primary) !important;
+            font-weight: 800 !important;
+        }
+
+        table,
+        table * {
+            color: var(--text-primary) !important;
+        }
+    }
+
+    /* ===========================
+       THEME TOGGLE BUTTON
+    =========================== */
+    .theme-toggle-btn,
+    .theme-toggle-wrapper .theme-toggle-btn {
+        color: var(--text-primary) !important;
+        font-weight: 900 !important;
+        background: var(--tertiary-bg) !important;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn:hover {
+        background: rgba(185, 185, 185, 0.92) !important;
+        transform: scale(1.05);
+    }
+}
+
+/* ===========================
+   THEME TOGGLE WRAPPER (DAY MODE)
+=========================== */
+.theme-toggle-wrapper {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1000;
+
+    .theme-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: var(--secondary-bg);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--border-dark);
+        padding: 4px;
+        color: var(--white);
+        position: relative;
+        top: 74px;
+        left: 5px;
+
+        &:hover {
+            background: var(--primary-bg);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
+            .theme-icon {
+                transform: rotate(15deg);
+            }
+        }
+
+        &:active {
+            transform: scale(0.95);
+        }
+
+        &:not([data-theme="night"]) {
+            color: #fbbf24;
+
+            &:hover {
+                background: rgba(251, 191, 36, 0.1);
+                border-color: rgba(251, 191, 36, 0.3);
+            }
+        }
+
+        .theme-icon {
+            width: 16px;
+            height: 16px;
+            transition: all 0.3s ease;
+        }
+    }
+}
+
+html {
+    transition: background-color 0.3s ease;
+}
+
 /* Universal Scrollbar Styling */
 * {
     scrollbar-width: none;
@@ -1238,7 +2108,6 @@ button.custom-nav-btn.terrain-active:hover {
     position: absolute;
     top: 0;
     right: 42px;
-    /* Move panel 42px from right when opened */
     width: 280px;
     max-height: 400px;
     background: var(--primary-bg);
@@ -1247,7 +2116,6 @@ button.custom-nav-btn.terrain-active:hover {
     padding: 12px;
     backdrop-filter: blur(15px);
     transform: translateX(100%);
-    /* Start hidden, slide in from right */
     opacity: 0;
     transition: all 0.3s ease;
     overflow-y: auto;
@@ -1264,7 +2132,6 @@ button.custom-nav-btn.terrain-active:hover {
     top: 0;
     right: 42px;
     transform: translateX(0);
-    /* Slide in from right when visible */
 }
 
 /* Responsive adjustments for mobile */
@@ -1281,7 +2148,7 @@ button.custom-nav-btn.terrain-active:hover {
 
 /* ===========================
    LAYER ORDER CONTROL
-=========================== */
+   =========================== */
 .custom-layer-control {
     position: relative;
     color: var(--white);
@@ -1459,6 +2326,57 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* ===========================
+   POPUP CONTROL BUTTON
+   =========================== */
+.layer-popup-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 4px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.layer-popup-btn:hover {
+    background: var(--tertiary-bg);
+    border-color: var(--border-light);
+    color: var(--white);
+}
+
+.layer-popup-btn i {
+    width: 12px;
+    height: 12px;
+}
+
+/* Active state when popup is shown */
+.layer-popup-btn.popup-active {
+    background: var(--ndma-green);
+    border-color: var(--ndma-green);
+    color: var(--white);
+}
+
+.layer-popup-btn.popup-active:hover {
+    background: var(--ndma-green-dark);
+    border-color: var(--ndma-green-dark);
+}
+
+/* Ensure popup button doesn't interfere with drag */
+.layer-popup-btn {
+    pointer-events: auto;
+}
+
+.layer-item.dragging .layer-popup-btn {
+    pointer-events: none;
+}
+/* ===========================
    LAYER INFO PANEL WITH LEGEND SUPPORT
 =========================== */
 
@@ -1476,7 +2394,7 @@ button.custom-nav-btn.terrain-active:hover {
     align-items: flex-end;
 }
 
-.layer-info-panel {
+/* .layer-info-panel {
     position: absolute;
     top: 0;
     right: 0;
@@ -1493,7 +2411,7 @@ button.custom-nav-btn.terrain-active:hover {
     overflow-y: auto;
     z-index: 1001;
     pointer-events: none;
-}
+} */
 
 /* Dynamic sizing when legends are visible */
 .layer-info-panel.has-legend {
@@ -1501,11 +2419,11 @@ button.custom-nav-btn.terrain-active:hover {
     max-height: 600px;
 }
 
-.layer-info-panel.visible {
+/* .layer-info-panel.visible {
     pointer-events: auto;
     transform: translateX(0);
     opacity: 1;
-}
+} */
 
 .layer-info-header {
     margin-bottom: 12px;
@@ -1626,6 +2544,20 @@ button.custom-nav-btn.terrain-active:hover {
     display: block;
     width: 100%;
 }
+/* Add this to your existing CSS file */
+.temporal-indicator {
+    font-size: 12px;
+    margin-left: 5px;
+    opacity: 0.7;
+}
+
+.layer-info-item.temporal-layer {
+    border-left: 3px solid #007bff;
+    padding-left: 12px;
+}
+
+.layer-info-item.temporal-layer .layer-info-label {
+    color: #007bff; }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
@@ -1761,11 +2693,11 @@ button.custom-nav-btn.terrain-active:hover {
    PANEL SCROLLING & OVERFLOW HANDLING
    ============================================ */
 
-.layer-info-panel {
+/* .layer-info-panel {
     transition: max-height 0.3s ease, height 0.3s ease;
     overflow-y: auto;
     overflow-x: hidden;
-}
+} */
 
 /* Webkit scrollbar customization (Chrome, Safari, Edge) */
 .layer-info-panel::-webkit-scrollbar {
@@ -1875,8 +2807,7 @@ button.custom-nav-btn.terrain-active:hover {
 @media (prefers-reduced-motion: reduce) {
 
     .layer-legend-toggle-btn,
-    .layer-legend-image-container,
-    .layer-info-panel {
+    .layer-legend-image-container {
         transition: none;
     }
 
@@ -3050,3 +3981,361 @@ button.custom-nav-btn.terrain-active:hover {
     font-size: 15px;
     color: #222;
     font-weight: 500; }
+
+
+/* ============================================================================
+   NESTED SUB-ACCORDION STYLES - NDMA THEME
+   ============================================================================
+   These styles are designed to match the NDMA glassmorphic design system
+   with blue gradients, dark backgrounds, and consistent transitions.
+   
+   REPLACE the existing nested styles (lines 3051-3374) with this entire block.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------
+   Nested Subsection Container
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection {
+    margin: 6px 0;
+    border-left: 2px solid var(--ndma-blue-light);
+    padding-left: 8px;
+    transition: all 0.2s ease;
+}
+
+/* ---------------------------------------------------------------------
+   Nested Header (Clickable accordion header for nested sections)
+   --------------------------------------------------------------------- */
+.ncop-nested-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--tertiary-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    position: relative;
+    backdrop-filter: blur(10px);
+}
+
+/* Left accent border (appears on hover/expand) */
+.ncop-nested-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--ndma-blue);
+    border-radius: 4px 0 0 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.ncop-nested-header:hover {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-nested-header:hover::before {
+    opacity: 1;
+}
+
+.ncop-nested-header.expanded {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+    box-shadow: var(--shadow-glow-blue);
+}
+
+.ncop-nested-header.expanded::before {
+    opacity: 1;
+}
+
+/* Nested Header Text */
+.ncop-nested-header span {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--white);
+    letter-spacing: 0.2px;
+    transition: color 0.2s ease;
+}
+
+/* Nested Header Chevron Icon */
+.ncop-nested-header .nested-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 5px;
+}
+
+.ncop-nested-header.expanded .nested-chevron {
+    transform: rotate(90deg);
+    color: var(--white);
+}
+
+/* ---------------------------------------------------------------------
+   Nested Items Container (Collapsible content area)
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding: 0 4px;
+    margin-top: 4px;
+}
+
+.ncop-nested-items-container.visible {
+    max-height: 600px;
+    /* Matches main .ncop-items-container */
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding: 4px;
+}
+
+/* ---------------------------------------------------------------------
+   Grid Layout Inside Nested Containers
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container .ncop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    /* Matches existing grid gap */
+    align-items: start;
+}
+
+/* Single column grid for button items inside nested sections */
+.ncop-nested-items-container .ncop-grid:has(.ncop-item-button) {
+    grid-template-columns: 1fr;
+    gap: 0px;
+}
+
+/* Responsive grid for smaller screens */
+@media (max-width: 768px) {
+    .ncop-nested-items-container .ncop-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Static Items Inside Nested Sections (GDACS Layers)
+   --------------------------------------------------------------------- */
+/* Override base styles for nested static items to match theme */
+.ncop-nested-subsection .ncop-item-static {
+    /* Inherits from base .ncop-item-static but with consistent styling */
+    background: transparent;
+    border: none;
+    padding: 12px 8px;
+}
+
+/* Image styling inside nested sections matches existing pattern */
+.ncop-nested-subsection .ncop-item-static .ncop-item-image {
+    /* Inherits existing .ncop-item-image styles */
+    width: 80px;
+    height: 80px;
+    border-radius: 15px;
+}
+
+.ncop-nested-subsection .ncop-item-static .ncop-item-image img {
+    /* Inherits existing image styles */
+    border: 3px solid transparent;
+}
+
+/* Selected state uses NDMA green (matches existing theme) */
+.ncop-nested-subsection .ncop-item-static .ncop-item-image.selected img {
+    border: 3px solid var(--ndma-green);
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+/* Label styling for nested static items */
+.ncop-nested-subsection .ncop-item-static .ncop-item-label {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--white);
+}
+
+/* ---------------------------------------------------------------------
+   Toggle Items Inside Nested Sections
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection .ncop-item-toggle {
+    /* Inherits base toggle styles */
+    background: transparent;
+    border: none;
+    padding: 8px;
+}
+
+.ncop-nested-subsection .ncop-item-toggle .ncop-item-label {
+    color: var(--white);
+    font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------
+   Button Items Inside Nested Sections
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection .ncop-item-button {
+    /* Inherits base button styles */
+    margin: 2px 0;
+}
+
+/* ---------------------------------------------------------------------
+   Temporal Items Inside Nested Sections
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection .ncop-item-temporal {
+    /* Inherits base temporal styles */
+    background: transparent;
+}
+
+.ncop-nested-subsection .ncop-item-temporal .ncop-item-image.selected img {
+    border: 3px solid var(--ndma-green);
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+/* ---------------------------------------------------------------------
+   Nested Section Loading States
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container .ncop-loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.ncop-nested-items-container .ncop-loading-state .ncop-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-dark);
+    border-top-color: var(--ndma-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Nested Section Empty States
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container .ncop-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.ncop-nested-items-container .ncop-empty-state-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.ncop-nested-items-container .ncop-empty-state-text {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------
+   Accessibility & Focus States
+   --------------------------------------------------------------------- */
+.ncop-nested-header:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.ncop-nested-header:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.ncop-nested-header:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Visual Hierarchy Adjustments
+   --------------------------------------------------------------------- */
+/* Slightly indent nested items to show hierarchy */
+.ncop-nested-items-container .ncop-item {
+    margin-left: 4px;
+}
+
+/* Reduce grid gap slightly for nested items to save space */
+.ncop-nested-items-container .ncop-grid {
+    gap: 6px;
+}
+
+/* Adjust nested header font size to be between subcategory and item */
+.ncop-nested-header span {
+    font-size: 12px;
+    /* Between subcategory (13px) and items (11px/10px) */
+}
+
+/* ---------------------------------------------------------------------
+   Scrollbar Styling for Nested Containers
+   --------------------------------------------------------------------- */
+/* Match global scrollbar styles */
+.ncop-nested-items-container::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ncop-nested-items-container::-webkit-scrollbar-track {
+    background: var(--glass-light);
+    border-radius: 10px;
+}
+
+.ncop-nested-items-container::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+
+/* ---------------------------------------------------------------------
+   Print Styles
+   --------------------------------------------------------------------- */
+@media print {
+    .ncop-nested-subsection {
+        page-break-inside: avoid;
+    }
+
+    .ncop-nested-header .nested-chevron {
+        display: none;
+    }
+
+    .ncop-nested-items-container {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .ncop-nested-header::before {
+        display: none;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Smooth Transitions for All States
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection,
+.ncop-nested-header,
+.ncop-nested-header::before,
+.ncop-nested-header span,
+.ncop-nested-header .nested-chevron,
+.ncop-nested-items-container {
+    /* Ensure consistent 0.2s ease transitions matching existing theme */
+    transition-timing-function: ease;
+}
+
+/* ============================================================================
+   END OF NESTED ACCORDION STYLES - NDMA THEME
+   ============================================================================ */
+
