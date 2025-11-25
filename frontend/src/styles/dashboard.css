@@ -152,290 +152,290 @@
     /* ===========================
            STORY MODAL
         =========================== */
-        #story-modal {
-            background: var(--primary-bg) !important;
-            border: 2px solid var(--border-light) !important;
-            backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-            -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25),
-                0 4px 12px rgba(0, 0, 0, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-            color: var(--text-primary) !important;
-    
-            /* Story Modal Header */
-            >div:first-child {
-                border-bottom: 1.5px solid var(--border-dark) !important;
-                background: var(--secondary-bg) !important;
-                backdrop-filter: blur(15px) !important;
-    
-                >div {
-                    >div:first-child {
-                        font-weight: 900 !important;
-                        color: var(--text-primary) !important;
-                        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
-                    }
-    
-                    >div:last-child {
-                        color: var(--text-secondary) !important;
-                        font-weight: 700 !important;
-                        opacity: 1 !important;
-                    }
-                }
-            }
-    
-            /* Story Root Container */
-            #story-root {
-                background: transparent !important;
-    
-                /* Story Select Dropdown */
-                #storySelect {
-                    background: var(--tertiary-bg) !important;
-                    border: 2px solid var(--border-dark) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 800 !important;
-                    padding: 8px 10px !important;
-                    border-radius: 6px !important;
-    
-                    option {
-                        background: var(--secondary-bg) !important;
-                        color: var(--text-primary) !important;
-                        font-weight: 700 !important;
-                    }
-    
-                    &:focus {
-                        outline: 2px solid var(--focus-ring) !important;
-                        outline-offset: 1px !important;
-                    }
-    
-                    &:hover {
-                        background: var(--glass-highlight) !important;
-                        border-color: var(--border-strong) !important;
-                    }
-                }
-    
-                /* Story Edit Button */
-                #storyEdit {
-                    background: var(--tertiary-bg) !important;
-                    border: 2px solid var(--border-dark) !important;
-                    color: var(--text-primary) !important;
+    #story-modal {
+        background: var(--primary-bg) !important;
+        border: 2px solid var(--border-light) !important;
+        backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25),
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+        color: var(--text-primary) !important;
+
+        /* Story Modal Header */
+        >div:first-child {
+            border-bottom: 1.5px solid var(--border-dark) !important;
+            background: var(--secondary-bg) !important;
+            backdrop-filter: blur(15px) !important;
+
+            >div {
+                >div:first-child {
                     font-weight: 900 !important;
-                    backdrop-filter: blur(12px) saturate(105%) !important;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
-                        0 1px 2px rgba(0, 0, 0, 0.10),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-    
-                    &:hover {
-                        background: var(--glass-highlight) !important;
-                        transform: translateY(-1px) !important;
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
-                            0 2px 4px rgba(0, 0, 0, 0.12),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
-                    }
-    
-                    svg {
-                        color: var(--text-primary) !important;
-                        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
-                    }
+                    color: var(--text-primary) !important;
+                    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
                 }
-    
-                /* Story Meta */
-                #storyMeta {
+
+                >div:last-child {
                     color: var(--text-secondary) !important;
                     font-weight: 700 !important;
                     opacity: 1 !important;
                 }
-    
-                /* Story Chapters Container */
-                #storyChapters {
-    
-                    /* Scrollbar styling */
-                    &::-webkit-scrollbar {
-                        width: 6px;
-                    }
-    
-                    &::-webkit-scrollbar-track {
-                        background: var(--tertiary-bg);
-                        border-radius: 3px;
-                    }
-    
-                    &::-webkit-scrollbar-thumb {
-                        background: var(--border-dark);
-                        border-radius: 3px;
-    
-                        &:hover {
-                            background: var(--border-strong);
-                        }
-                    }
-    
-                    /* Firefox scrollbar */
-                    scrollbar-width: thin;
-                    scrollbar-color: var(--border-dark) var(--tertiary-bg);
-    
-                    /* Empty state / placeholder */
-                    >div {
-                        border: 2px dashed var(--border-dark) !important;
-                        background: var(--secondary-bg) !important;
-                        color: var(--text-primary) !important;
-                        font-weight: 700 !important;
-                        opacity: 1 !important;
-                        backdrop-filter: blur(10px) !important;
-                    }
-    
-                    /* Chapter items (when populated) */
-                    .chapter-item {
-                        background: var(--secondary-bg) !important;
-                        border: 1.5px solid var(--border-dark) !important;
-                        color: var(--text-primary) !important;
-                        font-weight: 800 !important;
-                        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
-                        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
-                            0 1px 3px rgba(0, 0, 0, 0.10),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
-    
-                        &:hover {
-                            background: var(--glass-highlight) !important;
-                            border-color: var(--border-strong) !important;
-                            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.20),
-                                0 2px 6px rgba(0, 0, 0, 0.12),
-                                inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
-                        }
-    
-                        &.active,
-                        &.selected {
-                            background: rgba(170, 195, 215, 0.90) !important;
-                            border: 2px solid rgba(30, 120, 200, 0.75) !important;
-                            box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
-                                0 4px 12px rgba(0, 0, 0, 0.15),
-                                inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
-                        }
-                    }
-                }
-    
-                /* Story Editor */
-                #storyEditor {
-                    border-top: 1.5px solid var(--border-dark) !important;
+            }
+        }
+
+        /* Story Root Container */
+        #story-root {
+            background: transparent !important;
+
+            /* Story Select Dropdown */
+            #storySelect {
+                background: var(--tertiary-bg) !important;
+                border: 2px solid var(--border-dark) !important;
+                color: var(--text-primary) !important;
+                font-weight: 800 !important;
+                padding: 8px 10px !important;
+                border-radius: 6px !important;
+
+                option {
                     background: var(--secondary-bg) !important;
-                    backdrop-filter: blur(15px) !important;
-                    padding: 12px !important;
-                    border-radius: 6px !important;
-                    margin-top: 12px !important;
-    
-                    /* Editor text elements */
-                    * {
-                        color: var(--text-primary) !important;
-                        font-weight: 700 !important;
-                    }
-    
-                    /* Editor inputs */
-                    input,
-                    textarea,
-                    select {
-                        background: var(--tertiary-bg) !important;
-                        border: 2px solid var(--border-dark) !important;
-                        color: var(--text-primary) !important;
-                        font-weight: 700 !important;
-                        border-radius: 6px !important;
-                        padding: 6px 8px !important;
-    
-                        &:focus {
-                            outline: 2px solid var(--focus-ring) !important;
-                            outline-offset: 1px !important;
-                            border-color: var(--border-strong) !important;
-                        }
-    
-                        &::placeholder {
-                            color: var(--text-secondary) !important;
-                            font-weight: 600 !important;
-                        }
-                    }
-    
-                    /* Editor buttons */
-                    button {
-                        background: var(--tertiary-bg) !important;
-                        border: 2px solid var(--border-dark) !important;
-                        color: var(--text-primary) !important;
-                        font-weight: 800 !important;
-                        padding: 6px 12px !important;
-                        border-radius: 6px !important;
-                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
-    
-                        &:hover {
-                            background: var(--glass-highlight) !important;
-                            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
-                            transform: translateY(-1px) !important;
-                        }
-    
-                        &:active {
-                            transform: translateY(0) !important;
-                        }
-    
-                        &.primary,
-                        &.save {
-                            background: rgba(40, 150, 40, 0.90) !important;
-                            color: var(--text-inverse) !important;
-                            border-color: rgba(30, 130, 30, 0.75) !important;
-    
-                            &:hover {
-                                background: rgba(35, 140, 35, 0.93) !important;
-                            }
-                        }
-    
-                        &.danger,
-                        &.delete {
-                            background: rgba(200, 40, 40, 0.90) !important;
-                            color: var(--text-inverse) !important;
-                            border-color: rgba(180, 30, 30, 0.75) !important;
-    
-                            &:hover {
-                                background: rgba(190, 35, 35, 0.93) !important;
-                            }
-                        }
-                    }
-    
-                    /* Editor labels */
-                    label {
-                        color: var(--text-primary) !important;
-                        font-weight: 900 !important;
-                    }
-    
-                    /* Editor descriptions/hints */
-                    .hint,
-                    .description,
-                    small {
-                        color: var(--text-secondary) !important;
-                        font-weight: 600 !important;
-                    }
+                    color: var(--text-primary) !important;
+                    font-weight: 700 !important;
+                }
+
+                &:focus {
+                    outline: 2px solid var(--focus-ring) !important;
+                    outline-offset: 1px !important;
+                }
+
+                &:hover {
+                    background: var(--glass-highlight) !important;
+                    border-color: var(--border-strong) !important;
                 }
             }
-    
-            /* Close Button (custom-nav-btn) */
-            #storyCloseBtn {
+
+            /* Story Edit Button */
+            #storyEdit {
                 background: var(--tertiary-bg) !important;
                 border: 2px solid var(--border-dark) !important;
                 color: var(--text-primary) !important;
                 font-weight: 900 !important;
-    
+                backdrop-filter: blur(12px) saturate(105%) !important;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+                    0 1px 2px rgba(0, 0, 0, 0.10),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+
+                &:hover {
+                    background: var(--glass-highlight) !important;
+                    transform: translateY(-1px) !important;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                        0 2px 4px rgba(0, 0, 0, 0.12),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                }
+
                 svg {
                     color: var(--text-primary) !important;
                     filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
                 }
-    
-                &:hover {
-                    background: rgba(220, 190, 190, 0.90) !important;
-                    border-color: rgba(200, 40, 40, 0.60) !important;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
-                        0 2px 4px rgba(0, 0, 0, 0.12) !important;
+            }
+
+            /* Story Meta */
+            #storyMeta {
+                color: var(--text-secondary) !important;
+                font-weight: 700 !important;
+                opacity: 1 !important;
+            }
+
+            /* Story Chapters Container */
+            #storyChapters {
+
+                /* Scrollbar styling */
+                &::-webkit-scrollbar {
+                    width: 6px;
+                }
+
+                &::-webkit-scrollbar-track {
+                    background: var(--tertiary-bg);
+                    border-radius: 3px;
+                }
+
+                &::-webkit-scrollbar-thumb {
+                    background: var(--border-dark);
+                    border-radius: 3px;
+
+                    &:hover {
+                        background: var(--border-strong);
+                    }
+                }
+
+                /* Firefox scrollbar */
+                scrollbar-width: thin;
+                scrollbar-color: var(--border-dark) var(--tertiary-bg);
+
+                /* Empty state / placeholder */
+                >div {
+                    border: 2px dashed var(--border-dark) !important;
+                    background: var(--secondary-bg) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 700 !important;
+                    opacity: 1 !important;
+                    backdrop-filter: blur(10px) !important;
+                }
+
+                /* Chapter items (when populated) */
+                .chapter-item {
+                    background: var(--secondary-bg) !important;
+                    border: 1.5px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 800 !important;
+                    backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
+                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+                        0 1px 3px rgba(0, 0, 0, 0.10),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        border-color: var(--border-strong) !important;
+                        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.20),
+                            0 2px 6px rgba(0, 0, 0, 0.12),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+                    }
+
+                    &.active,
+                    &.selected {
+                        background: rgba(170, 195, 215, 0.90) !important;
+                        border: 2px solid rgba(30, 120, 200, 0.75) !important;
+                        box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
+                            0 4px 12px rgba(0, 0, 0, 0.15),
+                            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+                    }
+                }
+            }
+
+            /* Story Editor */
+            #storyEditor {
+                border-top: 1.5px solid var(--border-dark) !important;
+                background: var(--secondary-bg) !important;
+                backdrop-filter: blur(15px) !important;
+                padding: 12px !important;
+                border-radius: 6px !important;
+                margin-top: 12px !important;
+
+                /* Editor text elements */
+                * {
+                    color: var(--text-primary) !important;
+                    font-weight: 700 !important;
+                }
+
+                /* Editor inputs */
+                input,
+                textarea,
+                select {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 700 !important;
+                    border-radius: 6px !important;
+                    padding: 6px 8px !important;
+
+                    &:focus {
+                        outline: 2px solid var(--focus-ring) !important;
+                        outline-offset: 1px !important;
+                        border-color: var(--border-strong) !important;
+                    }
+
+                    &::placeholder {
+                        color: var(--text-secondary) !important;
+                        font-weight: 600 !important;
+                    }
+                }
+
+                /* Editor buttons */
+                button {
+                    background: var(--tertiary-bg) !important;
+                    border: 2px solid var(--border-dark) !important;
+                    color: var(--text-primary) !important;
+                    font-weight: 800 !important;
+                    padding: 6px 12px !important;
+                    border-radius: 6px !important;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+
+                    &:hover {
+                        background: var(--glass-highlight) !important;
+                        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
+                        transform: translateY(-1px) !important;
+                    }
+
+                    &:active {
+                        transform: translateY(0) !important;
+                    }
+
+                    &.primary,
+                    &.save {
+                        background: rgba(40, 150, 40, 0.90) !important;
+                        color: var(--text-inverse) !important;
+                        border-color: rgba(30, 130, 30, 0.75) !important;
+
+                        &:hover {
+                            background: rgba(35, 140, 35, 0.93) !important;
+                        }
+                    }
+
+                    &.danger,
+                    &.delete {
+                        background: rgba(200, 40, 40, 0.90) !important;
+                        color: var(--text-inverse) !important;
+                        border-color: rgba(180, 30, 30, 0.75) !important;
+
+                        &:hover {
+                            background: rgba(190, 35, 35, 0.93) !important;
+                        }
+                    }
+                }
+
+                /* Editor labels */
+                label {
+                    color: var(--text-primary) !important;
+                    font-weight: 900 !important;
+                }
+
+                /* Editor descriptions/hints */
+                .hint,
+                .description,
+                small {
+                    color: var(--text-secondary) !important;
+                    font-weight: 600 !important;
                 }
             }
         }
 
+        /* Close Button (custom-nav-btn) */
+        #storyCloseBtn {
+            background: var(--tertiary-bg) !important;
+            border: 2px solid var(--border-dark) !important;
+            color: var(--text-primary) !important;
+            font-weight: 900 !important;
+
+            svg {
+                color: var(--text-primary) !important;
+                filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
+            }
+
+            &:hover {
+                background: rgba(220, 190, 190, 0.90) !important;
+                border-color: rgba(200, 40, 40, 0.60) !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
+                    0 2px 4px rgba(0, 0, 0, 0.12) !important;
+            }
+        }
+    }
+
     /* ===========================
        GLOBAL TRANSITIONS
     =========================== */
-    * {
+    /* * {
         transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
             box-shadow 0.3s ease, transform 0.2s ease !important;
-    }
+    } */
 
     /* ===========================
        PRIMARY TEXT STYLES
@@ -507,20 +507,21 @@
     .ncop-subcategory-header,
     .ncop-nested-header,
     .layer-item,
-    .layer-info-item,
-    .basemap-item,
-    .projection-item,
     .ncop-dropdown-wrapper {
         background: var(--secondary-bg) !important;
-        backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
-        border: 1.5px solid var(--border-dark) !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
+        /* backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important; */
+        /* border: 1px solid var(--border-dark) !important; */
+        /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
             0 1px 3px rgba(0, 0, 0, 0.10),
-            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important; */
 
         &:hover {
             background: var(--glass-highlight) !important;
         }
+    }
+
+    .ncop-subcategory-header {
+        background: rgba(0, 0, 0, 0.15) !important;
     }
 
     /* ===========================
@@ -530,10 +531,7 @@
     .custom-user-btn,
     .custom-menu-btn,
     .custom-basemap-btn,
-    .custom-layer-btn,
-    .dragresizecontrol-btn,
-    #tempslider-controls button,
-    .legend-toggle-btn {
+    .custom-layer-btn {
         background: var(--tertiary-bg) !important;
         backdrop-filter: blur(12px) saturate(105%) !important;
         border: 2px solid var(--border-dark) !important;
@@ -552,22 +550,22 @@
     .ncop-nested-header.expanded,
     .basemap-item.active,
     .projection-item.active {
-        background: rgba(170, 195, 215, 0.90) !important;
-        border: 2px solid rgba(30, 120, 200, 0.75) !important;
+        background: var(--ndma-blue-gradient) !important;
+        /* border: 2px solid rgba(30, 120, 200, 0.75) !important;
         box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
             0 4px 12px rgba(0, 0, 0, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important; */
     }
 
     /* ===========================
        INPUTS & SEARCH
     =========================== */
     .search-input {
-        background: rgba(205, 205, 205, 0.88) !important;
+        /* background: rgba(205, 205, 205, 0.88) !important; */
         color: var(--text-primary) !important;
-        font-weight: 700 !important;
-        border: 1.5px solid var(--border-dark) !important;
-        border-radius: 6px !important;
+        /* font-weight: 700 !important; */
+        /* border: 1.5px solid var(--border-dark) !important; */
+        /* border-radius: 6px !important; */
 
         &::placeholder {
             color: var(--text-secondary) !important;
@@ -575,29 +573,29 @@
         }
     }
 
-    .ncop-dropdown {
+    /* .ncop-dropdown {
         background: var(--tertiary-bg) !important;
         border: 2px solid var(--border-dark) !important;
         color: var(--text-primary) !important;
         font-weight: 800 !important;
-    }
+    } */
 
     /* ===========================
        TOGGLES & SWITCHES
     =========================== */
     .ncop-toggle-slider {
         background: rgba(175, 175, 175, 0.88) !important;
-        border: 2px solid var(--border-dark) !important;
+        /* border: 2px solid var(--border-dark) !important; */
     }
 
     .ncop-toggle input:checked+.ncop-toggle-slider {
         background: rgba(40, 150, 40, 0.88) !important;
-        border-color: rgba(30, 130, 30, 0.75) !important;
+        /* border-color: rgba(30, 130, 30, 0.75) !important; */
     }
 
     .toggle-switch {
         background: var(--tertiary-bg) !important;
-        border: 1.5px solid var(--border-dark) !important;
+        /* border: 1.5px solid var(--border-dark) !important; */
 
         &.active {
             background: rgba(30, 120, 200, 0.88) !important;
@@ -890,20 +888,89 @@
         }
     }
 
+    .ncop-dropdown-header {
+        border: 1px solid var(--white);
+    }
+
+    .ncop-dropdown-toggle::after {
+        color: black;
+    }
+
+    .ncop-dropdown-count {
+        color: #2a2a2a;
+        font-weight: 500;
+    }
+
     /* ===========================
        THEME TOGGLE BUTTON
     =========================== */
     .theme-toggle-btn,
     .theme-toggle-wrapper .theme-toggle-btn {
         color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        background: var(--tertiary-bg) !important;
+        /* font-weight: 900 !important; */
+        /* background: var(--tertiary-bg) !important; */
     }
 
     .theme-toggle-wrapper .theme-toggle-btn:hover {
-        background: rgba(185, 185, 185, 0.92) !important;
-        transform: scale(1.05);
+        /* background: rgba(185, 185, 185, 0.92) !important; */
+        transform: scale(1.1);
     }
+
+    /* Basemap and Layer Panels */
+
+    /* Labels Toggle */
+    .labels-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border-dark);
+    }
+
+    .labels-toggle-text {
+        color: var(--black);
+        font-weight: 600;
+    }
+
+    .basemap-item,
+    .projection-item {
+        background: rgba(0, 0, 0, 0.15);
+    }
+
+    .layer-order-title {
+        color: var(--black);
+        font-weight: 700;
+    }
+
+    .projection-header h3 {
+        color: var(--black);
+        font-weight: 800;
+    }
+
+    .legend-image-container {
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+
+    /* Legend Toggle Button */
+    .legend-toggle-btn {
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--black);
+    }
+
+    .dragresizecontrol-btn,
+    #tempslider-controls button {
+        background: var(--tertiary-bg);
+        /* border: 1.5px solid var(--border-dark); */
+        color: var(--text-primary);
+    }
+
+    #tempslider-controls button i,
+    #tempslider-controls .speed-btn {
+        color: var(--black);
+        font-weight: 500;
+    }
+
 }
 
 /* ===========================
@@ -921,13 +988,13 @@
         justify-content: center;
         width: 28px;
         height: 28px;
-        background: var(--secondary-bg);
+        /* background: var(--secondary-bg); */
         border: none;
         border-radius: 6px;
         cursor: pointer;
         transition: all 0.3s ease;
-        backdrop-filter: blur(10px);
-        border: 1px solid var(--border-dark);
+        /* backdrop-filter: blur(10px); */
+        /* border: 1px solid var(--border-dark); */
         padding: 4px;
         color: var(--white);
         position: relative;
@@ -935,12 +1002,12 @@
         left: 5px;
 
         &:hover {
-            background: var(--primary-bg);
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            /* background: var(--primary-bg); */
+            transform: scale(1.1);
+            /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); */
 
             .theme-icon {
-                transform: rotate(15deg);
+                transform: rotate(45deg);
             }
         }
 
@@ -951,10 +1018,10 @@
         &:not([data-theme="night"]) {
             color: #fbbf24;
 
-            &:hover {
+            /* &:hover {
                 background: rgba(251, 191, 36, 0.1);
                 border-color: rgba(251, 191, 36, 0.3);
-            }
+            } */
         }
 
         .theme-icon {
@@ -2376,6 +2443,7 @@ button.custom-nav-btn.terrain-active:hover {
 .layer-item.dragging .layer-popup-btn {
     pointer-events: none;
 }
+
 /* ===========================
    LAYER INFO PANEL WITH LEGEND SUPPORT
 =========================== */
@@ -2472,10 +2540,12 @@ button.custom-nav-btn.terrain-active:hover {
 
 .layer-info-details {
     color: var(--text-muted);
-    font-size: 12px;
-    line-height: 1.5;
     white-space: pre-line;
     text-align: justify;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 5px;
+    padding: 5px 0;
 }
 
 /* Legend Toggle Button */
@@ -2544,6 +2614,7 @@ button.custom-nav-btn.terrain-active:hover {
     display: block;
     width: 100%;
 }
+
 /* Add this to your existing CSS file */
 .temporal-indicator {
     font-size: 12px;
@@ -2557,7 +2628,8 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 .layer-info-item.temporal-layer .layer-info-label {
-    color: #007bff; }
+    color: #007bff;
+}
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
@@ -2575,6 +2647,7 @@ button.custom-nav-btn.terrain-active:hover {
         padding: 6px;
     }
 }
+
 /* 
  * layer-info-panel-legend.css
  * Styling for the Layer Info Panel with Legend support
@@ -2682,12 +2755,7 @@ button.custom-nav-btn.terrain-active:hover {
     line-height: 1.3;
 }
 
-.layer-info-details {
-    font-size: 12px;
-    color: #666;
-    line-height: 1.4;
-    margin-top: 5px;
-}
+.layer-info-details {}
 
 /* ============================================
    PANEL SCROLLING & OVERFLOW HANDLING
@@ -2880,6 +2948,7 @@ button.custom-nav-btn.terrain-active:hover {
         scrollbar-color: #555 #2a2a2a;
     }
 }
+
 /* ===========================
    LAYER ATTRIBUTE POPUP
 =========================== */
@@ -3072,20 +3141,27 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 #tempslider-controls {
-  position: relative;
+    position: relative;
 
-  /* Switch to grid */
-  display: grid;
-  grid-auto-flow: column;                 /* fill rows first, then add a new column */
-  grid-template-rows: repeat(2, max-content); /* exactly 2 rows per column */
-  grid-auto-columns: 30px;                /* each column is 40px wide to match your buttons */
+    /* Switch to grid */
+    display: grid;
+    grid-auto-flow: column;
+    /* fill rows first, then add a new column */
+    grid-template-rows: repeat(2, max-content);
+    /* exactly 2 rows per column */
+    grid-auto-columns: 30px;
+    /* each column is 40px wide to match your buttons */
 
-  align-items: center;                    /* vertical align within each grid cell */
-  justify-items: center;                  /* horizontal align within each grid cell */
+    align-items: center;
+    /* vertical align within each grid cell */
+    justify-items: center;
+    /* horizontal align within each grid cell */
 
-  gap: 7px 5px;                           /* row-gap 7px, column-gap 8px */
-  margin-top: 3.5rem;
-  width: max-content;                     /* allow columns to expand as needed */
+    gap: 7px 5px;
+    /* row-gap 7px, column-gap 8px */
+    margin-top: 3.5rem;
+    width: max-content;
+    /* allow columns to expand as needed */
 }
 
 /* Shared button styling */
@@ -3105,8 +3181,8 @@ button.custom-nav-btn.terrain-active:hover {
 #tempslider-controls button i,
 #tempslider-controls .speed-btn {
     font-size: 10px !important;
-    font-weight: 400 !important;
-    color: var(--white) !important;
+    font-weight: 400;
+    color: var(--white);
     margin: 0 auto;
     text-align: center;
 }
@@ -3212,6 +3288,7 @@ button.custom-nav-btn.terrain-active:hover {
     color: var(--white);
     font-weight: 500;
 }
+
 /* ===== Opacity Control (additive) ===== */
 #opacityControlButton {
     width: 25px;
@@ -3269,7 +3346,8 @@ button.custom-nav-btn.terrain-active:hover {
     font-size: 13px;
     color: var(--white);
     width: 32px;
-    text-align: right; }
+    text-align: right;
+}
 
 /* ========================================================================
    TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
@@ -3980,7 +4058,8 @@ button.custom-nav-btn.terrain-active:hover {
 .ncop-thumb-label {
     font-size: 15px;
     color: #222;
-    font-weight: 500; }
+    font-weight: 500;
+}
 
 
 /* ============================================================================
@@ -4339,3 +4418,49 @@ button.custom-nav-btn.terrain-active:hover {
    END OF NESTED ACCORDION STYLES - NDMA THEME
    ============================================================================ */
 
+
+/* ============================================================================
+   STORY MODE STYLES
+   ============================================================================ */
+
+/* Container holding select + edit button */
+.story-select-container {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+/* Story dropdown */
+.story-select {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #444;
+    background: #101014;
+    color: #eee;
+    border-radius: 8px;
+}
+
+/* Metadata text */
+.story-meta {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-bottom: 6px;
+}
+
+/* Scrollable chapter list */
+.story-chapters {
+    display: grid;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Editor section */
+.story-editor {
+    display: none;
+    border-top: 1px solid #2a2a2a;
+    margin-top: 10px;
+    padding-top: 10px;
+}
