@@ -262,10 +262,11 @@ export class NavigationPanel {
     const storyModal = document.createElement("div");
     storyModal.id = "story-modal";
     storyModal.style.cssText = `
-    position: absolute; right: 16px; bottom: 72px; z-index: 3;
+    position: absolute; right: 50px; bottom: 72px; z-index: 3;
     display: none; width: 380px; max-height: 70vh; overflow: auto;
     background: rgba(20,20,24,.96); border: 1px solid #2a2a2a; border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,.35); color: #eaeaea; backdrop-filter: blur(6px);
+    transition: all 0.3s ease;
   `;
       storyModal.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #2a2a2a">
