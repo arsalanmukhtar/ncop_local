@@ -169,6 +169,9 @@ export class NavigationPanel {
   #scrollPaused = false;
   #includeSocialMedia = false;
   #baseUrl = window.location.origin;
+  // GEE Chatbot State
+  #geeLayers = new Map(); // Store active layers
+  #chatHistory = [];
 
   /**
    * @param {mapboxgl.Map} mapInstance
@@ -186,6 +189,7 @@ export class NavigationPanel {
     this.addEventListeners();
     this.setupNewsIntegration();
     this.#initializeNewsModal();
+    this.#initializeGeeChatbot();
     this.#updateNewsClock();
 
     // keep the live clock running
@@ -241,6 +245,10 @@ export class NavigationPanel {
           <button id="localNews" class="custom-nav-btn" title="Toggle Local News Panel">
               <i data-lucide="newspaper"></i>
           </button>
+          <!-- GEE CHATBOT TOGGLE -->
+          <button id="geeChat" class="custom-nav-btn" title="GEE Data Chatbot">
+              <i data-lucide="message-circle"></i>
+          </button>
           
           <!-- HOME EXTENT (Pakistan / South Asia) -->
           <button id="homeExtent" class="custom-nav-btn" title="Zoom to South Asia Region">
@@ -258,6 +266,38 @@ export class NavigationPanel {
     `;
 
     mapContainer.appendChild(navWrapper);
+
+    //GEE Chatbot modal shell
+    const geeChatModal = document.createElement("div");
+    geeChatModal.id = "gee-chat-modal";
+    geeChatModal.style.display = "none";
+    geeChatModal.innerHTML = `
+      <div class="gee-chat-header">
+        <div class="gee-chat-title">
+          <i data-lucide="satellite" style="width:18px;height:18px"></i>
+          <span>Earth Engine Data Assistant</span>
+        </div>
+        <button id="geeChatClose" class="custom-nav-btn">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      
+      <div class="gee-chat-messages" id="geeChatMessages"></div>
+      
+      <div class="gee-chat-input-wrapper">
+        <input type="text" 
+              id="geeChatInput" 
+              placeholder="Ask for data: 'Show snow cover in Swat Valley'"
+              autocomplete="off"
+              data-lpignore="true"
+              data-form-type="other"
+              data-1p-ignore="true">
+        <button id="geeChatSend" class="custom-nav-btn">
+          <i data-lucide="send"></i>
+        </button>
+      </div>
+    `;
+    mapContainer.appendChild(geeChatModal);
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
     storyModal.id = "story-modal";
@@ -268,7 +308,7 @@ export class NavigationPanel {
     box-shadow: 0 10px 30px rgba(0,0,0,.35); color: #eaeaea; backdrop-filter: blur(6px);
     transition: all 0.3s ease;
   `;
-      storyModal.innerHTML = `
+    storyModal.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #2a2a2a">
         <div>
           <div style="font-weight:700;font-size:14px">Story</div>
@@ -333,6 +373,11 @@ export class NavigationPanel {
     document
       .getElementById("localNews")
       ?.addEventListener("click", this.#handleNewsToggle.bind(this));
+
+    // GEE Chat button
+    document
+      .getElementById("geeChat")
+      ?.addEventListener("click", this.#handleGeeChatToggle.bind(this));
 
     // In addEventListeners()
     document.getElementById("storyBtn")?.addEventListener("click", () => {
@@ -1040,6 +1085,209 @@ export class NavigationPanel {
     // const pretty = `${year}/${month}/${day}`;
 
     return pretty;
+  }
+
+  // ============================================================
+  // GEE CHATBOT IMPLEMENTATION
+  // ============================================================
+
+  #initializeGeeChatbot() {
+    const sendBtn = document.getElementById("geeChatSend");
+    const input = document.getElementById("geeChatInput");
+    const closeBtn = document.getElementById("geeChatClose");
+
+    sendBtn?.addEventListener("click", () => this.#handleGeeMessage());
+
+    input?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.#handleGeeMessage();
+    });
+
+    closeBtn?.addEventListener("click", () => {
+      document.getElementById("gee-chat-modal").style.display = "none";
+      document.getElementById("geeChat")?.classList.remove("active-gee");
+    });
+
+    // Welcome message
+    this.#addChatMessage(
+      "assistant",
+      '👋 Hi! I can help you visualize satellite data over Pakistan.\n\nTry asking:\n• "Show snow cover in Gilgit Baltistan"\n• "Display population density in Lahore"\n• "Air quality in Karachi last week"'
+    );
+  }
+
+  #handleGeeChatToggle() {
+    const modal = document.getElementById("gee-chat-modal");
+    const btn = document.getElementById("geeChat");
+
+    if (!modal) return;
+
+    const isVisible = modal.style.display === "flex";
+
+    if (isVisible) {
+      modal.style.display = "none";
+      btn?.classList.remove("active-gee");
+    } else {
+      modal.style.display = "flex";
+      btn?.classList.add("active-gee");
+      document.getElementById("geeChatInput")?.focus();
+    }
+  }
+
+  async #handleGeeMessage() {
+    const input = document.getElementById("geeChatInput");
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Add user message
+    this.#addChatMessage("user", message);
+    input.value = "";
+
+    // Show loading
+    const loadingId = this.#addChatMessage(
+      "assistant",
+      "🔄 Generating layer...",
+      true
+    );
+
+    try {
+      const response = await fetch(`${this.#baseUrl}/api/gee/dynamic-layer/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      const data = await response.json();
+
+      // Remove loading message
+      document.getElementById(loadingId)?.remove();
+
+      if (data.success) {
+        // Store layer info
+        this.#geeLayers.set(data.layer_id, {
+          tile_url: data.tile_url,
+          dataset: data.dataset,
+          location: data.location,
+          legend: data.legend,
+          visualization: data.visualization,
+          added: false,
+        });
+
+        // Add response with controls
+        this.#addLayerResponse(data);
+      } else {
+        this.#addChatMessage("assistant", data.response || data.error);
+      }
+    } catch (error) {
+      document.getElementById(loadingId)?.remove();
+      this.#addChatMessage("assistant", `❌ Error: ${error.message}`);
+    }
+  }
+
+  #addChatMessage(role, content, isLoading = false) {
+    const container = document.getElementById("geeChatMessages");
+    const msgId = `msg-${Date.now()}-${Math.random()}`;
+
+    const msgDiv = document.createElement("div");
+    msgDiv.className = `gee-chat-message gee-chat-${role}`;
+    msgDiv.id = msgId;
+    msgDiv.innerHTML = this.#formatMessage(content);
+
+    container.appendChild(msgDiv);
+    container.scrollTop = container.scrollHeight;
+
+    lucide.createIcons();
+
+    return msgId;
+  }
+
+  #formatMessage(text) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+  }
+
+  #addLayerResponse(data) {
+    const container = document.getElementById("geeChatMessages");
+
+    const responseDiv = document.createElement("div");
+    responseDiv.className =
+      "gee-chat-message gee-chat-assistant gee-layer-response";
+
+    responseDiv.innerHTML = `
+      <div class="gee-response-text">${this.#formatMessage(data.response)}</div>
+      
+      ${
+        data.legend
+          ? `
+        <div class="gee-legend-container">
+          <img src="${data.legend}" alt="Legend" class="gee-legend-image">
+        </div>
+      `
+          : ""
+      }
+      
+      <div class="gee-layer-controls">
+        <label class="gee-checkbox-label">
+          <input type="checkbox" 
+                 class="gee-layer-checkbox" 
+                 data-layer-id="${data.layer_id}"
+                 ${data.added ? "checked" : ""}>
+          <span>${data.added ? "Remove from map" : "Add to map"}</span>
+        </label>
+      </div>
+    `;
+
+    container.appendChild(responseDiv);
+    container.scrollTop = container.scrollHeight;
+
+    // Attach checkbox listener
+    const checkbox = responseDiv.querySelector(".gee-layer-checkbox");
+    checkbox.addEventListener("change", (e) => {
+      this.#toggleGeeLayer(data.layer_id, e.target.checked);
+    });
+
+    lucide.createIcons();
+  }
+
+  #toggleGeeLayer(layerId, shouldAdd) {
+    const layerInfo = this.#geeLayers.get(layerId);
+    if (!layerInfo) return;
+
+    if (shouldAdd) {
+      // Add layer to map
+      if (!this.#map.getSource(layerId)) {
+        this.#map.addSource(layerId, {
+          type: "raster",
+          tiles: [layerInfo.tile_url],
+          tileSize: 256,
+        });
+
+        this.#map.addLayer({
+          id: layerId,
+          type: "raster",
+          source: layerId,
+          paint: { "raster-opacity": 0.7 },
+        });
+
+        layerInfo.added = true;
+        console.log(`✅ Added layer: ${layerId}`);
+      }
+    } else {
+      // Remove layer from map
+      if (this.#map.getLayer(layerId)) {
+        this.#map.removeLayer(layerId);
+        this.#map.removeSource(layerId);
+        layerInfo.added = false;
+        console.log(`❌ Removed layer: ${layerId}`);
+      }
+    }
+
+    // Update checkbox text
+    const checkbox = document.querySelector(`[data-layer-id="${layerId}"]`);
+    if (checkbox) {
+      const label = checkbox.nextElementSibling;
+      label.textContent = shouldAdd ? "Remove from map" : "Add to map";
+    }
   }
 }
 

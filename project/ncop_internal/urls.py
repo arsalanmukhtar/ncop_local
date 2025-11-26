@@ -12,6 +12,9 @@ from .views import (
     GdacsEventsGeojsonApi,
     GdacsEventDetailsApi,
     WAQIgeojson,
+    DynamicGEELayerView,
+    GEECatalogView,
+    GenerateLegendView,
     SlickPlusGeojsonApi,
     GdeltNewsEventsApi,
 
@@ -35,5 +38,8 @@ urlpatterns = [
     path("get-gdacs-events/<str:event_slug>/",GdacsEventsGeojsonApi.as_view(),name="get-gdacs-events",),
     path("get-gdacs-event-details/<str:event_type>/<int:event_id>/",GdacsEventDetailsApi.as_view(),name="gdacs-event-details",),
     path("get-gdacs-event-details/<str:event_type>/<int:event_id>/<int:episode_id>/",GdacsEventDetailsApi.as_view(),name="gdacs-event-details-ep",),
+    path('api/gee/dynamic-layer/', DynamicGEELayerView.as_view(), name='dynamic_gee'),
+    path('api/gee/catalog/', GEECatalogView.as_view(), name='gee_catalog'),
+    path('api/gee/legend/', GenerateLegendView.as_view(), name='gee_legend'),
     path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
 ]

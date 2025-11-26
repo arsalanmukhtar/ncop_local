@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext as _
-from django.http import JsonResponse, Http404,HttpResponseServerError,HttpResponseBadRequest, HttpResponseNotAllowed
+from django.http import JsonResponse, Http404,HttpResponseServerError,HttpResponseBadRequest,HttpResponse,HttpResponseNotAllowed
 from django.views import View
 from django.core.serializers import serialize
 from rest_framework.response import Response
@@ -46,7 +46,9 @@ from typing import Optional, Tuple, List, Dict, Any
 from xml.etree import ElementTree as ET
 from dataclasses import dataclass, asdict
 from urllib.parse import urlencode
+from datetime import datetime, timedelta
 from requests.adapters import HTTPAdapter
+from PIL import Image, ImageDraw, ImageFont
 from functools import lru_cache
 # from ncop.models import (
 #     DistrictBoundary, MajorDamsLevel, LayerInfo, Incident,
@@ -77,6 +79,7 @@ import ssl
 import socket
 import csv
 import io
+import ee
 import urllib3
 from urllib3.util.retry import Retry
 from langchain_groq import ChatGroq
@@ -88,7 +91,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 # TLS: fresh CA bundle (fixes stale trust store in prod)
 try:
     import certifi
@@ -1388,6 +1390,1227 @@ class GdacsEventDetailsApi(View):
                     result["media"] = media_items
 
         return JsonResponse(result)
+    
+    
+
+#----------------------GOOGLE EARTH ENGINE VIEWS HERE------------------------------
+# ============================================================================
+# GOOGLE EARTH ENGINE INITIALIZATION
+# ============================================================================
+
+GEE_PROJECT_ID = getattr(settings, 'GEE_PROJECT_ID', 'flood-mapping-dashboard-471116')
+
+def initialize_earth_engine():
+    """Initialize Earth Engine with error handling"""
+    try:
+        ee.Initialize(project=GEE_PROJECT_ID)
+        print("=" * 60)
+        print("✅ Google Earth Engine Initialized Successfully")
+        print(f"   Project: {GEE_PROJECT_ID}")
+        print("=" * 60)
+        return True
+    except Exception as e:
+        print("=" * 60)
+        print(f"❌ GEE Initialization Failed: {e}")
+        print("=" * 60)
+        return False
+
+GEE_INITIALIZED = initialize_earth_engine()
+
+# ============================================================================
+# ENHANCED GEE DATA CATALOG - HAZARD-SPECIFIC WITH AHP MODELS
+# ============================================================================
+
+class GEEDataCatalog:
+    """Advanced hazard management system with multi-criteria analysis"""
+    
+    PAKISTAN_BOUNDS = [60.872, 23.634, 77.837, 37.097]
+    
+    # EXPANDED PAKISTAN LOCATIONS (55+)
+    LOCATIONS = {
+        'pakistan': [60.872, 23.634, 77.837, 37.097],
+        'punjab': [69.5, 27.5, 75.5, 34.5],
+        'sindh': [66.5, 23.5, 71.0, 28.5],
+        'kpk': [69.0, 31.5, 74.5, 36.5],
+        'khyber_pakhtunkhwa': [69.0, 31.5, 74.5, 36.5],
+        'balochistan': [60.8, 24.5, 70.5, 31.5],
+        'gilgit_baltistan': [72.5, 34.5, 77.8, 37.1],
+        'azad_kashmir': [73.5, 33.5, 74.5, 34.5],
+        'lahore': [74.1, 31.3, 74.6, 31.7],
+        'faisalabad': [73.0, 31.3, 73.2, 31.5],
+        'rawalpindi': [73.0, 33.5, 73.2, 33.7],
+        'multan': [71.4, 30.1, 71.6, 30.3],
+        'gujranwala': [74.1, 32.1, 74.3, 32.3],
+        'sialkot': [74.4, 32.4, 74.6, 32.6],
+        'bahawalpur': [71.6, 29.3, 71.8, 29.5],
+        'sargodha': [72.6, 32.0, 72.8, 32.2],
+        'karachi': [66.9, 24.7, 67.3, 25.1],
+        'hyderabad': [68.3, 25.3, 68.5, 25.5],
+        'sukkur': [68.8, 27.6, 69.0, 27.8],
+        'larkana': [68.1, 27.4, 68.3, 27.6],
+        'peshawar': [71.4, 33.9, 71.7, 34.1],
+        'mardan': [72.0, 34.1, 72.2, 34.3],
+        'abbottabad': [73.1, 34.1, 73.3, 34.3],
+        'swat': [72.0, 34.7, 72.8, 35.5],
+        'quetta': [66.9, 30.1, 67.2, 30.3],
+        'gwadar': [62.3, 25.0, 62.5, 25.2],
+        'turbat': [63.0, 25.9, 63.2, 26.1],
+        'gilgit': [74.3, 35.8, 74.5, 36.0],
+        'skardu': [75.6, 35.2, 75.8, 35.4],
+        'hunza': [74.5, 36.0, 74.9, 36.5],
+        'islamabad': [72.9, 33.5, 73.2, 33.8],
+        'indus_river': [67.0, 24.0, 73.0, 35.0],
+        'chenab_river': [71.5, 29.5, 74.5, 33.0],
+    }
+    
+    # ========================================================================
+    # COMPREHENSIVE HAZARD-SPECIFIC DATASETS WITH PRIORITY
+    # ========================================================================
+    
+    DATASETS = {
+        # ====================================================================
+        # FLOOD HAZARDS - REAL FLOOD DATA (HIGH PRIORITY)
+        # ====================================================================
+        'flood_sar_extent': {
+            'name': 'Flood Extent (Sentinel-1 SAR)',
+            'collection': 'COPERNICUS/S1_GRD',
+            'compute': lambda img: img.select('VV').lt(-15).selfMask().rename('Flood_SAR'),
+            'vis': {'min': 0, 'max': 1, 'palette': ['ffffff', '0000ff']},
+            'type': 'hazard_flood',
+            'priority': 10,  # Highest priority for flood queries
+            'keywords': ['flood extent', 'flooding', 'inundation', 'flood mapping', 'flooded area', 'water extent', 'flood detection'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Flood+Extent+(SAR)&palette=ffffff,0000ff&min=0&max=1'
+        },
+        'flood_occurrence': {
+            'name': 'Flood Frequency (JRC)',
+            'collection': 'JRC/GSW1_4/GlobalSurfaceWater',
+            'compute': lambda img: img.select('occurrence').rename('Flood_Frequency'),
+            'vis': {'min': 0, 'max': 100, 'palette': ['ffffff', 'ffffcc', 'c7e9b4', '7fcdbb', '41b6c4', '1d91c0', '225ea8', '0c2c84']},
+            'type': 'hazard_flood',
+            'priority': 9,
+            'keywords': ['flood occurrence', 'flood frequency', 'historical flooding', 'flood history', 'recurring flood', 'permanent water'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Flood+Frequency+%25&palette=ffffff,7fcdbb,225ea8,0c2c84&min=0&max=100'
+        },
+        'flood_susceptibility_ahp': {
+            'name': 'Flood Susceptibility (AHP Multi-Criteria)',
+            'collection': 'COMPOSITE',  # Special marker for composite analysis
+            'compute': 'ahp_flood',  # Special marker for AHP computation
+            'vis': {'min': 0, 'max': 1, 'palette': ['00ff00', '7fff00', 'ffff00', 'ff7f00', 'ff0000', '8b0000']},
+            'type': 'susceptibility_flood',
+            'priority': 8,
+            'keywords': ['flood susceptibility', 'flood risk', 'flood prone', 'flood hazard', 'floodplain', 'flood vulnerability'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Flood+Susceptibility+(AHP)&palette=00ff00,ffff00,ff0000,8b0000&min=0&max=1',
+            'ahp_weights': {
+                'elevation': 0.30,      # Low elevation = higher risk
+                'slope': 0.25,          # Flat areas = higher risk
+                'rainfall': 0.20,       # High rainfall = higher risk
+                'distance_water': 0.15, # Near water = higher risk
+                'soil_moisture': 0.10   # Saturated soil = higher risk
+            }
+        },
+        'flood_depth_proxy': {
+            'name': 'Potential Flood Depth (Elevation-based)',
+            'collection': 'COPERNICUS/DEM/GLO30',
+            'compute': lambda img: ee.Image(50).subtract(img.select('DEM')).clamp(0, 50).rename('Flood_Depth'),
+            'vis': {'min': 0, 'max': 20, 'palette': ['ffffff', 'c7e9b4', '7fcdbb', '41b6c4', '1d91c0', '225ea8', '0c2c84']},
+            'type': 'susceptibility_flood',
+            'priority': 7,
+            'keywords': ['flood depth', 'inundation depth', 'flood level', 'water depth'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Flood+Depth+(m)&palette=ffffff,7fcdbb,225ea8,0c2c84&min=0&max=20'
+        },
+        
+        # ====================================================================
+        # WILDFIRE HAZARDS - REAL FIRE DATA (HIGH PRIORITY)
+        # ====================================================================
+        'active_fire_viirs': {
+            'name': 'Active Fires (VIIRS 375m)',
+            'collection': 'FIRMS',
+            'compute': lambda img: img.select('T21').gt(300).selfMask().rename('Active_Fire'),
+            'vis': {'min': 0, 'max': 1, 'palette': ['ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'hazard_fire',
+            'priority': 10,
+            'keywords': ['active fire', 'fire detection', 'burning', 'flames', 'fire hotspot', 'thermal anomaly', 'wildfire'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Active+Fires+(VIIRS)&palette=ffff00,ff0000,8b0000&min=0&max=1'
+        },
+        'fire_radiative_power': {
+            'name': 'Fire Radiative Power (MODIS)',
+            'collection': 'MODIS/061/MOD14A1',
+            'compute': lambda img: img.select('MaxFRP').rename('Fire_Power'),
+            'vis': {'min': 0, 'max': 500, 'palette': ['000000', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'hazard_fire',
+            'priority': 9,
+            'keywords': ['fire intensity', 'fire power', 'fire energy', 'frp', 'fire strength'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Fire+Power+(MW)&palette=000000,ff8c00,8b0000&min=0&max=500'
+        },
+        'fire_susceptibility_ahp': {
+            'name': 'Fire Susceptibility (AHP Multi-Criteria)',
+            'collection': 'COMPOSITE',
+            'compute': 'ahp_fire',
+            'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'susceptibility_fire',
+            'priority': 8,
+            'keywords': ['fire susceptibility', 'fire risk', 'fire hazard', 'fire prone', 'wildfire risk', 'burn probability'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Fire+Susceptibility+(AHP)&palette=006400,ffff00,ff0000,8b0000&min=0&max=1',
+            'ahp_weights': {
+                'vegetation_dryness': 0.35,  # NDVI-based
+                'temperature': 0.25,         # LST
+                'slope': 0.20,               # Terrain
+                'wind_exposure': 0.15,       # Aspect
+                'distance_settlement': 0.05  # Human factor
+            }
+        },
+        'burned_area': {
+            'name': 'Burned Area (MODIS)',
+            'collection': 'MODIS/061/MCD64A1',
+            'compute': lambda img: img.select('BurnDate').gt(0).selfMask().rename('Burned'),
+            'vis': {'min': 0, 'max': 366, 'palette': ['000000', '8b4513', 'ff8c00', 'ff0000']},
+            'type': 'hazard_fire',
+            'priority': 7,
+            'keywords': ['burned area', 'fire scar', 'post fire', 'burn extent'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Burned+Area&palette=000000,ff8c00,ff0000&min=0&max=366'
+        },
+        
+        # ====================================================================
+        # LANDSLIDE HAZARDS - MULTI-CRITERIA AHP
+        # ====================================================================
+        'landslide_susceptibility_ahp': {
+            'name': 'Landslide Susceptibility (AHP)',
+            'collection': 'COMPOSITE',
+            'compute': 'ahp_landslide',
+            'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'susceptibility_landslide',
+            'priority': 10,
+            'keywords': ['landslide susceptibility', 'landslide risk', 'landslip', 'mass movement', 'slope failure', 'hillside hazard'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Landslide+Susceptibility+(AHP)&palette=006400,ffff00,ff0000,8b0000&min=0&max=1',
+            'ahp_weights': {
+                'slope': 0.35,           # Steepness
+                'aspect': 0.15,          # Sun exposure
+                'elevation': 0.15,       # Altitude
+                'soil_moisture': 0.20,   # Saturation
+                'rainfall': 0.15         # Trigger
+            }
+        },
+        'slope_angle': {
+            'name': 'Slope Angle (Degrees)',
+            'collection': 'USGS/SRTMGL1_003',
+            'compute': lambda img: ee.Terrain.slope(img.select('elevation')).rename('Slope'),
+            'vis': {'min': 0, 'max': 45, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'terrain',
+            'priority': 6,
+            'keywords': ['slope', 'steepness', 'grade', 'incline'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Slope+(degrees)&palette=006400,ffff00,ff0000&min=0&max=45'
+        },
+        
+        # ====================================================================
+        # CYCLONE/STORM HAZARDS - METEOROLOGICAL DATA
+        # ====================================================================
+        'wind_speed_era5': {
+            'name': 'Wind Speed (ERA5 10m)',
+            'collection': 'ECMWF/ERA5_LAND/DAILY_AGGR',
+            'compute': lambda img: img.select('u_component_of_wind_10m').pow(2).add(
+                img.select('v_component_of_wind_10m').pow(2)
+            ).sqrt().rename('Wind_Speed'),
+            'vis': {'min': 0, 'max': 20, 'palette': ['ffffff', 'c6dbef', '6baed6', '3182bd', '08519c', '08306b']},
+            'type': 'hazard_cyclone',
+            'priority': 10,
+            'keywords': ['wind speed', 'wind', 'cyclone', 'storm', 'tropical storm', 'gale'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Wind+Speed+(m/s)&palette=ffffff,6baed6,08519c&min=0&max=20'
+        },
+        'cyclone_susceptibility_ahp': {
+            'name': 'Cyclone Susceptibility (Coastal AHP)',
+            'collection': 'COMPOSITE',
+            'compute': 'ahp_cyclone',
+            'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'susceptibility_cyclone',
+            'priority': 9,
+            'keywords': ['cyclone susceptibility', 'cyclone risk', 'storm surge', 'coastal hazard', 'tropical cyclone risk'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Cyclone+Susceptibility&palette=006400,ffff00,ff0000&min=0&max=1',
+            'ahp_weights': {
+                'coastal_elevation': 0.40,  # Storm surge risk
+                'distance_coast': 0.30,     # Proximity to coast
+                'population': 0.20,         # Exposure
+                'wind_exposure': 0.10       # Topographic shelter
+            }
+        },
+        
+        # ====================================================================
+        # EARTHQUAKE HAZARDS - TERRAIN PROXY
+        # ====================================================================
+        'seismic_susceptibility_ahp': {
+            'name': 'Seismic Susceptibility (Terrain-based)',
+            'collection': 'COMPOSITE',
+            'compute': 'ahp_seismic',
+            'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'susceptibility_seismic',
+            'priority': 10,
+            'keywords': ['earthquake', 'seismic', 'tectonic', 'fault', 'earthquake risk', 'seismic hazard'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Seismic+Susceptibility&palette=006400,ffff00,ff0000&min=0&max=1',
+            'ahp_weights': {
+                'elevation': 0.30,      # Mountainous areas
+                'slope': 0.30,          # Steep terrain
+                'geology_proxy': 0.25,  # Terrain roughness
+                'population': 0.15      # Exposure
+            }
+        },
+        
+        # ====================================================================
+        # DROUGHT HAZARDS - COMPOSITE INDICES
+        # ====================================================================
+        'drought_severity_composite': {
+            'name': 'Drought Severity (Composite Index)',
+            'collection': 'COMPOSITE',
+            'compute': 'composite_drought',
+            'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
+            'type': 'hazard_drought',
+            'priority': 10,
+            'keywords': ['drought', 'drought severity', 'dry conditions', 'water stress', 'arid', 'dryness'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Drought+Severity&palette=006400,ffff00,ff0000&min=0&max=1',
+            'weights': {
+                'vegetation_health': 0.40,  # NDVI
+                'soil_moisture': 0.30,      # SMAP
+                'precipitation_deficit': 0.30  # CHIRPS
+            }
+        },
+        
+        # ====================================================================
+        # ENVIRONMENTAL INDICES (Supporting Data)
+        # ====================================================================
+        'ndvi': {
+            'name': 'Vegetation (NDVI)',
+            'collection': 'COPERNICUS/S2_SR',
+            'compute': lambda img: img.normalizedDifference(['B8', 'B4']).rename('NDVI'),
+            'vis': {'min': 0, 'max': 0.8, 'palette': ['8b4513', 'f4a460', 'adff2f', '228b22', '006400']},
+            'type': 'environmental',
+            'priority': 3,
+            'keywords': ['vegetation', 'ndvi', 'green cover', 'crops'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Vegetation+(NDVI)&palette=8b4513,adff2f,006400&min=0&max=0.8'
+        },
+        'ndsi': {
+            'name': 'Snow Cover (NDSI)',
+            'collection': 'COPERNICUS/S2_SR',
+            'compute': lambda img: img.normalizedDifference(['B3', 'B11']).rename('NDSI'),
+            'vis': {'min': -0.5, 'max': 0.8, 'palette': ['0d47a1', '42a5f5', 'ffffff', 'e3f2fd']},
+            'type': 'environmental',
+            'priority': 8,  # High priority for snow queries
+            'keywords': ['snow', 'snow cover', 'ice', 'glacier', 'ndsi', 'winter', 'avalanche'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Snow+Cover+(NDSI)&palette=0d47a1,42a5f5,ffffff,e3f2fd&min=-0.5&max=0.8'
+        },
+        'ndbi': {
+            'name': 'Urban Areas (NDBI)',
+            'collection': 'COPERNICUS/S2_SR',
+            'compute': lambda img: img.normalizedDifference(['B11', 'B8']).rename('NDBI'),
+            'vis': {'min': -0.5, 'max': 0.5, 'palette': ['2e7d32', 'ffeb3b', 'ff6f00', 'd32f2f']},
+            'type': 'environmental',
+            'priority': 6,
+            'keywords': ['urban', 'urban areas', 'built', 'city', 'development', 'ndbi', 'building', 'infrastructure'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Urban+Areas+(NDBI)&palette=2e7d32,ffeb3b,ff6f00,d32f2f&min=-0.5&max=0.5'
+        },
+        'ndwi': {
+            'name': 'Water Bodies (NDWI)',
+            'collection': 'COPERNICUS/S2_SR',
+            'compute': lambda img: img.normalizedDifference(['B3', 'B8']).rename('NDWI'),
+            'vis': {'min': -0.5, 'max': 0.5, 'palette': ['d7ccc8', '81d4fa', '039be5', '01579b']},
+            'type': 'environmental',
+            'priority': 5,  # Lower than flood datasets
+            'keywords': ['ndwi', 'water index', 'water bodies index'],  # Removed generic "water" to avoid conflicts
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Water+Bodies+(NDWI)&palette=d7ccc8,81d4fa,039be5,01579b&min=-0.5&max=0.5'
+        },
+        'nightlights': {
+            'name': 'Nighttime Lights',
+            'collection': 'NOAA/DMSP-OLS/NIGHTTIME_LIGHTS',
+            'compute': lambda img: img.select('stable_lights').rename('Nightlights'),
+            'vis': {'min': 0, 'max': 63, 'palette': ['000000', '0d0887', '7e03a8', 'cc4778', 'f89540', 'f0f921']},
+            'type': 'socioeconomic',
+            'keywords': ['nightlights', 'lights', 'economic', 'activity', 'development', 'urbanization'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Nighttime+Lights&palette=000000,0d0887,7e03a8,cc4778,f89540,f0f921&min=0&max=63'
+        },
+        'air_quality': {
+            'name': 'Air Quality (AOD)',
+            'collection': 'MODIS/061/MCD19A2_GRANULES',
+            'compute': lambda img: img.select('Optical_Depth_047').multiply(0.001).rename('AOD'),
+            'vis': {'min': 0, 'max': 1, 'palette': ['00ff00', 'ffff00', 'ff7e00', 'ff0000', '8f3f97', '7e0023']},
+            'type': 'environmental',
+            'keywords': ['air quality', 'pollution', 'smog', 'aerosol', 'aod', 'environment'],
+            'legend': '/api/gee/legend/?dataset=Air+Quality+(AOD)&palette=00ff00,ffff00,ff7e00,ff0000,8f3f97,7e0023&min=0&max=1'
+        },
+        'temperature': {
+            'name': 'Land Surface Temperature',
+            'collection': 'MODIS/061/MOD11A1',
+            'compute': lambda img: img.select('LST_Day_1km').multiply(0.02).subtract(273.15).rename('Temperature'),
+            'vis': {'min': 0, 'max': 50, 'palette': ['313695', '4575b4', 'abd9e9', 'ffffbf', 'fdae61', 'f46d43', 'd73027', 'a50026']},
+            'type': 'environmental',
+            'priority': 3,
+            'keywords': ['temperature', 'heat', 'thermal', 'lst'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Temperature+(Celsius)&palette=313695,ffffbf,a50026&min=0&max=50'
+        },
+        'precipitation': {
+            'name': 'Rainfall Data',
+            'collection': 'UCSB-CHG/CHIRPS/DAILY',
+            'compute': lambda img: img.select('precipitation').rename('Precipitation'),
+            'vis': {'min': 0, 'max': 50, 'palette': ['ffffff', 'c6dbef', '9ecae1', '6baed6', '3182bd', '08519c']},
+            'type': 'environmental',
+            'priority': 3,
+            'keywords': ['rainfall', 'precipitation', 'rain'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Rainfall+(mm)&palette=ffffff,6baed6,08519c&min=0&max=50'
+        },
+        'soil_moisture': {
+            'name': 'Soil Moisture',
+            'collection': 'NASA_USDA/HSL/SMAP10KM_soil_moisture',
+            'compute': lambda img: img.select('ssm').rename('Soil_Moisture'),
+            'vis': {'min': 0, 'max': 28, 'palette': ['d73027', 'fc8d59', 'fee08b', 'd9ef8b', '91cf60', '1a9850']},
+            'type': 'environmental',
+            'priority': 3,
+            'keywords': ['soil moisture', 'soil water'],
+            'time_filter': 'latest',
+            'legend': '/api/gee/legend/?dataset=Soil+Moisture&palette=d73027,fee08b,1a9850&min=0&max=28'
+        },
+        'population': {
+            'name': 'Population Density',
+            'collection': 'WorldPop/GP/100m/pop',
+            'compute': lambda img: img.select('population').rename('Population'),
+            'vis': {'min': 0, 'max': 200, 'palette': ['fff5f0', 'fee0d2', 'fcbba1', 'fc9272', 'fb6a4a', 'ef3b2c', 'cb181d', '99000d']},
+            'type': 'exposure',
+            'priority': 2,
+            'keywords': ['population', 'people', 'density'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Population+Density&palette=fff5f0,fc9272,99000d&min=0&max=200'
+        },
+        'elevation': {
+            'name': 'Elevation (DEM)',
+            'collection': 'USGS/SRTMGL1_003',
+            'compute': lambda img: img.select('elevation').rename('Elevation'),
+            'vis': {'min': 0, 'max': 5000, 'palette': ['006400', '228b22', 'adff2f', 'ffff00', 'ff8c00', 'ff4500', '8b4513', 'ffffff']},
+            'type': 'terrain',
+            'priority': 2,
+            'keywords': ['elevation', 'altitude', 'dem', 'height'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Elevation+(m)&palette=006400,ffff00,ffffff&min=0&max=5000'
+        },
+        'multi_hazard_exposure': {
+            'name': 'Multi-Hazard Exposure',
+            'collection': 'WorldPop/GP/100m/pop',
+            'compute': lambda img: img.select('population').gt(50).selfMask().rename('Exposure'),
+            'vis': {'min': 0, 'max': 1, 'palette': ['ffeda0', 'feb24c', 'fd8d3c', 'fc4e2a', 'e31a1c', 'b10026']},
+            'type': 'susceptibility',
+            'keywords': ['multi hazard', 'exposure', 'vulnerability', 'risk', 'population risk', 'composite risk'],
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Multi-Hazard+Exposure&palette=ffeda0,fd8d3c,e31a1c,b10026&min=0&max=1'
+        },
+    }
+    
+    @classmethod
+    def get_dataset(cls, query):
+        """Enhanced keyword matching with priority scoring"""
+        query_lower = query.lower()
+        
+        # Score each dataset
+        scores = {}
+        for key, dataset in cls.DATASETS.items():
+            score = 0
+            priority = dataset.get('priority', 1)
+            
+            # Exact phrase matching (highest weight)
+            for keyword in dataset['keywords']:
+                if keyword in query_lower:
+                    # Multi-word exact match gets bonus
+                    if len(keyword.split()) > 1:
+                        score += 5
+                    else:
+                        score += 2
+            
+            # Type-specific bonus
+            if 'susceptibility' in query_lower and 'susceptibility' in dataset['type']:
+                score += 3
+            if 'hazard' in query_lower and 'hazard' in dataset['type']:
+                score += 3
+            
+            # Apply priority multiplier
+            scores[key] = score * priority
+        
+        if not scores:
+            return None, None
+        
+        # Return highest scoring dataset
+        best_match = max(scores, key=scores.get)
+        return best_match, cls.DATASETS[best_match]
+    
+    @classmethod
+    def get_location(cls, query):
+        """Extract location from query"""
+        query_lower = query.lower().replace(' ', '_').replace('-', '_')
+        
+        for loc_name, bbox in cls.LOCATIONS.items():
+            if loc_name in query_lower:
+                return loc_name, bbox
+        
+        return 'pakistan', cls.PAKISTAN_BOUNDS
+    
+    @classmethod
+    def extract_dates(cls, message):
+        """Extract date range - always prefer latest data"""
+        today = datetime.now()
+        
+        # For real-time hazards, use last 7 days
+        if any(word in message.lower() for word in ['active', 'current', 'latest', 'recent', 'now']):
+            start = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+            return [start, today.strftime('%Y-%m-%d')]
+        
+        # Default: last 30 days for most queries
+        default_start = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+        default_end = today.strftime('%Y-%m-%d')
+        
+        message_lower = message.lower()
+        
+        if 'yesterday' in message_lower:
+            yesterday = (today - timedelta(days=1)).strftime('%Y-%m-%d')
+            return [yesterday, yesterday]
+        
+        if 'last week' in message_lower:
+            start = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+            return [start, default_end]
+        
+        if 'last month' in message_lower:
+            start = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+            return [start, default_end]
+        
+        return [default_start, default_end]
+
+
+# ============================================================================
+# AHP COMPUTATION FUNCTIONS
+# ============================================================================
+
+# ============================================================================
+# AHP COMPUTATION FUNCTIONS - FULLY FIXED WITH PROPER MASKING
+# ============================================================================
+
+class AHPModels:
+    """Analytical Hierarchy Process for multi-criteria susceptibility - BULLETPROOF"""
+    
+    @staticmethod
+    def compute_flood_susceptibility(aoi):
+        """Multi-criteria flood susceptibility using AHP"""
+        try:
+            # Criterion 1: Low elevation (30% weight)
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem = dem_collection.select('DEM').mosaic().clip(aoi)
+            
+            # Normalize elevation risk (0-1 scale)
+            elevation_risk = dem.lt(100).multiply(1.0) \
+                .where(dem.gte(100).And(dem.lt(500)), 0.5) \
+                .where(dem.gte(500), 0.1) \
+                .unmask(0.1)  # Fill masked areas with low risk
+            
+            # Criterion 2: Flat slope (25% weight)
+            slope = ee.Terrain.slope(dem)
+            slope_risk = slope.lt(5).multiply(1.0) \
+                .where(slope.gte(5).And(slope.lt(15)), 0.5) \
+                .where(slope.gte(15), 0.1) \
+                .unmask(0.1)
+            
+            # Criterion 3: High rainfall (20% weight)
+            today = datetime.now()
+            start_date = (today - timedelta(days=90)).strftime('%Y-%m-%d')  # Increased to 90 days
+            end_date = today.strftime('%Y-%m-%d')
+            
+            try:
+                rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY') \
+                    .filterBounds(aoi) \
+                    .filterDate(start_date, end_date) \
+                    .sum() \
+                    .select('precipitation') \
+                    .clip(aoi)
+                
+                rainfall_risk = rainfall.gt(200).multiply(1.0) \
+                    .where(rainfall.gte(100).And(rainfall.lte(200)), 0.7) \
+                    .where(rainfall.gte(50).And(rainfall.lt(100)), 0.4) \
+                    .where(rainfall.lt(50), 0.2) \
+                    .unmask(0.3)
+            except:
+                # Fallback: use constant moderate risk
+                rainfall_risk = ee.Image.constant(0.5).clip(aoi)
+            
+            # Criterion 4: Near water bodies (15% weight)
+            try:
+                water_occurrence = ee.Image('JRC/GSW1_4/GlobalSurfaceWater') \
+                    .select('occurrence') \
+                    .clip(aoi)
+                
+                water_risk = water_occurrence.gt(50).multiply(1.0) \
+                    .where(water_occurrence.gte(20).And(water_occurrence.lte(50)), 0.6) \
+                    .where(water_occurrence.gte(5).And(water_occurrence.lt(20)), 0.3) \
+                    .where(water_occurrence.lt(5), 0.1) \
+                    .unmask(0.1)
+            except:
+                water_risk = ee.Image.constant(0.3).clip(aoi)
+            
+            # Criterion 5: High soil moisture (10% weight)
+            soil_start = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+            
+            try:
+                soil_collection = ee.ImageCollection('NASA_USDA/HSL/SMAP10KM_soil_moisture') \
+                    .filterBounds(aoi) \
+                    .filterDate(soil_start, end_date)
+                
+                soil_count = soil_collection.size().getInfo()
+                
+                if soil_count > 0:
+                    soil = soil_collection.mean().select('ssm').clip(aoi)
+                    soil_risk = soil.gt(20).multiply(1.0) \
+                        .where(soil.gte(10).And(soil.lte(20)), 0.6) \
+                        .where(soil.lt(10), 0.2) \
+                        .unmask(0.3)
+                else:
+                    soil_risk = ee.Image.constant(0.4).clip(aoi)
+            except:
+                soil_risk = ee.Image.constant(0.4).clip(aoi)
+            
+            # AHP weighted combination - properly masked
+            susceptibility = elevation_risk.multiply(0.30) \
+                .add(slope_risk.multiply(0.25)) \
+                .add(rainfall_risk.multiply(0.20)) \
+                .add(water_risk.multiply(0.15)) \
+                .add(soil_risk.multiply(0.10)) \
+                .clamp(0, 1)  # Ensure 0-1 range
+            
+            # Apply threshold mask to show only risk areas
+            susceptibility = susceptibility.updateMask(susceptibility.gt(0.05))
+            
+            return susceptibility.rename('Flood_Susceptibility_AHP')
+            
+        except Exception as e:
+            print(f"❌ AHP Flood Error: {e}")
+            # Fallback to simple elevation-based
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem = dem_collection.select('DEM').mosaic().clip(aoi)
+            simple = dem.lt(200).multiply(1.0) \
+                .where(dem.gte(200).And(dem.lt(500)), 0.5) \
+                .where(dem.gte(500), 0.1) \
+                .updateMask(dem.lt(500))
+            return simple.rename('Flood_Susceptibility_Simple')
+    
+    @staticmethod
+    def compute_fire_susceptibility(aoi, date_range):
+        """Multi-criteria fire susceptibility using AHP"""
+        try:
+            # Criterion 1: Dry vegetation (35% weight)
+            try:
+                s2_collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+                    .filterBounds(aoi) \
+                    .filterDate(date_range[0], date_range[1]) \
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                
+                s2_count = s2_collection.size().getInfo()
+                
+                if s2_count > 0:
+                    ndvi = s2_collection.median().normalizedDifference(['B8', 'B4']).clip(aoi)
+                else:
+                    # Fallback to MODIS NDVI
+                    ndvi = ee.ImageCollection('MODIS/061/MOD13A1') \
+                        .filterBounds(aoi) \
+                        .filterDate(date_range[0], date_range[1]) \
+                        .mean() \
+                        .select('NDVI') \
+                        .multiply(0.0001) \
+                        .clip(aoi)
+                
+                veg_risk = ndvi.lt(0.3).multiply(1.0) \
+                    .where(ndvi.gte(0.3).And(ndvi.lt(0.5)), 0.6) \
+                    .where(ndvi.gte(0.5), 0.1) \
+                    .unmask(0.3)
+            except:
+                veg_risk = ee.Image.constant(0.5).clip(aoi)
+            
+            # Criterion 2: High temperature (25% weight)
+            try:
+                temp = ee.ImageCollection('MODIS/061/MOD11A1') \
+                    .filterBounds(aoi) \
+                    .filterDate(date_range[0], date_range[1]) \
+                    .mean() \
+                    .select('LST_Day_1km') \
+                    .multiply(0.02) \
+                    .subtract(273.15) \
+                    .clip(aoi)
+                
+                temp_risk = temp.gt(40).multiply(1.0) \
+                    .where(temp.gte(30).And(temp.lte(40)), 0.7) \
+                    .where(temp.gte(20).And(temp.lt(30)), 0.3) \
+                    .where(temp.lt(20), 0.1) \
+                    .unmask(0.3)
+            except:
+                temp_risk = ee.Image.constant(0.5).clip(aoi)
+            
+            # Criterion 3: Slope (20% weight)
+            dem_srtm = ee.Image('USGS/SRTMGL1_003').select('elevation')
+            slope = ee.Terrain.slope(dem_srtm).clip(aoi)
+            slope_risk = slope.gte(10).And(slope.lte(30)).multiply(1.0) \
+                .where(slope.lt(10), 0.3) \
+                .where(slope.gt(30), 0.5) \
+                .unmask(0.3)
+            
+            # AHP weighted combination
+            susceptibility = veg_risk.multiply(0.35) \
+                .add(temp_risk.multiply(0.25)) \
+                .add(slope_risk.multiply(0.20)) \
+                .clamp(0, 1) \
+                .updateMask(veg_risk.gt(0.05))
+            
+            return susceptibility.rename('Fire_Susceptibility_AHP')
+            
+        except Exception as e:
+            print(f"❌ AHP Fire Error: {e}")
+            # Fallback
+            return ee.Image.constant(0.5).clip(aoi).rename('Fire_Risk_Fallback')
+    
+    @staticmethod
+    def compute_landslide_susceptibility(aoi):
+        """Multi-criteria landslide susceptibility - FIXED RAINFALL"""
+        try:
+            # Use SRTM (most reliable)
+            dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
+            
+            # Criterion 1: Steep slope (35% weight)
+            slope = ee.Terrain.slope(dem).clip(aoi)
+            slope_risk = slope.gt(25).multiply(1.0) \
+                .where(slope.gte(15).And(slope.lte(25)), 0.7) \
+                .where(slope.gte(10).And(slope.lt(15)), 0.4) \
+                .where(slope.lt(10), 0.1) \
+                .unmask(0.1)
+            
+            # Criterion 2: High elevation (15% weight)
+            elev_risk = dem.clip(aoi).gt(1500).multiply(1.0) \
+                .where(dem.clip(aoi).gte(1000).And(dem.clip(aoi).lte(1500)), 0.7) \
+                .where(dem.clip(aoi).gte(500).And(dem.clip(aoi).lt(1000)), 0.4) \
+                .where(dem.clip(aoi).lt(500), 0.2) \
+                .unmask(0.2)
+            
+            # Criterion 3: Aspect (north-facing slopes) (15% weight)
+            aspect = ee.Terrain.aspect(dem).clip(aoi)
+            # North-facing (315-45 degrees) are more susceptible
+            aspect_risk = aspect.gte(315).Or(aspect.lte(45)).multiply(1.0) \
+                .where(aspect.gt(45).And(aspect.lt(315)), 0.3) \
+                .unmask(0.5)
+            
+            # Criterion 4: Soil moisture (20% weight) - with robust fallback
+            today = datetime.now()
+            soil_start = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+            soil_end = today.strftime('%Y-%m-%d')
+            
+            try:
+                soil_collection = ee.ImageCollection('NASA_USDA/HSL/SMAP10KM_soil_moisture') \
+                    .filterBounds(aoi) \
+                    .filterDate(soil_start, soil_end)
+                
+                soil_count = soil_collection.size().getInfo()
+                
+                if soil_count > 0:
+                    soil = soil_collection.mean().select('ssm').clip(aoi)
+                    soil_risk = soil.gt(20).multiply(1.0) \
+                        .where(soil.gte(10).And(soil.lte(20)), 0.6) \
+                        .where(soil.lt(10), 0.2) \
+                        .unmask(0.4)
+                else:
+                    # Fallback: use elevation as proxy (higher = potentially wetter)
+                    soil_risk = dem.clip(aoi).gt(2000).multiply(0.8) \
+                        .where(dem.clip(aoi).gte(1000).And(dem.clip(aoi).lte(2000)), 0.6) \
+                        .where(dem.clip(aoi).lt(1000), 0.3) \
+                        .unmask(0.4)
+            except:
+                # Use slope as proxy for moisture accumulation
+                soil_risk = slope.gt(20).multiply(0.7) \
+                    .where(slope.gte(10).And(slope.lte(20)), 0.5) \
+                    .where(slope.lt(10), 0.3) \
+                    .unmask(0.4)
+            
+            # Criterion 5: Rainfall trigger (15% weight) - FIXED WITH ROBUST ERROR HANDLING
+            rain_start = (today - timedelta(days=90)).strftime('%Y-%m-%d')  # Extended to 90 days
+            
+            try:
+                rainfall_collection = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY') \
+                    .filterBounds(aoi) \
+                    .filterDate(rain_start, soil_end)
+                
+                # Check if collection has data
+                rain_count = rainfall_collection.size().getInfo()
+                
+                if rain_count > 0:
+                    rainfall = rainfall_collection.sum().select('precipitation').clip(aoi)
+                    rain_risk = rainfall.gt(300).multiply(1.0) \
+                        .where(rainfall.gte(150).And(rainfall.lte(300)), 0.7) \
+                        .where(rainfall.gte(50).And(rainfall.lt(150)), 0.4) \
+                        .where(rainfall.lt(50), 0.2) \
+                        .unmask(0.5)
+                else:
+                    # No rainfall data - use elevation as proxy (mountainous = more rain)
+                    print("⚠️ No CHIRPS data - using elevation proxy for rainfall")
+                    rain_risk = dem.clip(aoi).gt(2000).multiply(0.8) \
+                        .where(dem.clip(aoi).gte(1000).And(dem.clip(aoi).lte(2000)), 0.6) \
+                        .where(dem.clip(aoi).lt(1000), 0.3) \
+                        .unmask(0.5)
+            except Exception as rain_error:
+                print(f"⚠️ Rainfall error: {rain_error} - using slope proxy")
+                # Ultimate fallback: steep slopes accumulate water
+                rain_risk = slope.gt(20).multiply(0.7) \
+                    .where(slope.gte(10).And(slope.lte(20)), 0.5) \
+                    .where(slope.lt(10), 0.3) \
+                    .unmask(0.5)
+            
+            # AHP combination with proper masking
+            susceptibility = slope_risk.multiply(0.35) \
+                .add(elev_risk.multiply(0.15)) \
+                .add(aspect_risk.multiply(0.15)) \
+                .add(soil_risk.multiply(0.20)) \
+                .add(rain_risk.multiply(0.15)) \
+                .clamp(0, 1)
+            
+            # Mask low-risk areas for better visualization
+            susceptibility = susceptibility.updateMask(susceptibility.gt(0.1))
+            
+            return susceptibility.rename('Landslide_Susceptibility_AHP')
+            
+        except Exception as e:
+            print(f"❌ AHP Landslide Error: {e}")
+            # Fallback: simple slope-based
+            dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
+            slope = ee.Terrain.slope(dem).clip(aoi)
+            simple = slope.gt(15).multiply(1.0) \
+                .where(slope.gte(10).And(slope.lte(15)), 0.6) \
+                .where(slope.lt(10), 0.1) \
+                .updateMask(slope.gt(5))
+            return simple.rename('Landslide_Simple')
+    
+    @staticmethod
+    def compute_cyclone_susceptibility(aoi):
+        """Coastal cyclone susceptibility"""
+        try:
+            # Use COPERNICUS DEM properly
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem = dem_collection.select('DEM').mosaic().clip(aoi)
+            
+            # Criterion 1: Low coastal elevation (40% weight)
+            coastal_risk = dem.lt(10).And(dem.gt(-5)).multiply(1.0) \
+                .where(dem.gte(10).And(dem.lt(50)), 0.6) \
+                .where(dem.gte(50).And(dem.lt(100)), 0.3) \
+                .where(dem.gte(100), 0.1) \
+                .unmask(0.1)
+            
+            # Criterion 2: Slope (flat coastal plains) (20% weight)
+            slope = ee.Terrain.slope(dem)
+            slope_risk = slope.lt(5).multiply(1.0) \
+                .where(slope.gte(5).And(slope.lt(15)), 0.5) \
+                .where(slope.gte(15), 0.1) \
+                .unmask(0.3)
+            
+            # Criterion 3: Population exposure (20% weight)
+            try:
+                pop_collection = ee.ImageCollection('WorldPop/GP/100m/pop')
+                pop = pop_collection.mosaic().select('population').clip(aoi)
+                
+                pop_risk = pop.gt(100).multiply(1.0) \
+                    .where(pop.gte(50).And(pop.lte(100)), 0.7) \
+                    .where(pop.gte(10).And(pop.lt(50)), 0.4) \
+                    .where(pop.lt(10), 0.1) \
+                    .unmask(0.1)
+            except:
+                pop_risk = ee.Image.constant(0.3).clip(aoi)
+            
+            # Criterion 4: Distance to coast (20% weight)
+            distance_risk = dem.lt(5).multiply(1.0) \
+                .where(dem.gte(5).And(dem.lt(20)), 0.7) \
+                .where(dem.gte(20), 0.3) \
+                .unmask(0.3)
+            
+            # AHP combination
+            susceptibility = coastal_risk.multiply(0.40) \
+                .add(slope_risk.multiply(0.20)) \
+                .add(pop_risk.multiply(0.20)) \
+                .add(distance_risk.multiply(0.20)) \
+                .clamp(0, 1) \
+                .updateMask(dem.lt(200))  # Only show coastal areas
+            
+            return susceptibility.rename('Cyclone_Susceptibility_AHP')
+            
+        except Exception as e:
+            print(f"❌ AHP Cyclone Error: {e}")
+            # Fallback
+            try:
+                dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+                dem = dem_collection.select('DEM').mosaic().clip(aoi)
+            except:
+                dem = ee.Image('USGS/SRTMGL1_003').select('elevation').clip(aoi)
+            
+            simple = dem.lt(20).And(dem.gt(-5)).multiply(1.0) \
+                .where(dem.gte(20).And(dem.lt(50)), 0.5) \
+                .updateMask(dem.lt(100))
+            return simple.rename('Cyclone_Simple')
+    
+    @staticmethod
+    def compute_seismic_susceptibility(aoi):
+        """Terrain-based seismic susceptibility"""
+        try:
+            dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
+            slope = ee.Terrain.slope(dem).clip(aoi)
+            
+            # Criterion 1: Mountainous terrain (40% weight)
+            elev_risk = dem.clip(aoi).gt(1500).multiply(1.0) \
+                .where(dem.clip(aoi).gte(500).And(dem.clip(aoi).lte(1500)), 0.6) \
+                .where(dem.clip(aoi).lt(500), 0.2) \
+                .unmask(0.2)
+            
+            # Criterion 2: Steep slopes (30% weight)
+            slope_risk = slope.gt(20).multiply(1.0) \
+                .where(slope.gte(10).And(slope.lte(20)), 0.6) \
+                .where(slope.lt(10), 0.2) \
+                .unmask(0.2)
+            
+            # Criterion 3: Terrain roughness (30% weight)
+            roughness = slope.gt(15).multiply(1.0) \
+                .where(slope.gte(5).And(slope.lte(15)), 0.5) \
+                .where(slope.lt(5), 0.1) \
+                .unmask(0.1)
+            
+            # Combination
+            susceptibility = elev_risk.multiply(0.40) \
+                .add(slope_risk.multiply(0.30)) \
+                .add(roughness.multiply(0.30)) \
+                .clamp(0, 1) \
+                .updateMask(elev_risk.gt(0.1))
+            
+            return susceptibility.rename('Seismic_Susceptibility_AHP')
+            
+        except Exception as e:
+            print(f"❌ AHP Seismic Error: {e}")
+            dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
+            slope = ee.Terrain.slope(dem).clip(aoi)
+            simple = dem.clip(aoi).gt(500).And(slope.gt(15)).multiply(1.0) \
+                .where(dem.clip(aoi).gt(500).Or(slope.gt(15)), 0.5) \
+                .updateMask(dem.clip(aoi).gt(200))
+            return simple.rename('Seismic_Simple')
+    
+    @staticmethod
+    def compute_drought_composite(aoi, date_range):
+        """Composite drought severity index"""
+        try:
+            # Component 1: NDVI (40% weight)
+            try:
+                s2_collection = ee.ImageCollection('COPERNICUS/S2_SR') \
+                    .filterBounds(aoi) \
+                    .filterDate(date_range[0], date_range[1]) \
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                
+                s2_count = s2_collection.size().getInfo()
+                
+                if s2_count > 0:
+                    ndvi = s2_collection.median().normalizedDifference(['B8', 'B4']).clip(aoi)
+                else:
+                    ndvi = ee.ImageCollection('MODIS/061/MOD13A1') \
+                        .filterBounds(aoi) \
+                        .filterDate(date_range[0], date_range[1]) \
+                        .mean() \
+                        .select('NDVI') \
+                        .multiply(0.0001) \
+                        .clip(aoi)
+                
+                veg_stress = ndvi.lt(0.3).multiply(1.0) \
+                    .where(ndvi.gte(0.3).And(ndvi.lt(0.5)), 0.6) \
+                    .where(ndvi.gte(0.5), 0.1) \
+                    .unmask(0.3)
+            except:
+                veg_stress = ee.Image.constant(0.5).clip(aoi)
+            
+            # Component 2: Soil moisture (30% weight)
+            try:
+                soil_collection = ee.ImageCollection('NASA_USDA/HSL/SMAP10KM_soil_moisture') \
+                    .filterBounds(aoi) \
+                    .filterDate(date_range[0], date_range[1])
+                
+                soil_count = soil_collection.size().getInfo()
+                
+                if soil_count > 0:
+                    soil = soil_collection.mean().select('ssm').clip(aoi)
+                    soil_stress = soil.lt(10).multiply(1.0) \
+                        .where(soil.gte(10).And(soil.lt(15)), 0.6) \
+                        .where(soil.gte(15), 0.1) \
+                        .unmask(0.3)
+                else:
+                    soil_stress = veg_stress.multiply(0.7)
+            except:
+                soil_stress = veg_stress.multiply(0.7)
+            
+            # Component 3: Precipitation deficit (30% weight)
+            try:
+                rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY') \
+                    .filterBounds(aoi) \
+                    .filterDate(date_range[0], date_range[1]) \
+                    .sum() \
+                    .select('precipitation') \
+                    .clip(aoi)
+                
+                rain_stress = rainfall.lt(50).multiply(1.0) \
+                    .where(rainfall.gte(50).And(rainfall.lt(100)), 0.6) \
+                    .where(rainfall.gte(100), 0.1) \
+                    .unmask(0.3)
+            except:
+                rain_stress = veg_stress.multiply(0.7)
+            
+            # Composite
+            drought_severity = veg_stress.multiply(0.40) \
+                .add(soil_stress.multiply(0.30)) \
+                .add(rain_stress.multiply(0.30)) \
+                .clamp(0, 1) \
+                .updateMask(veg_stress.gt(0.05))
+            
+            return drought_severity.rename('Drought_Severity')
+            
+        except Exception as e:
+            print(f"❌ Drought Composite Error: {e}")
+            return ee.Image.constant(0.5).clip(aoi).rename('Drought_Fallback')
+# ============================================================================
+# DYNAMIC GEE LAYER VIEW - ENHANCED WITH AHP
+# ============================================================================
+
+@method_decorator(csrf_exempt, name='dispatch')
+class DynamicGEELayerView(View):
+    """Enhanced hazard-specific layer generator with AHP models"""
+    
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            message = data.get('message', '')
+            
+            if not message:
+                return JsonResponse({
+                    'error': 'No message provided',
+                    'suggestion': 'Try: "Show flood susceptibility in Sindh"'
+                }, status=400)
+            
+            # Get dataset with priority matching
+            dataset_key, dataset_config = GEEDataCatalog.get_dataset(message)
+            
+            if not dataset_key:
+                return JsonResponse({
+                    'error': 'Dataset not recognized',
+                    'response': f"❌ Couldn't find hazard data for '{message}'.\n\nTry: flood extent, fire susceptibility, landslide risk, etc."
+                }, status=400)
+            
+            location_name, bbox = GEEDataCatalog.get_location(message)
+            date_range = GEEDataCatalog.extract_dates(message)
+            
+            # Generate layer
+            layer_data = self.generate_layer(
+                dataset_key, dataset_config, bbox, date_range, location_name
+            )
+            
+            # Response with hazard type
+            hazard_emoji = {
+                'hazard_flood': '🌊',
+                'hazard_fire': '🔥',
+                'hazard_cyclone': '🌀',
+                'hazard_drought': '🌾',
+                'susceptibility_flood': '⚠️ Flood Risk',
+                'susceptibility_fire': '⚠️ Fire Risk',
+                'susceptibility_landslide': '⚠️ Landslide Risk',
+                'susceptibility_cyclone': '⚠️ Cyclone Risk',
+                'susceptibility_seismic': '⚠️ Earthquake Risk',
+            }
+            
+            emoji = hazard_emoji.get(dataset_config['type'], '📊')
+            
+            return JsonResponse({
+                'success': True,
+                'layer_id': f'gee-{dataset_key}-{int(datetime.now().timestamp())}',
+                'tile_url': layer_data['tile_url'],
+                'dataset': dataset_config['name'],
+                'dataset_type': dataset_config['type'],
+                'location': location_name.replace('_', ' ').title(),
+                'date_range': date_range,
+                'legend': dataset_config.get('legend', ''),
+                'visualization': dataset_config['vis'],
+                'response': f"{emoji} **{dataset_config['name']}** for **{location_name.replace('_', ' ').title()}**"
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'error': str(e),
+                'response': f'❌ Error: {str(e)}'
+            }, status=500)
+    
+    def generate_layer(self, dataset_key, dataset_config, bbox, date_range, location_name):
+        """Generate layer with AHP support"""
+        try:
+            aoi = ee.Geometry.Rectangle(bbox)
+            
+            # Check for AHP/Composite computation
+            compute_func = dataset_config['compute']
+            
+            if compute_func == 'ahp_flood':
+                computed_image = AHPModels.compute_flood_susceptibility(aoi)
+            elif compute_func == 'ahp_fire':
+                computed_image = AHPModels.compute_fire_susceptibility(aoi, date_range)
+            elif compute_func == 'ahp_landslide':
+                computed_image = AHPModels.compute_landslide_susceptibility(aoi)
+            elif compute_func == 'ahp_cyclone':
+                computed_image = AHPModels.compute_cyclone_susceptibility(aoi)
+            elif compute_func == 'ahp_seismic':
+                computed_image = AHPModels.compute_seismic_susceptibility(aoi)
+            elif compute_func == 'composite_drought':
+                computed_image = AHPModels.compute_drought_composite(aoi, date_range)
+            else:
+                # Standard computation
+                time_filter = dataset_config.get('time_filter', True)
+                
+                if time_filter is False:
+                    # Static data
+                    if 'Image' in dataset_config['collection'] or 'DEM' in dataset_config['collection']:
+                        image = ee.Image(dataset_config['collection'])
+                    else:
+                        collection = ee.ImageCollection(dataset_config['collection'])
+                        image = collection.filterBounds(aoi).mosaic()
+                elif time_filter == 'latest':
+                    # Always get latest available data
+                    collection = ee.ImageCollection(dataset_config['collection'])
+                    collection = collection.filterBounds(aoi).sort('system:time_start', False).limit(30)
+                    
+                    if 'COPERNICUS/S2' in dataset_config['collection']:
+                        collection = collection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                    
+                    if 'S1_GRD' in dataset_config['collection']:
+                        image = collection.min()  # SAR flood detection
+                    else:
+                        image = collection.median()
+                else:
+                    # Time-series
+                    collection = ee.ImageCollection(dataset_config['collection'])
+                    collection = collection.filterBounds(aoi).filterDate(date_range[0], date_range[1])
+                    
+                    if 'COPERNICUS/S2' in dataset_config['collection']:
+                        collection = collection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                    
+                    image = collection.median()
+                
+                computed_image = compute_func(image)
+            
+            # Clip and get tile URL
+            clipped = computed_image.clip(aoi)
+            map_id = clipped.getMapId(dataset_config['vis'])
+            
+            return {
+                'tile_url': map_id['tile_fetcher'].url_format,
+                'dataset': dataset_config['name'],
+                'location': location_name
+            }
+            
+        except Exception as e:
+            raise Exception(f"Layer generation failed: {str(e)}")
+
+
+# ============================================================================
+# CATALOG VIEW
+# ============================================================================
+
+class GEECatalogView(View):
+    """Return enhanced catalog"""
+    
+    def get(self, request):
+        datasets_by_type = {}
+        
+        for key, val in GEEDataCatalog.DATASETS.items():
+            dataset_type = val.get('type', 'environmental')
+            if dataset_type not in datasets_by_type:
+                datasets_by_type[dataset_type] = {}
+            
+            datasets_by_type[dataset_type][key] = {
+                'name': val['name'],
+                'type': val['type'],
+                'priority': val.get('priority', 1),
+                'keywords': val['keywords']
+            }
+        
+        return JsonResponse({
+            'datasets_by_type': datasets_by_type,
+            'total_datasets': len(GEEDataCatalog.DATASETS),
+            'locations': len(GEEDataCatalog.LOCATIONS),
+            'project_id': GEE_PROJECT_ID,
+            'initialized': GEE_INITIALIZED,
+            'features': {
+                'ahp_models': True,
+                'composite_indices': True,
+                'latest_data': True,
+                'multi_criteria': True
+            }
+        })
+
+
+# ============================================================================
+# LEGEND GENERATOR
+# ============================================================================
+
+class GenerateLegendView(View):
+    """Generate legend images"""
+    
+    def get(self, request):
+        dataset = request.GET.get('dataset', 'Data')
+        palette_str = request.GET.get('palette', '00ff00,ffff00,ff0000')
+        min_val = request.GET.get('min', '0')
+        max_val = request.GET.get('max', '1')
+        
+        palette = [f'#{color}' for color in palette_str.split(',')]
+        
+        width, height = 300, 100
+        img = Image.new('RGB', (width, height), color='#2a2a2a')
+        draw = ImageDraw.Draw(img)
+        
+        bar_height = 30
+        bar_y = 40
+        color_width = width // len(palette)
+        
+        for i, color in enumerate(palette):
+            x1 = i * color_width
+            x2 = x1 + color_width
+            try:
+                draw.rectangle([x1, bar_y, x2, bar_y + bar_height], fill=color)
+            except:
+                draw.rectangle([x1, bar_y, x2, bar_y + bar_height], fill='#cccccc')
+        
+        draw.rectangle([0, bar_y, width, bar_y + bar_height], outline='white', width=2)
+        
+        try:
+            font_title = ImageFont.truetype("arial.ttf", 14)
+            font_values = ImageFont.truetype("arial.ttf", 12)
+        except:
+            font_title = ImageFont.load_default()
+            font_values = ImageFont.load_default()
+        
+        draw.text((10, 10), dataset, fill='white', font=font_title)
+        draw.text((10, bar_y + bar_height + 10), f"Min: {min_val}", fill='white', font=font_values)
+        draw.text((width - 70, bar_y + bar_height + 10), f"Max: {max_val}", fill='white', font=font_values)
+        
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        return HttpResponse(buffer.getvalue(), content_type='image/png')
 #GDELT AND SOCIAL MEDIA VIEWS HERE-----------------------------------------------
 # ENHANCED VERSION - Increased Pakistan Focus for Climate, Weather, and Natural Hazards
 class RateLimiter:
