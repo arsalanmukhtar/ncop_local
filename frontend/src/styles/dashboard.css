@@ -981,6 +981,20 @@
         color: rgba(40, 150, 40, 0.90) !important;
     }
 
+    .gee-chat-title {
+        color: var(--black);
+    }
+    #geeChatInput:focus {
+        color: var(--black);
+    }
+    #geeChatSend {
+        color: var(--black);
+    }
+    #geeChatSend:hover {
+        background: rgba(40, 150, 40, 1);
+    }
+    
+
 }
 
 /* ===========================
@@ -4486,8 +4500,8 @@ button.custom-nav-btn.terrain-active:hover {
     height: 550px;
     background: var(--primary-bg);
     border: 2px solid var(--border-light);
-    border-radius: 12px;
-    backdrop-filter: blur(20px) saturate(110%);
+    border-radius: 20px;
+    backdrop-filter: blur(15px) saturate(110%);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     display: flex;
     flex-direction: column;
@@ -4503,6 +4517,7 @@ button.custom-nav-btn.terrain-active:hover {
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-dark);
     background: var(--secondary-bg);
+    border-radius: 20px 20px 0 0;
 }
 
 .gee-chat-title {
@@ -4510,7 +4525,7 @@ button.custom-nav-btn.terrain-active:hover {
     align-items: center;
     gap: 10px;
     color: var(--white);
-    font-size: 14px;
+    font-size: 19px;
     font-weight: 600;
 }
 
@@ -4519,9 +4534,19 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 #geeChatClose {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 26px;
     height: 26px;
     padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 5px;
+}
+#geeChatClose:hover {
+    background: var(--ndma-red-opaque);
+    transition: all 0.3s ease;
 }
 
 /* Messages Container */
@@ -4630,10 +4655,13 @@ button.custom-nav-btn.terrain-active:hover {
 /* Input Wrapper */
 .gee-chat-input-wrapper {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     padding: 12px;
     border-top: 1px solid var(--border-dark);
     background: var(--secondary-bg);
+    border-radius: 0 0 20px 20px;
 }
 
 #geeChatInput {
@@ -4659,14 +4687,19 @@ button.custom-nav-btn.terrain-active:hover {
 #geeChatSend {
     width: 40px;
     height: 40px;
-    padding: 0;
-    background: var(--ndma-green);
-    border-color: var(--ndma-green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border-radius: 8px;
+    /* background: var(--ndma-green); */
+    /* border-color: var(--ndma-green); */
+    color: var(--white);
 }
 
 #geeChatSend:hover {
-    background: var(--ndma-green-opaque);
-    transform: scale(1.05);
+    background: var(--ndma-green);
+    transition: all 0.3s ease;
 }
 
 /* Active Button State */
@@ -4687,4 +4720,45 @@ button.custom-nav-btn.terrain-active:hover {
 
 .gee-chat-messages::-webkit-scrollbar-thumb {
     background: transparent;
+}
+/* GEE Layer Download Button */
+.gee-download-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin-top: 8px;
+    background: var(--ndma-blue);
+    border: 1px solid var(--ndma-blue);
+    border-radius: 6px;
+    color: var(--white);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    justify-content: center;
+}
+
+.gee-download-btn:hover {
+    background: var(--ndma-blue-hover);
+    box-shadow: 0 0 8px var(--ndma-blue-glow);
+}
+
+.gee-download-btn:active {
+    transform: scale(0.98);
+}
+
+.gee-download-btn i {
+    flex-shrink: 0;
+}
+
+/* Adjust layer controls spacing */
+.gee-layer-controls {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-dark);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }

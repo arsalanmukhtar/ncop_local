@@ -277,7 +277,7 @@ export class NavigationPanel {
           <i data-lucide="satellite" style="width:18px;height:18px"></i>
           <span>Earth Engine Data Assistant</span>
         </div>
-        <button id="geeChatClose" class="custom-nav-btn">
+        <button id="geeChatClose">
           <i data-lucide="x"></i>
         </button>
       </div>
@@ -292,7 +292,7 @@ export class NavigationPanel {
               data-lpignore="true"
               data-form-type="other"
               data-1p-ignore="true">
-        <button id="geeChatSend" class="custom-nav-btn">
+        <button id="geeChatSend">
           <i data-lucide="send"></i>
         </button>
       </div>
@@ -1142,7 +1142,14 @@ export class NavigationPanel {
     this.#addChatMessage("user", message);
     input.value = "";
 
-    // Show loading
+    // ⭐ Check for conversational queries BEFORE calling backend
+    const semanticResponse = this.#handleSemanticQuery(message);
+    if (semanticResponse) {
+      this.#addChatMessage("assistant", semanticResponse);
+      return; // Don't call backend for greetings/help
+    }
+
+    // Show loading for actual data queries
     const loadingId = this.#addChatMessage(
       "assistant",
       "🔄 Generating layer...",
@@ -1181,6 +1188,82 @@ export class NavigationPanel {
       document.getElementById(loadingId)?.remove();
       this.#addChatMessage("assistant", `❌ Error: ${error.message}`);
     }
+  }
+
+  /**
+   * ⭐ Handle semantic/conversational queries without calling backend
+   * Returns response text if matched, null otherwise
+   */
+  #handleSemanticQuery(message) {
+    const msg = message.toLowerCase().trim();
+
+    // Greetings
+    const greetings = ["hi", "hello", "hey", "yo", "sup", "greetings"];
+    if (greetings.some((g) => msg === g || msg.startsWith(g + " "))) {
+      return "👋 Hey! I'm your Earth Engine assistant for Pakistan. I can show you satellite data like:\n\n• Snow cover in northern areas\n• Flood risk zones\n• Population density\n• Air quality\n• Temperature data\n• And much more!\n\nJust ask me to show you any environmental data.";
+    }
+
+    // Identity questions
+    if (msg.includes("what are you") || msg.includes("who are you")) {
+      return '🛰️ I\'m an AI assistant powered by **Google Earth Engine**. I help visualize satellite and geospatial data over Pakistan.\n\nI can access:\n• Real-time satellite imagery\n• Climate data (temperature, rainfall)\n• Hazard maps (floods, landslides, fires)\n• Environmental indices (NDVI, NDSI, NDWI)\n• Population & infrastructure data\n\nTry asking: "Show me snow in Hunza" or "Flood risk in Sindh"';
+    }
+
+    // Capabilities
+    if (
+      msg.includes("what can you do") ||
+      msg.includes("help") ||
+      msg === "?"
+    ) {
+      return '🎯 **I can help you with:**\n\n**Hazards:**\n• Flood extent & susceptibility\n• Landslide risk areas\n• Fire detection & burn scars\n• Drought severity\n• Earthquake zones\n\n**Environment:**\n• Snow & glacier cover\n• Vegetation health (NDVI)\n• Water bodies (NDWI)\n• Air quality\n• Temperature & rainfall\n\n**Urban:**\n• Population density\n• Urban growth (NDBI)\n• Nighttime lights\n\n**Example queries:**\n• "Show flood risk in Karachi"\n• "Landslide susceptibility in Swat"\n• "Snow cover in Gilgit Baltistan"\n• "Air quality in Lahore last week"';
+    }
+
+    // Thanks
+    if (msg.includes("thank") || msg.includes("thanks")) {
+      return "😊 You're welcome! Let me know if you need any more satellite data or hazard information.";
+    }
+
+    // How are you / status
+    if (
+      msg.includes("how are you") ||
+      msg.includes("whats up") ||
+      msg.includes("what's up")
+    ) {
+      return "🛰️ I'm functioning perfectly! All satellite connections active and ready to pull data for Pakistan.\n\nWhat environmental data would you like to explore?";
+    }
+
+    // Coverage area
+    if (
+      msg.includes("where") &&
+      (msg.includes("cover") || msg.includes("work"))
+    ) {
+      return "🗺️ I cover **all of Pakistan** including:\n\n📍 **55+ cities** from Karachi to Gilgit\n🏔️ **All provinces** (Punjab, Sindh, KPK, Balochistan, GB)\n🌊 **River basins** (Indus, Chenab, Jhelum, Ravi, Sutlej)\n\nJust specify any location in Pakistan and I'll get the data!";
+    }
+
+    // Data freshness
+    if (
+      msg.includes("how recent") ||
+      msg.includes("latest") ||
+      msg.includes("real-time")
+    ) {
+      return "⏱️ **Data freshness:**\n\n🔴 **Near real-time** (updates hourly/daily):\n• Active fires (VIIRS)\n• Flood extent (Sentinel-1 SAR)\n• Weather data (temperature, wind)\n\n🟡 **Weekly updates:**\n• Vegetation indices (NDVI)\n• Snow cover (NDSI)\n• Air quality\n\n🟢 **Static/Yearly:**\n• Population density\n• Elevation data\n• Infrastructure maps\n\nI always pull the latest available imagery!";
+    }
+
+    // Download info
+    if (msg.includes("download") && !msg.includes("show")) {
+      return "📥 **To download layer data:**\n\n1. Ask me to show any dataset\n2. Click the **📥 Download Info** button in the response\n3. You'll get a JSON file with:\n   • Tile URL (use in QGIS/ArcGIS)\n   • Metadata & visualization settings\n   • Usage instructions\n\n**Note:** I provide tile URLs, not raw raster files. Use GIS software to access the full dataset via the tile service.";
+    }
+
+    // Goodbye
+    if (
+      msg.includes("bye") ||
+      msg.includes("goodbye") ||
+      msg.includes("see you")
+    ) {
+      return "👋 See you later! Come back anytime you need satellite data for Pakistan. Stay safe!";
+    }
+
+    // No match - let backend handle it
+    return null;
   }
 
   #addChatMessage(role, content, isLoading = false) {
@@ -1234,6 +1317,13 @@ export class NavigationPanel {
                  ${data.added ? "checked" : ""}>
           <span>${data.added ? "Remove from map" : "Add to map"}</span>
         </label>
+        
+        <button class="gee-download-btn" data-layer-id="${
+          data.layer_id
+        }" title="Download layer info & metadata">
+          <i data-lucide="download" style="width:14px;height:14px"></i>
+          <span>Download Info</span>
+        </button>
       </div>
     `;
 
@@ -1244,6 +1334,12 @@ export class NavigationPanel {
     const checkbox = responseDiv.querySelector(".gee-layer-checkbox");
     checkbox.addEventListener("change", (e) => {
       this.#toggleGeeLayer(data.layer_id, e.target.checked);
+    });
+
+    // ⭐ Attach download button listener
+    const downloadBtn = responseDiv.querySelector(".gee-download-btn");
+    downloadBtn.addEventListener("click", () => {
+      this.#downloadLayerInfo(data.layer_id);
     });
 
     lucide.createIcons();
@@ -1288,6 +1384,71 @@ export class NavigationPanel {
       const label = checkbox.nextElementSibling;
       label.textContent = shouldAdd ? "Remove from map" : "Add to map";
     }
+  }
+  /**
+   * Download layer metadata and tile info as JSON
+   */
+  #downloadLayerInfo(layerId) {
+    const layerInfo = this.#geeLayers.get(layerId);
+    if (!layerInfo) {
+      console.error(`❌ Layer ${layerId} not found`);
+      return;
+    }
+
+    // Prepare comprehensive metadata
+    const metadata = {
+      layer_id: layerId,
+      dataset: layerInfo.dataset,
+      location: layerInfo.location,
+      tile_url_template: layerInfo.tile_url,
+      legend_url: layerInfo.legend,
+      visualization: layerInfo.visualization,
+      download_info: {
+        description: "Google Earth Engine Layer Information",
+        note: "Use the tile_url_template in GIS software (QGIS, ArcGIS) as XYZ Tiles",
+        tile_format: "Raster tiles served by Google Earth Engine",
+        coordinate_system: "EPSG:3857 (Web Mercator)",
+        tile_size: "256x256 pixels",
+      },
+      instructions: {
+        qgis: "Layer → Add Layer → Add XYZ Tiles → Paste tile_url_template",
+        arcgis: "Add Data → Add Basemap → Use tile_url_template as service URL",
+        web: "Use with Leaflet, OpenLayers, or Mapbox GL JS as raster source",
+      },
+      exported_at: new Date().toISOString(),
+      generated_by: "NDMA NCOP GEE Chatbot",
+    };
+
+    // Convert to formatted JSON
+    const jsonStr = JSON.stringify(metadata, null, 2);
+
+    // Create blob and download
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    // Generate filename
+    const timestamp = new Date().toISOString().split("T")[0];
+    const safeName = layerInfo.dataset
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase();
+    const filename = `gee_${safeName}_${layerInfo.location}_${timestamp}.json`;
+
+    // Trigger download
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    // Cleanup
+    URL.revokeObjectURL(url);
+
+    console.log(`✅ Downloaded layer info: ${filename}`);
+
+    // Show confirmation in chat
+    this.#addChatMessage(
+      "assistant",
+      `📥 Downloaded **${layerInfo.dataset}** metadata as **${filename}**\n\nYou can use the tile URL in GIS software like QGIS or ArcGIS Pro.`
+    );
   }
 }
 
