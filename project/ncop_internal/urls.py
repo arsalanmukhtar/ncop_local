@@ -15,6 +15,7 @@ from .views import (
     DynamicGEELayerView,
     GEECatalogView,
     GenerateLegendView,
+    TemporalGEELayerView,
     SlickPlusGeojsonApi,
     GdeltNewsEventsApi,
 
@@ -41,5 +42,6 @@ urlpatterns = [
     path('api/gee/dynamic-layer/', DynamicGEELayerView.as_view(), name='dynamic_gee'),
     path('api/gee/catalog/', GEECatalogView.as_view(), name='gee_catalog'),
     path('api/gee/legend/', GenerateLegendView.as_view(), name='gee_legend'),
-    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
+    path('api/gee/temporal-layer/', TemporalGEELayerView.as_view(), name='temporal_gee_layer'),
+    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" )
 ]
