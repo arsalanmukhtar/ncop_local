@@ -27,6 +27,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import PermissionDenied
 from django.utils.dateparse import parse_date, parse_datetime
+from difflib import SequenceMatcher
 from django.contrib.gis.geos import (
     Polygon, MultiPolygon, GEOSGeometry,
     GeometryCollection as GEOSGeometryCollection,
@@ -1416,55 +1417,208 @@ def initialize_earth_engine():
         return False
 
 GEE_INITIALIZED = initialize_earth_engine()
+# ============================================================================
+# SEMANTIC SEARCH HELPER
+# ============================================================================
+
+class SemanticSearchHelper:
+    """Enhanced semantic search for better dataset matching"""
+    
+    # Synonym mapping for better semantic understanding
+    SYNONYM_MAP = {
+        'flood': ['flooding', 'inundation', 'deluge', 'overflow', 'submersion', 'water logging'],
+        'fire': ['wildfire', 'forest fire', 'burning', 'blaze', 'conflagration'],
+        'drought': ['dry spell', 'water scarcity', 'arid conditions', 'water stress'],
+        'landslide': ['mudslide', 'rockslide', 'slope failure', 'mass movement', 'landslip'],
+        'cyclone': ['hurricane', 'typhoon', 'tropical storm', 'storm surge'],
+        'earthquake': ['seismic', 'tremor', 'quake', 'tectonic activity'],
+        'temperature': ['heat', 'thermal', 'hot', 'cold', 'climate'],
+        'vegetation': ['greenery', 'plants', 'forest', 'crops', 'agriculture'],
+        'water': ['aquatic', 'hydro', 'moisture', 'precipitation', 'rainfall'],
+        'urban': ['city', 'metropolitan', 'built-up', 'developed area'],
+        'snow': ['ice', 'glacier', 'frozen', 'winter'],
+        'pollution': ['air quality', 'smog', 'contamination', 'aerosol'],
+        'sea level': ['ocean rise', 'coastal flooding', 'submersion'],
+        'heat island': ['urban heat', 'city heat', 'temperature anomaly'],
+    }
+    
+    # Context patterns for better understanding
+    CONTEXT_PATTERNS = {
+        'risk': ['susceptibility', 'hazard', 'vulnerability', 'prone', 'exposure'],
+        'current': ['latest', 'active', 'real-time', 'now', 'present'],
+        'historical': ['past', 'archive', 'frequency', 'occurrence'],
+        'future': ['projection', 'forecast', 'scenario', 'prediction'],
+        'extent': ['area', 'coverage', 'spread', 'distribution'],
+        'severity': ['intensity', 'magnitude', 'strength', 'power'],
+    }
+    
+    @classmethod
+    def expand_query(cls, query):
+        """Expand query with synonyms and related terms"""
+        query_lower = query.lower()
+        expanded_terms = [query_lower]
+        
+        # Add synonyms
+        for key, synonyms in cls.SYNONYM_MAP.items():
+            if key in query_lower:
+                expanded_terms.extend(synonyms)
+            for syn in synonyms:
+                if syn in query_lower:
+                    expanded_terms.append(key)
+                    expanded_terms.extend(synonyms)
+        
+        # Add context patterns
+        for context, patterns in cls.CONTEXT_PATTERNS.items():
+            if any(pattern in query_lower for pattern in patterns):
+                expanded_terms.extend(patterns)
+        
+        return list(set(expanded_terms))
+    
+    @classmethod
+    def calculate_semantic_score(cls, query, dataset):
+        """Calculate semantic similarity score between query and dataset"""
+        query_lower = query.lower()
+        expanded_query = cls.expand_query(query)
+        
+        score = 0
+        
+        # 1. Direct keyword matching (highest weight)
+        for keyword in dataset['keywords']:
+            if keyword in query_lower:
+                word_count = len(keyword.split())
+                score += 10 if word_count > 1 else 5
+        
+        # 2. Expanded term matching (medium weight)
+        for term in expanded_query:
+            for keyword in dataset['keywords']:
+                if term in keyword or keyword in term:
+                    score += 3
+        
+        # 3. Description matching (lower weight)
+        description = dataset.get('description', '').lower()
+        for term in expanded_query[:5]:  # Use top 5 expanded terms
+            if term in description:
+                score += 2
+        
+        # 4. Fuzzy matching for typos (lowest weight)
+        for keyword in dataset['keywords']:
+            similarity = SequenceMatcher(None, query_lower, keyword).ratio()
+            if similarity > 0.7:
+                score += int(similarity * 5)
+        
+        # 5. Type matching bonus
+        if 'susceptibility' in query_lower and 'susceptibility' in dataset['type']:
+            score += 8
+        if 'hazard' in query_lower and 'hazard' in dataset['type']:
+            score += 8
+        if 'active' in query_lower or 'current' in query_lower:
+            if dataset.get('time_filter') == 'latest':
+                score += 5
+        
+        return score
 
 # ============================================================================
 # ENHANCED GEE DATA CATALOG - MORE ENVIRONMENTAL DATASETS
 # ============================================================================
-
 class GEEDataCatalog:
-    """Advanced hazard management system with multi-criteria analysis + Environmental Monitoring"""
+    """Advanced hazard management system with semantic search + Environmental Monitoring"""
     
-    PAKISTAN_BOUNDS = [60.872, 23.634, 77.837, 37.097]
-    
+    PAKISTAN_BOUNDS = [60.872, 23.634, 77.837, 37.097] 
     # EXPANDED PAKISTAN LOCATIONS (55+)
     LOCATIONS = {
-        'pakistan': [60.872, 23.634, 77.837, 37.097],
-        'punjab': [69.5, 27.5, 75.5, 34.5],
-        'sindh': [66.5, 23.5, 71.0, 28.5],
-        'kpk': [69.0, 31.5, 74.5, 36.5],
-        'khyber_pakhtunkhwa': [69.0, 31.5, 74.5, 36.5],
-        'balochistan': [60.8, 24.5, 70.5, 31.5],
-        'gilgit_baltistan': [72.5, 34.5, 77.8, 37.1],
-        'azad_kashmir': [73.5, 33.5, 74.5, 34.5],
-        'lahore': [74.1, 31.3, 74.6, 31.7],
-        'faisalabad': [73.0, 31.3, 73.2, 31.5],
-        'rawalpindi': [73.0, 33.5, 73.2, 33.7],
-        'multan': [71.4, 30.1, 71.6, 30.3],
-        'gujranwala': [74.1, 32.1, 74.3, 32.3],
-        'sialkot': [74.4, 32.4, 74.6, 32.6],
-        'bahawalpur': [71.6, 29.3, 71.8, 29.5],
-        'sargodha': [72.6, 32.0, 72.8, 32.2],
-        'karachi': [66.9, 24.7, 67.3, 25.1],
-        'hyderabad': [68.3, 25.3, 68.5, 25.5],
-        'sukkur': [68.8, 27.6, 69.0, 27.8],
-        'larkana': [68.1, 27.4, 68.3, 27.6],
-        'peshawar': [71.4, 33.9, 71.7, 34.1],
-        'mardan': [72.0, 34.1, 72.2, 34.3],
-        'abbottabad': [73.1, 34.1, 73.3, 34.3],
-        'swat': [72.0, 34.7, 72.8, 35.5],
-        'quetta': [66.9, 30.1, 67.2, 30.3],
-        'gwadar': [62.3, 25.0, 62.5, 25.2],
-        'turbat': [63.0, 25.9, 63.2, 26.1],
-        'gilgit': [74.3, 35.8, 74.5, 36.0],
-        'skardu': [75.6, 35.2, 75.8, 35.4],
-        'hunza': [74.5, 36.0, 74.9, 36.5],
-        'islamabad': [72.9, 33.5, 73.2, 33.8],
-        'indus_river': [67.0, 24.0, 73.0, 35.0],
-        'chenab_river': [71.5, 29.5, 74.5, 33.0],
+        # --- National / Provincial ---
+        'pakistan': [60.5, 23.3, 77.9, 37.3],
+        'punjab': [69.0, 27.0, 75.8, 34.5],
+        'sindh': [66.0, 23.3, 71.2, 28.7],
+        'kpk': [69.0, 31.0, 74.8, 36.8],
+        'khyber_pakhtunkhwa': [69.0, 31.0, 74.8, 36.8],
+        'balochistan': [60.5, 24.0, 70.7, 32.2],
+        'gilgit_baltistan': [72.0, 34.0, 78.0, 37.3],
+        'azad_kashmir': [73.2, 33.3, 75.6, 35.2],
+        'fata': [67.5, 31.0, 71.7, 35.5],
+
+        # --- Major Cities ---
+        'islamabad': [72.8, 33.5, 73.3, 33.9],
+        'rawalpindi': [73.0, 33.5, 73.3, 33.8],
+        'lahore': [74.0, 31.3, 74.6, 31.7],
+        'faisalabad': [72.8, 31.2, 73.3, 31.6],
+        'multan': [71.2, 30.0, 71.8, 30.5],
+        'bahawalpur': [71.4, 29.1, 72.1, 29.6],
+        'sargodha': [72.5, 31.8, 73.0, 32.3],
+        'gujranwala': [74.0, 32.0, 74.4, 32.4],
+        'sialkot': [74.3, 32.3, 74.8, 32.8],
+        'karachi': [66.8, 24.7, 67.4, 25.3],
+        'hyderabad': [68.2, 25.2, 68.6, 25.6],
+        'sukkur': [68.7, 27.5, 69.2, 28.0],
+        'larkana': [67.9, 27.3, 68.4, 27.8],
+        'quetta': [66.8, 30.0, 67.3, 30.4],
+        'gwadar': [62.2, 24.8, 62.6, 25.4],
+        'turbat': [62.9, 25.8, 63.4, 26.3],
+        'peshawar': [71.3, 33.9, 71.9, 34.2],
+        'mardan': [72.0, 34.0, 72.3, 34.4],
+        'abbottabad': [73.0, 34.0, 73.4, 34.3],
+        'swat': [71.8, 34.5, 72.8, 35.7],
+        'gilgit': [74.2, 35.7, 74.7, 36.2],
+        'skardu': [75.4, 35.1, 76.0, 35.6],
+        'hunza': [74.3, 35.9, 75.0, 36.5],
+        'muzaffarabad': [73.3, 34.2, 73.6, 34.5],
+        'mirpur': [73.7, 33.1, 74.1, 33.4],
+
+        # --- Pakistan Major River Systems ---
+        'indus_river': [66.5, 23.5, 75.0, 36.5],
+        'upper_indus': [73.0, 34.5, 77.5, 36.5],
+        'lower_indus': [67.0, 23.5, 69.5, 28.5],
+
+        'jhelum_river': [73.1, 33.0, 75.7, 35.5],
+        'chenab_river': [71.2, 29.0, 75.0, 33.2],
+        'ravi_river': [73.5, 29.5, 75.7, 32.8],
+        'sutlej_river': [71.0, 28.0, 75.0, 31.5],
+        'kabul_river': [70.8, 33.4, 72.7, 34.9],
+        'swat_river': [71.5, 34.5, 72.5, 35.5],
+
+        'panjnad_river': [70.3, 28.6, 71.4, 29.5],
+
+        # --- Secondary Rivers (Flood-Prone) ---
+        'gilgit_river': [74.0, 35.5, 74.9, 36.3],
+        'shyok_river': [75.0, 34.8, 77.0, 35.8],
+        'astore_river': [74.5, 35.1, 75.2, 35.7],
+        'ghizer_river': [73.2, 36.0, 74.5, 36.8],
+        'dasht_river': [62.0, 25.0, 63.3, 26.7],
+        'hub_river': [66.3, 24.0, 67.1, 25.2],
+        'zhob_river': [67.0, 30.0, 69.0, 32.0],
+        'gomal_river': [69.0, 31.0, 70.5, 33.0],
+        'kurram_river': [69.5, 33.5, 70.7, 34.8],
+        'tochi_river': [69.5, 32.8, 70.8, 33.8],
+
+        # --- Deltas & Wetlands ---
+        'indus_delta': [67.1, 23.4, 68.2, 24.7],
+        'manchar_lake': [67.4, 26.3, 67.9, 26.7],
+        'hamun_mashkel': [62.8, 27.5, 64.3, 29.0],
+
+        # --- Critical Mountain / GLOF Basins ---
+        'shigar_valley': [75.4, 35.2, 76.2, 36.0],
+        'nagar_valley': [74.2, 36.0, 75.0, 36.6],
+        'chitral_valley': [71.3, 35.2, 72.7, 36.9],
+        'ghizer_valley': [72.8, 35.8, 74.5, 36.8],
+        'attabad_lake': [74.4, 35.9, 74.6, 36.2],
+        'shishper_glacier': [74.5, 36.2, 74.7, 36.4],
+        'badswat_glof_zone': [72.5, 35.1, 73.2, 35.8],
+
+        # --- Plains / Basins ---
+        'punjab_plains': [70.5, 28.0, 74.8, 33.3],
+        'khyber_basin': [70.5, 33.0, 72.3, 34.8],
+        'murree_hills': [73.3, 33.8, 73.6, 34.1],
+        'salt_range': [71.5, 31.0, 73.5, 32.7],
+
+        # --- Special Hazard Zones ---
+        'glof_hotspots': [72.8, 34.8, 76.0, 36.8],
+        'monsoon_core_zone': [69.0, 28.0, 75.0, 33.0],
+        'makran_coastal_belt': [61.5, 24.0, 65.0, 26.5],
     }
+
     
     # ========================================================================
-    # COMPREHENSIVE HAZARD-SPECIFIC DATASETS WITH PRIORITY
+    # COMPREHENSIVE HAZARD-SPECIFIC DATASETS WITH ENRICHED METADATA
     # ========================================================================
     
     DATASETS = {
@@ -1478,15 +1632,26 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['ffffff', '0000ff']},
             'type': 'hazard_flood',
             'priority': 10,
-            'keywords': ['flood extent', 'flooding', 'inundation', 'flood mapping', 'flooded area', 'water extent', 'flood detection'],
+            'keywords': [
+                'flood extent', 'flooding', 'inundation', 'flood mapping', 'flooded area', 
+                'water extent', 'flood detection', 'active flooding', 'current flood',
+                'real-time flood', 'flood monitoring', 'water logging', 'submersion',
+                'overflow', 'deluge', 'flood zone'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Flood+Extent+(SAR)&palette=ffffff,0000ff&min=0&max=1',
-            'description': 'Sentinel-1 SAR detects active flooding using radar backscatter.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'description': 'Sentinel-1 SAR detects active flooding using radar backscatter. Shows current inundated areas regardless of cloud cover - essential for emergency response during monsoon floods.',
             'supports_temporal': True,
             'temporal_range': 'monthly',
             'temporal_start_year': 2014,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'water-related',
+                'urgency': 'high',
+                'use_cases': ['emergency response', 'flood mapping', 'disaster assessment'],
+                'data_source': 'satellite radar',
+                'update_frequency': 'daily'
+            }
         },
         'flood_occurrence': {
             'name': 'Flood Frequency (JRC)',
@@ -1495,12 +1660,22 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 100, 'palette': ['ffffff', 'ffffcc', 'c7e9b4', '7fcdbb', '41b6c4', '1d91c0', '225ea8', '0c2c84']},
             'type': 'hazard_flood',
             'priority': 9,
-            'keywords': ['flood occurrence', 'flood frequency', 'historical flooding', 'flood history', 'recurring flood', 'permanent water'],
+            'keywords': [
+                'flood occurrence', 'flood frequency', 'historical flooding', 'flood history', 
+                'recurring flood', 'permanent water', 'flood probability', 'flood recurrence',
+                'chronic flooding', 'repeat flooding', 'flood pattern', 'flood statistics',
+                'long-term flood', 'persistent flooding'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Flood+Frequency+%25&palette=ffffff,7fcdbb,225ea8,0c2c84&min=0&max=100',
-            'description': 'Historical flood frequency from 1984-2021. Shows how often an area has been underwater - higher % means more frequent flooding risk.',
-            # ❌ NO TEMPORAL SUPPORT
+            'description': 'Historical flood frequency from 1984-2021. Shows how often an area has been underwater - higher % means more frequent flooding risk. Essential for long-term planning and identifying chronic flood zones.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'water-related',
+                'temporal_scope': 'historical',
+                'use_cases': ['urban planning', 'risk assessment', 'insurance'],
+                'data_source': 'landsat archive'
+            }
         },
         'flood_susceptibility_ahp': {
             'name': 'Flood Susceptibility (AHP Multi-Criteria)',
@@ -1509,7 +1684,12 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['00ff00', '7fff00', 'ffff00', 'ff7f00', 'ff0000', '8b0000']},
             'type': 'susceptibility_flood',
             'priority': 8,
-            'keywords': ['flood susceptibility', 'flood risk', 'flood prone', 'flood hazard', 'floodplain', 'flood vulnerability'],
+            'keywords': [
+                'flood susceptibility', 'flood risk', 'flood prone', 'flood hazard', 'floodplain', 
+                'flood vulnerability', 'flood-prone areas', 'flood risk zones', 'flood danger',
+                'flood exposure', 'flood likelihood', 'flood potential', 'flood threat',
+                'flood-sensitive areas', 'at-risk areas'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Flood+Susceptibility+(AHP)&palette=00ff00,ffff00,ff0000,8b0000&min=0&max=1',
             'ahp_weights': {
@@ -1519,8 +1699,14 @@ class GEEDataCatalog:
                 'distance_water': 0.15,
                 'soil_moisture': 0.10
             },
-            'description': 'Multi-criteria flood risk combining elevation, slope, rainfall, proximity to water, and soil saturation. Red zones are high-risk floodplains.',
+            'description': 'Multi-criteria flood risk combining elevation, slope, rainfall, proximity to water, and soil saturation. Red zones are high-risk floodplains where multiple factors increase vulnerability.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'water-related',
+                'analysis_type': 'multi-criteria',
+                'use_cases': ['risk assessment', 'land use planning', 'disaster preparedness'],
+                'methodology': 'AHP weighted analysis'
+            }
         },
         'flood_depth_proxy': {
             'name': 'Potential Flood Depth (Elevation-based)',
@@ -1529,11 +1715,19 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 20, 'palette': ['ffffff', 'c7e9b4', '7fcdbb', '41b6c4', '1d91c0', '225ea8', '0c2c84']},
             'type': 'susceptibility_flood',
             'priority': 7,
-            'keywords': ['flood depth', 'inundation depth', 'flood level', 'water depth'],
+            'keywords': [
+                'flood depth', 'inundation depth', 'flood level', 'water depth',
+                'submersion depth', 'flood height', 'water level', 'flooding severity'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Flood+Depth+(m)&palette=ffffff,7fcdbb,225ea8,0c2c84&min=0&max=20',
-            'description': 'Estimated flood depth based on elevation. Lower areas (blues/purples) could experience deeper inundation during major floods.',
+            'description': 'Estimated flood depth based on elevation. Lower areas (blues/purples) could experience deeper inundation during major floods - critical for evacuation planning.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'water-related',
+                'measurement': 'depth estimate',
+                'use_cases': ['evacuation planning', 'infrastructure design']
+            }
         },
         
         # ====================================================================
@@ -1546,15 +1740,59 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'hazard_fire',
             'priority': 10,
-            'keywords': ['active fire', 'fire detection', 'burning', 'flames', 'fire hotspot', 'thermal anomaly', 'wildfire'],
+            'keywords': [
+                'active fire', 'fire detection', 'burning', 'flames', 'fire hotspot', 
+                'thermal anomaly', 'wildfire', 'forest fire', 'current fire', 'real-time fire',
+                'fire outbreak', 'conflagration', 'blaze', 'inferno', 'fire incident',
+                'burning areas', 'fire location', 'fire alert'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Active+Fires+(VIIRS)&palette=ffff00,ff0000,8b0000&min=0&max=1',
-            'description': 'Real-time fire hotspots detected by VIIRS satellite. Shows active burning locations updated daily - critical for emergency response.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'description': 'Real-time fire hotspots detected by VIIRS satellite. Shows active burning locations updated daily - critical for emergency response and firefighting coordination.',
             'supports_temporal': True,
             'temporal_range': 'daily',
             'temporal_start_year': 2012,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'fire-related',
+                'urgency': 'critical',
+                'use_cases': ['emergency response', 'firefighting', 'real-time monitoring'],
+                'data_source': 'thermal satellite',
+                'update_frequency': 'daily'
+            }
+        },
+        'active_fire_modis': {
+            'name': 'Active Fire (MODIS)',
+            'collection': 'MODIS/061/MOD14A1',
+            'compute': lambda img: img.select('FireMask').rename('Fire'),
+            'vis': {
+                'min': 7, 'max': 9,
+                'palette': ['ffff00', 'ff6600', 'ff0000', '8b0000']
+            },
+            'type': 'fire',
+            'keywords': [
+                'fire', 'wildfire', 'forest fire', 'active fire', 'burning', 'modis',
+                'fire detection', 'fire hotspots', 'fire monitoring', 'thermal anomaly',
+                'fire alert', 'fire activity', 'fire outbreak', 'conflagration', 'blaze',
+                'fire incident', 'fire location', 'fire intensity', 'smoke', 'burning areas'
+            ],
+            'time_filter': True,
+            'legend': '/api/gee/legend/?dataset=Active+Fire+(MODIS)&palette=ffff00,ff6600,ff0000,8b0000&min=7&max=9',
+            'description': 'Daily active fire detections from MODIS Terra (2000-present). 1km resolution thermal anomaly detection. Values: 7=low confidence, 8=nominal, 9=high confidence fire. Essential for fire monitoring, early warning, and emergency response.',
+            'supports_temporal': True,
+            'temporal_range': 'daily',
+            'temporal_start_year': 2000,
+            'temporal_end_year': 2024,
+            'temporal_note': 'Daily product from Terra satellite, near real-time with ~3 hour latency.',
+            'semantic_context': {
+                'indicator': 'fire_hazard',
+                'use_cases': [
+                    'fire monitoring', 'wildfire detection', 'fire early warning',
+                    'fire incident mapping', 'emergency response', 'fire activity tracking',
+                    'agricultural burning monitoring', 'air quality assessment', 'smoke detection'
+                ],
+                'temporal_note': 'Near real-time daily fire detection'
+            }
         },
         'fire_radiative_power': {
             'name': 'Fire Radiative Power (MODIS)',
@@ -1563,15 +1801,23 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 500, 'palette': ['000000', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'hazard_fire',
             'priority': 9,
-            'keywords': ['fire intensity', 'fire power', 'fire energy', 'frp', 'fire strength'],
+            'keywords': [
+                'fire intensity', 'fire power', 'fire energy', 'frp', 'fire strength',
+                'fire magnitude', 'heat release', 'fire severity', 'burn intensity',
+                'fire force', 'thermal output'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Fire+Power+(MW)&palette=000000,ff8c00,8b0000&min=0&max=500',
-            'description': 'Fire intensity measured in megawatts. Higher values (red) indicate more intense fires with greater heat release and destructive potential.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'description': 'Fire intensity measured in megawatts. Higher values (red) indicate more intense fires with greater heat release and destructive potential - helps prioritize response.',
             'supports_temporal': True,
             'temporal_range': 'daily',
-            'temporal_start_year': 2012,
+            'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'fire-related',
+                'measurement': 'energy output',
+                'use_cases': ['fire assessment', 'resource allocation', 'damage prediction']
+            }
         },
         'fire_susceptibility_ahp': {
             'name': 'Fire Susceptibility (AHP Multi-Criteria)',
@@ -1580,7 +1826,11 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'susceptibility_fire',
             'priority': 8,
-            'keywords': ['fire susceptibility', 'fire risk', 'fire hazard', 'fire prone', 'wildfire risk', 'burn probability'],
+            'keywords': [
+                'fire susceptibility', 'fire risk', 'fire hazard', 'fire prone', 'wildfire risk', 
+                'burn probability', 'fire danger', 'fire-prone areas', 'fire vulnerability',
+                'ignition risk', 'fire potential', 'combustion risk', 'fire threat'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Fire+Susceptibility+(AHP)&palette=006400,ffff00,ff0000,8b0000&min=0&max=1',
             'ahp_weights': {
@@ -1592,6 +1842,11 @@ class GEEDataCatalog:
             },
             'description': 'Wildfire risk based on dry vegetation, temperature, terrain, and human activity. Red zones have conditions favorable for fire ignition and spread.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'fire-related',
+                'analysis_type': 'multi-criteria',
+                'use_cases': ['prevention planning', 'resource positioning', 'land management']
+            }
         },
         'burned_area': {
             'name': 'Burned Area (MODIS)',
@@ -1600,15 +1855,94 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 366, 'palette': ['000000', '8b4513', 'ff8c00', 'ff0000']},
             'type': 'hazard_fire',
             'priority': 7,
-            'keywords': ['burned area', 'fire scar', 'post fire', 'burn extent'],
+            'keywords': [
+                'burned area', 'fire scar', 'post fire', 'burn extent', 'burnt land',
+                'fire damage', 'combusted area', 'charred land', 'fire footprint',
+                'burn perimeter', 'fire-affected area'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Burned+Area&palette=000000,ff8c00,ff0000&min=0&max=366',
             'description': 'Areas that have burned recently. Shows fire scars and helps assess post-fire recovery needs and environmental impact.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
             'temporal_range': 'monthly',
             'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'fire-related',
+                'temporal_scope': 'historical',
+                'use_cases': ['recovery assessment', 'rehabilitation planning']
+            }
+        },
+        # ========================================================================
+        # OPTICAL IMAGERY
+        # ========================================================================
+    
+        'sentinel2': {
+            'name': 'Sentinel-2 (True Color)',
+            'collection': 'COPERNICUS/S2_SR_HARMONIZED',
+            'compute': lambda img: img.select(['B4', 'B3', 'B2']).divide(10000),
+            'vis': {
+                'min': 0, 'max': 0.3,
+                'bands': ['B4', 'B3', 'B2']
+            },
+            'type': 'optical',
+            'keywords': [
+                'sentinel-2', 'optical', 'imagery', 'multispectral', 'rgb', 'true color',
+                'satellite imagery', 'earth observation', 'high resolution', 'land monitoring',
+                'surface reflectance', 'cloud-free', 'vegetation mapping', 'water detection',
+                'urban mapping', 'change detection', 'visual interpretation'
+            ],
+            'time_filter': True,
+            'legend': None,
+            'description': 'High-resolution optical imagery from Sentinel-2 satellites (2017-present). 10m resolution true color composite. 5-day revisit with both 2A and 2B satellites. Excellent for visual interpretation, change detection, and detailed land cover mapping.',
+            'supports_temporal': True,
+            'temporal_range': '5-day',
+            'temporal_start_year': 2017,
+            'temporal_end_year': 2024,
+            'temporal_note': 'Sentinel-2A (2015) + 2B (2017) provide 5-day revisit. Global coverage.',
+            'semantic_context': {
+                'indicator': 'land_surface',
+                'use_cases': [
+                    'visual interpretation', 'change detection', 'land cover mapping',
+                    'damage assessment', 'infrastructure monitoring', 'urban planning',
+                    'agriculture monitoring', 'water body detection', 'disaster mapping'
+                ],
+                'temporal_note': 'High-frequency 5-day revisit for change monitoring'
+            }
+        },
+    
+        'landsat8': {
+            'name': 'Landsat 8 (True Color)',
+            'collection': 'LANDSAT/LC08/C02/T1_L2',
+            'compute': lambda img: img.select(['SR_B4', 'SR_B3', 'SR_B2']).multiply(0.0000275).add(-0.2),
+            'vis': {
+                'min': 0, 'max': 0.3,
+                'bands': ['SR_B4', 'SR_B3', 'SR_B2']
+            },
+            'type': 'optical',
+            'keywords': [
+                'landsat', 'landsat 8', 'optical', 'imagery', 'multispectral', 'rgb',
+                'true color', 'satellite imagery', 'moderate resolution', 'land monitoring',
+                'historical archive', 'long-term monitoring', 'change detection',
+                'surface reflectance', 'multi-temporal', 'time series'
+            ],
+            'time_filter': True,
+            'legend': None,
+            'description': 'Landsat 8 optical imagery (2013-present). 30m resolution true color composite. 16-day revisit. Part of the continuous Landsat archive since 1972, enabling long-term change analysis when combined with Landsat 4-7.',
+            'supports_temporal': True,
+            'temporal_range': '16-day',
+            'temporal_start_year': 2013,
+            'temporal_end_year': 2024,
+            'temporal_note': 'Landsat 8 launched Feb 2013. 16-day repeat cycle.',
+            'semantic_context': {
+                'indicator': 'land_surface',
+                'use_cases': [
+                    'long-term change analysis', 'historical comparison', 'land cover change',
+                    'vegetation monitoring', 'water resource monitoring', 'urban expansion',
+                    'time series analysis', 'baseline assessment'
+                ],
+                'temporal_note': 'Part of 50+ year Landsat archive'
+            }
         },
         
         # ====================================================================
@@ -1621,7 +1955,12 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'susceptibility_landslide',
             'priority': 10,
-            'keywords': ['landslide susceptibility', 'landslide risk', 'landslip', 'mass movement', 'slope failure', 'hillside hazard'],
+            'keywords': [
+                'landslide susceptibility', 'landslide risk', 'landslip', 'mass movement', 
+                'slope failure', 'hillside hazard', 'mudslide risk', 'rockslide', 'debris flow',
+                'slope instability', 'land collapse', 'earth movement', 'slope hazard',
+                'gravitational hazard', 'slope susceptibility'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Landslide+Susceptibility+(AHP)&palette=006400,ffff00,ff0000,8b0000&min=0&max=1',
             'ahp_weights': {
@@ -1633,6 +1972,11 @@ class GEEDataCatalog:
             },
             'description': 'Landslide risk from steep slopes, rainfall, soil saturation, and terrain. Red areas in mountainous regions are most vulnerable to slope failures.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'geological',
+                'terrain_focus': 'mountainous',
+                'use_cases': ['infrastructure planning', 'early warning', 'risk mitigation']
+            }
         },
         'slope_angle': {
             'name': 'Slope Angle (Degrees)',
@@ -1641,11 +1985,18 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 45, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'terrain',
             'priority': 6,
-            'keywords': ['slope', 'steepness', 'grade', 'incline'],
+            'keywords': [
+                'slope', 'steepness', 'grade', 'incline', 'terrain angle', 'hillslope',
+                'gradient', 'declivity', 'pitch', 'terrain steepness'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Slope+(degrees)&palette=006400,ffff00,ff0000&min=0&max=45',
             'description': 'Terrain steepness in degrees. Slopes > 25° (red) are prone to landslides, especially during heavy rainfall or earthquakes.',
             'supports_temporal': False,
+            'semantic_context': {
+                'measurement': 'angle',
+                'use_cases': ['stability analysis', 'construction planning']
+            }
         },
         
         # ====================================================================
@@ -1660,15 +2011,23 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 20, 'palette': ['ffffff', 'c6dbef', '6baed6', '3182bd', '08519c', '08306b']},
             'type': 'hazard_cyclone',
             'priority': 10,
-            'keywords': ['wind speed', 'wind', 'cyclone', 'storm', 'tropical storm', 'gale'],
+            'keywords': [
+                'wind speed', 'wind', 'cyclone', 'storm', 'tropical storm', 'gale',
+                'windstorm', 'hurricane', 'typhoon', 'wind velocity', 'gust', 'breeze',
+                'wind intensity', 'atmospheric circulation'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Wind+Speed+(m/s)&palette=ffffff,6baed6,08519c&min=0&max=20',
             'description': 'Wind speed at 10m height from ERA5 reanalysis. Darker blues indicate stronger winds - useful for storm tracking and cyclone forecasting.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
             'temporal_range': 'daily',
             'temporal_start_year': 1950,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'meteorological',
+                'measurement': 'velocity',
+                'use_cases': ['storm tracking', 'cyclone forecasting', 'wind energy']
+            }
         },
         'cyclone_susceptibility_ahp': {
             'name': 'Cyclone Susceptibility (Coastal AHP)',
@@ -1677,7 +2036,11 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'susceptibility_cyclone',
             'priority': 9,
-            'keywords': ['cyclone susceptibility', 'cyclone risk', 'storm surge', 'coastal hazard', 'tropical cyclone risk'],
+            'keywords': [
+                'cyclone susceptibility', 'cyclone risk', 'storm surge', 'coastal hazard', 
+                'tropical cyclone risk', 'hurricane risk', 'typhoon risk', 'storm vulnerability',
+                'coastal flooding', 'storm impact', 'cyclone exposure'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Cyclone+Susceptibility&palette=006400,ffff00,ff0000&min=0&max=1',
             'ahp_weights': {
@@ -1688,6 +2051,11 @@ class GEEDataCatalog:
             },
             'description': 'Coastal cyclone risk from low elevation, proximity to coast, and population exposure. Red zones face severe storm surge and wind damage threats.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'meteorological',
+                'location_focus': 'coastal',
+                'use_cases': ['coastal management', 'evacuation planning', 'storm preparedness']
+            }
         },
         
         # ====================================================================
@@ -1700,7 +2068,11 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'susceptibility_seismic',
             'priority': 10,
-            'keywords': ['earthquake', 'seismic', 'tectonic', 'fault', 'earthquake risk', 'seismic hazard'],
+            'keywords': [
+                'earthquake', 'seismic', 'tectonic', 'fault', 'earthquake risk', 'seismic hazard',
+                'tremor', 'quake', 'seismic activity', 'ground shaking', 'seismic vulnerability',
+                'earthquake susceptibility', 'tectonic hazard', 'seismic zone'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Seismic+Susceptibility&palette=006400,ffff00,ff0000&min=0&max=1',
             'ahp_weights': {
@@ -1711,6 +2083,11 @@ class GEEDataCatalog:
             },
             'description': 'Earthquake vulnerability based on mountainous terrain and population exposure. Red zones in northern Pakistan face highest seismic risks due to active tectonics.',
             'supports_temporal': False,
+            'semantic_context': {
+                'hazard_type': 'geological',
+                'terrain_focus': 'mountainous',
+                'use_cases': ['building codes', 'seismic design', 'emergency preparedness']
+            }
         },
         
         # ====================================================================
@@ -1723,7 +2100,11 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['006400', '7fff00', 'ffff00', 'ff8c00', 'ff0000', '8b0000']},
             'type': 'hazard_drought',
             'priority': 10,
-            'keywords': ['drought', 'drought severity', 'dry conditions', 'water stress', 'arid', 'dryness'],
+            'keywords': [
+                'drought', 'drought severity', 'dry conditions', 'water stress', 'arid', 'dryness',
+                'water scarcity', 'dry spell', 'arid conditions', 'water deficit', 'aridity',
+                'drought intensity', 'moisture deficit', 'agricultural drought', 'hydrological drought'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Drought+Severity&palette=006400,ffff00,ff0000&min=0&max=1',
             'weights': {
@@ -1732,15 +2113,19 @@ class GEEDataCatalog:
                 'precipitation_deficit': 0.30
             },
             'description': 'Drought conditions from vegetation stress, dry soils, and low rainfall. Red areas face severe agricultural and water supply impacts.',
-            # ⭐ VALID TEMPORAL SUPPORT (monthly composites)
             'supports_temporal': True,
             'temporal_range': 'monthly',
             'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'hazard_type': 'climatic',
+                'impact_scope': 'agriculture and water',
+                'use_cases': ['crop monitoring', 'water management', 'food security']
+            }
         },
         
         # ====================================================================
-        # 🔥 NEW: ENHANCED ENVIRONMENTAL INDICES
+        # 🔥 ENHANCED ENVIRONMENTAL INDICES
         # ====================================================================
         'lst_enhanced': {
             'name': 'Land Surface Temperature (Enhanced)',
@@ -1749,14 +2134,22 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 50, 'palette': ['313695', '4575b4', '74add1', 'abd9e9', 'e0f3f8', 'ffffbf', 'fee090', 'fdae61', 'f46d43', 'd73027', 'a50026']},
             'type': 'environmental',
             'priority': 8,
-            'keywords': ['land surface temperature', 'temperature', 'heat', 'thermal', 'lst', 'surface heat', 'warming'],
+            'keywords': [
+                'land surface temperature', 'temperature', 'heat', 'thermal', 'lst', 'surface heat', 
+                'warming', 'ground temperature', 'surface temp', 'hot', 'heat stress', 'thermal stress',
+                'temperature anomaly', 'heat wave'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Land+Surface+Temp+(°C)&palette=313695,abd9e9,ffffbf,d73027,a50026&min=0&max=50',
             'description': 'Daytime land surface temperature from MODIS. Red zones (40°C+) indicate extreme heat - critical for urban planning and heat stress monitoring.',
-            'supports_temporal': True,  # ⭐ Enable temporal
-            'temporal_range': 'yearly',
+            'supports_temporal': True,
+            'temporal_range': 'daily',
             'temporal_start_year': 2000,
-            'temporal_end_year': 2024
+            'temporal_end_year': 2024,
+            'semantic_context': {
+                'measurement': 'temperature celsius',
+                'use_cases': ['heat monitoring', 'urban planning', 'climate analysis']
+            }
         },
         
         'urban_heat_island': {
@@ -1766,11 +2159,19 @@ class GEEDataCatalog:
             'vis': {'min': -5, 'max': 15, 'palette': ['2166ac', '4393c3', '92c5de', 'd1e5f0', 'f7f7f7', 'fddbc7', 'f4a582', 'd6604d', 'b2182b']},
             'type': 'environmental',
             'priority': 9,
-            'keywords': ['urban heat island', 'uhii', 'city heat', 'urban temperature', 'heat island effect', 'urban warming'],
+            'keywords': [
+                'urban heat island', 'uhii', 'city heat', 'urban temperature', 'heat island effect', 
+                'urban warming', 'metropolitan heat', 'city temperature', 'urban thermal',
+                'heat accumulation', 'urban climate', 'microclimate'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Urban+Heat+Island+(°C+above+rural)&palette=2166ac,f7f7f7,b2182b&min=-5&max=15',
             'description': 'Temperature difference between urban and rural areas. Red zones show cities 10-15°C hotter than surroundings - indicates poor ventilation and lack of green space.',
-            'supports_temporal': False,  # static composite
+            'supports_temporal': False,
+            'semantic_context': {
+                'phenomenon': 'urban climate',
+                'use_cases': ['urban design', 'green infrastructure', 'public health']
+            }
         },
         
         'sea_level_rise_2050': {
@@ -1780,10 +2181,20 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 3, 'palette': ['006d2c', '31a354', '74c476', 'a1d99b', 'c7e9c0', 'edf8e9', 'fee5d9', 'fcae91', 'fb6a4a', 'de2d26', 'a50f15']},
             'type': 'environmental',
             'priority': 10,
-            'keywords': ['sea level rise', 'slr', 'coastal flooding', 'ocean rise', 'climate change', 'coastal risk', 'submersion'],
+            'keywords': [
+                'sea level rise', 'slr', 'coastal flooding', 'ocean rise', 'climate change', 
+                'coastal risk', 'submersion', 'inundation projection', 'coastal vulnerability',
+                'sea encroachment', 'coastal erosion', 'future flooding', '2050 scenario'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Sea+Level+Rise+(meters)&palette=006d2c,edf8e9,a50f15&min=0&max=3',
-            'description': 'Projected coastal inundation from 1-3m sea level rise by 2050. Red areas in Karachi, Gwadar, and Indus Delta face severe flooding risk under climate scenarios.'
+            'description': 'Projected coastal inundation from 1-3m sea level rise by 2050. Red areas in Karachi, Gwadar, and Indus Delta face severe flooding risk under climate scenarios.',
+            'supports_temporal': False,
+            'semantic_context': {
+                'temporal_scope': 'future projection',
+                'location_focus': 'coastal',
+                'use_cases': ['climate adaptation', 'coastal management', 'infrastructure planning']
+            }
         },
         
         'sea_level_rise_2100': {
@@ -1793,10 +2204,19 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 5, 'palette': ['006d2c', '31a354', '74c476', 'a1d99b', 'c7e9c0', 'edf8e9', 'fee5d9', 'fcae91', 'fb6a4a', 'de2d26', 'a50f15']},
             'type': 'environmental',
             'priority': 9,
-            'keywords': ['sea level rise 2100', 'long term flooding', 'future coastal risk', 'climate projection'],
+            'keywords': [
+                'sea level rise 2100', 'long term flooding', 'future coastal risk', 'climate projection',
+                'century projection', 'extreme scenario', 'worst case', 'long-term impact'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Sea+Level+Rise+2100+(meters)&palette=006d2c,edf8e9,a50f15&min=0&max=5',
-            'description': 'Worst-case sea level rise projection (up to 5m) by 2100. Shows catastrophic coastal flooding potential - critical for long-term infrastructure planning.'
+            'description': 'Worst-case sea level rise projection (up to 5m) by 2100. Shows catastrophic coastal flooding potential - critical for long-term infrastructure planning.',
+            'supports_temporal': False,
+            'semantic_context': {
+                'temporal_scope': 'long-term future',
+                'scenario_type': 'worst-case',
+                'use_cases': ['strategic planning', 'policy making', 'climate modeling']
+            }
         },
         
         'thermal_comfort_index': {
@@ -1806,10 +2226,18 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 100, 'palette': ['00ff00', '7fff00', 'ffff00', 'ff8c00', 'ff4500', 'ff0000', '8b0000']},
             'type': 'environmental',
             'priority': 7,
-            'keywords': ['thermal comfort', 'heat stress', 'human comfort', 'livability', 'temperature comfort'],
+            'keywords': [
+                'thermal comfort', 'heat stress', 'human comfort', 'livability', 'temperature comfort',
+                'comfort index', 'heat index', 'outdoor comfort', 'habitability', 'climate comfort'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Thermal+Comfort+Index&palette=00ff00,ffff00,ff0000,8b0000&min=0&max=100',
-            'description': 'Human thermal comfort from temperature and humidity. Red zones (80+) indicate severe heat stress - unsafe outdoor conditions without cooling.'
+            'description': 'Human thermal comfort from temperature and humidity. Red zones (80+) indicate severe heat stress - unsafe outdoor conditions without cooling.',
+            'supports_temporal': False,
+            'semantic_context': {
+                'focus': 'human health',
+                'use_cases': ['public health', 'urban design', 'occupational safety']
+            }
         },
         
         'surface_water_extent': {
@@ -1819,15 +2247,22 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['ffffff', '0066ff']},
             'type': 'environmental',
             'priority': 8,
-            'keywords': ['surface water', 'water bodies', 'lakes', 'rivers', 'water extent', 'hydrology'],
+            'keywords': [
+                'surface water', 'water bodies', 'lakes', 'rivers', 'water extent', 'hydrology',
+                'reservoirs', 'ponds', 'wetlands', 'aquatic areas', 'water coverage',
+                'hydrological features', 'water resources'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Surface+Water&palette=ffffff,0066ff&min=0&max=1',
             'description': 'Current extent of lakes, rivers, and reservoirs. Blue areas show permanent and seasonal water bodies - critical for water resource management.',
-             # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
             'temporal_range': 'monthly',
             'temporal_start_year': 1984,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'resource_type': 'water',
+                'use_cases': ['water management', 'irrigation planning', 'conservation']
+            }
         },
         
         'evapotranspiration': {
@@ -1837,15 +2272,21 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 5, 'palette': ['f7fbff', 'deebf7', 'c6dbef', '9ecae1', '6baed6', '4292c6', '2171b5', '08519c', '08306b']},
             'type': 'environmental',
             'priority': 6,
-            'keywords': ['evapotranspiration', 'et', 'water loss', 'evaporation', 'transpiration', 'water cycle'],
+            'keywords': [
+                'evapotranspiration', 'et', 'water loss', 'evaporation', 'transpiration', 'water cycle',
+                'moisture loss', 'water demand', 'crop water use', 'plant water loss'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Evapotranspiration+(mm/day)&palette=f7fbff,6baed6,08306b&min=0&max=5',
             'description': 'Water loss from vegetation and soil (mm/day). Higher rates (blue) indicate active vegetation and high water demand - key for irrigation planning.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': '8day',
+            'temporal_range': '8-day',
             'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'process': 'hydrological',
+                'use_cases': ['irrigation scheduling', 'water balance', 'crop management']
+            }
         },
         
         'glacier_extent': {
@@ -1855,15 +2296,23 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 1, 'palette': ['ffffff', 'e0f3f8', 'abd9e9', '74add1', '4575b4', '313695']},
             'type': 'environmental',
             'priority': 9,
-            'keywords': ['glacier', 'ice', 'snow cover', 'glacial', 'ice extent', 'cryosphere'],
+            'keywords': [
+                'glacier', 'ice', 'snow cover', 'glacial', 'ice extent', 'cryosphere',
+                'ice cap', 'ice field', 'permanent ice', 'glacial coverage', 'frozen water',
+                'ice mass', 'glacier monitoring'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Glacier+Cover&palette=ffffff,abd9e9,313695&min=0&max=1',
             'description': 'Glaciers and permanent ice in northern Pakistan. Critical for monitoring glacial retreat and water security in Gilgit-Baltistan and Hunza regions.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': '8day',
-            'temporal_start_year': 2000,
+            'temporal_range': '5-day',
+            'temporal_start_year': 2017,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'resource_type': 'frozen water',
+                'location_focus': 'high altitude',
+                'use_cases': ['water security', 'climate monitoring', 'glacier tracking']
+            }
         },
         
         'lulc_worldcover': {
@@ -1874,85 +2323,108 @@ class GEEDataCatalog:
                 'min': 10,
                 'max': 95,
                 'palette': [
-                    '006400',  # Tree cover
-                    'ffbb22',  # Shrubland
-                    'ffff4c',  # Grassland
-                    'f096ff',  # Cropland
-                    'fa0000',  # Built-up
-                    'b4b4b4',  # Bare/sparse vegetation
-                    'f0f0f0',  # Snow and ice
-                    '0064c8',  # Permanent water bodies
-                    '0096a0',  # Herbaceous wetland
-                    '00cf75',  # Mangroves
-                    'fae6a0'   # Moss and lichen
+                    '006400', 'ffbb22', 'ffff4c', 'f096ff', 'fa0000',
+                    'b4b4b4', 'f0f0f0', '0064c8', '0096a0', '00cf75', 'fae6a0'
                 ]
             },
             'type': 'environmental',
             'priority': 8,
-            'keywords': ['land use', 'land cover', 'lulc', 'landcover', 'landuse', 'classification', 'land classification'],
+            'keywords': [
+                'land use', 'land cover', 'lulc', 'landcover', 'landuse', 'classification', 
+                'land classification', 'land types', 'terrain classification', 'surface cover',
+                'vegetation cover', 'urban areas', 'agricultural land', 'forest cover'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Land+Use+Cover&palette=006400,ffbb22,f096ff,fa0000,0064c8&min=10&max=95',
             'description': 'ESA WorldCover 10m land use classification. Shows forests (green), croplands (pink), urban areas (red), water (blue), and other land cover types. Essential for urban planning and environmental monitoring.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': '8day',
-            'temporal_start_year': 2000,
-            'temporal_end_year': 2024,
+            'temporal_range': 'annual',
+            'temporal_start_year': 2020,
+            'temporal_end_year': 2021,
+            'semantic_context': {
+                'data_type': 'classification',
+                'use_cases': ['urban planning', 'conservation', 'agriculture monitoring']
+            }
         },
         
         'lulc_modis': {
             'name': 'Land Cover (MODIS Annual)',
             'collection': 'MODIS/061/MCD12Q1',
-            'compute': lambda img: img.select('LC_Type1').rename('LULC_MODIS'),
+            'compute': lambda img: img.select('LC_Type1').rename('LandCover'),
             'vis': {
-                'min': 1,
-                'max': 17,
+                'min': 1, 'max': 17,
                 'palette': [
                     '05450a', '086a10', '54a708', '78d203', '009900',
                     'c6b044', 'dcd159', 'dade48', 'fbff13', 'b6ff05',
-                    '27ff87', 'c24f44', 'a5a5a5', 'ff6d4c', '69fff8',
-                    'f9ffa4', '1c0dff'
+                    'aec3d4', '152106', 'e6ae66', '071c00', '1c0dff',
+                    '6f6f6f', 'ffffff'
                 ]
             },
-            'type': 'environmental',
-            'priority': 10,  # ⭐ INCREASED PRIORITY to beat worldcover
+            'type': 'land_cover',
             'keywords': [
-                'modis land cover',  # ⭐ FIRST keyword for priority
-                'modis lulc',
-                'land cover annual', 
-                'yearly land use', 
-                'temporal land cover',
-                'land cover time series',
-                'land cover change',
-                'modis classification'
+                'land cover', 'lulc', 'modis', 'vegetation', 'forest', 'agriculture',
+                'urban', 'land use', 'classification', 'ecosystem', 'habitat',
+                'deforestation', 'afforestation', 'cropland', 'grassland', 'wetland',
+                'shrubland', 'savanna', 'barren', 'snow', 'water bodies', 'built-up'
             ],
-            'time_filter': 'latest',
-            'legend': '/api/gee/legend/?dataset=MODIS+Land+Cover&palette=05450a,c6b044,a5a5a5,0000ff&min=1&max=17',
-            'description': 'MODIS annual land cover classification (500m). Tracks land cover changes over time - useful for monitoring deforestation, urbanization, and agricultural expansion.',
-            'supports_temporal': True,  # ⭐ Temporal slider enabled
+            'time_filter': False,
+            'legend': '/api/gee/legend/?dataset=Land+Cover+(MODIS)&palette=05450a,086a10,54a708,78d203,009900,c6b044,dcd159,dade48,fbff13,b6ff05,aec3d4,152106,e6ae66,071c00,1c0dff&min=1&max=17',
+            'description': 'Annual global land cover classification from MODIS (2001-2022). 17 classes including forests, croplands, urban areas, and water bodies. Essential for monitoring deforestation, urbanization, and ecosystem changes. 500m resolution.',
+            'supports_temporal': True,
             'temporal_range': 'annual',
-            'temporal_start_year': 2001,  # ⭐ Available years
-            'temporal_end_year': 2022
+            'temporal_start_year': 2001,
+            'temporal_end_year': 2022,
+            'temporal_note': 'Annual product released typically 1 year after acquisition.',
+            'semantic_context': {
+                'indicator': 'land_use',
+                'use_cases': [
+                    'deforestation monitoring', 'urbanization tracking', 'agricultural expansion',
+                    'ecosystem monitoring', 'habitat loss assessment', 'land use planning',
+                    'environmental impact assessment'
+                ],
+                'temporal_note': 'Annual snapshots for trend analysis'
+            }
         },
         
         # ====================================================================
         # EXISTING ENVIRONMENTAL INDICES (PRESERVED)
         # ====================================================================
-        'ndvi': {
-            'name': 'Vegetation (NDVI)',
-            'collection': 'COPERNICUS/S2_SR',
-            'compute': lambda img: img.normalizedDifference(['B8', 'B4']).rename('NDVI'),
-            'vis': {'min': 0, 'max': 0.8, 'palette': ['8b4513', 'f4a460', 'adff2f', '228b22', '006400']},
-            'type': 'environmental',
-            'priority': 3,
-            'keywords': ['vegetation', 'ndvi', 'green cover', 'crops'],
-            'time_filter': 'latest',
-            'legend': '/api/gee/legend/?dataset=Vegetation+(NDVI)&palette=8b4513,adff2f,006400&min=0&max=0.8',
-            'description': 'Vegetation health and density. Green zones (NDVI > 0.6) show healthy forests/crops; brown areas are bare soil or degraded land.',
-            'supports_temporal': True,  # ⭐ Enable temporal
-            'temporal_range': 'yearly',
-            'temporal_start_year': 2017,
-            'temporal_end_year': 2024
+        'ndvi_modis': {
+            'name': 'NDVI (MODIS 16-day)',
+            'collection': 'MODIS/061/MOD13Q1',
+            'compute': lambda img: img.select('NDVI').multiply(0.0001).rename('NDVI'),
+            'vis': {
+                'min': -0.2, 'max': 0.8,
+                'palette': [
+                    'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163',
+                    '99B718', '74A901', '66A000', '529400', '3E8601',
+                    '207401', '056201', '004C00', '023B01', '012E01', '011D01'
+                ]
+            },
+            'type': 'vegetation',
+            'keywords': [
+                'ndvi', 'vegetation', 'health', 'greenness', 'modis', 'agriculture',
+                'crop health', 'drought', 'vegetation index', 'photosynthesis',
+                'biomass', 'crop monitoring', 'vegetation stress', 'agricultural productivity',
+                'food security', 'grassland health', 'forest health', 'degradation'
+            ],
+            'time_filter': True,
+            'legend': '/api/gee/legend/?dataset=NDVI+(MODIS)&palette=FFFFFF,CE7E45,DF923D,F1B555,FCD163,99B718,74A901,66A000,529400,3E8601,207401,056201,004C00,023B01,012E01,011D01&min=0&max=1',
+            'description': 'Vegetation health index from MODIS (2000-present). 16-day composite at 250m resolution. Values 0-1 where higher values indicate healthier, denser vegetation. Critical for monitoring drought, crop conditions, and ecosystem health.',
+            'supports_temporal': True,
+            'temporal_range': '16-day',
+            'temporal_start_year': 2000,
+            'temporal_end_year': datetime.now().year,
+            'temporal_note': 'Updated every 16 days, near real-time with ~2 week delay.',
+            'semantic_context': {
+                'indicator': 'vegetation_health',
+                'use_cases': [
+                    'drought monitoring', 'crop health assessment', 'agricultural monitoring',
+                    'food security', 'vegetation stress detection', 'rangeland monitoring',
+                    'forest health', 'post-disaster vegetation recovery'
+                ],
+                'temporal_note': '16-day composites for seasonal and inter-annual analysis'
+            }
         },
         'ndsi': {
             'name': 'Snow Cover (NDSI)',
@@ -1961,15 +2433,23 @@ class GEEDataCatalog:
             'vis': {'min': -0.5, 'max': 0.8, 'palette': ['0d47a1', '42a5f5', 'ffffff', 'e3f2fd']},
             'type': 'environmental',
             'priority': 8,
-            'keywords': ['snow', 'snow cover', 'ice', 'glacier', 'ndsi', 'winter', 'avalanche'],
+            'keywords': [
+                'snow', 'snow cover', 'ice', 'glacier', 'ndsi', 'winter', 'avalanche',
+                'snow extent', 'ice coverage', 'frozen precipitation', 'snowpack',
+                'snow depth indicator', 'winter conditions'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Snow+Cover+(NDSI)&palette=0d47a1,42a5f5,ffffff,e3f2fd&min=-0.5&max=0.8',
             'description': 'Snow and ice coverage. White zones indicate fresh snow; light blue shows older snow/ice - essential for avalanche risk and water forecasting.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': 'monthly',
+            'temporal_range': '5-day',
             'temporal_start_year': 2017,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'index_type': 'spectral',
+                'season_focus': 'winter',
+                'use_cases': ['avalanche prediction', 'water resource forecasting', 'winter monitoring']
+            }
         },
         'ndbi': {
             'name': 'Urban Areas (NDBI)',
@@ -1978,15 +2458,22 @@ class GEEDataCatalog:
             'vis': {'min': -0.5, 'max': 0.5, 'palette': ['2e7d32', 'ffeb3b', 'ff6f00', 'd32f2f']},
             'type': 'environmental',
             'priority': 6,
-            'keywords': ['urban', 'urban areas', 'built', 'city', 'development', 'ndbi', 'building', 'infrastructure'],
+            'keywords': [
+                'urban', 'urban areas', 'built', 'city', 'development', 'ndbi', 'building', 
+                'infrastructure', 'built-up areas', 'construction', 'urbanization', 'metropolitan',
+                'developed land', 'urban expansion', 'settlement'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Urban+Areas+(NDBI)&palette=2e7d32,ffeb3b,ff6f00,d32f2f&min=-0.5&max=0.5',
             'description': 'Built-up areas and infrastructure. Red zones show dense urban development - useful for tracking city expansion and heat island effects.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': 'monthly',
+            'temporal_range': '5-day',
             'temporal_start_year': 2017,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'index_type': 'spectral',
+                'use_cases': ['urban planning', 'growth monitoring', 'heat island analysis']
+            }
         },
         'ndwi': {
             'name': 'Water Bodies (NDWI)',
@@ -1995,31 +2482,74 @@ class GEEDataCatalog:
             'vis': {'min': -0.5, 'max': 0.5, 'palette': ['d7ccc8', '81d4fa', '039be5', '01579b']},
             'type': 'environmental',
             'priority': 5,
-            'keywords': ['ndwi', 'water index', 'water bodies index'],
+            'keywords': [
+                'ndwi', 'water index', 'water bodies index', 'water content', 'moisture index',
+                'water detection', 'aquatic features', 'water mapping', 'moisture content'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Water+Bodies+(NDWI)&palette=d7ccc8,81d4fa,039be5,01579b&min=-0.5&max=0.5',
             'description': 'Water content in vegetation and surface water. Dark blues indicate open water; light blues show moist soils or wetlands.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': 'monthly',
+            'temporal_range': '5-day',
             'temporal_start_year': 2017,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'index_type': 'spectral',
+                'use_cases': ['water mapping', 'wetland monitoring', 'irrigation assessment']
+            }
         },
-        'nightlights': {
-            'name': 'Nighttime Lights',
+        'nightlights_dmsp': {
+            'name': 'Nighttime Lights (DMSP 1992-2013)',
             'collection': 'NOAA/DMSP-OLS/NIGHTTIME_LIGHTS',
             'compute': lambda img: img.select('stable_lights').rename('Nightlights'),
             'vis': {'min': 0, 'max': 63, 'palette': ['000000', '0d0887', '7e03a8', 'cc4778', 'f89540', 'f0f921']},
             'type': 'socioeconomic',
-            'keywords': ['nightlights', 'lights', 'economic', 'activity', 'development', 'urbanization'],
+            'keywords': [
+                'nightlights', 'lights', 'economic', 'activity', 'development', 'urbanization',
+                'night illumination', 'artificial light', 'electrification', 'economic development',
+                'infrastructure development', 'settlement patterns', 'dmsp', 'historical lights',
+                'urban expansion', 'energy consumption', 'population density proxy'
+            ],
             'time_filter': False,
-            'legend': '/api/gee/legend/?dataset=Nighttime+Lights&palette=000000,0d0887,7e03a8,cc4778,f89540,f0f921&min=0&max=63',
-            'description': 'Nighttime lights showing economic activity and electrification. Bright areas indicate developed urban centers; dark zones lack infrastructure.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'legend': '/api/gee/legend/?dataset=Nighttime+Lights+(DMSP)&palette=000000,0d0887,7e03a8,cc4778,f89540,f0f921&min=0&max=63',
+            'description': 'Historical nighttime lights (1992-2013) from DMSP satellites showing economic activity and electrification. Bright areas indicate developed urban centers; dark zones lack infrastructure. NOTE: DMSP program ended in 2013 - use VIIRS for recent data.',
+            'supports_temporal': True,
+            'temporal_range': 'annual',
+            'temporal_start_year': 1992,
+            'temporal_end_year': 2013,
+            'temporal_note': 'DMSP satellite program ended in 2013. Use nightlights_viirs for 2014-present.',
+            'semantic_context': {
+                'indicator': 'socioeconomic',
+                'use_cases': ['development monitoring', 'electrification tracking', 'economic activity', 'historical urbanization', 'power grid expansion'],
+                'temporal_note': 'Historical dataset only - ended 2013'
+            }
+        },
+    
+        'nightlights_viirs': {
+            'name': 'Nighttime Lights (VIIRS 2014-Present)',
+            'collection': 'NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG',
+            'compute': lambda img: img.select('avg_rad').rename('Nightlights'),
+            'vis': {'min': 0, 'max': 60, 'palette': ['000000', '0d0887', '7e03a8', 'cc4778', 'f89540', 'f0f921']},
+            'type': 'socioeconomic',
+            'keywords': [
+                'nightlights', 'lights', 'economic', 'activity', 'development', 'urbanization',
+                'night illumination', 'artificial light', 'electrification', 'economic development',
+                'infrastructure development', 'settlement patterns', 'viirs', 'modern lights',
+                'urban expansion', 'energy consumption', 'real-time development', 'monthly lights'
+            ],
+            'time_filter': True,
+            'legend': '/api/gee/legend/?dataset=Nighttime+Lights+(VIIRS)&palette=000000,0d0887,7e03a8,cc4778,f89540,f0f921&min=0&max=60',
+            'description': 'Modern nighttime lights (2014-present) from VIIRS satellite showing current economic activity and electrification. Higher resolution than DMSP. Updated monthly with cloud-free composites. Essential for monitoring urban growth and disaster recovery.',
             'supports_temporal': True,
             'temporal_range': 'monthly',
-            'temporal_start_year': 2017,
+            'temporal_start_year': 2014,
             'temporal_end_year': 2024,
+            'temporal_note': 'Updated monthly, typically 2-3 months delay. Successor to DMSP.',
+            'semantic_context': {
+                'indicator': 'socioeconomic',
+                'use_cases': ['development monitoring', 'electrification tracking', 'economic activity', 'disaster recovery monitoring', 'power outage detection', 'urban expansion tracking'],
+                'temporal_note': 'Current operational dataset'
+            }
         },
         'air_quality': {
             'name': 'Air Quality (AOD)',
@@ -2027,14 +2557,22 @@ class GEEDataCatalog:
             'compute': lambda img: img.select('Optical_Depth_047').multiply(0.001).rename('AOD'),
             'vis': {'min': 0, 'max': 1, 'palette': ['00ff00', 'ffff00', 'ff7e00', 'ff0000', '8f3f97', '7e0023']},
             'type': 'environmental',
-            'keywords': ['air quality', 'pollution', 'smog', 'aerosol', 'aod', 'environment'],
+            'keywords': [
+                'air quality', 'pollution', 'smog', 'aerosol', 'aod', 'environment',
+                'air pollution', 'particulate matter', 'atmospheric pollution', 'haze',
+                'air contamination', 'pollution monitoring', 'aerosol optical depth'
+            ],
+            'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Air+Quality+(AOD)&palette=00ff00,ffff00,ff7e00,ff0000,8f3f97,7e0023&min=0&max=1',
             'description': 'Air pollution from aerosols and particulates. Red/purple zones show hazardous air quality - common in winter smog season in Punjab.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': 'monthly',
-            'temporal_start_year': 2010,
+            'temporal_range': 'daily',
+            'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'health_impact': 'respiratory',
+                'use_cases': ['health monitoring', 'pollution control', 'environmental policy']
+            }
         },
         'temperature': {
             'name': 'Land Surface Temperature',
@@ -2043,15 +2581,21 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 50, 'palette': ['313695', '4575b4', 'abd9e9', 'ffffbf', 'fdae61', 'f46d43', 'd73027', 'a50026']},
             'type': 'environmental',
             'priority': 3,
-            'keywords': ['temperature', 'heat', 'thermal', 'lst'],
+            'keywords': [
+                'temperature', 'heat', 'thermal', 'lst', 'surface temperature', 'ground heat',
+                'thermal radiation', 'heat distribution', 'temperature map'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Temperature+(Celsius)&palette=313695,ffffbf,a50026&min=0&max=50',
             'description': 'Land surface temperature from MODIS. Shows ground-level heat - red zones (40°C+) face extreme heat stress risks.',
-            # ⭐ VALID TEMPORAL SUPPORT
             'supports_temporal': True,
-            'temporal_range': 'monthly',
-            'temporal_start_year': 2010,
+            'temporal_range': 'daily',
+            'temporal_start_year': 2000,
             'temporal_end_year': 2024,
+            'semantic_context': {
+                'measurement': 'celsius',
+                'use_cases': ['heat monitoring', 'climate analysis', 'thermal mapping']
+            }
         },
         'precipitation': {
             'name': 'Rainfall Data',
@@ -2060,48 +2604,92 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 50, 'palette': ['ffffff', 'c6dbef', '9ecae1', '6baed6', '3182bd', '08519c']},
             'type': 'environmental',
             'priority': 3,
-            'keywords': ['rainfall', 'precipitation', 'rain'],
+            'keywords': [
+                'rainfall', 'precipitation', 'rain', 'rainfall data', 'rain measurement',
+                'precipitation rate', 'wet conditions', 'monsoon', 'rainfall intensity',
+                'rain accumulation', 'precipitation patterns'
+            ],
             'time_filter': 'latest',
             'legend': '/api/gee/legend/?dataset=Rainfall+(mm)&palette=ffffff,6baed6,08519c&min=0&max=50',
             'description': 'Daily rainfall from CHIRPS satellite. Darker blues show heavy rain (30mm+) - useful for flood forecasting and agricultural planning.',
-            'supports_temporal': True,  # ⭐ Enable temporal
-            'temporal_range': 'yearly',
+            'supports_temporal': True,
+            'temporal_range': 'daily',
             'temporal_start_year': 1981,
-            'temporal_end_year': 2024
+            'temporal_end_year': 2024,
+            'semantic_context': {
+                'measurement': 'millimeters',
+                'use_cases': ['flood forecasting', 'agriculture', 'water management']
+            }
         },
         'soil_moisture': {
-            'name': 'Soil Moisture',
+            'name': 'Soil Moisture (SMAP)',
             'collection': 'NASA_USDA/HSL/SMAP10KM_soil_moisture',
-            'compute': lambda img: img.select('ssm').rename('Soil_Moisture'),
-            'vis': {'min': 0, 'max': 28, 'palette': ['d73027', 'fc8d59', 'fee08b', 'd9ef8b', '91cf60', '1a9850']},
-            'type': 'environmental',
-            'priority': 3,
-            'keywords': ['soil moisture', 'soil water'],
-            'time_filter': 'latest',
-            'legend': '/api/gee/legend/?dataset=Soil+Moisture&palette=d73027,fee08b,1a9850&min=0&max=28',
-            'description': 'Soil water content (0-28%). Green zones indicate saturated soils prone to flooding; red zones show drought conditions.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'compute': lambda img: img.select('ssm').rename('SoilMoisture'),
+            'vis': {
+                'min': 0, 'max': 28,
+                'palette': ['d7191c', 'fdae61', 'ffffbf', 'a6d96a', '1a9641']
+            },
+            'type': 'water',
+            'keywords': [
+                'soil moisture', 'soil', 'water content', 'drought', 'agriculture',
+                'soil water', 'surface moisture', 'agricultural drought', 'crop water stress',
+                'irrigation', 'water availability', 'hydrological drought', 'soil saturation',
+                'field capacity', 'water stress', 'agricultural monitoring'
+            ],
+            'time_filter': True,
+            'legend': '/api/gee/legend/?dataset=Soil+Moisture+(SMAP)&palette=d7191c,fdae61,ffffbf,a6d96a,1a9641&min=0&max=28',
+            'description': 'Surface soil moisture from SMAP satellite (2015-present). Daily product at 10km resolution showing top 5cm soil water content. Critical for drought monitoring, agricultural planning, and flood forecasting. Values in percent volumetric water content.',
             'supports_temporal': True,
-            'temporal_range': 'monthly',
-            'temporal_start_year': 2010,
+            'temporal_range': 'daily',
+            'temporal_start_year': 2015,
             'temporal_end_year': 2024,
+            'temporal_note': 'SMAP launched April 2015. Daily products with ~2 day latency.',
+            'semantic_context': {
+                'indicator': 'drought',
+                'use_cases': [
+                    'drought monitoring', 'agricultural drought assessment', 'crop water stress',
+                    'irrigation planning', 'flood forecasting', 'water resource management',
+                    'agricultural advisory', 'food security monitoring'
+                ],
+                'temporal_note': 'Daily updates for operational drought monitoring'
+            }
         },
         'population': {
-            'name': 'Population Density',
+            'name': 'Population Density (WorldPop)',
             'collection': 'WorldPop/GP/100m/pop',
-            'compute': lambda img: img.select('population').rename('Population'),
-            'vis': {'min': 0, 'max': 200, 'palette': ['fff5f0', 'fee0d2', 'fcbba1', 'fc9272', 'fb6a4a', 'ef3b2c', 'cb181d', '99000d']},
-            'type': 'exposure',
-            'priority': 2,
-            'keywords': ['population', 'people', 'density'],
+            'compute': lambda img: img.rename('Population'),
+            'vis': {
+                'min': 0, 'max': 100,
+                'palette': [
+                    'ffffcc', 'ffeda0', 'fed976', 'feb24c', 'fd8d3c',
+                    'fc4e2a', 'e31a1c', 'bd0026', '800026'
+                ]
+            },
+            'type': 'socioeconomic',
+            'keywords': [
+                'population', 'density', 'demographics', 'people', 'settlement',
+                'population distribution', 'human settlement', 'population count',
+                'urban population', 'rural population', 'population growth',
+                'population exposure', 'disaster exposure', 'risk assessment',
+                'humanitarian planning', 'vulnerable populations'
+            ],
             'time_filter': False,
-            'legend': '/api/gee/legend/?dataset=Population+Density&palette=fff5f0,fc9272,99000d&min=0&max=200',
-            'description': 'Population density (people/hectare). Red zones show high-density urban areas - critical for assessing disaster exposure and evacuation planning.',
-            # ⭐ VALID TEMPORAL SUPPORT
+            'legend': '/api/gee/legend/?dataset=Population+Density&palette=ffffcc,ffeda0,fed976,feb24c,fd8d3c,fc4e2a,e31a1c,bd0026,800026&min=0&max=100',
+            'description': 'Annual population density estimates from WorldPop (2000-2020) at 100m resolution. Shows people per hectare. Essential for disaster risk assessment, exposure analysis, and humanitarian planning. Typically 2-3 years behind current year.',
             'supports_temporal': True,
-            'temporal_range': 'monthly',
-            'temporal_start_year': 2010,
-            'temporal_end_year': 2024,
+            'temporal_range': 'annual',
+            'temporal_start_year': 2000,
+            'temporal_end_year': 2020,
+            'temporal_note': 'WorldPop releases typically lag 2-3 years behind current year.',
+            'semantic_context': {
+                'indicator': 'demographic',
+                'use_cases': [
+                    'disaster exposure assessment', 'risk analysis', 'humanitarian planning',
+                    'evacuation planning', 'resource allocation', 'impact assessment',
+                    'vulnerable population identification', 'population growth monitoring'
+                ],
+                'temporal_note': 'Annual estimates with 2-3 year lag'
+            }
         },
         'elevation': {
             'name': 'Elevation (DEM)',
@@ -2110,11 +2698,19 @@ class GEEDataCatalog:
             'vis': {'min': 0, 'max': 5000, 'palette': ['006400', '228b22', 'adff2f', 'ffff00', 'ff8c00', 'ff4500', '8b4513', 'ffffff']},
             'type': 'terrain',
             'priority': 2,
-            'keywords': ['elevation', 'altitude', 'dem', 'height'],
+            'keywords': [
+                'elevation', 'altitude', 'dem', 'height', 'terrain height', 'topography',
+                'digital elevation model', 'ground elevation', 'elevation data', 'height above sea level',
+                'terrain elevation', 'topographic height'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Elevation+(m)&palette=006400,ffff00,ffffff&min=0&max=5000',
             'description': 'Terrain elevation from sea level. White peaks show Karakoram mountains (5000m+); greens are lowland plains vulnerable to flooding.',
             'supports_temporal': False,
+            'semantic_context': {
+                'measurement': 'meters',
+                'use_cases': ['topographic analysis', 'hazard mapping', 'infrastructure planning']
+            }
         },
         'multi_hazard_exposure': {
             'name': 'Multi-Hazard Exposure',
@@ -2122,37 +2718,38 @@ class GEEDataCatalog:
             'compute': lambda img: img.select('population').gt(50).selfMask().rename('Exposure'),
             'vis': {'min': 0, 'max': 1, 'palette': ['ffeda0', 'feb24c', 'fd8d3c', 'fc4e2a', 'e31a1c', 'b10026']},
             'type': 'susceptibility',
-            'keywords': ['multi hazard', 'exposure', 'vulnerability', 'risk', 'population risk', 'composite risk'],
+            'keywords': [
+                'multi hazard', 'exposure', 'vulnerability', 'risk', 'population risk', 
+                'composite risk', 'combined hazards', 'multiple threats', 'compound risk',
+                'integrated risk', 'cumulative hazard', 'risk overlap'
+            ],
             'time_filter': False,
             'legend': '/api/gee/legend/?dataset=Multi-Hazard+Exposure&palette=ffeda0,fd8d3c,e31a1c,b10026&min=0&max=1',
             'description': 'Population exposure to multiple hazards. Red areas face compound risks from floods, landslides, and earthquakes - priority zones for resilience planning.',
             'supports_temporal': False,
+            'semantic_context': {
+                'analysis_type': 'composite',
+                'use_cases': ['resilience planning', 'disaster preparedness', 'risk reduction']
+            }
         },
     }
     
     @classmethod
     def get_dataset(cls, query):
-        """Enhanced keyword matching with priority scoring"""
+        """Enhanced semantic search with priority scoring"""
         query_lower = query.lower()
         
         scores = {}
         for key, dataset in cls.DATASETS.items():
-            score = 0
+            # Calculate semantic score
+            semantic_score = SemanticSearchHelper.calculate_semantic_score(query, dataset)
             priority = dataset.get('priority', 1)
             
-            for keyword in dataset['keywords']:
-                if keyword in query_lower:
-                    if len(keyword.split()) > 1:
-                        score += 5
-                    else:
-                        score += 2
+            # Combine semantic score with priority
+            final_score = semantic_score * priority
             
-            if 'susceptibility' in query_lower and 'susceptibility' in dataset['type']:
-                score += 3
-            if 'hazard' in query_lower and 'hazard' in dataset['type']:
-                score += 3
-            
-            scores[key] = score * priority
+            if final_score > 0:
+                scores[key] = final_score
         
         if not scores:
             return None, None
@@ -2198,10 +2795,11 @@ class GEEDataCatalog:
             return [start, default_end]
         
         return [default_start, default_end]
-
-
 # ============================================================================
 # 🔥 NEW ENHANCED COMPUTATION FUNCTIONS
+# ============================================================================
+# ============================================================================
+# 🔥 ENHANCED COMPUTATION FUNCTIONS (PRESERVED)
 # ============================================================================
 
 class EnhancedCompute:
@@ -2220,7 +2818,6 @@ class EnhancedCompute:
                 .subtract(273.15) \
                 .clip(aoi)
             
-            # Urban mask
             urban = ee.ImageCollection('COPERNICUS/S2_SR') \
                 .filterBounds(aoi) \
                 .filterDate(date_range[0], date_range[1]) \
@@ -2230,7 +2827,6 @@ class EnhancedCompute:
                 .gt(0.1) \
                 .clip(aoi)
             
-            # Calculate rural reference temp (30th percentile)
             rural_temp = lst.updateMask(urban.Not()).reduceRegion(
                 reducer=ee.Reducer.percentile([30]),
                 geometry=aoi,
@@ -2238,7 +2834,6 @@ class EnhancedCompute:
                 maxPixels=1e9
             ).getNumber('LST_Day_1km')
             
-            # UHII = Urban temp - Rural reference
             uhii = lst.subtract(ee.Image.constant(rural_temp)).rename('UHII')
             
             return uhii.updateMask(urban)
@@ -2252,15 +2847,9 @@ class EnhancedCompute:
         """Sea Level Rise 2050 - 1-3m inundation scenario"""
         try:
             dem = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic().clip(aoi)
-            
-            # Areas below 3m elevation near coast
             slr_risk = dem.lt(3).multiply(3).subtract(dem).clamp(0, 3).rename('SLR_2050')
-            
-            # Only show coastal areas
             coastal_mask = dem.lt(10).And(dem.gt(-5))
-            
             return slr_risk.updateMask(coastal_mask)
-            
         except Exception as e:
             print(f"❌ SLR 2050 Error: {e}")
             return ee.Image.constant(0).clip(aoi).rename('SLR_Fallback')
@@ -2270,15 +2859,9 @@ class EnhancedCompute:
         """Sea Level Rise 2100 - 1-5m worst case scenario"""
         try:
             dem = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic().clip(aoi)
-            
-            # Areas below 5m elevation
             slr_risk = dem.lt(5).multiply(5).subtract(dem).clamp(0, 5).rename('SLR_2100')
-            
-            # Coastal mask
             coastal_mask = dem.lt(15).And(dem.gt(-5))
-            
             return slr_risk.updateMask(coastal_mask)
-            
         except Exception as e:
             print(f"❌ SLR 2100 Error: {e}")
             return ee.Image.constant(0).clip(aoi).rename('SLR_Fallback')
@@ -2287,7 +2870,6 @@ class EnhancedCompute:
     def compute_thermal_comfort(aoi, date_range):
         """Thermal Comfort Index from temp + humidity proxy"""
         try:
-            # Temperature component
             temp = ee.ImageCollection('MODIS/061/MOD11A1') \
                 .filterBounds(aoi) \
                 .filterDate(date_range[0], date_range[1]) \
@@ -2297,15 +2879,11 @@ class EnhancedCompute:
                 .subtract(273.15) \
                 .clip(aoi)
             
-            # Normalize to 0-100 scale (0°C = 0, 50°C = 100)
             comfort = temp.multiply(2).clamp(0, 100).rename('Thermal_Comfort')
-            
             return comfort
-            
         except Exception as e:
             print(f"❌ Thermal Comfort Error: {e}")
             return ee.Image.constant(50).clip(aoi).rename('Comfort_Fallback')
-
 
 # ============================================================================
 # AHP COMPUTATION FUNCTIONS - PRESERVED FROM ORIGINAL
@@ -2749,10 +3327,13 @@ class AHPModels:
 # ============================================================================
 # DYNAMIC GEE LAYER VIEW - ENHANCED WITH DESCRIPTIONS
 # ============================================================================
+# ============================================================================
+# DYNAMIC GEE LAYER VIEW - ENHANCED
+# ============================================================================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class DynamicGEELayerView(View):
-    """Enhanced hazard-specific layer generator with human-friendly descriptions"""
+    """Enhanced hazard-specific layer generator with semantic search"""
     
     def post(self, request):
         try:
@@ -2780,7 +3361,6 @@ class DynamicGEELayerView(View):
                 dataset_key, dataset_config, bbox, date_range, location_name
             )
             
-            # 🔥 Generate human-friendly description
             description = dataset_config.get('description', 'No description available.')
             
             hazard_emoji = {
@@ -2799,12 +3379,8 @@ class DynamicGEELayerView(View):
             }
             
             emoji = hazard_emoji.get(dataset_config['type'], '📊')
-            
-            # 🔥 Enhanced response with description
             response_text = f"{emoji} **{dataset_config['name']}** for **{location_name.replace('_', ' ').title()}**\n\n📊 **What this shows:** {description}"
             
-            # ⭐ Check if dataset supports temporal visualization
-            # ⭐ Check if dataset supports temporal visualization
             supports_temporal = dataset_config.get('supports_temporal', False)
             temporal_config = None
 
@@ -2820,10 +3396,7 @@ class DynamicGEELayerView(View):
                     'bbox': bbox,
                     'location_name': location_name
                 }
-                # ---------------------------------------------
-                # SAFE FALLBACK FOR NON-TEMPORAL DATASETS
-                # ---------------------------------------------
-            if not supports_temporal:
+            else:
                 temporal_config = {
                     'available': False,
                     'start_year': None,
@@ -2843,9 +3416,9 @@ class DynamicGEELayerView(View):
                 'date_range': date_range,
                 'legend': dataset_config.get('legend', ''),
                 'visualization': dataset_config['vis'],
-                'response': response_text,  # ✅ Now includes description
-                'description': description,  # ✅ Separate field for frontend use
-                'temporal': temporal_config  # ⭐ Temporal availability info (not auto-enabled)
+                'response': response_text,
+                'description': description,
+                'temporal': temporal_config
             })
             
         except Exception as e:
@@ -2858,10 +3431,9 @@ class DynamicGEELayerView(View):
         """Generate layer with AHP support + new compute methods"""
         try:
             aoi = ee.Geometry.Rectangle(bbox)
-            
             compute_func = dataset_config['compute']
             
-            # 🔥 NEW COMPUTE METHODS
+            # New compute methods
             if compute_func == 'compute_uhii':
                 computed_image = EnhancedCompute.compute_uhii(aoi, date_range)
             elif compute_func == 'compute_slr_2050':
@@ -2871,7 +3443,7 @@ class DynamicGEELayerView(View):
             elif compute_func == 'compute_thermal_comfort':
                 computed_image = EnhancedCompute.compute_thermal_comfort(aoi, date_range)
             
-            # EXISTING AHP METHODS (PRESERVED)
+            # AHP methods
             elif compute_func == 'ahp_flood':
                 computed_image = AHPModels.compute_flood_susceptibility(aoi)
             elif compute_func == 'ahp_fire':
@@ -2885,22 +3457,23 @@ class DynamicGEELayerView(View):
             elif compute_func == 'composite_drought':
                 computed_image = AHPModels.compute_drought_composite(aoi, date_range)
             else:
-                # Standard computation (PRESERVED)
-                time_filter = dataset_config.get('time_filter', True)
+                # Standard computation
                 
+                time_filter = dataset_config.get('time_filter', True)
                 if time_filter is False:
                     if 'Image' in dataset_config['collection'] or 'DEM' in dataset_config['collection']:
                         image = ee.Image(dataset_config['collection'])
                     else:
                         collection = ee.ImageCollection(dataset_config['collection'])
-                        image = collection.filterBounds(aoi).mosaic()
+                        collection = collection.filterBounds(aoi)
+                        image = collection.mosaic()
                 elif time_filter == 'latest':
                     collection = ee.ImageCollection(dataset_config['collection'])
                     collection = collection.filterBounds(aoi).sort('system:time_start', False).limit(30)
-                    
+
                     if 'COPERNICUS/S2' in dataset_config['collection']:
                         collection = collection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
-                    
+
                     if 'S1_GRD' in dataset_config['collection']:
                         image = collection.min()
                     else:
@@ -2911,14 +3484,26 @@ class DynamicGEELayerView(View):
                     
                     if 'COPERNICUS/S2' in dataset_config['collection']:
                         collection = collection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
-                    
                     image = collection.median()
                 
+                # ✅ NEW: guard against cases where the median image has no bands
+                # 🔐 Safety check: avoid "Image has no bands" -> NDVI/NDWI crashes
+                band_names = image.bandNames().getInfo()
+                if not band_names:
+                    logger.warning(
+                        f"No bands found for dataset {dataset_key} "
+                        f"in date range {date_range} and AOI; collection likely empty."
+                    )
+                    raise Exception(
+                        "No data available for the selected period and location. "
+                        "Please try a different year, wider date range, or slightly larger area of interest."
+                    )
+
                 computed_image = compute_func(image)
             
             clipped = computed_image.clip(aoi)
             map_id = clipped.getMapId(dataset_config['vis'])
-            
+
             return {
                 'tile_url': map_id['tile_fetcher'].url_format,
                 'dataset': dataset_config['name'],
@@ -2932,10 +3517,13 @@ class DynamicGEELayerView(View):
 # ============================================================================
 # TEMPORAL LAYER VIEW - Generate layers for specific years
 # ============================================================================
+# ============================================================================
+# 🔥 OPTIMIZED TEMPORAL LAYER VIEW - BATCH PROCESSING
+# ============================================================================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class TemporalGEELayerView(View):
-    """Generate GEE layers for specific years (temporal visualization)"""
+    """Optimized temporal layer generation with batch processing"""
     
     def post(self, request):
         try:
@@ -2943,7 +3531,7 @@ class TemporalGEELayerView(View):
             dataset_key = data.get('dataset_key')
             location_name = data.get('location')
             bbox = data.get('bbox')
-            years = data.get('years', [])  # List of years requested
+            years = data.get('years', [])
             
             if not dataset_key or not location_name or not bbox or not years:
                 return JsonResponse({
@@ -2951,67 +3539,108 @@ class TemporalGEELayerView(View):
                     'required': ['dataset_key', 'location', 'bbox', 'years']
                 }, status=400)
             
-            # Get dataset config
             dataset_config = GEEDataCatalog.DATASETS.get(dataset_key)
             if not dataset_config:
                 return JsonResponse({'error': 'Dataset not found'}, status=404)
             
-            # Check temporal support
             if not dataset_config.get('supports_temporal', False):
                 return JsonResponse({'error': 'Dataset does not support temporal visualization'}, status=400)
             
-            # Get available year range
             start_year = dataset_config.get('temporal_start_year', 2001)
             end_year = dataset_config.get('temporal_end_year', 2022)
             
-            # Generate layers for each year
+            # 🔥 OPTIMIZED: Process all years in single batch
+            layers = self.batch_generate_layers(
+                dataset_config, bbox, years, start_year, end_year, dataset_key
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'layers': layers,
+                'dataset': dataset_config['name'],
+                'location': location_name,
+                'visualization': dataset_config['vis'],
+                'legend': dataset_config.get('legend', '')
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'error': str(e),
+                'message': 'Failed to generate temporal layers'
+            }, status=500)
+    
+        # in views.py, inside TemporalGEELayerView
+    def batch_generate_layers(self, dataset_config, bbox, years, start_year, end_year, dataset_key):
+        """Batch process multiple years efficiently"""
+        try:
+            aoi = ee.Geometry.Rectangle(bbox)
+            collection = ee.ImageCollection(dataset_config['collection']).filterBounds(aoi)
+            compute_func = dataset_config['compute']
             layers = []
+            
             for year in years:
-                # Find nearest available year if exact year not available
                 adjusted_year = max(start_year, min(end_year, year))
                 
                 try:
-                    # Generate date range for this year
+                    # Create year-specific filter
                     date_range = [f'{adjusted_year}-01-01', f'{adjusted_year}-12-31']
                     
-                    # Generate layer
-                    aoi = ee.Geometry.Rectangle(bbox)
+                    # Filter collection for this year
+                    year_collection = collection.filterDate(date_range[0], date_range[1])
                     
-                    # Get collection for this year
-                    collection = ee.ImageCollection(dataset_config['collection'])
-                    collection = collection.filterBounds(aoi).filterDate(date_range[0], date_range[1])
+                    # Check data availability
+                    count = year_collection.size().getInfo()
                     
-                    # Check if data exists
-                    count = collection.size().getInfo()
                     if count == 0:
-                        # Try nearest years
+                        # Find nearest available year (simple fallback)
                         for offset in [1, -1, 2, -2]:
                             alt_year = adjusted_year + offset
                             if start_year <= alt_year <= end_year:
                                 date_range = [f'{alt_year}-01-01', f'{alt_year}-12-31']
-                                collection = ee.ImageCollection(dataset_config['collection'])
-                                collection = collection.filterBounds(aoi).filterDate(date_range[0], date_range[1])
-                                count = collection.size().getInfo()
+                                year_collection = collection.filterDate(date_range[0], date_range[1])
+                                count = year_collection.size().getInfo()
                                 if count > 0:
                                     adjusted_year = alt_year
                                     break
                     
                     if count > 0:
-                        # Compute image
-                        image = collection.median()
-                        compute_func = dataset_config['compute']
-                        computed_image = compute_func(image)
-                        
-                        clipped = computed_image.clip(aoi)
-                        map_id = clipped.getMapId(dataset_config['vis'])
-                        
-                        layers.append({
-                            'year': adjusted_year,
-                            'requested_year': year,
-                            'tile_url': map_id['tile_fetcher'].url_format,
-                            'available': True
-                        })
+                        # Compute image with error handling
+                        try:
+                            image = year_collection.median()
+
+                            # ✅ NEW: guard against empty images (no bands)
+                            band_names = image.bandNames().getInfo()
+                            if not band_names or len(band_names) == 0:
+                                raise Exception(f"No bands available for {adjusted_year}")
+                            
+                            computed_image = compute_func(image)
+
+                            # ✅ NEW: generate tile URL for successful years
+                            clipped = computed_image.clip(aoi)
+                            map_id = clipped.getMapId(dataset_config['vis'])
+                            tile_url = map_id['tile_fetcher'].url_format
+
+                            layers.append({
+                                'year': adjusted_year,
+                                'requested_year': year,
+                                'tile_url': tile_url,
+                                'available': True,
+                                'dataset_key': dataset_key,
+                            })
+                            continue
+
+                        except Exception as compute_error:
+                            print(f"Compute error for {year}: {compute_error}")
+                            layers.append({
+                                'year': adjusted_year,
+                                'requested_year': year,
+                                'tile_url': None,
+                                'available': False,
+                                'error': f'Computation failed: {str(compute_error)}'
+                            })
+                            continue
                     else:
+                        # No data at all (even after fallback)
                         layers.append({
                             'year': adjusted_year,
                             'requested_year': year,
@@ -3030,20 +3659,10 @@ class TemporalGEELayerView(View):
                         'error': str(e)
                     })
             
-            return JsonResponse({
-                'success': True,
-                'layers': layers,
-                'dataset': dataset_config['name'],
-                'location': location_name,
-                'visualization': dataset_config['vis'],
-                'legend': dataset_config.get('legend', '')
-            })
+            return layers
             
         except Exception as e:
-            return JsonResponse({
-                'error': str(e),
-                'message': 'Failed to generate temporal layers'
-            }, status=500)
+            raise Exception(f"Batch generation failed: {str(e)}")
 
 
 # ============================================================================

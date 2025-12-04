@@ -4779,7 +4779,7 @@ button.custom-nav-btn.terrain-active:hover {
     margin-bottom: 6px;
 }
 /* ===================================
-   TEMPORAL SLIDER STYLES
+   TEMPORAL SLIDER STYLES (PRESERVED)
    =================================== */
 
 .gee-temporal-slider {
@@ -4886,8 +4886,9 @@ button.custom-nav-btn.terrain-active:hover {
     background: var(--ndma-red);
     border-color: var(--ndma-red);
 }
+
 /* ===================================
-   TEMPORAL DIALOG STYLES
+   TEMPORAL DIALOG STYLES (PRESERVED)
    =================================== */
 
 .gee-temporal-dialog {
@@ -4988,21 +4989,6 @@ button.custom-nav-btn.terrain-active:hover {
     gap: 10px;
 }
 
-.gee-temporal-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-}
-
 .gee-temporal-btn-cancel {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -5027,13 +5013,8 @@ button.custom-nav-btn.terrain-active:hover {
     transform: translateY(-1px);
 }
 
-.gee-temporal-btn i {
-    width: 14px;
-    height: 14px;
-}
-
 /* ===================================
-   TEMPORAL TIMELINE STYLES
+   TEMPORAL TIMELINE STYLES (PRESERVED)
    =================================== */
 
 .gee-temporal-timeline {
@@ -5140,6 +5121,12 @@ button.custom-nav-btn.terrain-active:hover {
     transition: all 0.2s ease;
 }
 
+/* 🔥 NEW: Disabled slider state */
+.gee-temporal-year-slider:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .gee-temporal-year-labels {
     display: flex;
     justify-content: space-between;
@@ -5226,30 +5213,6 @@ button.custom-nav-btn.terrain-active:hover {
     height: 18px;
 }
 
-.gee-temporal-speed-control {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.gee-temporal-speed-select {
-    padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    color: var(--white, #ffffff);
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.gee-temporal-speed-select:focus {
-    outline: none;
-    border-color: var(--ndma-green, #66bb6a);
-}
-
 .gee-temporal-info {
     margin-top: 12px;
     padding-top: 10px;
@@ -5258,8 +5221,76 @@ button.custom-nav-btn.terrain-active:hover {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
 }
+
 /* ===================================
-   TEMPORAL DIALOG BACKDROP (MODAL)
+   🔥 NEW: LOADING STATE STYLES
+   =================================== */
+
+.gee-temporal-loading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin: 8px 0;
+}
+
+.gee-temporal-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--ndma-green, #66bb6a);
+    border-radius: 50%;
+    animation: gee-spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes gee-spinner-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.gee-temporal-loading-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+.gee-temporal-loading-text span {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+}
+
+.gee-temporal-loading-text small {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* 🔥 NEW: Timeline content wrapper */
+.gee-temporal-timeline-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: gee-fade-in 0.3s ease;
+}
+
+@keyframes gee-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===================================
+   TEMPORAL DIALOG BACKDROP (PRESERVED)
    =================================== */
 
 .gee-temporal-dialog-backdrop {
@@ -5282,7 +5313,6 @@ button.custom-nav-btn.terrain-active:hover {
     margin: 20px;
 }
 
-/* Fix button class names */
 .gee-temporal-cancel,
 .gee-temporal-confirm {
     flex: 1;
@@ -5371,4 +5401,30 @@ button.custom-nav-btn.terrain-active:hover {
     display: flex;
     gap: 10px;
     margin-top: 14px;
+}
+
+/* ===================================
+   RESPONSIVE ADJUSTMENTS (PRESERVED)
+   =================================== */
+
+@media (max-width: 768px) {
+    .gee-temporal-loading {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .gee-temporal-loading-spinner {
+        width: 20px;
+        height: 20px;
+    }
+
+    .gee-temporal-control-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .gee-temporal-control-btn i {
+        width: 12px;
+        height: 12px;
+    }
 }

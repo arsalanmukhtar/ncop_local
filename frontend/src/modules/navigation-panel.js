@@ -3,6 +3,7 @@
 //  - bottom-right map navigation controls (zoom, bearing, 3D toggle, locate, home)
 //  - South Asia coordinate jumps
 //  - News modal UI (fetch, render, markers, scroll pause, clock)
+//  - GEE Chatbot with optimized temporal timeline
 // Single source of truth for navigation + news
 
 import { MapControls } from "./map-controls.js";
@@ -160,6 +161,9 @@ const COUNTRY_ISO_MAP = {
 };
 
 export class NavigationPanel {
+  // ============================================================
+  // PRIVATE FIELD DECLARATIONS - Must be at class level
+  // ============================================================
   #map;
   #mapControls;
 
@@ -169,10 +173,13 @@ export class NavigationPanel {
   #scrollPaused = false;
   #includeSocialMedia = false;
   #baseUrl = window.location.origin;
+
   // GEE Chatbot State
-  #geeLayers = new Map(); // Store active layers
+  #geeLayers = new Map();
   #chatHistory = [];
   #temporalLayers = {};
+  #temporalLayerCache = new Map(); // ✅ Optimized temporal cache
+  #geeChatMessages; // ✅ Required for temporal dialog
 
   /**
    * @param {mapboxgl.Map} mapInstance
@@ -184,8 +191,6 @@ export class NavigationPanel {
     this.#mapControls = mapControlsInstance;
     this.projectionPanel = projectionPanelInstance;
 
-    // console.log("🌏 Initializing NavigationPanel for South Asia scope");
-
     this.render();
     this.addEventListeners();
     this.setupNewsIntegration();
@@ -196,9 +201,7 @@ export class NavigationPanel {
     // keep the live clock running
     setInterval(() => this.#updateNewsClock(), 1000);
 
-    // ⛔ DO NOT auto-fetch news here anymore.
-    // ⛔ DO NOT auto-mark any button as active here.
-    // Terrain state stays same:
+    // Restore terrain state
     this.restoreToggle3DState(
       window.ncop_storage?.getSetting("terrainEnabled") || false
     );
@@ -301,6 +304,7 @@ export class NavigationPanel {
       </div>
     `;
     mapContainer.appendChild(geeChatModal);
+
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
     storyModal.id = "story-modal";
@@ -382,7 +386,7 @@ export class NavigationPanel {
       .getElementById("geeChat")
       ?.addEventListener("click", this.#handleGeeChatToggle.bind(this));
 
-    // In addEventListeners()
+    // Story button
     document.getElementById("storyBtn")?.addEventListener("click", () => {
       const modal = document.getElementById("story-modal");
       if (!modal) return;
@@ -391,6 +395,7 @@ export class NavigationPanel {
           ? "block"
           : "none";
     });
+
     document.getElementById("storyCloseBtn")?.addEventListener("click", () => {
       const modal = document.getElementById("story-modal");
       if (modal) modal.style.display = "none";
@@ -408,8 +413,6 @@ export class NavigationPanel {
       console.warn("⚠️ News modal not found in DOM");
       return;
     }
-
-    // console.log("✅ News modal detected - integrating with navigation");
 
     // Keep reference for later usage
     this.newsModal = newsModal;
@@ -438,8 +441,6 @@ export class NavigationPanel {
       );
       lucide.createIcons();
     }
-
-    // console.log(`📍 Navigation panel ${isCollapsed ? "collapsed" : "expanded"}`);
   }
 
   /**
@@ -451,7 +452,6 @@ export class NavigationPanel {
       pitch: 0,
       duration: 500,
     });
-    // console.log("🧭 Bearing and tilt reset");
   }
 
   /**
@@ -469,7 +469,6 @@ export class NavigationPanel {
     }
 
     this.restoreToggle3DState(newTerrainState);
-    // console.log(`🏔️ 3D Terrain ${newTerrainState ? "enabled" : "disabled"}`);
   }
 
   /**
@@ -494,8 +493,6 @@ export class NavigationPanel {
         )
       )
       .addTo(this.#map);
-
-    // console.log("🎯 Located to Islamabad, Pakistan");
   }
 
   /**
@@ -503,16 +500,13 @@ export class NavigationPanel {
    */
   #handleHomeExtent() {
     // Zoom to Pakistan center
-    const pakistanCenter = SOUTH_ASIA_COORDS.regions.pakistan; // [lng, lat]
-    // console.log({ pakistanCenter, SOUTH_ASIA_COORDS });
+    const pakistanCenter = SOUTH_ASIA_COORDS.regions.pakistan;
     this.#map.flyTo({
       center: pakistanCenter,
-      zoom: 5, // adjust as needed
+      zoom: 5,
       duration: 1500,
       essential: true,
     });
-
-    // console.log("🏠 Zoomed to South Asia region (Pakistan, India, Iran, Afghanistan, Bangladesh, Nepal, Sri Lanka, Myanmar, Thailand, Vietnam, Cambodia, Laos, Malaysia, Singapore, Indonesia, Philippines)");
   }
 
   /**
@@ -532,11 +526,9 @@ export class NavigationPanel {
     if (isVisible) {
       newsModal.style.display = "none";
       localNewsBtn?.classList.remove("active-news");
-      // console.log("📰 News modal hidden");
     } else {
       newsModal.style.display = "flex";
       localNewsBtn?.classList.add("active-news");
-      // console.log("📰 News modal shown");
     }
   }
 
@@ -576,8 +568,6 @@ export class NavigationPanel {
       duration: 1500,
       essential: true,
     });
-
-    // console.log(`🗺️ Jumped to ${cityName}`);
   }
 
   /**
@@ -599,8 +589,6 @@ export class NavigationPanel {
       duration: 1500,
       essential: true,
     });
-
-    // console.log(`🌏 Jumped to ${regionName}`);
   }
 
   /**
@@ -616,13 +604,8 @@ export class NavigationPanel {
 
   /**
    * Initialize News Modal buttons and default mode
-   * - We NO LONGER fetch by default.
-   * - We ONLY fetch on button click.
-   * - We ONLY mark a button as active after it triggers a fetch.
    */
   #initializeNewsModal() {
-    // console.log("🗞️ Initializing News Modal for South Asia");
-
     const socialBtn = document.getElementById("toggle-social-btn");
     const regularBtn = document.getElementById("fetch-regular-btn");
 
@@ -633,30 +616,23 @@ export class NavigationPanel {
 
     // Social Media Button Click
     socialBtn.addEventListener("click", () => {
-      // if already active, don't refetch
       if (socialBtn.classList.contains("active")) return;
 
       this.#includeSocialMedia = true;
-      this.#fetchNews(true); // 🔥 fetch social feed
+      this.#fetchNews(true);
       this.#updateNewsButtonStates(socialBtn, regularBtn);
-
-      // console.log("📱 Switched to Social Media mode");
     });
 
     // Regular News Button Click
     regularBtn.addEventListener("click", () => {
-      // if already active, don't refetch
       if (regularBtn.classList.contains("active")) return;
 
       this.#includeSocialMedia = false;
-      this.#fetchNews(false); // 🔥 fetch regular news
+      this.#fetchNews(false);
       this.#updateNewsButtonStates(regularBtn, socialBtn);
-
-      // console.log("📰 Switched to Regular News mode");
     });
 
-    // ⛔ DO NOT set default active state here.
-    // both start inactive, both enabled.
+    // Both start inactive
     regularBtn.classList.remove("active");
     socialBtn.classList.remove("active");
     regularBtn.disabled = false;
@@ -680,9 +656,6 @@ export class NavigationPanel {
    */
   async #fetchNews(includeSM = false) {
     try {
-      // console.log(`📡 Fetching news (Social Media: ${includeSM})...`);
-
-      // pick URL based on mode
       const url = includeSM
         ? `${
             this.#baseUrl
@@ -715,11 +688,8 @@ export class NavigationPanel {
               <small>Try switching between Social Media and Regular News</small>
           </div>
         `;
-        // console.log("ℹ️ No articles found");
         return;
       }
-
-      // console.log(`✅ Fetched ${geojson.features.length} articles for South Asia`);
 
       // populate ticker with boxes
       geojson.features.forEach((feature, index) => {
@@ -737,7 +707,6 @@ export class NavigationPanel {
             : fullUrl;
 
         const sourceDisplay = this.#generateSourceDisplay(props);
-
         const displayDate = this.#formatGdeltDate(props.formatted_date);
 
         box.innerHTML = `
@@ -767,19 +736,7 @@ export class NavigationPanel {
         container.appendChild(box);
       });
 
-      // keep globally accessible (optional debug/use)
       window.gdeltNewsFeatures = geojson.features;
-
-      // Log metadata if available
-      if (geojson.metadata) {
-        // console.log("📊 Metadata:", {
-        //   total_features: geojson.metadata.total_features,
-        //   gdelt_articles: geojson.metadata.gdelt_articles,
-        //   social_media_posts: geojson.metadata.social_media_posts,
-        //   sources: geojson.metadata.sources,
-        //   geographic_scope: geojson.metadata.geographic_scope,
-        // });
-      }
     } catch (error) {
       console.error("❌ Error fetching news:", error);
       const container = document.getElementById("news-scroll");
@@ -883,7 +840,6 @@ export class NavigationPanel {
         ?.classList.remove("active");
 
       this.#resumeScroll();
-      // console.log(`❌ Marker ${index} removed`);
       return;
     }
 
@@ -891,11 +847,11 @@ export class NavigationPanel {
     this.#pauseScroll();
 
     // Determine marker color based on source
-    let markerColor = "#e63946"; // default red for GDELT
+    let markerColor = "#e63946";
     if (props.source_platform === "reddit") {
-      markerColor = "#ff4500"; // Reddit orange
+      markerColor = "#ff4500";
     } else if (props.source_platform === "mastodon") {
-      markerColor = "#6364ff"; // Mastodon bluish
+      markerColor = "#6364ff";
     }
 
     const marker = new mapboxgl.Marker({ color: markerColor })
@@ -966,8 +922,6 @@ export class NavigationPanel {
     });
 
     document.querySelector(`[data-index="${index}"]`)?.classList.add("active");
-
-    // console.log(`✅ Marker ${index} created at [${coords[0]}, ${coords[1]}]`);
   }
 
   /**
@@ -979,7 +933,6 @@ export class NavigationPanel {
       if (scrollElement) {
         scrollElement.style.animationPlayState = "paused";
         this.#scrollPaused = true;
-        // console.log("⏸️ News scroll paused");
       }
     }
   }
@@ -993,7 +946,6 @@ export class NavigationPanel {
       if (scrollElement) {
         scrollElement.style.animationPlayState = "running";
         this.#scrollPaused = false;
-        // console.log("▶️ News scroll resumed");
       }
     }
   }
@@ -1026,13 +978,10 @@ export class NavigationPanel {
 
   /**
    * Convert GDELT-style timestamp "20251027T121500Z" -> "27th Oct 2025"
-   * Fallbacks to "Unknown date" if invalid.
    */
   #formatGdeltDate(raw) {
     if (!raw || typeof raw !== "string") return "Unknown date";
 
-    // Expecting "YYYYMMDDTHHMMSSZ"
-    // Example: "20251027T121500Z"
     const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
     if (!match) {
       return "Unknown date";
@@ -1040,11 +989,10 @@ export class NavigationPanel {
 
     const [_, year, month, day, hour, minute, second] = match;
 
-    // Build a real Date in UTC
     const dateObj = new Date(
       Date.UTC(
         parseInt(year, 10),
-        parseInt(month, 10) - 1, // month is 0-based
+        parseInt(month, 10) - 1,
         parseInt(day, 10),
         parseInt(hour, 10),
         parseInt(minute, 10),
@@ -1052,8 +1000,7 @@ export class NavigationPanel {
       )
     );
 
-    // Human-friendly pieces
-    const dayNum = dateObj.getUTCDate(); // 1-31
+    const dayNum = dateObj.getUTCDate();
     const monthNamesShort = [
       "Jan",
       "Feb",
@@ -1071,7 +1018,6 @@ export class NavigationPanel {
     const monthLabel = monthNamesShort[dateObj.getUTCMonth()];
     const yearNum = dateObj.getUTCFullYear();
 
-    // ordinal suffix (1st, 2nd, 3rd, 4th...)
     const suffix = ((n) => {
       const rem10 = n % 10;
       const rem100 = n % 100;
@@ -1081,13 +1027,7 @@ export class NavigationPanel {
       return "th";
     })(dayNum);
 
-    // Style A: "27th Oct 2025"
-    const pretty = `${dayNum}${suffix} ${monthLabel} ${yearNum}`;
-
-    // Style B (if you prefer): "2025/10/27"
-    // const pretty = `${year}/${month}/${day}`;
-
-    return pretty;
+    return `${dayNum}${suffix} ${monthLabel} ${yearNum}`;
   }
 
   // ============================================================
@@ -1098,6 +1038,9 @@ export class NavigationPanel {
     const sendBtn = document.getElementById("geeChatSend");
     const input = document.getElementById("geeChatInput");
     const closeBtn = document.getElementById("geeChatClose");
+
+    // Store reference to messages container
+    this.#geeChatMessages = document.getElementById("geeChatMessages");
 
     sendBtn?.addEventListener("click", () => this.#handleGeeMessage());
 
@@ -1145,14 +1088,14 @@ export class NavigationPanel {
     this.#addChatMessage("user", message);
     input.value = "";
 
-    // ⭐ Check for conversational queries BEFORE calling backend
+    // Check for conversational queries
     const semanticResponse = this.#handleSemanticQuery(message);
     if (semanticResponse) {
       this.#addChatMessage("assistant", semanticResponse);
-      return; // Don't call backend for greetings/help
+      return;
     }
 
-    // Show loading for actual data queries
+    // Show loading
     const loadingId = this.#addChatMessage(
       "assistant",
       "🔄 Generating layer...",
@@ -1194,8 +1137,7 @@ export class NavigationPanel {
   }
 
   /**
-   * ⭐ Handle semantic/conversational queries without calling backend
-   * Returns response text if matched, null otherwise
+   * Handle semantic/conversational queries
    */
   #handleSemanticQuery(message) {
     const msg = message.toLowerCase().trim();
@@ -1206,164 +1148,26 @@ export class NavigationPanel {
       return "👋 Hey! I'm your Earth Engine assistant for Pakistan. I can show you satellite data like:\n\n• Snow cover in northern areas\n• Flood risk zones\n• Population density\n• Air quality\n• Temperature data\n• And much more!\n\nJust ask me to show you any environmental data.";
     }
 
-    // Identity questions
+    // Identity
     if (msg.includes("what are you") || msg.includes("who are you")) {
       return '🛰️ I\'m an AI assistant powered by **Google Earth Engine**. I help visualize satellite and geospatial data over Pakistan.\n\nI can access:\n• Real-time satellite imagery\n• Climate data (temperature, rainfall)\n• Hazard maps (floods, landslides, fires)\n• Environmental indices (NDVI, NDSI, NDWI)\n• Population & infrastructure data\n\nTry asking: "Show me snow in Hunza" or "Flood risk in Sindh"';
     }
+
     // Capabilities
     if (
       msg.includes("what can you do") ||
       msg.includes("help") ||
       msg === "?"
     ) {
-      return '🎯 **I can help you with:**\n\n**🌊 Hazards:**\n• Flood extent & susceptibility\n• Landslide risk areas\n• Fire detection & burn scars\n• Drought severity\n• Earthquake zones\n\n**🌍 Environment & Climate:**\n• Snow & glacier monitoring\n• Vegetation health (NDVI)\n• Water bodies & hydrology\n• Air quality (AOD)\n• Land Surface Temperature\n• Urban Heat Island effects\n• Land Use Land Cover (LULC) ⭐ NEW\n• Evapotranspiration\n• Thermal comfort index\n\n**🌊 Climate Scenarios:**\n• Sea Level Rise 2050/2100\n• Coastal flooding risk\n\n**🏙️ Urban:**\n• Population density\n• Urban growth (NDBI)\n• Nighttime lights\n• Built-up areas\n\n**Example queries:**\n• "Show flood risk in Karachi"\n• "Urban heat island in Lahore"\n• "Land use cover in Islamabad" ⭐\n• "Sea level rise 2050 Gwadar"\n• "Glacier extent in Hunza"';
+      return '🎯 **I can help you with:**\n\n**🌊 Hazards:**\n• Flood extent & susceptibility\n• Landslide risk areas\n• Fire detection & burn scars\n• Drought severity\n• Earthquake zones\n\n**🌍 Environment & Climate:**\n• Snow & glacier monitoring\n• Vegetation health (NDVI)\n• Water bodies & hydrology\n• Air quality (AOD)\n• Land Surface Temperature\n• Urban Heat Island effects\n• Land Use Land Cover (LULC)\n• Evapotranspiration\n• Thermal comfort index\n\n**🌊 Climate Scenarios:**\n• Sea Level Rise 2050/2100\n• Coastal flooding risk\n\n**🏙️ Urban:**\n• Population density\n• Urban growth (NDBI)\n• Nighttime lights\n• Built-up areas\n\n**Example queries:**\n• "Show flood risk in Karachi"\n• "Urban heat island in Lahore"\n• "Land use cover in Islamabad"\n• "Sea level rise 2050 Gwadar"';
     }
 
-    // Urban Heat Island - FIXED
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("heat island") || msg.includes("uhii"))
-    ) {
-      return "🌡️ **Urban Heat Island Index (UHII)**\n\nI can show you temperature differences between urban and rural areas...";
-    }
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("heat island") || msg.includes("uhii"))
-    ) {
-      return null; // Pass to backend
-    }
-
-    // Sea Level Rise queries - ONLY for explanatory questions
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("sea level") || msg.includes("slr"))
-    ) {
-      return '🌊 **Sea Level Rise Scenarios**\n\nI can visualize projected coastal inundation for 2050 (1-3m) and 2100 (1-5m) scenarios.\n\nTry:\n• "Sea level rise 2050 in Karachi"\n• "Coastal flooding risk Gwadar"\n• "Show SLR scenario 2100"';
-    }
-
-    // ⚠️ IMPORTANT: Let "show", "display", "map" queries pass through to backend!
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("sea level") ||
-        msg.includes("slr") ||
-        msg.includes("coastal flood"))
-    ) {
-      return null; // ✅ Pass to backend for actual data
-    }
-
-    // Glacier queries - FIXED
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("glacier") || msg.includes("ice cover"))
-    ) {
-      return "🏔️ **Glacier & Ice Monitoring**\n\nI can track glaciers and permanent ice...";
-    }
-
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("glacier") || msg.includes("ice"))
-    ) {
-      return null; // Pass to backend
-    }
-
-    // Thermal comfort - FIXED
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("thermal comfort") || msg.includes("heat stress"))
-    ) {
-      return "🌡️ **Thermal Comfort Index**\n\nI can assess human thermal comfort...";
-    }
-
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("thermal comfort") || msg.includes("heat stress"))
-    ) {
-      return null; // Pass to backend
-    }
-
-    // Evapotranspiration - FIXED
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("evapotranspiration") ||
-        msg.includes("et") ||
-        msg.includes("water loss"))
-    ) {
-      return "💧 **Evapotranspiration (ET)**\n\nI can show water loss from vegetation...";
-    }
-
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("evapotranspiration") || msg.includes("et"))
-    ) {
-      return null; // Pass to backend
-    }
-
-    // Surface water - FIXED
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("surface water") || msg.includes("water extent"))
-    ) {
-      return "💧 **Surface Water Monitoring**\n\nI can track current extent of rivers...";
-    }
-
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("surface water") || msg.includes("water extent"))
-    ) {
-      return null; // Pass to backend
-    }
-    // LULC queries
-    if (
-      (msg.includes("tell me about") ||
-        msg.includes("what is") ||
-        msg.includes("explain")) &&
-      (msg.includes("land use") ||
-        msg.includes("land cover") ||
-        msg.includes("lulc"))
-    ) {
-      return '🌳 **Land Use Land Cover (LULC)**\n\nI can show detailed land classification including forests, croplands, urban areas, water bodies, and more.\n\nTry:\n• "Show land use in Lahore"\n• "Land cover classification Sindh"\n• "LULC map Islamabad"';
-    }
-
-    if (
-      (msg.includes("show") ||
-        msg.includes("display") ||
-        msg.includes("map")) &&
-      (msg.includes("land use") ||
-        msg.includes("land cover") ||
-        msg.includes("lulc"))
-    ) {
-      return null; // Pass to backend
-    }
     // Thanks
     if (msg.includes("thank") || msg.includes("thanks")) {
       return "😊 You're welcome! Let me know if you need any more satellite data or hazard information.";
     }
 
-    // How are you / status
+    // Status
     if (
       msg.includes("how are you") ||
       msg.includes("whats up") ||
@@ -1372,21 +1176,12 @@ export class NavigationPanel {
       return "🛰️ I'm functioning perfectly! All satellite connections active and ready to pull data for Pakistan.\n\nWhat environmental data would you like to explore?";
     }
 
-    // Coverage area
+    // Coverage
     if (
       msg.includes("where") &&
       (msg.includes("cover") || msg.includes("work"))
     ) {
       return "🗺️ I cover **all of Pakistan** including:\n\n📍 **55+ cities** from Karachi to Gilgit\n🏔️ **All provinces** (Punjab, Sindh, KPK, Balochistan, GB)\n🌊 **River basins** (Indus, Chenab, Jhelum, Ravi, Sutlej)\n\nJust specify any location in Pakistan and I'll get the data!";
-    }
-
-    // Data freshness
-    if (
-      msg.includes("how recent") ||
-      msg.includes("latest") ||
-      msg.includes("real-time")
-    ) {
-      return "⏱️ **Data freshness:**\n\n🔴 **Near real-time** (updates hourly/daily):\n• Active fires (VIIRS)\n• Flood extent (Sentinel-1 SAR)\n• Weather data (temperature, wind)\n\n🟡 **Weekly updates:**\n• Vegetation indices (NDVI)\n• Snow cover (NDSI)\n• Air quality\n\n🟢 **Static/Yearly:**\n• Population density\n• Elevation data\n• Infrastructure maps\n\nI always pull the latest available imagery!";
     }
 
     // Download info
@@ -1403,12 +1198,11 @@ export class NavigationPanel {
       return "👋 See you later! Come back anytime you need satellite data for Pakistan. Stay safe!";
     }
 
-    // No match - let backend handle it
     return null;
   }
 
   #addChatMessage(role, content, isLoading = false) {
-    const container = document.getElementById("geeChatMessages");
+    const container = this.#geeChatMessages;
     const msgId = `msg-${Date.now()}-${Math.random()}`;
 
     const msgDiv = document.createElement("div");
@@ -1431,7 +1225,7 @@ export class NavigationPanel {
   }
 
   #addLayerResponse(data) {
-    const container = document.getElementById("geeChatMessages");
+    const container = this.#geeChatMessages;
 
     const responseDiv = document.createElement("div");
     responseDiv.className =
@@ -1485,7 +1279,7 @@ export class NavigationPanel {
     container.appendChild(responseDiv);
     container.scrollTop = container.scrollHeight;
 
-    // ⭐ CHECK FOR TEMPORAL DATA AVAILABILITY
+    // Check for temporal data
     if (
       data.temporal &&
       data.temporal.available === true &&
@@ -1493,10 +1287,10 @@ export class NavigationPanel {
       data.temporal.end_year &&
       !data.temporal.enabled
     ) {
-      this.#showTemporalDialog(responseDiv, data);
+      this.#showTemporalDialog(data);
     }
 
-    // Rest of existing code...
+    // Attach listeners
     const checkbox = responseDiv.querySelector(".gee-layer-checkbox");
     checkbox.addEventListener("change", (e) => {
       this.#toggleGeeLayer(data.layer_id, e.target.checked);
@@ -1509,227 +1303,212 @@ export class NavigationPanel {
 
     lucide.createIcons();
   }
+
+  // ============================================================
+  // OPTIMIZED TEMPORAL TIMELINE IMPLEMENTATION
+  // ============================================================
+
   /**
-   * 📅 Show temporal dialog - Ask user if they want timeline visualization
+   * Show temporal dialog inline within chatbot (no full-screen backdrop)
    */
-  #showTemporalDialog(responseDiv, data) {
-    const timelineData = data.temporal;
-    const layerId = data.layer_id;
-    const datasetName = data.dataset;
+  #showTemporalDialog(data) {
+    const startYear = data.temporal.start_year;
+    const endYear = data.temporal.end_year;
+    const datasetName = data.dataset_name || "this dataset";
+    const note = data.temporal.note || "";
 
-    const { start_year: startYear, end_year: endYear } = timelineData || {
-      start_year: null,
-      end_year: null,
-    };
-    if (!startYear || !endYear) {
-      console.warn("Dataset has no valid timeline metadata");
-      return;
+    console.log(`📅 ${datasetName} available years: ${startYear} - ${endYear}`);
+
+    // Calculate suggested years (5 evenly spaced)
+    const yearCount = endYear - startYear + 1;
+    let suggestedYears;
+
+    if (yearCount <= 5) {
+      suggestedYears = Array.from(
+        { length: yearCount },
+        (_, i) => startYear + i
+      );
+    } else {
+      const step = Math.floor((endYear - startYear) / 4);
+      suggestedYears = [
+        startYear,
+        startYear + step,
+        startYear + 2 * step,
+        startYear + 3 * step,
+        endYear,
+      ];
     }
-    const defaultYears = this.#getDefaultYears(timelineData);
-    const yearsText =
-      defaultYears.length > 0
-        ? defaultYears.join(", ")
-        : `${startYear}–${endYear}`;
 
+    // Create dialog inline (no backdrop)
     const dialogContainer = document.createElement("div");
     dialogContainer.className = "gee-temporal-dialog";
     dialogContainer.innerHTML = `
       <div class="gee-temporal-dialog-content">
         <div class="gee-temporal-dialog-header">
-          <i data-lucide="calendar-clock" style="width:16px;height:16px"></i>
-          <span>Temporal View Available</span>
+          <i data-lucide="calendar-range"></i>
+          <span>Temporal Data Configuration</span>
         </div>
         
         <div class="gee-temporal-dialog-body">
-          <p>
-            This dataset has historical data from 
-            <strong>${startYear}</strong> to <strong>${endYear}</strong>.
-          </p>
-          <p style="margin-top: 6px;">
-            Would you like to visualize <strong>changes over time</strong>?
-          </p>
-  
-          <div class="gee-temporal-year-selection">
-            <label for="temporal-years-${layerId}">
-              Enter years separated by commas (e.g., ${yearsText}):
-            </label>
-            <input
-              id="temporal-years-${layerId}"
-              type="text"
-              class="gee-temporal-years-input"
-              placeholder="${yearsText}"
-            />
-            <small>Leave empty to use the latest 5 years by default.</small>
-            <div class="gee-temporal-error" style="color:#f87171; margin-top:4px; display:none;"></div>
+          <p><strong>Dataset:</strong> ${datasetName}</p>
+          <p><strong>📅 Available Years:</strong> ${startYear} - ${endYear} (${yearCount} years)</p>
+          ${
+            note
+              ? `<p style="color:#fbbf24;font-size:12px;"><strong>Note:</strong> ${note}</p>`
+              : ""
+          }
+          
+          <div class="gee-temporal-input-block">
+            <label>Select Years (comma-separated):</label>
+            <input 
+              type="text" 
+              class="gee-temporal-input"
+              id="gee-temporal-years-input-${data.layer_id}"
+              value="${suggestedYears.join(", ")}"
+              placeholder="e.g., ${startYear}, ${Math.floor(
+      (startYear + endYear) / 2
+    )}, ${endYear}">
+            <small class="gee-temporal-hint">
+              💡 Suggested: ${suggestedYears.join(
+                ", "
+              )} | Valid range: ${startYear}-${endYear}
+            </small>
+            <small class="gee-temporal-error" id="gee-temporal-error-${
+              data.layer_id
+            }"></small>
           </div>
         </div>
-  
-        <div class="gee-temporal-dialog-actions">
-          <button class="gee-temporal-btn gee-temporal-btn-cancel">
-            <i data-lucide="x" style="width:14px;height:14px"></i>
-            <span>No, keep latest only</span>
+        
+        <div class="gee-temporal-actions">
+          <button class="gee-temporal-btn gee-temporal-cancel" data-layer-id="${
+            data.layer_id
+          }">
+            <i data-lucide="x"></i>
+            <span>Cancel</span>
           </button>
-          <button class="gee-temporal-btn gee-temporal-btn-confirm">
-            <i data-lucide="check" style="width:14px;height:14px"></i>
-            <span>Yes, show timeline</span>
+          <button class="gee-temporal-btn gee-temporal-confirm" data-layer-id="${
+            data.layer_id
+          }">
+            <i data-lucide="check"></i>
+            <span>Load Timeline</span>
           </button>
         </div>
       </div>
     `;
 
-    // ⭐ APPEND TO CHAT MESSAGE (responseDiv), NOT document.body
-    responseDiv.appendChild(dialogContainer);
+    // Append to chat messages container
+    this.#geeChatMessages.appendChild(dialogContainer);
+    this.#geeChatMessages.scrollTop = this.#geeChatMessages.scrollHeight;
 
-    // Refresh Lucide icons
-    if (typeof lucide !== "undefined") {
-      lucide.createIcons();
-    }
+    lucide.createIcons();
 
-    const input = dialogContainer.querySelector(`#temporal-years-${layerId}`);
-    const errorBox = dialogContainer.querySelector(".gee-temporal-error");
-    const cancelBtn = dialogContainer.querySelector(".gee-temporal-btn-cancel");
-    const confirmBtn = dialogContainer.querySelector(
-      ".gee-temporal-btn-confirm"
+    const input = dialogContainer.querySelector(
+      `#gee-temporal-years-input-${data.layer_id}`
     );
+    const errorDiv = dialogContainer.querySelector(
+      `#gee-temporal-error-${data.layer_id}`
+    );
+    const cancelBtn = dialogContainer.querySelector(".gee-temporal-cancel");
+    const confirmBtn = dialogContainer.querySelector(".gee-temporal-confirm");
 
-    const closeDialog = () => {
-      dialogContainer.remove();
+    // Validate years
+    const validateYears = () => {
+      const value = input.value.trim();
+      if (!value) {
+        errorDiv.textContent = "Please enter at least one year";
+        errorDiv.style.display = "block";
+        return null;
+      }
+
+      const years = value
+        .split(",")
+        .map((y) => parseInt(y.trim()))
+        .filter((y) => !isNaN(y));
+
+      if (years.length === 0) {
+        errorDiv.textContent = "No valid years found";
+        errorDiv.style.display = "block";
+        return null;
+      }
+
+      const invalidYears = years.filter((y) => y < startYear || y > endYear);
+
+      if (invalidYears.length > 0) {
+        errorDiv.textContent = `Invalid years: ${invalidYears.join(
+          ", "
+        )}. Valid range: ${startYear}-${endYear}`;
+        errorDiv.style.display = "block";
+        return null;
+      }
+
+      const sortedYears = [...new Set(years)].sort((a, b) => a - b);
+
+      if (sortedYears.length > 20) {
+        errorDiv.textContent = "Maximum 20 years allowed";
+        errorDiv.style.display = "block";
+        return null;
+      }
+
+      errorDiv.style.display = "none";
+      return sortedYears;
     };
 
+    input.addEventListener("input", () => {
+      errorDiv.style.display = "none";
+    });
+
     cancelBtn.addEventListener("click", () => {
-      closeDialog();
+      dialogContainer.remove();
+      this.#addChatMessage(
+        "assistant",
+        "⏸️ Temporal timeline configuration cancelled. You can still use the latest year data."
+      );
     });
 
     confirmBtn.addEventListener("click", () => {
-      const raw = (input.value || "").trim();
-      const { validYears, invalidYears } = this.#parseYears(
-        raw,
-        startYear,
-        endYear
-      );
-
-      // Case 1: user entered something, but ALL of it is invalid
-      if (raw && validYears.length === 0) {
-        const suggested = this.#getDefaultYears(timelineData);
-        errorBox.style.display = "block";
-        errorBox.innerHTML = `
-          The year(s) you entered are not available for this dataset.<br>
-          Available range is <strong>${startYear}–${endYear}</strong>.<br>
-          Try years closer to the latest data, for example: 
-          <strong>${suggested.join(", ")}</strong>.
-        `;
-        // Pre-fill with suggested years so user can just confirm
-        input.value = suggested.join(", ");
-        return; // keep dialog open
+      const years = validateYears();
+      if (years) {
+        console.log(`✅ Valid years selected: ${years.join(", ")}`);
+        dialogContainer.remove();
+        this.#addTemporalTimeline(data, years);
       }
-
-      // Case 2: some invalid, some valid → warn, but proceed with valid
-      if (invalidYears.length > 0 && validYears.length > 0) {
-        errorBox.style.display = "block";
-        errorBox.innerHTML = `
-          Ignoring unavailable year(s): <strong>${invalidYears.join(
-            ", "
-          )}</strong>.<br>
-          Using only valid years within <strong>${startYear}–${endYear}</strong>.
-        `;
-        // Continue with validYears
-      }
-
-      // Case 3: user left it empty → default to last N years
-      const yearsToUse =
-        validYears.length > 0
-          ? validYears
-          : this.#getDefaultYears(timelineData);
-
-      if (!yearsToUse || yearsToUse.length === 0) {
-        // Failsafe: no years at all → just keep latest
-        closeDialog();
-        return;
-      }
-
-      // Build timeline UI & emit temporal events
-      const timelineData_extended = {
-        ...data,
-        temporal: { ...data.temporal, years: yearsToUse },
-      };
-      this.#addTemporalTimeline(responseDiv, timelineData_extended, yearsToUse);
-
-      // Mark temporal as enabled locally so we don't re-prompt
-      window.dispatchEvent(
-        new CustomEvent("gee-temporal-enabled", {
-          detail: {
-            layerId,
-            datasetKey: timelineData.dataset_key || null,
-            years: yearsToUse,
-          },
-        })
-      );
-
-      closeDialog();
     });
-  }
 
-  /**
-   * Get default last N years
-   */
-  #getDefaultYears(timelineData) {
-    const { start_year: startYear, end_year: endYear } = timelineData || {
-      start_year: null,
-      end_year: null,
-    };
-    if (!startYear || !endYear) return [];
-
-    // Take up to the last 5 years in the dataset range, i.e. closest to "now"
-    const defaultYears = [];
-    for (let y = endYear; y >= startYear && defaultYears.length < 5; y--) {
-      defaultYears.unshift(y);
-    }
-
-    return defaultYears;
-  }
-
-  /**
-   * Parse and validate years from user input
-   */
-  #parseYears(inputValue, startYear, endYear) {
-    // No input → let caller decide default
-    if (!inputValue) {
-      return {
-        validYears: [],
-        invalidYears: [],
-      };
-    }
-
-    const rawYears = inputValue
-      .split(",")
-      .map((y) => parseInt(y.trim(), 10))
-      .filter((y) => !isNaN(y));
-
-    const validYears = [];
-    const invalidYears = [];
-
-    for (const y of rawYears) {
-      if (y >= startYear && y <= endYear) {
-        validYears.push(y);
-      } else {
-        invalidYears.push(y);
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        confirmBtn.click();
       }
-    }
+    });
 
-    const uniqueValid = Array.from(new Set(validYears)).sort((a, b) => a - b);
-
-    return {
-      validYears: uniqueValid,
-      invalidYears,
-    };
+    // Focus input for immediate typing
+    input.focus();
   }
+
   /**
-   * ⏱️ TEMPORAL TIMELINE - Year-based slider with play/pause
+   * Add temporal timeline UI within chatbot messages
    */
-  #addTemporalTimeline(responseDiv, data, years) {
+  #addTemporalTimeline(data, years) {
     if (!years || years.length === 0) {
       console.error("No valid years provided");
       return;
+    }
+
+    const startYear = data.temporal.start_year;
+    const endYear = data.temporal.end_year;
+
+    console.log(
+      `📅 Creating timeline: ${years.length} years from ${years[0]} to ${
+        years[years.length - 1]
+      }`
+    );
+
+    // Check if timeline already exists and remove it
+    const existingTimeline = this.#geeChatMessages.querySelector(
+      `#temporal-timeline-${data.layer_id}`
+    );
+    if (existingTimeline) {
+      console.log("⚠️ Timeline already exists, removing old one");
+      existingTimeline.remove();
     }
 
     const timelineContainer = document.createElement("div");
@@ -1749,245 +1528,330 @@ export class NavigationPanel {
         </div>
       </div>
       
-      <div class="gee-temporal-timeline-slider">
-        <input type="range" 
-               class="gee-temporal-year-slider" 
-               id="temporal-year-slider-${data.layer_id}"
-               min="0" 
-               max="${years.length - 1}" 
-               value="${years.length - 1}"
-               step="1"
-               data-years='${JSON.stringify(years)}'
-               data-layer-id="${data.layer_id}"
-               data-dataset-key="${data.temporal.dataset_key}"
-               data-location="${data.temporal.location_name}"
-               data-bbox='${JSON.stringify(data.temporal.bbox || null)}'>
-        
-        <div class="gee-temporal-year-labels">
-          <span class="gee-temporal-year-label">${years[0]}</span>
-          <span class="gee-temporal-year-label">${
-            years[Math.floor(years.length / 2)]
-          }</span>
-          <span class="gee-temporal-year-label">${
-            years[years.length - 1]
-          }</span>
+      <div class="gee-temporal-loading" id="temporal-loading-${data.layer_id}">
+        <div class="gee-temporal-loading-spinner"></div>
+        <div class="gee-temporal-loading-text">
+          <span id="temporal-loading-progress-${
+            data.layer_id
+          }">Loading temporal data...</span>
+          <small>Preparing ${years.length} years (${years[0]}-${
+      years[years.length - 1]
+    })</small>
         </div>
       </div>
       
-      <div class="gee-temporal-year-markers">
-        ${years
-          .map(
-            (year, idx) => `
-          <div class="gee-temporal-year-marker" 
-               style="left: ${(idx / (years.length - 1)) * 100}%"
-               title="${year}">
-            <div class="gee-temporal-year-dot"></div>
+      <div class="gee-temporal-timeline-content" id="temporal-content-${
+        data.layer_id
+      }" style="display:none;">
+        <div class="gee-temporal-timeline-slider">
+          <input type="range" 
+                 class="gee-temporal-year-slider" 
+                 id="temporal-year-slider-${data.layer_id}"
+                 min="0" 
+                 max="${years.length - 1}" 
+                 value="${years.length - 1}"
+                 step="1"
+                 disabled
+                 data-years='${JSON.stringify(years)}'
+                 data-layer-id="${data.layer_id}">
+          
+          <div class="gee-temporal-year-labels">
+            <span>${years[0]}</span>
+            <span>${years[Math.floor(years.length / 2)]}</span>
+            <span>${years[years.length - 1]}</span>
           </div>
-        `
-          )
-          .join("")}
-      </div>
-      
-      <div class="gee-temporal-timeline-controls">
-        <button class="gee-temporal-control-btn" id="temporal-play-${
-          data.layer_id
-        }" title="Play animation">
-          <i data-lucide="play"></i>
-        </button>
-        <button class="gee-temporal-control-btn" id="temporal-pause-${
-          data.layer_id
-        }" style="display:none;" title="Pause animation">
-          <i data-lucide="pause"></i>
-        </button>
-        <button class="gee-temporal-control-btn" id="temporal-stop-${
-          data.layer_id
-        }" title="Stop & reset">
-          <i data-lucide="square"></i>
-        </button>
-        <button class="gee-temporal-control-btn gee-temporal-control-btn-remove" id="temporal-remove-${
-          data.layer_id
-        }" title="Remove timeline">
-          <i data-lucide="x"></i>
-        </button>
+        </div>
         
-        <div class="gee-temporal-speed-control">
-          <label>Speed:</label>
-          <select id="temporal-speed-${
-            data.layer_id
-          }" class="gee-temporal-speed-select">
-            <option value="2000">Slow</option>
-            <option value="1000" selected>Normal</option>
-            <option value="500">Fast</option>
-          </select>
+        <div class="gee-temporal-year-markers">
+          ${years
+            .map(
+              (year, idx) => `
+            <div class="gee-temporal-year-marker" 
+                 style="left: ${(idx / (years.length - 1)) * 100}%"
+                 title="${year}">
+              <div class="gee-temporal-year-dot"></div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+        
+        <div class="gee-temporal-timeline-controls">
+          <button class="gee-temporal-control-btn gee-temporal-control-btn-remove" 
+                  id="temporal-remove-${data.layer_id}" 
+                  title="Remove timeline">
+            <i data-lucide="x"></i>
+          </button>
         </div>
       </div>
       
       <div class="gee-temporal-info">
-        <small>📊 Showing ${years.length} years: ${years.join(", ")}</small>
+        <small>📊 Dataset: ${startYear}-${endYear} | Loading: ${
+      years.length
+    } years</small>
+        <small id="temporal-status-${
+          data.layer_id
+        }" style="display:block;margin-top:4px;"></small>
       </div>
     `;
 
-    // ⭐ Simply append to responseDiv (already the correct container)
-    responseDiv.appendChild(timelineContainer);
-    console.log(`✅ Timeline appended to chatbot for layer: ${data.layer_id}`);
+    // Append timeline to chat messages
+    this.#geeChatMessages.appendChild(timelineContainer);
+    this.#geeChatMessages.scrollTop = this.#geeChatMessages.scrollHeight;
 
-    // Attach event listeners
-    this.#attachTimelineListeners(data.layer_id, data, years);
+    console.log(`✅ Timeline container created for layer: ${data.layer_id}`);
 
-    // Load initial year
-    console.log(`⏸️ Timeline ready. Drag slider to load years manually.`);
+    this.#preloadTemporalLayers(data, years);
 
-    // Refresh icons
-    if (typeof lucide !== "undefined") {
-      lucide.createIcons();
+    lucide.createIcons();
+  }
+
+  /**
+   * Pre-load all temporal layers (prevents 429 errors)
+   */
+  async #preloadTemporalLayers(data, years) {
+    const layerId = data.layer_id;
+    const loadingDiv = document.getElementById(`temporal-loading-${layerId}`);
+    const contentDiv = document.getElementById(`temporal-content-${layerId}`);
+    const slider = document.getElementById(`temporal-year-slider-${layerId}`);
+    const progressText = document.getElementById(
+      `temporal-loading-progress-${layerId}`
+    );
+    const statusText = document.getElementById(`temporal-status-${layerId}`);
+
+    console.log(
+      `🔄 Pre-loading ${years.length} temporal layers for ${layerId}...`
+    );
+
+    try {
+      progressText.textContent = `Fetching ${years.length} years from GEE...`;
+
+      const response = await fetch("/api/gee/temporal-layer/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset_key: data.temporal.dataset_key,
+          location: data.temporal.location_name,
+          bbox: data.temporal.bbox,
+          years: years,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.layers) {
+        throw new Error("Invalid response from server");
+      }
+
+      console.log(
+        `📦 Received ${result.layers.length} layer responses from backend`
+      );
+
+      // Initialize cache
+      if (!this.#temporalLayerCache) {
+        this.#temporalLayerCache = new Map();
+        console.log(`🆕 Initialized temporal layer cache (Map)`);
+      }
+
+      const layerCache = new Map();
+      let successCount = 0;
+      let failedYears = [];
+
+      // Process each layer
+      for (const layerData of result.layers) {
+        const year = layerData.year || layerData.requested_year;
+
+        if (layerData.available && layerData.tile_url) {
+          const temporalLayerId = `${layerId}-year-${year}`;
+
+          // Cleanup if exists
+          if (this.#map.getLayer(temporalLayerId)) {
+            this.#map.removeLayer(temporalLayerId);
+          }
+          if (this.#map.getSource(temporalLayerId)) {
+            this.#map.removeSource(temporalLayerId);
+          }
+
+          // Add source
+          this.#map.addSource(temporalLayerId, {
+            type: "raster",
+            tiles: [layerData.tile_url],
+            tileSize: 256,
+            minzoom: 0,
+            maxzoom: 22,
+          });
+
+          // Add layer (hidden with visibility)
+          this.#map.addLayer({
+            id: temporalLayerId,
+            type: "raster",
+            source: temporalLayerId,
+            paint: {
+              "raster-opacity": 0.8,
+              "raster-fade-duration": 0,
+            },
+            layout: {
+              visibility: "none", // KEY: Stops tile fetching
+            },
+          });
+
+          // Add error listener for this temporal layer
+          this.#map.on("error", (e) => {
+            if (
+              e.sourceId === temporalLayerId ||
+              e.source?.id === temporalLayerId
+            ) {
+              console.warn(`⚠️ Temporal tile error for year ${year}:`, e.error);
+              // Don't spam user with errors - temporal layers are pre-cached
+            }
+          });
+
+          // Cache the layer
+          layerCache.set(year, {
+            layerId: temporalLayerId,
+            tileUrl: layerData.tile_url,
+            year: year,
+          });
+
+          successCount++;
+          console.log(`✅ Cached layer for year ${year}`);
+        } else {
+          failedYears.push(year);
+          console.warn(`⚠️ No data for year ${year}`);
+        }
+      }
+
+      // Store cache
+      this.#temporalLayerCache.set(layerId, layerCache);
+
+      console.log(`💾 Cache stored for ${layerId}:`, {
+        cacheExists: this.#temporalLayerCache.has(layerId),
+        cachedYears: Array.from(layerCache.keys()),
+        successCount: successCount,
+      });
+
+      if (successCount === 0) {
+        throw new Error(
+          `No data available for any year. Requested: ${years.join(", ")}`
+        );
+      }
+
+      // Update status
+      statusText.textContent = `✅ ${successCount}/${years.length} years loaded`;
+      statusText.style.color = "#10b981";
+
+      if (failedYears.length > 0) {
+        statusText.textContent += ` (${failedYears.length} unavailable)`;
+      }
+
+      // Show content
+      loadingDiv.style.display = "none";
+      contentDiv.style.display = "block";
+      slider.disabled = false;
+
+      // Show most recent year
+      const availableYears = Array.from(layerCache.keys()).sort(
+        (a, b) => b - a
+      );
+      const mostRecentYear = availableYears[0];
+
+      console.log(`👁️ Showing most recent year: ${mostRecentYear}`);
+      this.#showTemporalYear(layerId, mostRecentYear);
+      this.#attachOptimizedTimelineListeners(layerId, data, years);
+
+      console.log(`✅ Temporal timeline ready for ${layerId}`);
+    } catch (error) {
+      console.error(`❌ Failed to pre-load temporal layers:`, error);
+
+      progressText.textContent = "❌ Failed to load";
+      progressText.style.color = "#ef4444";
+      statusText.textContent = error.message;
+      statusText.style.color = "#ef4444";
+
+      loadingDiv.style.display = "none";
+      contentDiv.style.display = "block";
+
+      this.#addChatMessage(
+        "assistant",
+        `❌ Temporal loading failed: ${error.message}`
+      );
     }
   }
+
   /**
-   * Attach event listeners to timeline controls
+   * Show specific year (instant visibility toggle)
    */
-  #attachTimelineListeners(layerId, data, years) {
+  #showTemporalYear(layerId, year) {
+    const cache = this.#temporalLayerCache?.get(layerId);
+
+    if (!cache) {
+      console.error(`❌ No cache found for ${layerId}`);
+      return;
+    }
+
+    // Hide all years
+    cache.forEach((layerInfo) => {
+      if (this.#map.getLayer(layerInfo.layerId)) {
+        this.#map.setLayoutProperty(layerInfo.layerId, "visibility", "none");
+      }
+    });
+
+    // Show selected year
+    const layerInfo = cache.get(year);
+
+    if (layerInfo && this.#map.getLayer(layerInfo.layerId)) {
+      this.#map.setLayoutProperty(layerInfo.layerId, "visibility", "visible");
+      console.log(`👁️ Showing year ${year}`);
+    } else {
+      console.warn(`⚠️ Year ${year} not in cache`);
+    }
+  }
+
+  /**
+   * Attach optimized timeline listeners
+   */
+  #attachOptimizedTimelineListeners(layerId, data, years) {
     const slider = document.getElementById(`temporal-year-slider-${layerId}`);
-    const playBtn = document.getElementById(`temporal-play-${layerId}`);
-    const pauseBtn = document.getElementById(`temporal-pause-${layerId}`);
-    const stopBtn = document.getElementById(`temporal-stop-${layerId}`);
     const removeBtn = document.getElementById(`temporal-remove-${layerId}`);
-    const speedSelect = document.getElementById(`temporal-speed-${layerId}`);
     const currentYearDisplay = document.getElementById(
       `temporal-current-year-${layerId}`
     );
 
-    let isPlaying = false;
-    let playInterval = null;
-    // ===== SLIDER CHANGE EVENT WITH DEBOUNCING =====
-    let sliderDebounceTimeout;
+    // Slider input - INSTANT visibility toggle
     slider?.addEventListener("input", (e) => {
       const yearIndex = parseInt(e.target.value);
       const year = years[yearIndex];
 
-      // Update display immediately
       currentYearDisplay.textContent = year;
-
-      // Update active marker immediately
       this.#updateActiveMarker(layerId, yearIndex, years.length);
-
-      // Debounce the actual layer loading to prevent rate limiting
-      clearTimeout(sliderDebounceTimeout);
-      sliderDebounceTimeout = setTimeout(() => {
-        console.log(`🎯 User selected year ${year} - loading layer...`);
-
-        // Clear previous temporal layers before loading new one
-        if (this.#temporalLayers && this.#temporalLayers[layerId]) {
-          this.#temporalLayers[layerId].forEach((tempLayerId) => {
-            if (this.#map.getLayer(tempLayerId)) {
-              this.#map.removeLayer(tempLayerId);
-            }
-            if (this.#map.getSource(tempLayerId)) {
-              this.#map.removeSource(tempLayerId);
-            }
-          });
-          this.#temporalLayers[layerId] = [];
-        }
-
-        // Load layer for this year
-        this.#loadTemporalLayer(data, year, yearIndex);
-      }, 500); // Wait 500ms after user stops dragging
+      this.#showTemporalYear(layerId, year);
     });
 
-    // ===== PLAY BUTTON =====
-    playBtn?.addEventListener("click", () => {
-      isPlaying = true;
-      playBtn.style.display = "none";
-      pauseBtn.style.display = "flex";
-
-      let currentIndex = parseInt(slider.value);
-      const speed = parseInt(speedSelect.value);
-
-      playInterval = setInterval(() => {
-        if (currentIndex >= years.length - 1) {
-          currentIndex = 0; // Loop back to start
-        } else {
-          currentIndex++;
-        }
-
-        slider.value = currentIndex;
-        slider.dispatchEvent(new Event("input"));
-      }, speed);
-    });
-
-    // ===== PAUSE BUTTON =====
-    pauseBtn?.addEventListener("click", () => {
-      isPlaying = false;
-      playBtn.style.display = "flex";
-      pauseBtn.style.display = "none";
-
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-      }
-    });
-
-    // ===== STOP BUTTON =====
-    stopBtn?.addEventListener("click", () => {
-      isPlaying = false;
-      playBtn.style.display = "flex";
-      pauseBtn.style.display = "none";
-
-      if (playInterval) {
-        clearInterval(playInterval);
-        playInterval = null;
-      }
-
-      // Reset to last year
-      slider.value = years.length - 1;
-      slider.dispatchEvent(new Event("input"));
-    });
-
-    // ===== REMOVE BUTTON =====
-    // ===== REMOVE BUTTON =====
+    // Remove button
     removeBtn?.addEventListener("click", () => {
-      // Stop animation if playing
-      if (playInterval) {
-        clearInterval(playInterval);
-      }
-
-      // Remove ALL temporal layers for this dataset
-      if (this.#temporalLayers && this.#temporalLayers[layerId]) {
-        this.#temporalLayers[layerId].forEach((tempLayerId) => {
-          if (this.#map.getLayer(tempLayerId)) {
-            this.#map.removeLayer(tempLayerId);
+      const cache = this.#temporalLayerCache?.get(layerId);
+      if (cache) {
+        cache.forEach((layerInfo) => {
+          if (this.#map.getLayer(layerInfo.layerId)) {
+            this.#map.removeLayer(layerInfo.layerId);
           }
-          if (this.#map.getSource(tempLayerId)) {
-            this.#map.removeSource(tempLayerId);
+          if (this.#map.getSource(layerInfo.layerId)) {
+            this.#map.removeSource(layerInfo.layerId);
           }
-          console.log(`🗑️ Removed temporal layer: ${tempLayerId}`);
         });
-        delete this.#temporalLayers[layerId];
+        this.#temporalLayerCache.delete(layerId);
+        console.log(`🗑️ Removed cache for ${layerId}`);
       }
 
-      // Remove base layer
-      if (this.#map && this.#map.getLayer && this.#map.getLayer(layerId)) {
-        this.#map.removeLayer(layerId);
-        if (this.#map.getSource(layerId)) {
-          this.#map.removeSource(layerId);
-        }
-      }
-
-      // Remove timeline UI
       const timeline = document.getElementById(`temporal-timeline-${layerId}`);
-      if (timeline) {
-        timeline.remove();
-      }
+      timeline?.remove();
 
-      console.log(`🗑️ Removed temporal timeline and all layers: ${layerId}`);
-    });
-
-    // ===== SPEED CHANGE =====
-    speedSelect?.addEventListener("change", () => {
-      if (isPlaying) {
-        // Restart with new speed
-        pauseBtn.click();
-        setTimeout(() => playBtn.click(), 100);
-      }
+      this.#addChatMessage("assistant", "🗑️ Temporal timeline removed.");
     });
   }
 
@@ -2000,252 +1864,82 @@ export class NavigationPanel {
 
     const markers = timeline.querySelectorAll(".gee-temporal-year-marker");
     markers.forEach((marker, idx) => {
-      if (idx === activeIndex) {
-        marker.classList.add("active");
-      } else if (idx < activeIndex) {
-        marker.classList.add("past");
-        marker.classList.remove("active");
-      } else {
-        marker.classList.remove("active", "past");
-      }
+      marker.classList.toggle("active", idx === activeIndex);
+      marker.classList.toggle("past", idx < activeIndex);
     });
   }
 
   /**
-   * Load temporal layer for specific year
+   * Toggle GEE layer on/off with error handling
    */
-  async #loadTemporalLayer(data, year, yearIndex) {
-    console.log(
-      `📅 Loading ${data.dataset} for year ${year} (index ${yearIndex})`
-    );
-
-    try {
-      // Call backend to get tile URL for this specific year
-      const response = await fetch("/api/gee/temporal-layer/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_key: data.temporal.dataset_key,
-          location: data.temporal.location_name,
-          bbox: data.temporal.bbox,
-          years: [year],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.layers && result.layers.length > 0) {
-        const layerData = result.layers[0];
-
-        if (layerData.available && layerData.tile_url) {
-          const temporalLayerId = `${data.layer_id}-year-${year}`;
-
-          // Remove old temporal layer if exists
-          if (this.#map.getLayer(temporalLayerId)) {
-            this.#map.removeLayer(temporalLayerId);
-          }
-          if (this.#map.getSource(temporalLayerId)) {
-            this.#map.removeSource(temporalLayerId);
-          }
-
-          // Add new temporal layer
-          this.#map.addSource(temporalLayerId, {
-            type: "raster",
-            tiles: [layerData.tile_url],
-            tileSize: 256,
-          });
-
-          this.#map.addLayer({
-            id: temporalLayerId,
-            type: "raster",
-            source: temporalLayerId,
-            paint: { "raster-opacity": 0.8 },
-          });
-
-          // Store layer ID for cleanup
-          if (!this.#temporalLayers) this.#temporalLayers = {};
-          if (!this.#temporalLayers[data.layer_id]) {
-            this.#temporalLayers[data.layer_id] = [];
-          }
-          this.#temporalLayers[data.layer_id].push(temporalLayerId);
-
-          console.log(`✅ Added temporal layer: ${temporalLayerId}`);
-        } else {
-          console.warn(`⚠️ No data for year ${year}`);
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Failed to load year ${year}:`, error);
-    }
-  }
-  #addTemporalSlider(responseDiv, data) {
-    if (!data.temporal || !data.temporal.enabled) return;
-
-    const sliderContainer = document.createElement("div");
-    sliderContainer.className = "gee-temporal-slider";
-    sliderContainer.innerHTML = `
-      <div class="gee-temporal-header">
-        <span class="gee-temporal-title">⏱️ Timeline</span>
-        <span class="gee-temporal-date" id="temporal-date-${data.layer_id}">
-          ${data.temporal.start_date}
-        </span>
-      </div>
-      
-      <div class="gee-temporal-controls">
-        <input type="range" 
-               class="gee-temporal-range" 
-               id="temporal-slider-${data.layer_id}"
-               min="0" 
-               max="100" 
-               value="0"
-               data-layer-id="${data.layer_id}"
-               data-start="${data.temporal.start_date}"
-               data-end="${data.temporal.end_date}">
-      </div>
-      
-      <div class="gee-temporal-buttons">
-        <button class="gee-temporal-btn" id="temporal-play-${data.layer_id}">
-          <i data-lucide="play"></i>
-          <span>Play</span>
-        </button>
-        <button class="gee-temporal-btn" id="temporal-pause-${data.layer_id}" style="display:none;">
-          <i data-lucide="pause"></i>
-          <span>Pause</span>
-        </button>
-        <button class="gee-temporal-btn" id="temporal-remove-${data.layer_id}">
-          <i data-lucide="x"></i>
-          <span>Remove</span>
-        </button>
-      </div>
-    `;
-
-    responseDiv.appendChild(sliderContainer);
-
-    // Attach event listeners
-    this.#attachTemporalListeners(data.layer_id, data);
-
-    lucide.createIcons();
-  }
-
-  #attachTemporalListeners(layerId, data) {
-    const slider = document.getElementById(`temporal-slider-${layerId}`);
-    const playBtn = document.getElementById(`temporal-play-${layerId}`);
-    const pauseBtn = document.getElementById(`temporal-pause-${layerId}`);
-    const removeBtn = document.getElementById(`temporal-remove-${layerId}`);
-    const dateDisplay = document.getElementById(`temporal-date-${layerId}`);
-
-    let isPlaying = false;
-    let playInterval = null;
-
-    // Slider change
-    slider?.addEventListener("input", (e) => {
-      const value = parseInt(e.target.value);
-      const startDate = new Date(data.temporal.start_date);
-      const endDate = new Date(data.temporal.end_date);
-      const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-      const currentDays = (totalDays * value) / 100;
-      const currentDate = new Date(
-        startDate.getTime() + currentDays * 24 * 60 * 60 * 1000
-      );
-
-      dateDisplay.textContent = currentDate.toISOString().split("T")[0];
-
-      // Update layer with new date
-      this.#updateTemporalLayer(
-        layerId,
-        currentDate.toISOString().split("T")[0]
-      );
-    });
-
-    // Play button
-    playBtn?.addEventListener("click", () => {
-      isPlaying = true;
-      playBtn.style.display = "none";
-      pauseBtn.style.display = "flex";
-
-      playInterval = setInterval(() => {
-        const currentValue = parseInt(slider.value);
-        if (currentValue >= 100) {
-          slider.value = 0;
-        } else {
-          slider.value = currentValue + 1;
-        }
-        slider.dispatchEvent(new Event("input"));
-      }, 500); // 500ms per frame
-    });
-
-    // Pause button
-    pauseBtn?.addEventListener("click", () => {
-      isPlaying = false;
-      playBtn.style.display = "flex";
-      pauseBtn.style.display = "none";
-      clearInterval(playInterval);
-    });
-
-    // Remove button
-    removeBtn?.addEventListener("click", () => {
-      if (playInterval) clearInterval(playInterval);
-
-      // Remove layer from map
-      if (this.#map.getLayer(layerId)) {
-        this.#map.removeLayer(layerId);
-        this.#map.removeSource(layerId);
-      }
-
-      // Remove UI
-      const container = document
-        .querySelector(`#temporal-slider-${layerId}`)
-        .closest(".gee-temporal-slider");
-      container?.remove();
-
-      // Update layer info
-      const layerInfo = this.#geeLayers.get(layerId);
-      if (layerInfo) {
-        layerInfo.added = false;
-      }
-    });
-  }
-
-  #updateTemporalLayer(layerId, date) {
-    // This would re-fetch the layer for the new date
-    // For now, just update visual feedback
-    console.log(`Updating layer ${layerId} to date ${date}`);
-
-    // In a full implementation, you'd:
-    // 1. Call backend with new date
-    // 2. Get new tile URL
-    // 3. Update map source
-  }
-
   #toggleGeeLayer(layerId, shouldAdd) {
     const layerInfo = this.#geeLayers.get(layerId);
     if (!layerInfo) return;
 
     if (shouldAdd) {
-      // Add layer to map
       if (!this.#map.getSource(layerId)) {
-        this.#map.addSource(layerId, {
-          type: "raster",
-          tiles: [layerInfo.tile_url],
-          tileSize: 256,
-        });
+        try {
+          this.#map.addSource(layerId, {
+            type: "raster",
+            tiles: [layerInfo.tile_url],
+            tileSize: 256,
+          });
 
-        this.#map.addLayer({
-          id: layerId,
-          type: "raster",
-          source: layerId,
-          paint: { "raster-opacity": 0.7 },
-        });
+          this.#map.addLayer({
+            id: layerId,
+            type: "raster",
+            source: layerId,
+            paint: { "raster-opacity": 0.7 },
+          });
 
-        layerInfo.added = true;
-        console.log(`✅ Added layer: ${layerId}`);
+          // Add error listener for tile loading failures
+          this.#map.on("error", (e) => {
+            if (e.sourceId === layerId || e.source?.id === layerId) {
+              console.error(`❌ GEE Tile Error for ${layerId}:`, e.error);
+
+              // Show user-friendly error message
+              this.#addChatMessage(
+                "assistant",
+                `⚠️ **Tile Loading Error**\n\nThe layer tiles failed to load. This usually means:\n• The map ID has expired (GEE map IDs expire after 3 days)\n• The dataset is temporarily unavailable\n• There's an authentication issue\n\n**Solution:** Try requesting the layer again to generate a fresh map ID.`
+              );
+
+              // Auto-remove the broken layer
+              setTimeout(() => {
+                if (this.#map.getLayer(layerId)) {
+                  this.#map.removeLayer(layerId);
+                }
+                if (this.#map.getSource(layerId)) {
+                  this.#map.removeSource(layerId);
+                }
+                layerInfo.added = false;
+
+                // Update checkbox
+                const checkbox = document.querySelector(
+                  `input.gee-layer-checkbox[data-layer-id="${layerId}"]`
+                );
+                if (checkbox) {
+                  checkbox.checked = false;
+                  const labelSpan =
+                    checkbox.parentElement.querySelector("span");
+                  if (labelSpan) {
+                    labelSpan.textContent = "Add to map";
+                  }
+                }
+              }, 2000);
+            }
+          });
+
+          layerInfo.added = true;
+          console.log(`✅ Added layer: ${layerId}`);
+        } catch (error) {
+          console.error(`❌ Error adding layer ${layerId}:`, error);
+          this.#addChatMessage(
+            "assistant",
+            `❌ Failed to add layer to map: ${error.message}`
+          );
+        }
       }
     } else {
-      // Remove layer from map
       if (this.#map.getLayer(layerId)) {
         this.#map.removeLayer(layerId);
         this.#map.removeSource(layerId);
@@ -2265,8 +1959,9 @@ export class NavigationPanel {
       }
     }
   }
+
   /**
-   * Download layer metadata and tile info as JSON
+   * Download layer metadata
    */
   #downloadLayerInfo(layerId) {
     const layerInfo = this.#geeLayers.get(layerId);
@@ -2275,7 +1970,6 @@ export class NavigationPanel {
       return;
     }
 
-    // Prepare comprehensive metadata
     const metadata = {
       layer_id: layerId,
       dataset: layerInfo.dataset,
@@ -2299,32 +1993,25 @@ export class NavigationPanel {
       generated_by: "NDMA NCOP GEE Chatbot",
     };
 
-    // Convert to formatted JSON
     const jsonStr = JSON.stringify(metadata, null, 2);
-
-    // Create blob and download
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
-    // Generate filename
     const timestamp = new Date().toISOString().split("T")[0];
     const safeName = layerInfo.dataset
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
     const filename = `gee_${safeName}_${layerInfo.location}_${timestamp}.json`;
 
-    // Trigger download
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
 
-    // Cleanup
     URL.revokeObjectURL(url);
 
     console.log(`✅ Downloaded layer info: ${filename}`);
 
-    // Show confirmation in chat
     this.#addChatMessage(
       "assistant",
       `📥 Downloaded **${layerInfo.dataset}** metadata as **${filename}**\n\nYou can use the tile URL in GIS software like QGIS or ArcGIS Pro.`
