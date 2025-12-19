@@ -231,7 +231,10 @@ function getLatestSatelliteTime() {
   }
   return fallback;
 }
-// LAYER definations and additions 
+//---------------------------------------------------------------------------------------------
+/******************************************************
+ LAYER definations and additions 
+ ******************************************************/
 export function generateDWDSatelliteLayers() {
   const dwdSatellite = [];
 
@@ -305,7 +308,6 @@ export function generateDWDSatelliteLayers() {
   return dwdSatellite;
 }
 // LAYER definitions and additions
-
 // Generate ECMWF Temperature Layers
 export function generateECMWFTempLayers() {
   const ecmwfTemp = [];
@@ -357,7 +359,6 @@ export function generateECMWFTempLayers() {
 
   return ecmwfTemp;
 }
-
 // Generate ECMWF Cyclone Layers
 export function generateECMWFCycloneLayers() {
   const ecmwfCyclone = [];
@@ -405,8 +406,6 @@ export function generateECMWFCycloneLayers() {
 
   return ecmwfCyclone;
 }
-
-
 // Generate ECMWF Lightning Layers
 export function generateECMWFLightningLayers() {
   const ecmwfLight = [];
@@ -756,35 +755,24 @@ export function generateCH4300Layers() {
 
 
 // GDPS Layers
-export function generateGDPSHumLayers() {
-  const gdpsHumLayers = [];
+// Relative Humidity only
+export function generateGDPSRelHumLayers() {
+  const gdpsRelHumLayers = [];
 
-  // Iterate 11 times (index 0 to 10) to cover "today" and "onedayahead" through "tendayahead"
   Array.from({ length: 11 }, (_, index) => {
-    // Determine the ID suffix based on the index
     const idSuffixes = [
-      "today",
-      "onedayahead",
-      "twodayahead",
-      "threedayahead",
-      "fourdayahead",
-      "fivedayahead",
-      "sixdayahead",
-      "sevendayahead",
-      "eightdayahead",
-      "ninedayahead",
-      "tendayahead",
+      "today", "onedayahead", "twodayahead", "threedayahead", "fourdayahead",
+      "fivedayahead", "sixdayahead", "sevendayahead", "eightdayahead", 
+      "ninedayahead", "tendayahead",
     ];
 
     const suffix = idSuffixes[index];
     const date = getNextNDays(index, "short");
-    // Assuming getNextNDaysWithTime(index, "00", "00", "00") provides the time parameter
-    const timeParam = getNextNDaysWithTime(index, "00", "00", "00"); 
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
 
-    // --- Relative Humidity Layer Entry ---
     const idRelHum = `gdps_rel_hum_${suffix}`;
     const relHumEntry = {
-      date, // The date property is moved up one level
+      date,
       source: {
         id: idRelHum,
         type: "raster",
@@ -801,17 +789,36 @@ export function generateGDPSHumLayers() {
           layout: { visibility: "none" },
           paint: {
             "raster-opacity": 1,
-            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
-            "raster-opacity-transition": { duration: 1000 }, 
+            "raster-opacity-transition": { duration: 1000 },
           },
         },
       ],
     };
 
-    // --- Specific Humidity Layer Entry ---
+    gdpsRelHumLayers.push(relHumEntry); // Only push one entry
+  });
+
+  return gdpsRelHumLayers;
+}
+
+// Specific Humidity only
+export function generateGDPSSpecHumLayers() {
+  const gdpsSpecHumLayers = [];
+
+  Array.from({ length: 11 }, (_, index) => {
+    const idSuffixes = [
+      "today", "onedayahead", "twodayahead", "threedayahead", "fourdayahead",
+      "fivedayahead", "sixdayahead", "sevendayahead", "eightdayahead", 
+      "ninedayahead", "tendayahead",
+    ];
+
+    const suffix = idSuffixes[index];
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
+
     const idSpecHum = `gdps_spec_hum_${suffix}`;
     const specHumEntry = {
-      date, // The date property is moved up one level
+      date,
       source: {
         id: idSpecHum,
         type: "raster",
@@ -828,18 +835,16 @@ export function generateGDPSHumLayers() {
           layout: { visibility: "none" },
           paint: {
             "raster-opacity": 1,
-            // Changed "raster-fade-duration" to "raster-opacity-transition" to match the new syntax
             "raster-opacity-transition": { duration: 1000 },
           },
         },
       ],
     };
 
-    // Push both entries to the final array
-    gdpsHumLayers.push(relHumEntry, specHumEntry);
+    gdpsSpecHumLayers.push(specHumEntry); // Only push one entry
   });
 
-  return gdpsHumLayers;
+  return gdpsSpecHumLayers;
 }
 
 // Precipitation Layer (GDPS)
@@ -1219,3 +1224,1046 @@ export function generateOceanSurfaceHeightLayers() {
 }
 
 //--------------- LAYER definitions and additions - Air Quality Layers END-------------------------------------------
+/******************************************************
+ * SUFFIX HELPERS (consistent, conflict-free naming)
+ ******************************************************/
+const MBX_DAY_SUFFIXES = [
+  "today",
+  "onedayahead",
+  "twodayahead",
+  "threedayahead",
+  "fourdayahead",
+  "fivedayahead",
+  "sixdayahead",
+  "sevendayahead",
+];
+
+const MBX_HOUR_SUFFIXES = [
+  "now",
+  "onehourahead",
+  "twohourahead",
+  "threehourahead",
+  "fourhourahead",
+  "fivehourahead",
+  "sixhourahead",
+  "sevenhourahead",
+  "eighthourahead",
+  "ninehourahead",
+  "tenhourahead",
+  "elevenhourahead",
+];
+//METEOBLUE LAYERS --------------------------------------------
+/***********************************************************************
+ * 1) Meteoblue Daily: CloudsLow / CloudsMid / Precip / Snow (vector)
+ ***********************************************************************/
+export function generateMeteoblueNEMSCloudPrecipLayers(model, metbluT) {
+  const result = [];
+
+  const idSuffixes = [
+    "today",
+    "onedayahead",
+    "twodayahead",
+    "threedayahead",
+    "fourdayahead",
+    "fivedayahead",
+    "sixdayahead",
+    "sevendayahead",
+  ];
+
+  Array.from({ length: 8 }, (_, index) => {
+    const date = getNextNDays(index, "short");
+    const time = getNextDaysMidnight(index);
+
+    const sourceId = `meteoblue_nems_cloudprecipitation_forecast_${idSuffixes[index]}`;
+
+    // NOTE: same URL you provided, just parameterized with model/time/key.
+    const baseUrl = `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}/cloudsLow~73~low%20cld%20lay~daily~mean~contourSteps~20.0~40.0~60.0~80.0~95.0_cloudsMid~74~mid%20cld%20lay~daily~mean~contourSteps~20.0~40.0~60.0~80.0~95.0_precip~61~sfc~daily~sum~contourSteps~1~2~3~4~5~6~8~10~12~16~18~20~25~30~35~40~50~60~70~80~90~100~125~150_snow~679~sfc~daily~sum~contourSteps~1~5~10~20~30/{z}/{x}/{y}?apikey=${metbluT}`;
+
+    const entry = {
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [baseUrl],
+      },
+      layers: [
+        // Low clouds
+        {
+          id: `meteoblue_nems_cloudlow_forecast_${idSuffixes[index]}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "cloudsLow",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": index === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0, "rgba(255,255,255,0.0)",
+              20, "rgba(255,255,255,0.2)",
+              40, "rgba(255,255,255,0.3)",
+              60, "rgba(255,255,255,0.5)",
+              80, "rgba(255,255,255,0.8)",
+              95, "rgba(255,255,255,0.9)"
+            ]
+          },
+        },
+
+        // Mid clouds
+        {
+          id: `meteoblue_nems_cloudmid_forecast_${idSuffixes[index]}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "cloudsMid",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": index === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0, "rgba(255,255,255,0.0)",
+              20, "rgba(255,255,255,0.2)",
+              40, "rgba(255,255,255,0.3)",
+              60, "rgba(255,255,255,0.5)",
+              80, "rgba(255,255,255,0.8)",
+              95, "rgba(255,255,255,0.9)"
+            ]
+          },
+        },
+
+        // Precipitation (daily sum scale you provided)
+        {
+          id: `meteoblue_nems_precipitation_forecast_${idSuffixes[index]}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "precip",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": index === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              1, "rgba(240,249,255,1.0)",
+              2, "rgba(222,243,252,1.0)",
+              3, "rgba(191,235,250,1.0)",
+              4, "rgba(160,225,248,1.0)",
+              5, "rgba(133,217,246,1.0)",
+              6, "rgba(110,200,242,1.0)",
+              8, "rgba(82,176,237,1.0)",
+              10, "rgba(64,149,230,1.0)",
+              12, "rgba(49,136,227,1.0)",
+              16, "rgba(33,121,223,1.0)",
+              18, "rgba(29,156,109,1.0)",
+              20, "rgba(26,178,64,1.0)",
+              25, "rgba(111,201,54,1.0)",
+              30, "rgba(173,230,47,1.0)",
+              35, "rgba(209,242,46,1.0)",
+              40, "rgba(247,250,46,1.0)",
+              50, "rgba(250,213,41,1.0)",
+              60, "rgba(252,176,36,1.0)",
+              70, "rgba(250,141,38,1.0)",
+              80, "rgba(249,102,35,1.0)",
+              90, "rgba(246,66,35,1.0)",
+              100, "rgba(243,33,33,1.0)",
+              125, "rgba(216,0,117,1.0)",
+              150, "rgba(166,0,157,1.0)"
+            ]
+          },
+        },
+
+        // Snow (pattern assumes your sprite contains "snowPattern")
+        {
+          id: `meteoblue_nems_snow_forecast_${idSuffixes[index]}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "snow",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-pattern": "snowPattern",
+          },
+        },
+      ],
+      date,
+    };
+
+    result.push(entry);
+  });
+
+  return result;
+}
+/***********************************************************************
+ * 2) Meteoblue Hourly: CloudsLow / CloudsMid / Precip / Snow (vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueHourlyCloudPrecipLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 11 }, (_, hourOffset) => {
+    const time = getNextNHoursWithTime(hourOffset);
+    const date = getPastHours(-hourOffset, "short");
+    const suffix = MBX_HOUR_SUFFIXES[hourOffset]; // 0..10 → now..tenhourahead
+    const sourceId = `mbx_nems_cloudprecip_hourly_${suffix}`;
+
+    const baseUrl =
+      `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+      `/cloudsLow~73~low%20cld%20lay~hourly~none~contourSteps~20.0~40.0~60.0~80.0~95.0` +
+      `_cloudsMid~74~mid%20cld%20lay~hourly~none~contourSteps~20.0~40.0~60.0~80.0~95.0` +
+      `_precip~61~sfc~hourly~none~contourSteps~0.1~0.25~0.5~1.0~1.5~2.0~3.0~5.0~7.0~10.0~15.0~20.0~30.0` +
+      `_snow~679~sfc~hourly~none~contourSteps~0.2/{z}/{x}/{y}?apikey=${metbluT}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [baseUrl],
+      },
+      layers: [
+        {
+          id: `mbx_nems_cloudlow_hourly_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "cloudsLow",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0, "rgba(255,255,255,0.0)",
+              20, "rgba(255,255,255,0.2)",
+              40, "rgba(255,255,255,0.3)",
+              60, "rgba(255,255,255,0.5)",
+              80, "rgba(255,255,255,0.8)",
+              95, "rgba(255,255,255,0.9)"
+            ]
+          },
+        },
+        {
+          id: `mbx_nems_cloudmid_hourly_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "cloudsMid",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0, "rgba(255,255,255,0.0)",
+              20, "rgba(255,255,255,0.2)",
+              40, "rgba(255,255,255,0.3)",
+              60, "rgba(255,255,255,0.5)",
+              80, "rgba(255,255,255,0.8)",
+              95, "rgba(255,255,255,0.9)"
+            ]
+          },
+        },
+        {
+          id: `mbx_nems_precip_hourly_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "precip",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0.1, "rgba(133,247,244,0.5)",
+              0.25, "rgba(133,247,244,1.0)",
+              0.5, "rgba(105,148,252,1.0)",
+              1, "rgba(90,123,248,1.0)",
+              1.5, "rgba(1,124,254,1.0)",
+              2, "rgba(2,104,213,1.0)",
+              3, "rgba(3,151,135,1.0)",
+              5, "rgba(2,198,33,1.0)",
+              7, "rgba(174,255,3,1.0)",
+              10, "rgba(218,255,53,1.0)",
+              15, "rgba(255,173,2,1.0)",
+              20, "rgba(255,97,1,1.0)",
+              25, "rgba(252,60,3,1.0)",
+              30, "rgba(251,20,3,1.0)"
+            ]
+          },
+        },
+        {
+          id: `mbx_nems_snow_hourly_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "layerSnow", // original name kept
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-pattern": "snowPattern",
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 3) Meteoblue “Hourly Temperature” (vector, 8 entries)
+ *    (Keeps your hourly URL; takes 'level' explicitly)
+ ***********************************************************************/
+export function generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT) {
+  const out = [];
+
+  Array.from({ length: 8 }, (_, index) => {
+    const date = getNextNDays(index, "short");
+    const time = getNextNDaysWithTime(index);
+    const suffix = MBX_DAY_SUFFIXES[index];
+    const sourceId = `mbx_temp_hourly_${suffix}`;
+
+    const url =
+      `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+      `/temperatureLayer~11~${level}~hourly~none~contourSteps~-100.0~-8.0~-6.0~-4.0~-2.0~0.0~2.0~4.0~6.0~8.0~10.0~12.0~14.0~16.0~18.0~20.0~46.0/{z}/{x}/{y}` +
+      `?temperatureUnit=C&apikey=${metbluT}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [url],
+      },
+      layers: [
+        {
+          id: `mbx_temp_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "temperatureLayer",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": index === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              -100, "rgba(52,140,237,1.0)",
+              -8, "rgba(68,177,246,1.0)",
+              -6, "rgba(81,203,250,1.0)",
+              -4, "rgba(128,224,247,1.0)",
+              -2, "rgba(160,234,247,1.0)",
+              0, "rgba(0,239,124,1.0)",
+              2, "rgba(0,228,82,1.0)",
+              4, "rgba(0,200,72,1.0)",
+              6, "rgba(16,184,122,1.0)",
+              8, "rgba(41,123,93,1.0)",
+              10, "rgba(0,114,41,1.0)",
+              12, "rgba(60,161,44,1.0)",
+              14, "rgba(121,208,48,1.0)",
+              16, "rgba(181,255,51,1.0)",
+              18, "rgba(216,247,161,1.0)",
+              20, "rgba(255,246,0,1.0)",
+              46, "rgba(243,22,194,1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 4) Meteoblue “Radar Composite” (raster x2 per step)
+ *    Note: returns `sources` (plural) for composite use-case.
+ ***********************************************************************/
+export function generateMBX_MeteoblueRadarCompositeLayers(metbluT) {
+  const out = [];
+
+  // hour = 11..0 (11h past → now)
+  Array.from({ length: 12 }, (_, i) => {
+    const hour = 11 - i;
+    const date = getPastHours(hour, "short");
+
+    const hourNames = ["", "one", "two", "three", "four", "five", "six",
+      "seven", "eight", "nine", "ten", "eleven"];
+    const hourName = hour === 0 ? "" : `${hourNames[hour]}hour`;
+    const suffix = hour === 0 ? "" : "past";
+
+    const precipId = `mbx_radar_precip_global_${hourName}${suffix}`;
+    const satId = `mbx_satellite_global_${hourName}${suffix}`;
+
+    const precipUrl =
+      `https://maps-api.meteoblue.com/v1/tiles/precipitation_global/${getPastHours(hour)}/{z}/{x}/{y}.png?apikey=${metbluT}`;
+    const satUrl =
+      `https://maps-api.meteoblue.com/v1/tiles/satellite_global/${getPastHours(hour)}/{z}/{x}/{y}.jpg?apikey=${metbluT}`;
+
+    out.push({
+      sources: [
+        { id: precipId, type: "raster", tiles: [precipUrl] },
+        { id: satId, type: "raster", tiles: [satUrl] },
+      ],
+      layers: [
+        {
+          id: satId,
+          type: "raster",
+          source: satId,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": hour === 11 ? 0.2 : 0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+        {
+          id: precipId,
+          type: "raster",
+          source: precipId,
+          layout: { visibility: "none" },
+          paint: {
+            "raster-opacity": hour === 11 ? 0.5 : 0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date,
+      metadata: {
+        hour,
+        hasComposite: true,
+        precipitationId: precipId,
+        satelliteId: satId,
+      },
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 5) Meteoblue Snowfall (Hourly, vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueSnowfallHourlyLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, hourOffset) => {
+    const time = getNextNHoursWithTime(hourOffset);
+    const date = getPastHours(-hourOffset, "short");
+    const suffix = MBX_HOUR_SUFFIXES[hourOffset];
+    const sourceId = `mbx_snowfall_hourly_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/snow~679~sfc~hourly~none~contourSteps~0.1~0.5~1~2~4~8~12~16~20~25~30~40~50~70~90~110~140/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: `mbx_snowfall_hourly_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "snow",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0.1, "rgba(230, 250, 255, 0.8)",
+              0.5, "rgba(191, 236, 243, 1.0)",
+              1, "rgba(156, 227, 242, 1.0)",
+              2, "rgba(113, 207, 240, 1.0)",
+              4, "rgba(84, 193, 238, 1.0)",
+              8, "rgba(63, 181, 237, 1.0)",
+              12, "rgba(43, 168, 229, 1.0)",
+              16, "rgba(22, 150, 218, 1.0)",
+              20, "rgba(28, 133, 207, 1.0)",
+              25, "rgba(90, 123, 248, 1.0)",
+              30, "rgba(134, 111, 250, 1.0)",
+              40, "rgba(170, 100, 245, 1.0)",
+              50, "rgba(200, 85, 230, 1.0)",
+              70, "rgba(215, 65, 200, 1.0)",
+              90, "rgba(230, 50, 160, 1.0)",
+              110, "rgba(245, 35, 120, 1.0)",
+              140, "rgba(255, 20, 80, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 6) Meteoblue CAPE (Hourly, vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueCAPEHourlyLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, hourOffset) => {
+    const time = getNextNHoursWithTime(hourOffset);
+    const date = getPastHours(-hourOffset, "short");
+    const suffix = MBX_HOUR_SUFFIXES[hourOffset];
+    const sourceId = `mbx_cape_hourly_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/layerCAPEInternal~157~180-0%20mb%20above%20gnd~hourly~none` +
+          `~contourSteps~25.0~75.0~125.0~250.0~500.0~750.0~1000.0~1250.0~1500.0~1750.0~2000.0~2250.0~2500.0~2750.0~3000.0~3250.0~3500.0~4000.0~4500.0~5000.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: `mbx_cape_hourly_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "layerCAPEInternal",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              25, "rgba(180, 170, 255, 0.8)",
+              75, "rgba(130, 120, 255, 1.0)",
+              125, "rgba(90, 140, 255, 1.0)",
+              250, "rgba(60, 170, 255, 1.0)",
+              500, "rgba(0, 200, 255, 1.0)",
+              750, "rgba(0, 220, 200, 1.0)",
+              1000, "rgba(0, 210, 120, 1.0)",
+              1250, "rgba(140, 230, 60, 1.0)",
+              1500, "rgba(230, 230, 40, 1.0)",
+              1750, "rgba(255, 210, 40, 1.0)",
+              2000, "rgba(255, 180, 30, 1.0)",
+              2250, "rgba(255, 150, 20, 1.0)",
+              2500, "rgba(255, 120, 10, 1.0)",
+              2750, "rgba(255, 90, 0, 1.0)",
+              3000, "rgba(255, 60, 0, 1.0)",
+              3250, "rgba(255, 30, 0, 1.0)",
+              3500, "rgba(255, 0, 0, 1.0)",
+              4000, "rgba(240, 0, 0, 1.0)",
+              4500, "rgba(230, 0, 0, 1.0)",
+              5000, "rgba(0, 255, 255, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 7) Meteoblue Storm Helicity (Hourly, vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueStormHelicityHourlyLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, hourOffset) => {
+    const time = getNextNHoursWithTime(hourOffset);
+    const date = getPastHours(-hourOffset, "short");
+    const suffix = MBX_HOUR_SUFFIXES[hourOffset];
+    const sourceId = `mbx_stormhelicity_hourly_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api-cdn.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/stormhelicityColortable~190~3000-0%20m%20above%20gnd~hourly~none` +
+          `~contourSteps~100.0~150.0~200.0~250.0~300.0~400.0~600.0~800.0~1000.0/{z}/{x}/{y}` +
+          `?temperatureUnit=C&velocityUnit=km%2Fh&lengthUnit=metric&energyUnit=watts&internal=true&apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: `mbx_stormhelicity_hourly_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "stormhelicityColortable",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": hourOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              100, "rgba(255, 255, 255, 0.1)",
+              150, "rgba(180, 255, 180, 0.6)",
+              200, "rgba(120, 255, 120, 0.7)",
+              250, "rgba(60, 240, 60, 0.8)",
+              300, "rgba(255, 255, 0, 0.8)",
+              400, "rgba(255, 200, 0, 0.9)",
+              600, "rgba(255, 150, 0, 1.0)",
+              800, "rgba(255, 100, 0, 1.0)",
+              1000, "rgba(255, 0, 0, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 8) Meteoblue Snowfall (Daily, vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueDailySnowfallLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 8 }, (_, dayOffset) => {
+    const time = getNextDaysMidnight(dayOffset);
+    const date = getNextNDays(dayOffset, "short");
+    const suffix = MBX_DAY_SUFFIXES[dayOffset];
+    const sourceId = `mbx_snowfall_daily_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/snow~679~sfc~daily~sum~contourSteps~0.1~0.5~1~2~4~8~12~16~20~30~50~75~105~150~200~270~360/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: `mbx_snowfall_daily_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "snow",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": dayOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              0.1, "rgba(230, 250, 255, 0.8)",
+              0.5, "rgba(191, 236, 243, 1.0)",
+              1, "rgba(156, 227, 242, 1.0)",
+              2, "rgba(113, 207, 240, 1.0)",
+              4, "rgba(84, 193, 238, 1.0)",
+              8, "rgba(63, 181, 237, 1.0)",
+              12, "rgba(43, 168, 229, 1.0)",
+              16, "rgba(22, 150, 218, 1.0)",
+              20, "rgba(28, 133, 207, 1.0)",
+              30, "rgba(90, 123, 248, 1.0)",
+              50, "rgba(134, 111, 250, 1.0)",
+              75, "rgba(170, 100, 245, 1.0)",
+              105, "rgba(200, 85, 230, 1.0)",
+              150, "rgba(215, 65, 200, 1.0)",
+              200, "rgba(230, 50, 160, 1.0)",
+              270, "rgba(245, 35, 120, 1.0)",
+              360, "rgba(255, 20, 80, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 9) Meteoblue CAPE (Daily, vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueDailyCAPELayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 8 }, (_, dayOffset) => {
+    const time = getNextDaysMidnight(dayOffset);
+    const date = getNextNDays(dayOffset, "short");
+    const suffix = MBX_DAY_SUFFIXES[dayOffset];
+    const sourceId = `mbx_cape_daily_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/layerCAPEInternal~157~180-0%20mb%20above%20gnd~daily~max` +
+          `~contourSteps~25.0~75.0~125.0~250.0~500.0~750.0~1000.0~1250.0~1500.0~1750.0~2000.0~2250.0~2500.0~2750.0~3000.0~3250.0~3500.0~4000.0~4500.0~5000.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: `mbx_cape_daily_layer_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "layerCAPEInternal",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": dayOffset === 0 ? 0.5 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              25, "rgba(180, 170, 255, 0.8)",
+              75, "rgba(130, 120, 255, 1.0)",
+              125, "rgba(90, 140, 255, 1.0)",
+              250, "rgba(60, 170, 255, 1.0)",
+              500, "rgba(0, 200, 255, 1.0)",
+              750, "rgba(0, 220, 200, 1.0)",
+              1000, "rgba(0, 210, 120, 1.0)",
+              1250, "rgba(140, 230, 60, 1.0)",
+              1500, "rgba(230, 230, 40, 1.0)",
+              1750, "rgba(255, 210, 40, 1.0)",
+              2000, "rgba(255, 180, 30, 1.0)",
+              2250, "rgba(255, 150, 20, 1.0)",
+              2500, "rgba(255, 120, 10, 1.0)",
+              2750, "rgba(255, 90, 0, 1.0)",
+              3000, "rgba(255, 60, 0, 1.0)",
+              3250, "rgba(255, 30, 0, 1.0)",
+              3500, "rgba(255, 0, 0, 1.0)",
+              4000, "rgba(240, 0, 0, 1.0)",
+              4500, "rgba(230, 0, 0, 1.0)",
+              5000, "rgba(0, 255, 255, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+/***********************************************************************
+ * 10) Official Weather Warnings (4 static buckets)
+ *    Note: includes .images on the first entry (as in your source)
+ ***********************************************************************/
+export function generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT) {
+  const out = [];
+  const types = ["all", "24h", "24_48h", "48h_plus"];
+  const names = ["all", "24h", "24_48h", "48h_plus"];
+  const dates = [
+    "All Warnings",
+    "Next 24 Hours",
+    "24-48 Hours",
+    "Beyond 48 Hours",
+  ];
+  const urls = ["all", "%3C24h", "24-48h", "%3E48h"];
+
+  Array.from({ length: 4 }, (_, index) => {
+    const sourceId = `mbx_official_weather_warnings_${types[index]}`;
+    const layerSuffix = names[index];
+
+    const entry = {
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://warnings-api.meteoblue.com/warnings/tiles/${urls[index]}/{z}/{x}/{y}.pbf?t=${metbluT}`,
+        ],
+      },
+      layers: [
+        // Polygons
+        {
+          id: `mbx_weather_warnings_polygons_${layerSuffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "weatherwarnings",
+          filter: ["==", "$type", "Polygon"],
+          layout: { visibility: "none" },
+          paint: {
+            "fill-color": [
+              "match",
+              ["get", "severity"],
+              "Extreme",
+              "rgba(255, 0,   0,   0.6)",
+              "Severe",
+              "rgba(255, 125, 0,   0.6)",
+              "Moderate",
+              "rgba(252, 231, 0,   0.6)",
+              "Minor",
+              "rgba(215, 255, 0,   0.6)",
+              /* default */ "rgba(112,112,112,0.6)",
+            ],
+            "fill-outline-color": "rgba(200, 100, 240, 1)",
+            "fill-antialias": true,
+            "fill-opacity": index === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+          },
+        },
+        // Points
+        {
+          id: `mbx_weather_warnings_points_${layerSuffix}`,
+          type: "circle",
+          source: sourceId,
+          "source-layer": "weatherwarnings",
+          filter: ["==", "$type", "Point"],
+          layout: { visibility: "none" },
+          paint: {
+            "circle-radius": 6,
+            "circle-color": "#B42222",
+            "circle-opacity": index === 0 ? 1 : 0,
+            "circle-opacity-transition": { duration: 500 },
+          },
+        },
+        // Icons
+        {
+          id: `mbx_weather_warnings_icons_${layerSuffix}`,
+          type: "symbol",
+          source: sourceId,
+          "source-layer": "weatherwarnings",
+          filter: ["==", "$type", "Polygon"],
+          minzoom: 2,
+          layout: {
+            "icon-size": 0.25,
+            "icon-image": [
+              "match",
+              ["get", "main_type"],
+              "Wind",
+              "wind",
+              "Snow",
+              "snow",
+              "Thunder",
+              "thunderstorm",
+              "LowVis",
+              "fog",
+              "Heat",
+              "high-temp",
+              "Cold",
+              "low-temp",
+              "Coastal",
+              "coastal",
+              "Forestfires",
+              "fire",
+              "Avalanches",
+              "avalanche",
+              "Rain",
+              "rain",
+              "Flood",
+              "rain",
+              "Hail",
+              "snow",
+              "Geological",
+              "avalanche",
+              "AirQuality",
+              "fog",
+              "Volcanic",
+              "volcanic",
+              "Earthquake",
+              "earthquake",
+              /* default */ "",
+            ],
+            "text-font": ["Noto Sans Regular"],
+            "icon-allow-overlap": false,
+            visibility: "none",
+          },
+          paint: {
+            "icon-opacity": index === 0 ? 1 : 0,
+            "icon-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date: dates[index],
+      ...(index === 0 && {
+        images: [
+          {
+            name: "wind",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at01.png",
+          },
+          {
+            name: "snow",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at02.png",
+          },
+          {
+            name: "thunderstorm",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at03.png",
+          },
+          {
+            name: "fog",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at04.png",
+          },
+          {
+            name: "high-temp",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at05.png",
+          },
+          {
+            name: "low-temp",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at06.png",
+          },
+          {
+            name: "coastal",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at07.png",
+          },
+          {
+            name: "fire",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at08.png",
+          },
+          {
+            name: "avalanche",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at09.png",
+          },
+          {
+            name: "rain",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at10.png",
+          },
+          {
+            name: "earthquake",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at11.png",
+          },
+          {
+            name: "volcanic",
+            url: "https://maps-api-cdn.meteoblue.com/warning_icons/at12.png",
+          },
+        ],
+      }),
+    };
+
+    // ✅ push into the output array
+    out.push(entry);
+  });
+
+  // ✅ close the function with "}" (not "})")
+  return out;
+}
+
+/***********************************************************************
+ * 11) Forecast Warnings (Daily Risk: wind + precip risk)
+ ***********************************************************************/
+export function generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT) {
+  const out = [];
+
+  Array.from({ length: 8 }, (_, dayOffset) => {
+    const time = getNextDaysMidnight(dayOffset, "date");
+    const date = getNextNDays(dayOffset, "short");
+    const suffix = MBX_DAY_SUFFIXES[dayOffset];
+    const sourceId = `mbx_forecast_warnings_daily_${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api-cdn.meteoblue.com/v1/map/vector/${model}/${time}` +
+          `/layerriskInternal~61~sfc~daily~sum~contourSteps~40.0~60.0~90.0` +
+          `_layerWindInternal~180~sfc~daily~max~contourSteps~60.0~80.0~110.0/{z}/{x}/{y}` +
+          `?temperatureUnit=C&velocityUnit=km%2Fh&lengthUnit=metric&energyUnit=watts&internal=true&apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        // Wind risk (yellows/reds)
+        {
+          id: `mbx_wind_risk_daily_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "layerWindInternal",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": dayOffset === 0 ? 0.7 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              60, "rgba(248, 246, 0, 1.0)",
+              80, "rgba(255, 173, 0, 1.0)",
+              110, "rgba(255, 26, 0, 1.0)"
+            ],
+          },
+        },
+        // Precip risk (blues/purples)
+        {
+          id: `mbx_precip_risk_daily_${suffix}`,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "layerriskInternal",
+          layout: { visibility: "none" },
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": dayOffset === 0 ? 0.55 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate", ["linear"], ["get", "minValue"],
+              40, "rgba(145, 201, 255, 1.0)",
+              60, "rgba(157, 121, 210, 1.0)",
+              90, "rgba(148, 0, 166, 1.0)"
+            ],
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Imerger Weather Layers
+ ***********************************************************************/
+/************************************************************
+ * NASA GPM IMERG — Precipitation Rate (raster) | Functional A
+ * Window: last 13 days to today (14 frames; 0 = 13 days ago … 13 = today)
+ * returns: Array<{ source, layers, date }>
+ ************************************************************/
+export function generateMBX_IMERGPrecipRateLayers() {
+  const out = [];
+
+  Array.from({ length: 14 }, (_, dayOffset) => {
+    // Map 0..13 -> -13..0 where 0 == today
+    const actualDayOffset = dayOffset - 13;
+    const isToday = actualDayOffset === 0;
+    const date = getNextNDays(actualDayOffset, "short");
+
+    const suffix =
+      actualDayOffset === 0 ? "today" : `${Math.abs(actualDayOffset)}daysago`;
+    const sourceId = `mbx_imerg_precip_rate_${suffix}`;
+
+    const tileUrl =
+      `https://gitc.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi` +
+      `?service=WMS&version=1.3.0&request=GetMap` +
+      `&layers=IMERG_Precipitation_Rate&styles=` +
+      `&format=image/png&transparent=true` +
+      `&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256` +
+      `&time=${getNextNDays(actualDayOffset)}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [tileUrl],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          // keep "visible" and fade with opacity like your original
+          layout: { visibility: "visible" },
+          paint: {
+            "raster-opacity": isToday ? 1.0 : 0.0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}

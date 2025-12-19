@@ -4,8 +4,9 @@ import {
   handleToggleInteraction,
   handleTemporalInteraction,
   handleDropdownInteraction,
-  handleButtonInteraction
-} from './mapbox-functions.js';
+  handleButtonInteraction,
+  handleStaticInteraction,
+} from "./mapbox-functions.js";
 import { handleDewExposureCheckbox } from "./mapbox-functions.js";
 import gisLayersIcon from "@assets/images/accordion_icons/gis-layers.webp";
 import weatherSystemsIcon from "@assets/images/accordion_icons/weather-systems.webp";
@@ -321,6 +322,45 @@ export class SidebarMenu {
         });
         itemsContainer.appendChild(grid);
       }
+      // --- STATIC CASE ---
+      // JSON: { static: { itemKey: { label: ..., image: ... }, ... } }
+      else if (typeKey === "static") {
+        // console.log(`✅ Creating static items for ${typeKey}:`, Object.keys(items));
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          // console.log(`🔍 Creating static item: ${itemKey}`, items[itemKey]);
+          const staticElement = this.#createStaticItem(
+            categoryKey,
+            subcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (staticElement) {
+            // console.log(`✅ Created static element:`, staticElement);
+            grid.appendChild(staticElement);
+          } else {
+            console.error(`❌ Failed to create static element for ${itemKey}`);
+          }
+        });
+        itemsContainer.appendChild(grid);
+      } else if (typeKey === "nested") {
+        // 🆕 NEW: Nested sub-accordions (e.g., "GDACS Alerts", "Regional Alerts")
+        Object.keys(items).forEach((nestedSubKey) => {
+          const nestedSubData = items[nestedSubKey];
+          const nestedElement = this.#createNestedSubSection(
+            categoryKey,
+            subcategoryKey,
+            nestedSubKey,
+            nestedSubData
+          );
+          if (nestedElement) {
+            itemsContainer.appendChild(nestedElement);
+          }
+        });
+        // Handle other item types
+      }
+
       // --- OTHER CASES ---
       // If new types are added in map-layers.js, add their logic here.
       else {
@@ -354,6 +394,114 @@ export class SidebarMenu {
     subcategoryDiv.appendChild(subcategoryHeader);
     subcategoryDiv.appendChild(itemsContainer);
     return subcategoryDiv;
+  }
+  /**
+   * 🆕 NEW: Create nested sub-accordion sections
+   * Handles sub-accordions within subcategories (e.g., "GDACS Alerts" inside "Hazard Alerts")
+   */
+  #createNestedSubSection(
+    categoryKey,
+    parentSubcategoryKey,
+    nestedSubKey,
+    nestedSubData
+  ) {
+    const nestedDiv = document.createElement("div");
+    nestedDiv.className = "ncop-nested-subsection";
+
+    const nestedHeader = document.createElement("div");
+    nestedHeader.className = "ncop-nested-header";
+    nestedHeader.innerHTML = `<span>${nestedSubKey}</span><i data-lucide="chevron-right" class="nested-chevron"></i>`;
+
+    const nestedItemsContainer = document.createElement("div");
+    nestedItemsContainer.className = "ncop-nested-items-container";
+
+    // Render items within the nested section
+    Object.keys(nestedSubData).forEach((typeKey) => {
+      const items = nestedSubData[typeKey];
+
+      if (typeKey === "static") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const staticElement = this.#createStaticItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (staticElement) grid.appendChild(staticElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else if (typeKey === "toggle") {
+        Object.keys(items).forEach((itemKey) => {
+          const toggleElement = this.#createToggleItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (toggleElement) nestedItemsContainer.appendChild(toggleElement);
+        });
+      } else if (typeKey === "temporal") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const temporalElement = this.#createTemporalItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (temporalElement) grid.appendChild(temporalElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else if (typeKey === "button") {
+        const grid = document.createElement("div");
+        grid.className = "ncop-grid";
+        Object.keys(items).forEach((itemKey) => {
+          const buttonElement = this.#createButtonItem(
+            categoryKey,
+            parentSubcategoryKey,
+            itemKey,
+            items[itemKey]
+          );
+          if (buttonElement) grid.appendChild(buttonElement);
+        });
+        nestedItemsContainer.appendChild(grid);
+      } else {
+        console.warn(`⚠️ Unknown nested item type: ${typeKey}`, items);
+      }
+    });
+
+    // Event handler for nested header click
+    nestedHeader.addEventListener("click", function () {
+      const isExpanded = this.classList.contains("expanded");
+
+      // Close other nested sections at the same level
+      const parentContainer = this.closest(".ncop-items-container");
+      const otherNestedHeaders = parentContainer?.querySelectorAll(
+        ".ncop-nested-header"
+      );
+
+      otherNestedHeaders?.forEach((header) => {
+        if (header !== this) {
+          header.classList.remove("expanded");
+          header.nextElementSibling?.classList.remove("visible");
+        }
+      });
+
+      if (!isExpanded) {
+        this.classList.add("expanded");
+        nestedItemsContainer.classList.add("visible");
+      } else {
+        this.classList.remove("expanded");
+        nestedItemsContainer.classList.remove("visible");
+      }
+    });
+
+    nestedDiv.appendChild(nestedHeader);
+    nestedDiv.appendChild(nestedItemsContainer);
+    return nestedDiv;
   }
   #createToggleItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // console.log(`🔧 Creating toggle item: ${itemKey}`, itemData);
@@ -399,8 +547,9 @@ export class SidebarMenu {
     itemDiv.className = "ncop-item ncop-item-temporal";
     itemDiv.innerHTML = `
             <div class="ncop-item-image">
-                <img src="${itemData.image || "/static/images/placeholder.png"
-      }" alt="${itemData.label}" />
+                <img src="${
+                  itemData.image || "/static/images/placeholder.png"
+                }" alt="${itemData.label}" />
             </div>
             <span class="ncop-item-label">${itemData.label}</span>
         `;
@@ -425,7 +574,6 @@ export class SidebarMenu {
     return itemDiv;
   }
 
-
   #createDropdownItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // Main container for all dropdowns in this item
     const itemDiv = document.createElement("div");
@@ -440,7 +588,11 @@ export class SidebarMenu {
       // ===== STEP 1: Extract endpoint =====
       let endpoint = "";
       for (const k in dropdownConfig) {
-        if (k.endsWith('_endpoint') && typeof dropdownConfig[k] === 'string' && dropdownConfig[k].startsWith('http')) {
+        if (
+          k.endsWith("_endpoint") &&
+          typeof dropdownConfig[k] === "string" &&
+          dropdownConfig[k].startsWith("http")
+        ) {
           endpoint = dropdownConfig[k];
           break;
         }
@@ -580,7 +732,9 @@ export class SidebarMenu {
 
             // Attribute field header
             const attrHeader = document.createElement("th");
-            attrHeader.textContent = attributeField.replace(/_/g, " ").toUpperCase();
+            attrHeader.textContent = attributeField
+              .replace(/_/g, " ")
+              .toUpperCase();
             attrHeader.style.flex = "1";
             headerRow.appendChild(attrHeader);
 
@@ -724,6 +878,61 @@ export class SidebarMenu {
     });
 
     // console.log(`✅ Button item created successfully:`, itemDiv);
+    return itemDiv;
+  }
+
+  #createStaticItem(categoryKey, subcategoryKey, itemKey, itemData) {
+    if (!itemData || !itemData.label) return null;
+
+    const itemDiv = document.createElement("div");
+    itemDiv.className = "ncop-item ncop-item-static";
+    itemDiv.title = itemData.label;
+
+    itemDiv.innerHTML = `
+      <div class="ncop-item-image">
+        <img 
+          src="${itemData.image}" 
+          alt="${itemData.label}" 
+        />
+      </div>
+      <span class="ncop-item-label">${itemData.label}</span>
+    `;
+
+    // Track layer state locally
+    let isActive = false;
+
+    const imageElement = itemDiv.querySelector(".ncop-item-image");
+    if (imageElement) {
+      // Image click: use existing selection handler and prevent bubbling to itemDiv
+      imageElement.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const wasSelected = imageElement.classList.contains("selected");
+        // Reuse central selection logic
+        this.#handleImageSelection(imageElement);
+        // keep isActive in sync with visual state
+        isActive = !wasSelected;
+        // trigger static interaction to keep behavior consistent
+        handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
+      });
+    }
+
+    // Click handler for the static layer (click outside image)
+    itemDiv.addEventListener("click", () => {
+      isActive = !isActive;
+
+      // console.log(`🔄 Static layer "${itemKey}" toggling to:`, isActive);
+
+      handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
+
+      // Toggle selection class on the image element so CSS .ncop-item-image.selected img applies
+      if (imageElement) {
+        imageElement.classList.toggle("selected", isActive);
+      } else {
+        // fallback: toggle on whole item (preserve previous behavior if image not present)
+        itemDiv.classList.toggle("selected", isActive);
+      }
+    });
+
     return itemDiv;
   }
 

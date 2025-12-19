@@ -11,9 +11,14 @@ environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env"))  # repo/.env
 
 # --- Core ---
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
+METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
+WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+
+# --- Google Earth Engine ---
+GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
 
 # --- Apps ---
 INSTALLED_APPS = [
@@ -28,6 +33,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_vite",
     "ncop_internal",
+    "django_extensions",
 ]
 
 # --- Middleware ---
@@ -119,3 +125,7 @@ DJANGO_VITE = {
         "dev_server_port": env.int("VITE_DEV_SERVER_PORT", default=5173),
     }
 }
+# Prefer ENV override; otherwise use repo-relative path (same pattern as other paths)
+STORY_JSON_DIR = Path(
+    env("STORY_JSON_DIR", default=BASE_DIR.parent / "frontend" / "src" / "assets" / "story_jasons")
+)

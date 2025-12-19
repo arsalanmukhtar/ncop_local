@@ -38,7 +38,11 @@ import "./time-slider-functionality.js"; // Exposes global functions
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 // ===================================================
 
-import { MapControls } from "./map-controls.js";
+import {
+  MapControls,
+  initStoryManager,
+  startStoryBySlug,
+} from "./map-controls.js";
 import { NavigationPanel } from "./navigation-panel.js";
 import { ProjectionPanel } from "./projection-panel.js";
 import { BasemapPanel } from "./basemap-panel.js";
@@ -81,6 +85,7 @@ class DashboardManager {
   #mapControls;
   #sourceLayerControl;
   #layerAttributePopup;
+  #themeToggler;
 
   init() {
     if (!window.mapboxgl?.accessToken) {
@@ -91,23 +96,29 @@ class DashboardManager {
     }
 
     this.#initializeMap();
-    // MOVE GLOBAL ASSIGNMENTS HERE (after map is created)
+
+    // Expose globals (you already do this)
     window.map = this.#map;
     window.ncop_map = this.#map;
 
-    // Initialize SourceLayerControl for layer management
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
-    this.#layerAttributePopup = this.#sourceLayerControl.layerAttributePopup;
-    // === NEW: Ensure a global popup instance is available ===
-    if (!this.#layerAttributePopup) {
-      this.#layerAttributePopup = new LayerAttributePopup(this.#map); // SAFE now (deferred)
-    }
-    // Make it globally reachable anywhere in your app:
-    window.layerAttributePopup = this.#layerAttributePopup; // short, generic global
-    window.ncop_popup = this.#layerAttributePopup; // namespaced alias (optional)
-    // ========================================================
+    // Initialize theme toggler early
+    this.#themeToggler = new ThemeToggler();
 
-    // Initialize SourceLayerControl reference for interaction handlers
+    // SourceLayerControl (your existing)
+    const slc = new SourceLayerControl(window.ncop_map);
+    window.sourceLayerControl = slc;
+
+    // MapControls (your existing)
+    const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
+
+    // Keep your existing initializations…
+    this.#sourceLayerControl = new SourceLayerControl(this.#map);
+    this.#layerAttributePopup =
+      this.#sourceLayerControl.layerAttributePopup ||
+      new LayerAttributePopup(this.#map);
+    window.layerAttributePopup = this.#layerAttributePopup;
+    window.ncop_popup = this.#layerAttributePopup;
+
     initializeSourceLayerControl(this.#sourceLayerControl);
 
     this.#map.on("load", this.#onMapLoad.bind(this));
@@ -116,11 +127,11 @@ class DashboardManager {
 
     this.#mapControls = new MapControls(this.#map, this.#storage);
 
-    // ProjectionPanel must be initialized before NavigationPanel to pass its instance
     const projectionPanel = new ProjectionPanel(this.#map, this.#mapControls);
 
-    // Initialize UI components
+    // IMPORTANT: NavigationPanel builds the story modal shell (#story-modal with #story-root)
     new NavigationPanel(this.#map, this.#mapControls, projectionPanel);
+
     new UserControl();
     new BasemapPanel(this.#map, this.#mapControls);
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
@@ -131,6 +142,26 @@ class DashboardManager {
     if (this.#storage) {
       this.#storage.updateLastLogin();
     }
+
+    // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
+    waitForEl("#story-root")
+      .then(() => {
+        // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
+        const mgr = initStoryManager({
+          map: window.ncop_map,
+          sourceLayerControl: window.sourceLayerControl, // you created `slc` earlier
+          fetchBase: window.baseUrl, // ✅ use your global baseUrl
+        });
+
+        // Optional: make a one-liner available globally to start by slug
+        window.startStoryBySlug = (slug) => startStoryBySlug(slug, "");
+
+        // Optional auto-start (leave commented to avoid changing behavior)
+        // startStoryBySlug('meteorological', '');
+      })
+      .catch(() => {
+        console.warn("Story root not found (timed out).");
+      });
   }
 
   #initializeMap() {
@@ -153,7 +184,7 @@ class DashboardManager {
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
-    console.log("✅ Map exposed as window.ncop_map");
+    // console.log("✅ Map exposed as window.ncop_map");
   }
 
   #onMapLoad() {
@@ -222,6 +253,135 @@ class DashboardManager {
   }
 }
 
+// THEME CHANGING TOGGLER
+class ThemeToggler {
+  #currentTheme = 'day';
+  #storage = window.ncop_storage;
+
+  constructor() {
+    this.#loadSavedTheme();
+    this.#createToggleButton();
+    this.#attachEventListeners();
+  }
+
+  #loadSavedTheme() {
+    if (this.#storage) {
+      const savedTheme = this.#storage.getSetting('theme') || 'day';
+      this.#currentTheme = savedTheme;
+      this.#applyTheme(savedTheme);
+    }
+  }
+
+  #createToggleButton() {
+    // Wait for NCOP container to exist
+    const checkForContainer = () => {
+      const ncopContainer = document.querySelector('.ncop-container');
+      if (ncopContainer) {
+        this.#renderToggleButton(ncopContainer);
+      } else {
+        setTimeout(checkForContainer, 100);
+      }
+    };
+    checkForContainer();
+  }
+
+  #renderToggleButton(container) {
+    const toggleButton = document.createElement('div');
+    toggleButton.className = 'theme-toggle-wrapper';
+    toggleButton.innerHTML = `
+      <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Day/Night Mode">
+        <i data-lucide="${this.#currentTheme === 'day' ? 'sun' : 'moon'}" class="theme-icon"></i>
+      </button>
+    `;
+    
+    // Insert at the top of the NCOP container
+    container.insertBefore(toggleButton, container.firstChild);
+    
+    // Initialize lucide icons
+    if (window.lucide?.createIcons) {
+      window.lucide.createIcons();
+    }
+  }
+
+  #attachEventListeners() {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#themeToggleBtn')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.#toggleTheme();
+      }
+    });
+  }
+
+  #toggleTheme() {
+    const newTheme = this.#currentTheme === 'day' ? 'night' : 'day';
+    this.#currentTheme = newTheme;
+    this.#applyTheme(newTheme);
+    this.#updateButtonIcon();
+    this.#saveTheme(newTheme);
+  }
+
+  #applyTheme(theme) {
+    const htmlElement = document.documentElement;
+    if (theme === 'night') {
+      htmlElement.setAttribute('data-theme', 'night');
+    } else {
+      htmlElement.removeAttribute('data-theme');
+    }
+  }
+
+  #updateButtonIcon() {
+    const iconElement = document.querySelector('#themeToggleBtn .theme-icon');
+    if (iconElement) {
+      // Update the icon attribute
+      iconElement.setAttribute('data-lucide', this.#currentTheme === 'day' ? 'sun' : 'moon');
+      
+      // Recreate the icon
+      if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+      }
+      
+      // Update the button title
+      const buttonElement = document.getElementById('themeToggleBtn');
+      if (buttonElement) {
+        buttonElement.setAttribute('title', `Switch to ${this.#currentTheme === 'day' ? 'Night' : 'Day'} Mode`);
+      }
+    }
+  }
+
+  #saveTheme(theme) {
+    if (this.#storage) {
+      this.#storage.saveSetting('theme', theme);
+    }
+  }
+
+  // Public method to get current theme
+  getCurrentTheme() {
+    return this.#currentTheme;
+  }
+}
+// Utility: wait for a DOM element to exist before resolving
+function waitForEl(selector, timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    const el = document.querySelector(selector);
+    if (el) return resolve(el);
+
+    const observer = new MutationObserver(() => {
+      const found = document.querySelector(selector);
+      if (found) {
+        observer.disconnect();
+        resolve(found);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`waitForEl: Timeout waiting for ${selector}`));
+    }, timeout);
+  });
+}
 // Ensure only one control panel is open at a time inside .map-controls-wrapper
 function setupMapControlsExclusivePanels() {
   const wrapper = document.querySelector(".map-controls-wrapper");

@@ -1,0 +1,27 @@
+#=============================#
+# NCOP (Django + Node + Vite) #
+#=============================#
+
+Directory structure
+ncop_local
+	djangoenv (python django environment)
+		env files	
+	project (The django-admin project)
+		ncop_project (The main django project with its .py files)
+			settings (A new settings folder to host all the urls and project. It contains all the new files for development settings)
+				base.py (Initially active)
+				dev.py
+				staging.py
+				prod.py
+			static (User made folder with sub folders and files)
+				src
+			templates (User made folder with template files)
+		ncop_internal (The django app containing all its relevant .py files)
+	frontend (Vite application)
+		src (User made folder to hold entry points and modules)
+			entries (Main entry points for each individual page like login, signup, dashboard, etc.)
+			modules (Main javascriptfiles that hold the logic for all the client side interactivity, operations and functions)
+			styles (Contains all the css files for the whole application)
+	.env (env variables)
+	.gitignore (github ignore file config)
+	requirements.txt (installation file for djangoenv modules)

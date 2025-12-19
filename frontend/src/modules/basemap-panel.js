@@ -87,8 +87,16 @@ export class BasemapPanel {
         const basemapList = document.getElementById("basemapList");
 
         basemapToggle?.addEventListener("click", (e) => {
-            e.stopPropagation();
-            basemapPanel.classList.toggle("visible");
+          e.stopPropagation();
+          basemapPanel.classList.toggle("visible");
+          // Hide layer order panel
+          document
+            .getElementById("layerOrderPanel")
+            ?.classList.remove("visible");
+          // Hide layer info panel
+          document
+            .getElementById("layerInfoPanel")
+            ?.classList.remove("visible");
         });
 
         labelsToggle?.addEventListener(

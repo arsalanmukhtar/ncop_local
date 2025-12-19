@@ -2,6 +2,11 @@
 // Updated to work with DashboardManager's private map instance
 // Adds: clean Lucide play/pause toggle with two buttons, and restoration on map 'style.load'.
 // ADDED: Drag and Resize functionality
+// IMPROVED: Table-based popup with advanced styling and CSS variables
+// ENHANCED: HTML escaping, property prioritization, and better value formatting
+// OPTIMIZED: Layer/show switching, caching of layer types/opacity props, no-op paint sets skipped
+// ADDED: Async temporal loader (updateTempSliderAsync) that waits for map readiness
+// ADDED: Temporal Opacity Controller (global factor applied to all temporal layers/steps)
 
 import { legends } from "./temporal-layer-legends";
 
@@ -14,12 +19,21 @@ let currentSpeedIndex = 1;
 let currentActiveLayerSet = null;
 let clickPopup = null;
 
+// Internal caches for faster ops
+const _layerTypeCache = new Map();
+const _opacityPropCache = new Map();
+const _layerOpacityState = new Map();
+const _boundClickLayers = new Set();
+
+// Track current frame for 2-way toggle optimization
+let _lastStepIndex = null;
+
 // For restoring after 'style.load'
 let _sliderRestore = {
-  layerKey: null, // string
-  textContent: null, // string (title)
-  layersDef: null, // the "layers" array passed into updateTempSlider
-  currentIndex: 0, // current slider frame
+  layerKey: null,
+  textContent: null,
+  layersDef: null,
+  currentIndex: 0,
 };
 let _styleLoadHandlerBound = false;
 
@@ -35,6 +49,9 @@ let resizeStartY = 0;
 let resizeStartWidth = 0;
 let resizeStartHeight = 0;
 
+// === GLOBAL OPACITY FACTOR FOR TEMPORAL LAYERS (NEW) ===
+let _opacityFactor = 1; // 1 = 100% (default). Controlled by UI popover.
+
 // Helper to get the map instance from DashboardManager
 function getMap() {
   if (!window.ncop_map) {
@@ -46,15 +63,148 @@ function getMap() {
   return window.ncop_map;
 }
 
-// ===== DRAG AND RESIZE FUNCTIONS =====
+// ===== POPUP FORMATTING UTILITIES =====
+const PROPERTY_PRIORITY = {
+  event: 1,
+  headline: 2,
+  info: 3,
+  description: 4,
+  expire: 5,
+  severity: 6,
+  urgency: 7,
+  name: 8,
+  title: 9,
+  type: 10,
+};
 
+function escapeHtml(text) {
+  if (!text) return "";
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return String(text).replace(/[&<>"']/g, (m) => map[m]);
+}
+
+function isUrlValue(value) {
+  return typeof value === "string" && /^https?:\/\//.test(value);
+}
+
+function formatPropertyValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (isUrlValue(value)) {
+    return `<a href="${escapeHtml(
+      value
+    )}" target="_blank" style="color:#0066cc;text-decoration:none;word-break:break-all;">Link</a>`;
+  }
+  if (typeof value === "number") {
+    return escapeHtml(
+      value.toLocaleString(
+        undefined,
+        Number.isInteger(value)
+          ? undefined
+          : { minimumFractionDigits: 0, maximumFractionDigits: 2 }
+      )
+    );
+  }
+  if (typeof value === "string") {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}/;
+    if (dateRegex.test(value)) {
+      try {
+        const d = new Date(value);
+        if (!isNaN(d.getTime())) {
+          return escapeHtml(
+            d.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          );
+        }
+      } catch {}
+    }
+  }
+  if (typeof value === "object") {
+    try {
+      const str = JSON.stringify(value);
+      const truncated = str.length > 100 ? str.substring(0, 100) + "..." : str;
+      return `<span style="font-family:monospace;font-size:11px;">${escapeHtml(
+        truncated
+      )}</span>`;
+    } catch {}
+  }
+  return escapeHtml(String(value));
+}
+
+function formatPropertyKey(key) {
+  return key
+    .replace(/([_-])/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (s) => s.toUpperCase())
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildPopupContent(layerId, feature) {
+  const properties = feature.properties || {};
+  const sorted = Object.entries(properties)
+    .filter(([, v]) => v != null && v !== "")
+    .sort(
+      ([a], [b]) =>
+        (PROPERTY_PRIORITY[a.toLowerCase()] || 99) -
+          (PROPERTY_PRIORITY[b.toLowerCase()] || 99) || a.localeCompare(b)
+    );
+
+  let rows = `
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.5);">
+      <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;white-space:nowrap;">Layer</td>
+      <td style="padding:8px 0;color:rgba(255,255,255,0.75);font-weight:500;word-break:break-word;">${escapeHtml(
+        layerId
+      )}</td>
+    </tr>`;
+
+  if (sorted.length) {
+    rows += sorted
+      .map(([k, v], i) => {
+        const last = i === sorted.length - 1;
+        return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,${
+          last ? "0" : "0.5"
+        });">
+          <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;white-space:nowrap;vertical-align:top;">${escapeHtml(
+            formatPropertyKey(k)
+          )}:</td>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.75);word-break:break-word;max-width:250px;">${formatPropertyValue(
+            v
+          )}</td>
+        </tr>`;
+      })
+      .join("");
+  } else {
+    rows += `
+      <tr>
+        <td colspan="2" style="padding:8px 0;color:rgba(255,255,255,0.75);font-size:12px;font-style:italic;text-align:center;">No properties available</td>
+      </tr>`;
+  }
+
+  return `
+    <div style="position:fixed;z-index:9999;background:var(--primary-bg,#ffffff);box-shadow:0 8px 32px var(--shadow-soft,rgba(0,0,0,0.1));border-radius:8px;padding:10px 15px;font-size:13px;border:1px solid var(--border-dark,rgba(0,0,0,0.1));backdrop-filter:blur(15px) saturate(180%);-webkit-backdrop-filter:blur(15px) saturate(180%);transition:opacity .2s;opacity:1;display:flex;flex-direction:column;transform:translate(-50%,-100%);min-width:280px;height:25rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.4;overflow-y:auto;">
+      <table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ===== DRAG AND RESIZE FUNCTIONS =====
 function initDragResize() {
   const tempSlider = document.getElementById("temp-slider1");
   const dragBtn = document.getElementById("dragControlButton");
   const resizeBtn = document.getElementById("resizeControlButton");
-
   if (!tempSlider || !dragBtn || !resizeBtn) return;
-  // ===== DRAG FUNCTIONALITY =====
+
   dragBtn.addEventListener("mousedown", (e) => {
     e.preventDefault();
     isDragging = true;
@@ -62,28 +212,26 @@ function initDragResize() {
     dragStartY = e.clientY;
     dragStartLeft = parseInt(window.getComputedStyle(tempSlider).left) || 0;
     dragStartTop = parseInt(window.getComputedStyle(tempSlider).top) || 0;
-
     document.addEventListener("mousemove", onDragMove);
     document.addEventListener("mouseup", onDragEnd);
   });
 
   function onDragMove(e) {
     if (!isDragging) return;
-
-    const deltaX = e.clientX - dragStartX;
-    const deltaY = e.clientY - dragStartY;
-
-    tempSlider.style.left = dragStartLeft + deltaX + "px";
-    tempSlider.style.top = dragStartTop + deltaY + "px";
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    tempSlider.style.left = dragStartLeft + dx + "px";
+    tempSlider.style.top = dragStartTop + dy + "px";
+    if (typeof window.__ts_positionOpacityPopover === "function") {
+      window.__ts_positionOpacityPopover();
+    }
   }
-
   function onDragEnd() {
     isDragging = false;
     document.removeEventListener("mousemove", onDragMove);
     document.removeEventListener("mouseup", onDragEnd);
   }
 
-  // ===== RESIZE FUNCTIONALITY =====
   resizeBtn.addEventListener("mousedown", (e) => {
     e.preventDefault();
     isResizing = true;
@@ -91,29 +239,24 @@ function initDragResize() {
     resizeStartY = e.clientY;
     resizeStartWidth = tempSlider.offsetWidth;
     resizeStartHeight = tempSlider.offsetHeight;
-
     document.addEventListener("mousemove", onResizeMove);
     document.addEventListener("mouseup", onResizeEnd);
   });
 
   function onResizeMove(e) {
     if (!isResizing) return;
-
-    const deltaX = e.clientX - resizeStartX;
-    const deltaY = e.clientY - resizeStartY;
-
-    const newWidth = Math.max(100, resizeStartWidth + deltaX);
-    const newHeight = Math.max(50, resizeStartHeight + deltaY);
-
-    tempSlider.style.width = newWidth + "px";
-    tempSlider.style.height = newHeight + "px";
-
+    const dx = e.clientX - resizeStartX;
+    const dy = e.clientY - resizeStartY;
+    const newW = Math.max(100, resizeStartWidth + dx);
+    const newH = Math.max(50, resizeStartHeight + dy);
+    tempSlider.style.width = newW + "px";
+    tempSlider.style.height = newH + "px";
     const legendContainer = document.querySelector(".legend-container1");
-    if (legendContainer) {
-      legendContainer.style.width = newWidth * 0.95 + "px";
+    if (legendContainer) legendContainer.style.width = newW * 0.95 + "px";
+    if (typeof window.__ts_positionOpacityPopover === "function") {
+      window.__ts_positionOpacityPopover();
     }
   }
-
   function onResizeEnd() {
     isResizing = false;
     document.removeEventListener("mousemove", onResizeMove);
@@ -121,24 +264,18 @@ function initDragResize() {
   }
 }
 
-// ===== UTILITY FUNCTIONS =====
-
+// ===== UTILITIES =====
 function loadsliderlayertemporalIcons(layerSet) {
   const map = getMap();
-  if (!map) {
-    console.error("Map instance not found");
-    return;
-  }
-
+  if (!map) return;
   if (layerSet[0]?.images) {
     layerSet[0].images.forEach((icon) => {
       if (!map.hasImage(icon.name)) {
-        map.loadImage(icon.url, (error, image) => {
-          if (error) {
-            console.error(`Failed to load icon ${icon.name}:`, error);
+        map.loadImage(icon.url, (err, image) => {
+          if (err) {
+            console.error(`Failed to load icon ${icon.name}:`, err);
           } else {
             map.addImage(icon.name, image);
-            // console.log(`Loaded icon: ${icon.name}`);
           }
         });
       }
@@ -146,211 +283,319 @@ function loadsliderlayertemporalIcons(layerSet) {
   }
 }
 
-function isRasterLayer(layerId) {
+function _getLayerType(id) {
+  if (_layerTypeCache.has(id)) return _layerTypeCache.get(id);
   const map = getMap();
-  const layer = map?.getLayer(layerId);
-  return layer && layer.type === "raster";
+  const layer = map?.getLayer(id);
+  const type = layer?.type || null;
+  if (type) _layerTypeCache.set(id, type);
+  return type;
 }
 
-function isVectorLayer(layerId) {
-  const map = getMap();
-  const layer = map?.getLayer(layerId);
-  return layer && ["fill", "line", "circle", "symbol"].includes(layer.type);
+function isVectorLayer(id) {
+  const t = _getLayerType(id);
+  return t && ["fill", "line", "circle", "symbol"].includes(t);
 }
 
-function getOpacityProperty(layerId) {
-  const map = getMap();
-  const layer = map?.getLayer(layerId);
-  if (!layer) return null;
-
-  const type = layer.type;
-  if (type === "raster") return "raster-opacity";
-  if (type === "fill") return "fill-opacity";
-  if (type === "line") return "line-opacity";
-  if (type === "circle") return "circle-opacity";
-  if (type === "symbol") return "icon-opacity";
-  return null;
+function getOpacityProperty(id) {
+  if (_opacityPropCache.has(id)) return _opacityPropCache.get(id);
+  const t = _getLayerType(id);
+  let prop = null;
+  if (t === "raster") prop = "raster-opacity";
+  else if (t === "fill") prop = "fill-opacity";
+  else if (t === "line") prop = "line-opacity";
+  else if (t === "circle") prop = "circle-opacity";
+  else if (t === "symbol") prop = "icon-opacity";
+  if (prop) _opacityPropCache.set(id, prop);
+  return prop;
 }
 
-function setLayerOpacity(layerId, value) {
+function setLayerOpacity(id, value) {
   const map = getMap();
   if (!map) return;
-
-  const prop = getOpacityProperty(layerId);
-  if (prop && map.getLayer(layerId)) {
-    map.setPaintProperty(layerId, prop, value);
-    if (map.getLayer(layerId).type === "symbol") {
-      try {
-        map.setPaintProperty(layerId, "text-opacity", value);
-      } catch (e) {
-        /* ignore */
-      }
-    }
+  const prop = getOpacityProperty(id);
+  if (!prop || !map.getLayer(id)) return;
+  const target =
+    value > 0 ? Math.max(0, Math.min(1, value * _opacityFactor)) : 0;
+  const rounded = Math.round(target * 1000) / 1000;
+  const last = _layerOpacityState.get(id);
+  if (last === rounded) return;
+  map.setPaintProperty(id, prop, rounded);
+  _layerOpacityState.set(id, rounded);
+  if (_getLayerType(id) === "symbol") {
+    try {
+      map.setPaintProperty(id, "text-opacity", rounded);
+    } catch {}
   }
 }
 
 function hideAllSliderLayers() {
   sliderLayers.flat().forEach((id) => {
     const map = getMap();
-    if (map?.getLayer(id)) {
-      setLayerOpacity(id, 0);
-    }
+    if (map?.getLayer(id)) setLayerOpacity(id, 0);
   });
 }
 
 function removeClickListeners() {
   const map = getMap();
   if (!map) return;
-
   if (clickPopup) {
     clickPopup.remove();
     clickPopup = null;
   }
-
-  sliderLayers.flat().forEach((layerId) => {
+  _boundClickLayers.forEach((layerId) => {
     if (map.getLayer(layerId)) {
       map.off("mouseenter", layerId);
       map.off("mouseleave", layerId);
       map.off("click", layerId);
     }
   });
+  _boundClickLayers.clear();
 }
 
 function addClickListeners() {
   const map = getMap();
   if (!map) return;
-
   sliderLayers.flat().forEach((layerId) => {
-    if (map.getLayer(layerId) && isVectorLayer(layerId)) {
-      map.on("mouseenter", layerId, () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-
-      map.on("mouseleave", layerId, () => {
-        map.getCanvas().style.cursor = "";
-      });
-
-      map.on("click", layerId, (e) => {
-        if (e.features.length > 0) {
-          const feature = e.features[0];
-          const coordinates = e.lngLat;
-
-          if (clickPopup) {
-            clickPopup.remove();
-          }
-
-          let popupContent = '<div style="max-width: 200px; font-size: 12px;">';
-          popupContent += `<strong>Layer:</strong> ${layerId}<br>`;
-
-          if (feature.properties) {
-            Object.entries(feature.properties).forEach(([key, value]) => {
-              if (value !== null && value !== undefined && value !== "") {
-                popupContent += `<strong>${key}:</strong> ${value}<br>`;
-              }
-            });
-          }
-
-          popupContent += "</div>";
-
-          clickPopup = new mapboxgl.Popup({
-            closeButton: true,
-            closeOnClick: true,
-            maxWidth: "300px",
-          })
-            .setLngLat(coordinates)
-            .setHTML(popupContent)
-            .addTo(map);
-        }
-      });
-    }
+    if (!map.getLayer(layerId) || !isVectorLayer(layerId)) return;
+    if (_boundClickLayers.has(layerId)) return;
+    map.on("mouseenter", layerId, () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", layerId, () => {
+      map.getCanvas().style.cursor = "";
+    });
+    map.on("click", layerId, (e) => {
+      if (!e.features?.length) return;
+      const feature = e.features[0];
+      const coordinates = e.lngLat;
+      if (!clickPopup) {
+        clickPopup = new mapboxgl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: "400px",
+          offset: [0, -10],
+          anchor: "bottom",
+          className: "temporal-layer-popup",
+        });
+      }
+      const html = buildPopupContent(layerId, feature);
+      clickPopup.setLngLat(coordinates).setHTML(html).addTo(map);
+    });
+    _boundClickLayers.add(layerId);
   });
 }
 
 function cleanupSliderLayers() {
   const map = getMap();
   if (!map) return;
-
   removeClickListeners();
-
   sliderLayers.flat().forEach((id) => {
     if (map.getLayer(id)) map.removeLayer(id);
+    _layerTypeCache.delete(id);
+    _opacityPropCache.delete(id);
+    _layerOpacityState.delete(id);
   });
 
   const sourceIds = new Set();
-  sliderLayers.forEach((layerGroup) => {
-    layerGroup.forEach((layerId) => {
+  sliderLayers.forEach((grp) => {
+    grp.forEach((layerId) => {
       const layer = map.getLayer(layerId);
-      if (layer && layer.source) {
-        sourceIds.add(layer.source);
-      }
+      if (layer && layer.source) sourceIds.add(layer.source);
     });
   });
 
   if (currentActiveLayerSet && window[currentActiveLayerSet]) {
-    const layerSet = window[currentActiveLayerSet];
-    layerSet.forEach((entry) => {
-      if (entry.sources) {
-        entry.sources.forEach((source) => {
-          sourceIds.add(source.id);
-        });
-      } else if (entry.source) {
-        sourceIds.add(entry.source.id);
-      }
+    const set = window[currentActiveLayerSet];
+    set.forEach((entry) => {
+      if (entry.sources) entry.sources.forEach((s) => sourceIds.add(s.id));
+      else if (entry.source) sourceIds.add(entry.source.id);
     });
   }
 
-  sourceIds.forEach((sourceId) => {
-    if (map.getSource(sourceId)) {
-      map.removeSource(sourceId);
-    }
+  sourceIds.forEach((sid) => {
+    if (map.getSource(sid)) map.removeSource(sid);
   });
 
   sliderLayers = [];
   currentActiveLayerSet = null;
+  _lastStepIndex = null;
 }
 
+// Optimized show: only flip previous vs current
 function showTimeStepLayers(stepIndex) {
-  hideAllSliderLayers();
-
-  if (sliderLayers[stepIndex]) {
-    sliderLayers[stepIndex].forEach((layerId) => {
-      const map = getMap();
-      if (map?.getLayer(layerId)) {
-        setLayerOpacity(layerId, 0.75);
-      }
+  const map = getMap();
+  if (!map) return;
+  if (_lastStepIndex === null || !sliderLayers[_lastStepIndex]) {
+    hideAllSliderLayers();
+  } else if (_lastStepIndex !== stepIndex) {
+    sliderLayers[_lastStepIndex].forEach((id) => {
+      if (map.getLayer(id)) setLayerOpacity(id, 0);
     });
   }
+  if (sliderLayers[stepIndex]) {
+    sliderLayers[stepIndex].forEach((id) => {
+      if (map.getLayer(id)) setLayerOpacity(id, 0.75);
+    });
+  }
+  _lastStepIndex = stepIndex;
 }
 
-// Add all sources/layers from a layersDef array (like updateTempSlider does),
-// but DO NOT touch UI text/legend/etc. Used for restoring after style.load.
+// Re-apply global opacity to current frame
+function _applyGlobalOpacityNow() {
+  const map = getMap();
+  if (!map) return;
+  const idx = _lastStepIndex != null ? _lastStepIndex : 0;
+  showTimeStepLayers(idx);
+}
+
+// Rebuild layers from def (for style.load)
 function _rebuildLayersFromDef(layersDef, currentIndex) {
   const map = getMap();
   if (!map || !Array.isArray(layersDef)) return;
-
   sliderLayers = [];
-
-  // ensure icons present
+  _lastStepIndex = null;
   loadsliderlayertemporalIcons(layersDef);
 
   layersDef.forEach((entry, index) => {
     const group = [];
 
-    // Add sources
     if (entry.sources) {
       entry.sources.forEach((source) => {
-        if (!map.getSource(source.id)) {
-          map.addSource(source.id, source);
-        }
+        if (!map.getSource(source.id)) map.addSource(source.id, source);
       });
     } else if (entry.source) {
-      const { id: sourceId } = entry.source;
-      if (!map.getSource(sourceId)) {
-        map.addSource(sourceId, entry.source);
-      }
+      if (!map.getSource(entry.source.id))
+        map.addSource(entry.source.id, entry.source);
     }
 
-    // Add layers
+    entry.layers.forEach((layerDef) => {
+      group.push(layerDef.id);
+      const t =
+        _getLayerType(layerDef.id) ||
+        layerDef.type ||
+        (map.getLayer(layerDef.id)?.type ?? null);
+      let opacityProp = getOpacityProperty(layerDef.id);
+      if (!opacityProp) {
+        opacityProp =
+          t === "raster"
+            ? "raster-opacity"
+            : t === "fill"
+            ? "fill-opacity"
+            : t === "line"
+            ? "line-opacity"
+            : t === "circle"
+            ? "circle-opacity"
+            : t === "symbol"
+            ? "icon-opacity"
+            : null;
+        if (opacityProp) _opacityPropCache.set(layerDef.id, opacityProp);
+      }
+      const initialOpacity =
+        index === currentIndex ? layerDef.paint?.[opacityProp] ?? 0.75 : 0;
+
+      const cfg = {
+        ...layerDef,
+        layout: { ...layerDef.layout, visibility: "visible" },
+        paint: {
+          ...layerDef.paint,
+          ...(opacityProp ? { [opacityProp]: initialOpacity } : {}),
+        },
+      };
+      if (t === "symbol") {
+        cfg.paint = { ...cfg.paint, "text-opacity": initialOpacity };
+      }
+
+      if (!map.getLayer(layerDef.id)) {
+        map.addLayer(cfg);
+        if (initialOpacity > 0) setLayerOpacity(layerDef.id, initialOpacity);
+      } else {
+        map.setLayoutProperty(layerDef.id, "visibility", "visible");
+        if (opacityProp != null) setLayerOpacity(layerDef.id, initialOpacity);
+      }
+    });
+
+    sliderLayers.push(group);
+  });
+
+  setTimeout(addClickListeners, 300);
+}
+
+export function updateLegendBarWidths() {
+  const el = document.getElementById("legend-container-slider1");
+  if (!el) return;
+  el.querySelectorAll("div.bar1, div.bar2").forEach((bar) => {
+    bar.style.flex = "1 1 0";
+    bar.style.minWidth = "0";
+    bar.style.width = "";
+  });
+}
+
+// ===== MAIN SLIDER FUNCTION =====
+function updateTempSlider(layers, textContent, layerKey, event = null) {
+  const map = getMap();
+  if (!map) {
+    console.error("Map instance not found. Cannot initialize slider.");
+    return;
+  }
+
+  const tempSlider = document.getElementById("temp-slider1");
+  const yearLabelsDiv = document.querySelector(".year-labels1");
+  const legendContainer = document.getElementById("legend-container-slider1");
+  const playBtn = document.getElementById("playPauseButton1");
+  const pauseBtn = document.getElementById("playPauseButton2");
+
+  try {
+    window.lucide?.createIcons();
+  } catch {}
+
+  if (playBtn) playBtn.style.display = "inline-block";
+  if (pauseBtn) pauseBtn.style.display = "none";
+  clearInterval(interval);
+  isPlaying = false;
+
+  if (
+    tempSlider.style.display === "block" &&
+    currentActiveLayerSet === layerKey
+  ) {
+    hideAllSliderLayers();
+    cleanupSliderLayers();
+    tempSlider.style.display = "none";
+    if (legendContainer) legendContainer.style.display = "none";
+    currentActiveLayerSet = null;
+    _sliderRestore = {
+      layerKey: null,
+      textContent: null,
+      layersDef: null,
+      currentIndex: 0,
+    };
+    return;
+  }
+
+  if (sliderLayers.length > 0) {
+    hideAllSliderLayers();
+    cleanupSliderLayers();
+  }
+
+  loadsliderlayertemporalIcons(layers);
+
+  tempSlider.style.display = "block";
+  sliderLayers = [];
+  currentActiveLayerSet = layerKey;
+  _lastStepIndex = null;
+
+  layers.forEach((entry, index) => {
+    const group = [];
+
+    if (entry.sources)
+      entry.sources.forEach((s) => {
+        if (!map.getSource(s.id)) map.addSource(s.id, s);
+      });
+    else if (entry.source) {
+      const sid = entry.source.id;
+      if (!map.getSource(sid)) map.addSource(sid, entry.source);
+    }
+
     entry.layers.forEach((layerDef) => {
       group.push(layerDef.id);
 
@@ -368,171 +613,16 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
           ? "icon-opacity"
           : null);
 
-      // visible but 0 opacity except for the current index
-      const initialOpacity =
-        index === currentIndex ? layerDef.paint?.[opacityProp] ?? 0.75 : 0;
-
-      const layerConfig = {
-        ...layerDef,
-        layout: {
-          ...layerDef.layout,
-          visibility: "visible",
-        },
-        paint: {
-          ...layerDef.paint,
-          ...(opacityProp ? { [opacityProp]: initialOpacity } : {}),
-        },
-      };
-
-      if (layerDef.type === "symbol") {
-        layerConfig.paint = {
-          ...layerConfig.paint,
-          "text-opacity": initialOpacity,
-        };
+      let initialOpacity = 0;
+      if (index === 0) {
+        initialOpacity =
+          layerDef.paint?.[opacityProp] !== undefined
+            ? layerDef.paint[opacityProp]
+            : 0.75;
       }
 
       if (!map.getLayer(layerDef.id)) {
-        map.addLayer(layerConfig);
-      } else {
-        // If layer already exists (rare on style.load), just reset opacities
-        if (opacityProp) {
-          map.setPaintProperty(layerDef.id, opacityProp, initialOpacity);
-          if (layerDef.type === "symbol") {
-            try {
-              map.setPaintProperty(layerDef.id, "text-opacity", initialOpacity);
-            } catch {}
-          }
-        }
-        map.setLayoutProperty(layerDef.id, "visibility", "visible");
-      }
-    });
-
-    sliderLayers.push(group);
-  });
-
-  // restore click listeners
-  setTimeout(addClickListeners, 300);
-}
-
-// After rendering the legend HTML into #legend-container-slider1, dynamically set legend bar widths
-export function updateLegendBarWidths() {
-  const legendContainer = document.getElementById("legend-container-slider1");
-  if (!legendContainer) return;
-  // Select all direct child divs with class bar1 or bar2 (legend bars)
-  const bars = legendContainer.querySelectorAll("div.bar1, div.bar2");
-  bars.forEach((bar) => {
-    bar.style.flex = "1 1 0";
-    bar.style.minWidth = "0";
-    bar.style.width = "";
-  });
-}
-
-// ===== MAIN SLIDER FUNCTION =====
-
-function updateTempSlider(layers, textContent, layerKey, event = null) {
-  const map = getMap();
-  if (!map) {
-    console.error("Map instance not found. Cannot initialize slider.");
-    return;
-  }
-
-  const tempSlider = document.getElementById("temp-slider1");
-  const slider = document.getElementById("slider1");
-  const yearLabelsDiv = document.querySelector(".year-labels1");
-  const legendContainer = document.getElementById("legend-container-slider1");
-  const playBtn = document.getElementById("playPauseButton1"); // PLAY
-  const pauseBtn = document.getElementById("playPauseButton2"); // PAUSE
-
-  // ensure Lucide renders (in case DOM updated)
-  try {
-    window.lucide?.createIcons();
-  } catch {}
-
-  // Reset play/pause buttons -> show PLAY, hide PAUSE
-  if (playBtn) playBtn.style.display = "inline-block";
-  if (pauseBtn) pauseBtn.style.display = "none";
-  clearInterval(interval);
-  isPlaying = false;
-
-  // Toggle off if same layer clicked
-  if (
-    tempSlider.style.display === "block" &&
-    currentActiveLayerSet === layerKey
-  ) {
-    hideAllSliderLayers();
-    cleanupSliderLayers();
-    tempSlider.style.display = "none";
-    if (legendContainer) legendContainer.style.display = "none";
-
-    currentActiveLayerSet = null;
-    _sliderRestore = {
-      layerKey: null,
-      textContent: null,
-      layersDef: null,
-      currentIndex: 0,
-    };
-    return;
-  }
-
-  // Clean up previous layers
-  if (sliderLayers.length > 0) {
-    hideAllSliderLayers();
-    cleanupSliderLayers();
-  }
-
-  // Load icons for temporal set
-  loadsliderlayertemporalIcons(layers);
-
-  tempSlider.style.display = "block";
-  sliderLayers = [];
-  currentActiveLayerSet = layerKey;
-
-  // Add layers to map
-  layers.forEach((entry, index) => {
-    const group = [];
-
-    // Sources
-    if (entry.sources) {
-      entry.sources.forEach((source) => {
-        if (!map.getSource(source.id)) {
-          map.addSource(source.id, source);
-        }
-      });
-    } else if (entry.source) {
-      const { id: sourceId } = entry.source;
-      if (!map.getSource(sourceId)) {
-        map.addSource(sourceId, entry.source);
-      }
-    }
-
-    // Layers
-    entry.layers.forEach((layerDef) => {
-      group.push(layerDef.id);
-
-      if (!map.getLayer(layerDef.id)) {
-        const opacityProp =
-          getOpacityProperty(layerDef.id) ||
-          (layerDef.type === "raster"
-            ? "raster-opacity"
-            : layerDef.type === "fill"
-            ? "fill-opacity"
-            : layerDef.type === "line"
-            ? "line-opacity"
-            : layerDef.type === "circle"
-            ? "circle-opacity"
-            : layerDef.type === "symbol"
-            ? "icon-opacity"
-            : null);
-
-        let initialOpacity = 0;
-        if (index === 0) {
-          initialOpacity =
-            layerDef.paint?.[opacityProp] !== undefined
-              ? layerDef.paint[opacityProp]
-              : 0.75;
-        }
-
-        const layerConfig = {
+        const cfg = {
           ...layerDef,
           layout: { ...layerDef.layout, visibility: "visible" },
           paint: {
@@ -540,25 +630,13 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
             ...(opacityProp ? { [opacityProp]: initialOpacity } : {}),
           },
         };
-
         if (layerDef.type === "symbol") {
-          layerConfig.paint = {
-            ...layerConfig.paint,
-            "text-opacity": initialOpacity,
-          };
+          cfg.paint = { ...cfg.paint, "text-opacity": initialOpacity };
         }
-
-        map.addLayer(layerConfig);
+        map.addLayer(cfg);
+        if (initialOpacity > 0) setLayerOpacity(layerDef.id, initialOpacity);
       } else {
         map.setLayoutProperty(layerDef.id, "visibility", "visible");
-        let initialOpacity = 0;
-        if (index === 0) {
-          const opacityProp = getOpacityProperty(layerDef.id);
-          initialOpacity =
-            layerDef.paint?.[opacityProp] !== undefined
-              ? layerDef.paint[opacityProp]
-              : 0.75;
-        }
         setLayerOpacity(layerDef.id, initialOpacity);
       }
     });
@@ -566,21 +644,20 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     sliderLayers.push(group);
   });
 
-  // Click listeners
-  setTimeout(addClickListeners, 500);
+  setTimeout(addClickListeners, 300);
 
-  // Render time labels
   if (yearLabelsDiv) {
-    yearLabelsDiv.innerHTML = "";
+    const frag = document.createDocumentFragment();
     layers.forEach((l) => {
       const span = document.createElement("span");
       span.textContent = l.date;
       span.style.marginRight = "10px";
-      yearLabelsDiv.appendChild(span);
+      frag.appendChild(span);
     });
+    yearLabelsDiv.innerHTML = "";
+    yearLabelsDiv.appendChild(frag);
   }
 
-  // Setup slider range
   const sliderEl = document.getElementById("slider1");
   if (sliderEl) {
     sliderEl.max = layers.length - 1;
@@ -592,7 +669,6 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     titleElement.textContent = textContent;
   }
 
-  // Load legend
   if (typeof legends !== "undefined" && legends[layerKey]) {
     if (legendContainer) {
       legendContainer.innerHTML = legends[layerKey];
@@ -602,15 +678,12 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     legendContainer.style.display = "none";
   }
 
-  // After legend HTML is set:
   updateLegendBarWidths();
 
-  // Show first frame when map idle
   map.once("idle", () => {
     showTimeStepLayers(0);
   });
 
-  // Save restore info for style.load
   _sliderRestore = {
     layerKey,
     textContent,
@@ -618,106 +691,90 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     currentIndex: 0,
   };
 
-  // Bind a single style.load handler that restores temporal layers
   if (!_styleLoadHandlerBound) {
     map.on("style.load", () => {
-      // If a temporal slider is active, rebuild its layers
-      const tempSlider = document.getElementById("temp-slider1");
+      const temp = document.getElementById("temp-slider1");
       if (
-        tempSlider &&
-        tempSlider.style.display === "block" &&
+        temp &&
+        temp.style.display === "block" &&
         _sliderRestore.layersDef &&
         _sliderRestore.layerKey === currentActiveLayerSet
       ) {
-        // clean any remnants, then rebuild to current index
         removeClickListeners();
         _rebuildLayersFromDef(
           _sliderRestore.layersDef,
           _sliderRestore.currentIndex
         );
+        showTimeStepLayers(_sliderRestore.currentIndex);
       }
     });
     _styleLoadHandlerBound = true;
   }
 }
 
-// ===== SLIDER CONTROLS =====
-
+// ===== SLIDER CONTROLS & OPACITY BINDING =====
 document.addEventListener("DOMContentLoaded", function () {
-  const playBtn = document.getElementById("playPauseButton1"); // PLAY
-  const pauseBtn = document.getElementById("playPauseButton2"); // PAUSE
+  const playBtn = document.getElementById("playPauseButton1");
+  const pauseBtn = document.getElementById("playPauseButton2");
   const slider = document.getElementById("slider1");
   const speedBtn = document.getElementById("speedControlButton");
 
-  // Render Lucide icons on load
   try {
     window.lucide?.createIcons();
   } catch {}
-
-  // Initialize drag and resize
   initDragResize();
 
-  // Initialize speed label
-  if (speedBtn) {
-    speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
-  }
+  if (speedBtn) speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
 
   function playAnimation() {
     interval = setInterval(() => {
       const maxVal = parseInt(slider.max);
-      let currentVal = parseInt(slider.value);
+      const currentVal = parseInt(slider.value);
       const nextVal = currentVal < maxVal ? currentVal + 1 : 0;
       slider.value = nextVal;
-      _sliderRestore.currentIndex = nextVal; // keep in sync for style.load restore
+      _sliderRestore.currentIndex = nextVal;
       showTimeStepLayers(nextVal);
     }, 1000 / speedLevels[currentSpeedIndex]);
   }
 
-  // --- Clean 2-button toggle for Lucide ---
   if (playBtn) {
-    playBtn.addEventListener("click", () => {
+    playBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       isPlaying = true;
+      window.isTemporalAnimating = true; // <-- ADD THIS LINE
       clearInterval(interval);
       playAnimation();
-
-      // Toggle visibility: hide PLAY, show PAUSE
       playBtn.style.display = "none";
       if (pauseBtn) pauseBtn.style.display = "inline-block";
-
-      // Make sure icons render
       try {
         window.lucide?.createIcons();
       } catch {}
     });
   }
-
   if (pauseBtn) {
-    pauseBtn.addEventListener("click", () => {
+    pauseBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       isPlaying = false;
+      window.isTemporalAnimating = false; // <-- ADD THIS LINE
       clearInterval(interval);
-
-      // Toggle visibility back: show PLAY, hide PAUSE
       if (playBtn) playBtn.style.display = "inline-block";
       pauseBtn.style.display = "none";
-
       try {
         window.lucide?.createIcons();
       } catch {}
     });
   }
-
-  // Slider scrub
   if (slider) {
-    slider.addEventListener("input", () => {
+    slider.addEventListener("input", (ev) => {
+      ev.stopPropagation();
       const val = parseInt(slider.value);
-      _sliderRestore.currentIndex = val; // keep in sync
+      _sliderRestore.currentIndex = val;
       showTimeStepLayers(val);
     });
   }
-
-  // Speed button
   if (speedBtn) {
-    speedBtn.addEventListener("click", () => {
+    speedBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       currentSpeedIndex = (currentSpeedIndex + 1) % speedLevels.length;
       speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
       if (isPlaying) {
@@ -726,9 +783,108 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
   }
+
+  // ===== Opacity Control: bind to HTML-owned elements =====
+  const root = document.getElementById("temp-slider1");
+  const controls = document.getElementById("tempslider-controls");
+  const btn = document.getElementById("opacityControlButton");
+  const pop = document.getElementById("opacityControlPopover");
+  const range = document.getElementById("opacityRange");
+  const label = document.getElementById("opacityValueLabel");
+
+  if (range && label) {
+    range.value = String(Math.round(_opacityFactor * 100));
+    label.textContent = `${range.value}%`;
+  }
+
+  function positionPopover() {
+    if (!root || !controls || !pop) return;
+    const controlsRect = controls.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    const left = controlsRect.right - rootRect.left + 8; // 8px gap
+    const top = controlsRect.top - rootRect.top + 4;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }
+
+  // expose for drag/resize to keep it pinned
+  window.__ts_positionOpacityPopover = function __ts_positionOpacityPopover() {
+    if (pop && pop.style.display === "block") positionPopover();
+  };
+
+  if (btn && pop) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = pop.style.display === "block";
+      if (!open) {
+        positionPopover();
+        pop.style.display = "block";
+        btn.setAttribute("aria-expanded", "true");
+        pop.setAttribute("aria-hidden", "false");
+      } else {
+        pop.style.display = "none";
+        btn.setAttribute("aria-expanded", "false");
+        pop.setAttribute("aria-hidden", "true");
+      }
+      try {
+        window.lucide?.createIcons();
+      } catch {}
+    });
+  }
+
+  if (range && label) {
+    range.addEventListener("input", (e) => {
+      e.stopPropagation();
+      const pct = Math.max(
+        0,
+        Math.min(100, parseInt(range.value || "100", 10))
+      );
+      _opacityFactor = pct / 100;
+      label.textContent = `${pct}%`;
+      _applyGlobalOpacityNow();
+    });
+  }
+
+  // No click-away closing — popover toggles only from its button
+  window.addEventListener("resize", () => {
+    if (pop && pop.style.display === "block") positionPopover();
+  });
+
+  // Expose manual helper for console
+  window.setTemporalOpacity = function setTemporalOpacity(pct) {
+    const clamped = Math.max(0, Math.min(100, Number(pct)));
+    _opacityFactor = clamped / 100;
+    if (range) range.value = String(clamped);
+    if (label) label.textContent = `${clamped}%`;
+    _applyGlobalOpacityNow();
+  };
 });
 
-// ===== EXPOSE FUNCTIONS GLOBALLY =====
+// ===== ASYNC TEMPORAL SUPPORT =====
+async function updateTempSliderAsync(layersPromise, textContent, layerKey) {
+  const map = getMap();
+  if (!map) return;
+  if (!map.isStyleLoaded()) {
+    await new Promise((resolve) => {
+      map.once("load", resolve);
+    });
+  }
+  let layers;
+  try {
+    layers = await layersPromise;
+  } catch (e) {
+    console.error("updateTempSliderAsync: failed to resolve layers:", e);
+    return;
+  }
+  if (!Array.isArray(layers) || layers.length === 0) {
+    console.warn("updateTempSliderAsync: empty layers array");
+    return;
+  }
+  updateTempSlider(layers, textContent, layerKey);
+}
+
+// ===== EXPOSE GLOBALS =====
 window.updateTempSlider = updateTempSlider;
+window.updateTempSliderAsync = updateTempSliderAsync;
 window.hideAllSliderLayers = hideAllSliderLayers;
 window.cleanupSliderLayers = cleanupSliderLayers;

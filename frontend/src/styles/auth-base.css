@@ -46,7 +46,7 @@ html, body {
 }
 
 .auth-background {
-    background-image: url('@assets/images/bg_images/background.jpg');
+    background-image: url('@assets/images/bg_images/background.gif');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

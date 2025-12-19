@@ -138,6 +138,68 @@ export class SourceLayerControl {
             }
           }
         }
+
+        // Check in static items
+        if (subcategory.static && subcategory.static[layerKey]) {
+          return {
+            config: subcategory.static[layerKey],
+            categoryKey,
+            subcategoryKey,
+            itemType: "static",
+          };
+        }
+
+        // 🔥 NEW: Check in nested sections (like GDACS Alerts)
+        const nestedSections = subcategory.nested || subcategory.subsections;
+        if (nestedSections && typeof nestedSections === "object") {
+          for (const nestedKey in nestedSections) {
+            const nestedSection = nestedSections[nestedKey];
+
+            // Check nested toggle items
+            if (nestedSection.toggle && nestedSection.toggle[layerKey]) {
+              return {
+                config: nestedSection.toggle[layerKey],
+                categoryKey,
+                subcategoryKey,
+                nestedKey,
+                itemType: "toggle",
+              };
+            }
+
+            // Check nested temporal items
+            if (nestedSection.temporal && nestedSection.temporal[layerKey]) {
+              return {
+                config: nestedSection.temporal[layerKey],
+                categoryKey,
+                subcategoryKey,
+                nestedKey,
+                itemType: "temporal",
+              };
+            }
+
+            // Check nested static items (where GDACS events are located)
+            if (nestedSection.static && nestedSection.static[layerKey]) {
+              return {
+                config: nestedSection.static[layerKey],
+                categoryKey,
+                subcategoryKey,
+                nestedKey,
+                itemType: "static",
+              };
+            }
+
+            // Check nested button items
+            if (nestedSection.button && nestedSection.button[layerKey]) {
+              return {
+                config: nestedSection.button[layerKey],
+                categoryKey,
+                subcategoryKey,
+                nestedKey,
+                itemType: "button",
+              };
+            }
+          }
+        }
       }
     }
 
@@ -149,16 +211,22 @@ export class SourceLayerControl {
    */
   preloadAllSources() {
     const sourcesSet = new Set();
+
     for (const categoryKey in ncop_menu_items) {
       const category = ncop_menu_items[categoryKey];
+
       for (const subcategoryKey in category) {
         const subcategory = category[subcategoryKey];
+
+        // Handle direct items (toggle, temporal, button, dropdown, static)
         const items = [
           subcategory.toggle,
           subcategory.temporal,
           subcategory.button,
           subcategory.dropdown,
+          subcategory.static,
         ].filter(Boolean);
+
         items.forEach((item) => {
           if (typeof item === "object") {
             for (const key in item) {
@@ -171,12 +239,50 @@ export class SourceLayerControl {
               ) {
                 sourcesSet.add(config.source.id);
                 this.addMapboxSource(config.source);
+                console.debug(`🔧 Preloaded source: ${config.source.id}`);
               }
             }
           }
         });
+
+        // 🔥 Handle nested subsections (GDACS, etc.)
+        const nestedSections = subcategory.nested || subcategory.subsections;
+        if (nestedSections && typeof nestedSections === "object") {
+          for (const nestedKey in nestedSections) {
+            const nestedSection = nestedSections[nestedKey];
+
+            const nestedItems = [
+              nestedSection.toggle,
+              nestedSection.temporal,
+              nestedSection.static,
+              nestedSection.button,
+            ].filter(Boolean);
+
+            nestedItems.forEach((item) => {
+              if (typeof item === "object") {
+                for (const key in item) {
+                  const config = item[key];
+                  if (
+                    config &&
+                    config.source &&
+                    config.source.id &&
+                    !sourcesSet.has(config.source.id)
+                  ) {
+                    sourcesSet.add(config.source.id);
+                    this.addMapboxSource(config.source);
+                    console.debug(
+                      `🔧 Preloaded nested source: ${config.source.id} (from ${nestedKey})`
+                    );
+                  }
+                }
+              }
+            });
+          }
+        }
       }
     }
+
+    console.debug(`✅ Preloaded ${sourcesSet.size} total sources`);
   }
 
   /**
@@ -269,27 +375,50 @@ export class SourceLayerControl {
    */
   addMapboxSource(sourceConfig) {
     try {
-      const { id, type, data, tiles, scheme, maxzoom } = sourceConfig;
+      const { id, type, data, tiles, scheme, maxzoom, minzoom, tileSize } =
+        sourceConfig;
 
       // Check if source already exists
       if (this.map.getSource(id)) {
+        // console.log(`⚠️ Source ${id} already exists, skipping...`);
         return true;
       }
 
       const sourceDefinition = {
         type: type,
         ...(data && { data }), // For GeoJSON sources
-        ...(tiles && { tiles }), // For vector tile sources
+        ...(tiles && { tiles }), // For vector/raster tile sources
         ...(scheme && { scheme }), // For vector tile sources (e.g., 'tms')
-        ...(maxzoom && { maxzoom }),
+        ...(maxzoom !== undefined && { maxzoom }),
+        ...(minzoom !== undefined && { minzoom }),
+        ...(tileSize && { tileSize }), // Now properly destructured
       };
 
-      // console.log('🔧 Source Definition:', { id, ...sourceDefinition });
-      this.map.addSource(id, sourceDefinition);
+      // For raster sources, ensure we have proper defaults
+      if (type === "raster") {
+        // Set default tileSize if not provided
+        if (!sourceDefinition.tileSize) {
+          sourceDefinition.tileSize = 256; // Default tile size
+        }
 
+        // Add attribution if needed
+        if (!sourceDefinition.attribution) {
+          sourceDefinition.attribution = "";
+        }
+      }
+
+      // console.log(`🔧 Adding ${type} source:`, {
+      //   id,
+      //   type,
+      //   tileSize: sourceDefinition.tileSize,
+      //   tiles: tiles ? `${tiles.length} tile URLs` : "no tiles",
+      // });
+
+      this.map.addSource(id, sourceDefinition);
       return true;
     } catch (error) {
       console.error("❌ Error adding source:", error);
+      console.error("❌ Source config:", sourceConfig);
       return false;
     }
   }
@@ -329,6 +458,9 @@ export class SourceLayerControl {
   /**
    * Add Mapbox layers from configuration (in order)
    */
+  /**
+   * Add Mapbox layers from configuration (in order) with GDACS icon support
+   */
   addMapboxLayers(layersConfig, sourceId) {
     const addedLayers = [];
     try {
@@ -354,6 +486,7 @@ export class SourceLayerControl {
           addedLayers.push(layerId);
           return;
         }
+
         const layer = {
           id: layerId,
           type: layerConfig.type,
@@ -363,84 +496,93 @@ export class SourceLayerControl {
           }),
           ...(layerConfig.paint && { paint: layerConfig.paint }),
           ...(layerConfig.layout && { layout: layerConfig.layout }),
+          ...(layerConfig.filter && { filter: layerConfig.filter }),
         };
-        // Handle symbol layers with custom icon-image
+
+        // Handle symbol layers with icon-image
         if (
           layer.type === "symbol" &&
           layer.layout &&
           layer.layout["icon-image"]
         ) {
-          const iconName = layer.layout["icon-image"];
-          let iconPath = iconName;
-          if (
-            !iconName.includes("/") &&
-            !iconName.endsWith(".webp") &&
-            !iconName.endsWith(".png")
-          ) {
-            iconPath = `/static/icons/map_icons/layer_icons/${iconName}.webp`;
-          }
-          this.ensureSymbolIconLoaded(iconName, iconPath, () => {
-            // Wait for source to be available before adding layer
-            const tryAddLayer = () => {
-              if (this.map.getSource(sourceId)) {
-                if (labelLayerId) {
-                  this.map.addLayer(layer, labelLayerId);
-                } else {
-                  this.map.addLayer(layer);
-                }
-                addedLayers.push(layerId);
-                // --- FIX: update activeLayers and layerOrder immediately after adding ---
-                const layerKey = Object.keys(this.activeLayers).find((key) => {
-                  const info = this.activeLayers.get(key);
-                  return (
-                    info &&
-                    info.sourceId === sourceId &&
-                    info.layerIds.includes(layerId)
-                  );
-                });
-                if (!layerKey) {
-                  // If not already tracked, add to activeLayers and layerOrder
-                  // Find config for this sourceId
-                  for (const categoryKey in ncop_menu_items) {
-                    const category = ncop_menu_items[categoryKey];
-                    for (const subcategoryKey in category) {
-                      const subcategory = category[subcategoryKey];
-                      const items = [
-                        subcategory.toggle,
-                        subcategory.temporal,
-                        subcategory.button,
-                        subcategory.dropdown,
-                      ].filter(Boolean);
-                      items.forEach((item) => {
-                        if (typeof item === "object") {
-                          for (const key in item) {
-                            const config = item[key];
-                            if (
-                              config &&
-                              config.source &&
-                              config.source.id === sourceId
-                            ) {
-                              this.activeLayers.set(key, {
-                                sourceId: sourceId,
-                                layerIds: [layerId],
-                                config: config,
-                              });
-                              this.layerOrder.push(key);
-                            }
-                          }
-                        }
-                      });
-                    }
+          const iconImage = layer.layout["icon-image"];
+
+          // Check if this is a GDACS layer with conditional expressions or direct icon URL usage
+          const isGDACSLayer = sourceId && sourceId.startsWith("gdacs_");
+          const isComplexExpression =
+            Array.isArray(iconImage) && iconImage[0] === "case";
+          const isDirectIconExpression =
+            Array.isArray(iconImage) &&
+            iconImage.length === 3 &&
+            iconImage[0] === "case" &&
+            Array.isArray(iconImage[1]) &&
+            iconImage[1][0] === "has" &&
+            iconImage[1][1] === "icon";
+
+          if (isGDACSLayer && (isComplexExpression || isDirectIconExpression)) {
+            // For GDACS layers, set up the layer with direct icon URL support
+            console.debug(
+              `Setting up GDACS layer with dynamic icons: ${layerId}`
+            );
+
+            // Simplify to direct icon URL from properties
+            layer.layout["icon-image"] = [
+              "case",
+              ["has", "icon"],
+              ["get", "icon"],
+              "red-dot",
+            ];
+            layer.layout["icon-size"] = layer.layout["icon-size"] || 0.6; // Smaller for GDACS icons
+
+            // Add layer immediately and handle icon loading asynchronously
+            if (labelLayerId) {
+              this.map.addLayer(layer, labelLayerId);
+            } else {
+              this.map.addLayer(layer);
+            }
+            addedLayers.push(layerId);
+
+            // Set up dynamic icon handling for this GDACS source
+            this.setupGDACSIconHandling(sourceId, layerId);
+          } else if (typeof iconImage === "string") {
+            // Handle regular string icon paths (non-GDACS)
+            let iconPath = iconImage;
+            if (
+              !iconImage.includes("/") &&
+              !iconImage.endsWith(".webp") &&
+              !iconImage.endsWith(".png") &&
+              !iconImage.startsWith("http")
+            ) {
+              iconPath = `/static/icons/map_icons/layer_icons/${iconImage}.webp`;
+            }
+
+            this.ensureSymbolIconLoaded(iconImage, iconPath, () => {
+              // Wait for source to be available before adding layer
+              const tryAddLayer = () => {
+                if (this.map.getSource(sourceId)) {
+                  if (labelLayerId) {
+                    this.map.addLayer(layer, labelLayerId);
+                  } else {
+                    this.map.addLayer(layer);
                   }
+                  addedLayers.push(layerId);
+                } else {
+                  setTimeout(tryAddLayer, 100);
                 }
-              } else {
-                setTimeout(tryAddLayer, 100);
-              }
-            };
-            tryAddLayer();
-          });
+              };
+              tryAddLayer();
+            });
+          } else {
+            // Handle other complex expressions (non-GDACS)
+            if (labelLayerId) {
+              this.map.addLayer(layer, labelLayerId);
+            } else {
+              this.map.addLayer(layer);
+            }
+            addedLayers.push(layerId);
+          }
         } else {
-          // Always add before the first label layer
+          // Non-symbol layers or symbol layers without icons
           if (labelLayerId) {
             this.map.addLayer(layer, labelLayerId);
           } else {
@@ -457,6 +599,125 @@ export class SourceLayerControl {
     } catch (error) {
       console.error("❌ Error adding layers:", error);
       return addedLayers;
+    }
+  }
+
+  /**
+   * Set up dynamic icon handling for GDACS layers
+   */
+  setupGDACSIconHandling(sourceId, layerId) {
+    if (!sourceId || !sourceId.startsWith("gdacs_")) {
+      return;
+    }
+
+    console.debug(`Setting up GDACS icon handling for source: ${sourceId}`);
+
+    // Listen for data changes on this source
+    const handleSourceData = (e) => {
+      if (e.sourceId === sourceId && e.isSourceLoaded) {
+        this.updateGDACSIcons(sourceId, layerId);
+        // Remove listener after first successful load
+        this.map.off("sourcedata", handleSourceData);
+      }
+    };
+
+    this.map.on("sourcedata", handleSourceData);
+
+    // Also try to update immediately if data is already loaded
+    setTimeout(() => {
+      this.updateGDACSIcons(sourceId, layerId);
+    }, 1000);
+  }
+
+  /**
+   * Update GDACS icons using the icon URLs from the API response
+   */
+  updateGDACSIcons(sourceId, layerId) {
+    try {
+      const source = this.map.getSource(sourceId);
+      if (!source) return;
+
+      // Get the GeoJSON data
+      const data = source._data;
+      if (!data || !data.features) return;
+
+      // Collect unique icon URLs from features
+      const iconUrls = new Set();
+      data.features.forEach((feature) => {
+        if (feature.properties && feature.properties.icon) {
+          iconUrls.add(feature.properties.icon);
+        }
+      });
+
+      if (iconUrls.size === 0) return;
+
+      console.debug(
+        `Found ${iconUrls.size} unique GDACS icons to preload for ${sourceId}`
+      );
+
+      // Preload all unique icon URLs
+      this.preloadGDACSIconsFromUrls(iconUrls)
+        .then(() => {
+          console.debug(`✅ Preloaded all GDACS icons for ${sourceId}`);
+        })
+        .catch((error) => {
+          console.error("Error preloading GDACS icons:", error);
+        });
+    } catch (error) {
+      console.error("Error updating GDACS icons:", error);
+    }
+  }
+
+  /**
+   * Preload GDACS icons from URLs
+   */
+  async preloadGDACSIconsFromUrls(iconUrls) {
+    try {
+      // Load all icons in parallel
+      const loadPromises = Array.from(iconUrls).map((iconUrl) =>
+        this.loadRemoteIcon(iconUrl)
+      );
+      await Promise.all(loadPromises);
+    } catch (error) {
+      console.error("Error preloading GDACS icons from URLs:", error);
+    }
+  }
+
+  /**
+   * Load remote icon and add to map
+   */
+  async loadRemoteIcon(iconUrl) {
+    try {
+      // Use the URL itself as the icon name
+      if (this.map.hasImage(iconUrl)) {
+        console.debug(`Icon already loaded: ${iconUrl}`);
+        return;
+      }
+
+      console.debug(`Loading GDACS icon: ${iconUrl}`);
+
+      const response = await fetch(iconUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const blob = await response.blob();
+      const img = await createImageBitmap(blob);
+
+      // Add the image using the URL as the key
+      this.map.addImage(iconUrl, img);
+      console.debug(`✅ Loaded remote icon: ${iconUrl}`);
+    } catch (error) {
+      console.error(`❌ Error loading remote icon ${iconUrl}:`, error);
+
+      // Ensure fallback icon exists
+      if (!this.map.hasImage("red-dot")) {
+        this.ensureSymbolIconLoaded(
+          "red-dot",
+          "/static/icons/map_icons/layer_icons/red-dot.webp",
+          () => {
+            console.debug("Fallback red-dot icon loaded");
+          }
+        );
+      }
     }
   }
 
@@ -693,7 +954,10 @@ export class SourceLayerControl {
    * Setup map click handler for vector tile feature popup
    */
   _setupFeatureClickHandler() {
-    // Set pointer cursor for all vector tile layers
+    // ✅ FIXED: Removed duplicate click handler that was blocking the popup
+    // The LayerAttributePopup now handles all clicks properly
+
+    // Only keep mousemove for cursor changes (no click handler needed here)
     this.map.on("mousemove", (e) => {
       if (!this._isStyleReady()) {
         this.map.getCanvas().style.cursor = "";
@@ -705,7 +969,7 @@ export class SourceLayerControl {
         const config = info?.config;
         if (config?.source?.type === "vector") {
           const layerId = info.layerIds?.[0];
-          if (!layerId || !this.map.getLayer(layerId)) continue; // guard during style churn
+          if (!layerId || !this.map.getLayer(layerId)) continue;
           const features = this._safeQRF(e.point, { layers: [layerId] });
           if (features && features.length > 0) {
             pointer = true;
@@ -716,28 +980,7 @@ export class SourceLayerControl {
       this.map.getCanvas().style.cursor = pointer ? "pointer" : "";
     });
 
-    this.map.on("click", (e) => {
-      if (!this._isStyleReady()) return;
-      // Get layer order (topmost first)
-      const orderedKeys = [...this.layerOrder].reverse();
-      for (const layerKey of orderedKeys) {
-        const info = this.getLayerInfo(layerKey);
-        const config = info?.config;
-        if (config?.source?.type === "vector") {
-          const layerId = info.layerIds?.[0];
-          if (!layerId || !this.map.getLayer(layerId)) continue; // guard during style churn
-          const features = this._safeQRF(e.point, { layers: [layerId] });
-          if (features && features.length > 0) {
-            // this.layerAttributePopup.show(features[0], layerKey, e.point);
-            return;
-          }
-        }
-      }
-      // Only hide if no DEW popup is active
-      if (!window.ncop_popup_active) {
-        // this.layerAttributePopup.hide();
-      }
-    });
+    // ✅ Click handling is now done by LayerAttributePopup - removed duplicate handler
   }
 
   /**
