@@ -4,8 +4,8 @@ function gradientLegendBar(colors, values) {
   // values: array of tick labels (numbers/strings)
   const gradient = `linear-gradient(to right, ${colors.join(", ")})`;
   const n = values.length;
-  let html = `<div style="position: relative; width: 100%; height: 30px; margin-bottom: 2px;">`;
-  html += `<div style="background: ${gradient}; width: 100%; height: 100%; border-radius: 4px; position: relative;">`;
+  let html = `<div class="legend-bar-container" style="position: relative; width: 100%; height: 30px; margin-bottom: 2px;">`;
+  html += `<div class="legend-bar" style="background: ${gradient}; width: 100%; height: 100%; border-radius: 4px; position: relative;">`;
   // Place each label absolutely at the correct percentage, centered vertically and horizontally
   values.forEach((val, i) => {
     const leftPercent = (n === 1) ? 0 : (i / (n - 1)) * 100;
@@ -22,7 +22,7 @@ function gradientLegendBar(colors, values) {
     } else {
       style += `left: calc(${leftPercent}% - 24px); min-width: 48px; text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis;`;
     }
-    html += `<span style="${style}">${val}</span>`;
+    html += `<span class="legend-labels" style="${style}">${val}</span>`;
   });
   html += `</div></div>`;
   return html;

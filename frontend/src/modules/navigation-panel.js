@@ -230,7 +230,12 @@ export class NavigationPanel {
           <button id="projectionSwitch" class="custom-nav-btn" title="Map Projections">
               <i data-lucide="earth"></i>
           </button>
-          
+
+          <!-- SPINNING GLOBE TOGGLE -->
+          <button id="spinGlobe" class="custom-nav-btn" title="Toggle Spinning Globe">
+              <i data-lucide="rotate-3d"></i>
+          </button>
+
           <!-- LOCATE USER -->
           <button id="locate" class="custom-nav-btn" title="Find My Location (Islamabad)">
               <i data-lucide="map-pin"></i>
@@ -336,7 +341,6 @@ export class NavigationPanel {
       .getElementById("localNews")
       ?.addEventListener("click", this.#handleNewsToggle.bind(this));
 
-    
     // Story button
     document.getElementById("storyBtn")?.addEventListener("click", () => {
       const modal = document.getElementById("story-modal");
@@ -351,6 +355,12 @@ export class NavigationPanel {
       const modal = document.getElementById("story-modal");
       if (modal) modal.style.display = "none";
     });
+
+    // Spinning Globe Toggle
+    document
+      .getElementById("spinGlobe")
+      ?.addEventListener("click", this.#handleSpinGlobe.bind(this));
+
   }
 
   /**
@@ -454,7 +464,7 @@ export class NavigationPanel {
     const pakistanCenter = SOUTH_ASIA_COORDS.regions.pakistan;
     this.#map.flyTo({
       center: pakistanCenter,
-      zoom: 5,
+      zoom: 3,
       duration: 1500,
       essential: true,
     });
@@ -602,6 +612,24 @@ export class NavigationPanel {
   }
 
   /**
+   * Handle spinning globe toggle
+   */
+  #handleSpinGlobe() {
+      const spinBtn = document.getElementById("spinGlobe");
+      const isSpinning = this.#mapControls.toggleSpinGlobe();
+      
+      if (spinBtn) {
+          if (isSpinning) {
+              spinBtn.classList.add("globe-spinning");
+              spinBtn.title = "Stop Spinning Globe";
+          } else {
+              spinBtn.classList.remove("globe-spinning");
+              spinBtn.title = "Start Spinning Globe";
+          }
+      }
+  }
+
+  /**
    * Fetch news from Django backend
    * @param {boolean} includeSM - Include social media or just regular
    */
@@ -662,11 +690,11 @@ export class NavigationPanel {
 
         box.innerHTML = `
             ${sourceDisplay}
-            <div style="margin-top: 6px;">
-                <strong style="display:block; font-size:13px; line-height:1.4;">
+            <div class="news-content">
+                <strong class="news-headline">
                     ${this.#sanitizeHTML(props.title || "Untitled")}
                 </strong>
-                <small style="font-size:11px;">
+                <small class="news-link">
                     <a href="${fullUrl}"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -713,14 +741,14 @@ export class NavigationPanel {
     // Reddit source
     if (props.source_platform === "reddit") {
       return `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="background: #ff4500; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
+        <div class="reddit-news-box">
+            <span class="reddit-news-tag">
                 REDDIT
             </span>
-            <span style="font-size: 11px; color: #ccc;">
+            <span class="reddit-news-country">
                 r/${this.#sanitizeHTML(props.reddit_subreddit || "unknown")}
             </span>
-            <span style="font-size: 9px; color: #888;">
+            <span class="reddit-news-stats">
                 👍 ${props.reddit_score || 0} | 💬 ${props.reddit_comments || 0}
             </span>
         </div>
@@ -763,10 +791,10 @@ export class NavigationPanel {
                   onerror="this.style.display='none'"
               >
           </picture>
-          <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
+          <span class="news-tag">
               NEWS
           </span>
-          <span style="font-size: 11px; color: #ccc;">
+          <span class="news-country">
               ${this.#sanitizeHTML(country)}
           </span>
       </div>
@@ -980,7 +1008,6 @@ export class NavigationPanel {
 
     return `${dayNum}${suffix} ${monthLabel} ${yearNum}`;
   }
-  
 }
 
 // Export for use in other modules

@@ -1,0 +1,48 @@
+{% load static %}
+{% load pwa %}
+
+{# Manifest #}
+<link rel="manifest" href="{% url 'pwa:manifest' %}">
+
+{# Theme/Display #}
+<meta name="theme-color" content="{{ PWA_APP_THEME_COLOR|default:'#0066CC' }}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{{ PWA_APP_SHORT_NAME|default:'NCOP' }}">
+
+{# iOS icon #}
+<link rel="apple-touch-icon" href="{% static 'pwa/icons/icon-192x192.png' %}">
+
+{# Optional: iOS splash screens (safe even if files missing, but better if they exist) #}
+{% if PWA_APP_SPLASH_SCREEN %}
+{% for splash in PWA_APP_SPLASH_SCREEN %}
+<link rel="apple-touch-startup-image" href="{{ splash.src }}" media="{{ splash.media }}">
+{% endfor %}
+{% endif %}
+
+{# Service worker registration #}
+<script>
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register("{% url 'pwa:serviceworker' %}")
+        .then(function (reg) {
+          // Optional: listen for updates
+          reg.addEventListener('updatefound', function () {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', function () {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('✅ New version available (service worker updated).');
+              }
+            });
+          });
+        })
+        .catch(function (err) {
+          console.warn('Service Worker registration failed:', err);
+        });
+    });
+  })();
+</script>

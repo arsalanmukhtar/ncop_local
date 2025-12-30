@@ -1,0 +1,229 @@
+{% load pwa %}
+
+<!-- PWA Meta Tags -->
+<meta name="application-name" content="NCOP Dashboard">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NCOP">
+
+<!-- Theme Colors -->
+<meta name="theme-color" content="#0066CC">
+<meta name="msapplication-TileColor" content="#0066CC">
+<meta name="msapplication-navbutton-color" content="#0066CC">
+
+<!-- Manifest -->
+<link rel="manifest" href="{% url 'pwa:manifest' %}">
+
+<!-- Apple Touch Icons -->
+<link rel="apple-touch-icon" sizes="72x72" href="{{ STATIC_URL }}pwa/icons/icon-72x72.png">
+<link rel="apple-touch-icon" sizes="96x96" href="{{ STATIC_URL }}pwa/icons/icon-96x96.png">
+<link rel="apple-touch-icon" sizes="128x128" href="{{ STATIC_URL }}pwa/icons/icon-128x128.png">
+<link rel="apple-touch-icon" sizes="144x144" href="{{ STATIC_URL }}pwa/icons/icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="{{ STATIC_URL }}pwa/icons/icon-152x152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="{{ STATIC_URL }}pwa/icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="384x384" href="{{ STATIC_URL }}pwa/icons/icon-384x384.png">
+<link rel="apple-touch-icon" sizes="512x512" href="{{ STATIC_URL }}pwa/icons/icon-512x512.png">
+
+<!-- Apple Splash Screens -->
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-1242x2208.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-1668x2224.png" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="{{ STATIC_URL }}pwa/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
+
+<!-- Standard Icons -->
+<link rel="icon" type="image/png" sizes="32x32" href="{{ STATIC_URL }}pwa/icons/icon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ STATIC_URL }}pwa/icons/icon-16x16.png">
+
+<!-- Microsoft Tiles -->
+<meta name="msapplication-TileImage" content="{{ STATIC_URL }}pwa/icons/icon-144x144.png">
+<meta name="msapplication-config" content="{{ STATIC_URL }}pwa/browserconfig.xml">
+
+<!-- Service Worker Registration -->
+<script>
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('{% url "pwa:serviceworker" %}')
+        .then(function(registration) {
+          console.log('ServiceWorker registered successfully:', registration.scope);
+          
+          // Check for updates periodically
+          setInterval(function() {
+            registration.update();
+          }, 60000); // Check every minute
+          
+          // Listen for new service worker
+          registration.addEventListener('updatefound', function() {
+            const newWorker = registration.installing;
+            
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New service worker available, prompt user to refresh
+                if (confirm('New version available! Reload to update?')) {
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  window.location.reload();
+                }
+              }
+            });
+          });
+        })
+        .catch(function(error) {
+          console.log('ServiceWorker registration failed:', error);
+        });
+      
+      // Handle service worker controller change
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        window.location.reload();
+      });
+    });
+  }
+  
+  // PWA Install Prompt Handler
+  let deferredPrompt;
+  const installButton = document.getElementById('pwa-install-button');
+  
+  window.addEventListener('beforeinstallprompt', function(e) {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    
+    // Show install button if it exists
+    if (installButton) {
+      installButton.style.display = 'block';
+      
+      installButton.addEventListener('click', function() {
+        // Hide the button
+        installButton.style.display = 'none';
+        // Show the install prompt
+        deferredPrompt.prompt();
+        // Wait for the user to respond to the prompt
+        deferredPrompt.userChoice.then(function(choiceResult) {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted the install prompt');
+          } else {
+            console.log('User dismissed the install prompt');
+          }
+          deferredPrompt = null;
+        });
+      });
+    }
+  });
+  
+  // Track app installation
+  window.addEventListener('appinstalled', function(e) {
+    console.log('NCOP PWA installed successfully');
+    // Track this event in your analytics if needed
+  });
+  
+  // Detect if running as installed PWA
+  function isRunningStandalone() {
+    return (window.matchMedia('(display-mode: standalone)').matches) || 
+           (window.navigator.standalone) || 
+           document.referrer.includes('android-app://');
+  }
+  
+  if (isRunningStandalone()) {
+    console.log('Running as installed PWA');
+    document.body.classList.add('pwa-standalone');
+  }
+  
+  // Online/Offline detection
+  window.addEventListener('online', function() {
+    console.log('Back online');
+    document.body.classList.remove('offline');
+    document.body.classList.add('online');
+    
+    // Show notification
+    if ('serviceWorker' in navigator && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        new Notification('Connection Restored', {
+          body: 'You are back online!',
+          icon: '{{ STATIC_URL }}pwa/icons/icon-192x192.png'
+        });
+      }
+    }
+  });
+  
+  window.addEventListener('offline', function() {
+    console.log('Gone offline');
+    document.body.classList.remove('online');
+    document.body.classList.add('offline');
+    
+    // Show offline indicator
+    const offlineMsg = document.createElement('div');
+    offlineMsg.id = 'offline-indicator';
+    offlineMsg.className = 'offline-indicator';
+    offlineMsg.innerHTML = '⚠️ You are offline. Some features may be limited.';
+    document.body.appendChild(offlineMsg);
+  });
+  
+  // Request notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    // Don't ask immediately, wait for user interaction
+    setTimeout(function() {
+      Notification.requestPermission().then(function(permission) {
+        console.log('Notification permission:', permission);
+      });
+    }, 5000);
+  }
+</script>
+
+<style>
+  /* PWA-specific styles */
+  .pwa-standalone {
+    /* Add any styles specific to standalone mode */
+  }
+  
+  .offline-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #ff9800;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    z-index: 10000;
+    font-weight: bold;
+  }
+  
+  #pwa-install-button {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #0066CC;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 9999;
+    transition: all 0.3s ease;
+  }
+  
+  #pwa-install-button:hover {
+    background: #0052A3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+  }
+  
+  @media (max-width: 768px) {
+    #pwa-install-button {
+      bottom: 10px;
+      right: 10px;
+      font-size: 14px;
+      padding: 10px 20px;
+    }
+  }
+</style>
+
+<!-- Optional: Add install button to your page -->
+<!-- <button id="pwa-install-button">📱 Install App</button> -->

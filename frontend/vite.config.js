@@ -1,5 +1,6 @@
 // frontend/vite.config.js
 import { defineConfig } from "vite";
+import { copyFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
@@ -11,9 +12,24 @@ const __dirname = dirname(__filename);
 const HMR_HOST = process.env.VITE_HMR_HOST || "localhost";
 
 export default defineConfig(() => ({
-  base: "/static/",
+  // IMPORTANT:
+  // Leave URL prefixing to Django (STATIC_URL + django-vite).
+  // If you keep "/static/" here, django-vite + Vite can become "/static/static/...".
+  base: "",
+
   plugins: [
     tailwindcss(),
+    {
+      name: "copy-service-worker",
+      closeBundle() {
+        // Copy service worker to dist
+        copyFileSync(
+          resolve(__dirname, "public/serviceworker.js"),
+          resolve(__dirname, "dist/serviceworker.js")
+        );
+        console.log("✓ Service worker copied to dist");
+      },
+    },
   ],
   resolve: {
     alias: {
@@ -21,11 +37,11 @@ export default defineConfig(() => ({
     },
   },
   server: {
-    host: "0.0.0.0", // bind on all ifaces
+    host: "0.0.0.0",
     port: 5173,
     strictPort: true,
     hmr: {
-      host: HMR_HOST, // what the browser should connect to
+      host: HMR_HOST,
       port: 5173,
     },
     origin: `http://${HMR_HOST}:5173`,

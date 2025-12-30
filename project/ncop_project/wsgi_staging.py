@@ -5,7 +5,7 @@ This is the entry point for Waitress when serving the staging environment.
 Exposes the WSGI callable as a module-level variable named ``application``.
 
 Usage:
-    waitress-serve --port=8080 --host=127.0.0.1 ncop_project.wsgi_staging:application
+    waitress-serve --port=4096 --host=127.0.0.1 ncop_project.wsgi_staging:application
 
 For more information on WSGI:
     https://docs.djangoproject.com/en/5.1/howto/deployment/wsgi/

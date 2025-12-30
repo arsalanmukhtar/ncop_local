@@ -15,6 +15,8 @@ METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
+
+# NOTE: Keep as you had it (core logic)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 
 # --- Google Earth Engine ---
@@ -32,6 +34,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "django_vite",
+    "pwa",  # PWA support
     "ncop_internal",
     "django_extensions",
 ]
@@ -52,7 +55,6 @@ MIDDLEWARE = [
 ROOT_URLCONF = "ncop_project.urls"
 
 # --- Templates ---
-# You have templates under: project/templates AND frontend/templates (from earlier steps)
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -97,7 +99,6 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "static" / "dist"
 
-# Only include dirs that actually exist (avoid warnings before first build)
 STATICFILES_DIRS = []
 legacy_static = BASE_DIR / "static" / "src"
 vite_dist = BASE_DIR.parent / "frontend" / "dist"
@@ -120,12 +121,71 @@ DJANGO_VITE = {
     "default": {
         "dev_mode": env.bool("VITE_DEV_MODE", default=DEBUG),
         "manifest_path": BASE_DIR.parent / "frontend" / "dist" / ".vite" / "manifest.json",
-        "static_url_prefix": STATIC_URL,
         "dev_server_host": env("VITE_DEV_SERVER_HOST", default="localhost"),
         "dev_server_port": env.int("VITE_DEV_SERVER_PORT", default=5173),
     }
 }
+
 # Prefer ENV override; otherwise use repo-relative path (same pattern as other paths)
 STORY_JSON_DIR = Path(
     env("STORY_JSON_DIR", default=BASE_DIR.parent / "frontend" / "src" / "assets" / "story_jasons")
 )
+
+# ============================================================================
+# PWA CONFIGURATION
+# ============================================================================
+PWA_APP_NAME = env("PWA_APP_NAME", default="NCOP Dashboard")
+PWA_APP_SHORT_NAME = env("PWA_APP_SHORT_NAME", default="NCOP")
+PWA_APP_DESCRIPTION = env(
+    "PWA_APP_DESCRIPTION",
+    default="National Climate and Operational Platform - Real-time disaster monitoring and climate analytics"
+)
+PWA_APP_THEME_COLOR = env("PWA_APP_THEME_COLOR", default="#0066CC")
+PWA_APP_BACKGROUND_COLOR = env("PWA_APP_BACKGROUND_COLOR", default="#FFFFFF")
+PWA_APP_DISPLAY = env("PWA_APP_DISPLAY", default="standalone")
+PWA_APP_SCOPE = env("PWA_APP_SCOPE", default="/")
+PWA_APP_ORIENTATION = env("PWA_APP_ORIENTATION", default="any")
+PWA_APP_START_URL = env("PWA_APP_START_URL", default="/")
+PWA_APP_STATUS_BAR_COLOR = env("PWA_APP_STATUS_BAR_COLOR", default="default")
+PWA_APP_DIR = env("PWA_APP_DIR", default="ltr")
+PWA_APP_LANG = env("PWA_APP_LANG", default="en-US")
+
+PWA_APP_ICONS = [
+    {"src": "/static/pwa/icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/static/pwa/icons/icon-maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "/static/pwa/icons/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+]
+
+PWA_APP_SPLASH_SCREEN = [
+    {"src": "/static/pwa/splash/splash-640x1136.png",
+     "media": "(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)"},
+    {"src": "/static/pwa/splash/splash-750x1334.png",
+     "media": "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)"},
+    {"src": "/static/pwa/splash/splash-1242x2208.png",
+     "media": "(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"},
+    {"src": "/static/pwa/splash/splash-1125x2436.png",
+     "media": "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)"},
+    {"src": "/static/pwa/splash/splash-1536x2048.png",
+     "media": "(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)"},
+    {"src": "/static/pwa/splash/splash-1668x2224.png",
+     "media": "(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2)"},
+    {"src": "/static/pwa/splash/splash-2048x2732.png",
+     "media": "(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)"},
+]
+
+PWA_SERVICE_WORKER_PATH = os.path.join(BASE_DIR.parent, "frontend", "dist", "serviceworker.js")
+PWA_APP_CACHE_STRATEGY = env("PWA_APP_CACHE_STRATEGY", default="NetworkFirst")
+PWA_APP_CACHE_NAME = env("PWA_APP_CACHE_NAME", default="ncop-cache-v1")
+PWA_APP_CACHE_MAX_AGE = env.int("PWA_APP_CACHE_MAX_AGE", default=86400)  # 24 hours
+
+# ============================================================================
+# IMPORTANT: CSRF TRUSTED ORIGINS (safe default empty; set in env-specific files)
+# ============================================================================
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])

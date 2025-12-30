@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0066CC">
+    <title>Offline - NCOP Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+        }
+        
+        .offline-container {
+            text-align: center;
+            max-width: 500px;
+        }
+        
+        .offline-icon {
+            font-size: 120px;
+            margin-bottom: 30px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        p {
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        
+        .retry-button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        .offline-features {
+            margin-top: 50px;
+            text-align: left;
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .offline-features h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .offline-features ul {
+            list-style: none;
+        }
+        
+        .offline-features li {
+            padding: 10px 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .offline-features li:before {
+            content: "✓ ";
+            color: #4ade80;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+            margin-right: 10px;
+            animation: blink 1s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .online .status-indicator {
+            background: #4ade80;
+            animation: none;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 28px;
+            }
+            
+            .offline-icon {
+                font-size: 80px;
+            }
+            
+            p {
+                font-size: 16px;
+            }
+            
+            .offline-features {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">📡</div>
+        <h1>
+            <span class="status-indicator"></span>
+            You're Offline
+        </h1>
+        <p>
+            It looks like you've lost your internet connection. Don't worry, 
+            some features are still available while you're offline.
+        </p>
+        
+        <button class="retry-button" onclick="window.location.reload()">
+            Try Again
+        </button>
+        
+        <div class="offline-features">
+            <h2>Available Offline:</h2>
+            <ul>
+                <li>View cached dashboard data</li>
+                <li>Access previously loaded maps</li>
+                <li>Browse saved reports</li>
+                <li>Review historical data</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-reload when connection is restored
+        window.addEventListener('online', function() {
+            console.log('Connection restored');
+            document.body.classList.add('online');
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        });
+        
+        // Update UI based on connection status
+        function updateConnectionStatus() {
+            if (navigator.onLine) {
+                document.body.classList.add('online');
+                document.querySelector('h1').innerHTML = 
+                    '<span class="status-indicator"></span>Connection Restored!';
+                document.querySelector('p').textContent = 
+                    'Your internet connection has been restored. The page will reload automatically.';
+            }
+        }
+        
+        // Check connection on load
+        updateConnectionStatus();
+        
+        // Monitor connection changes
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+    </script>
+</body>
+</html>

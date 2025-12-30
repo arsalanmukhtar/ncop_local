@@ -4,7 +4,7 @@ class NCOPStorageManager {    constructor() {
         this.currentUser = null;        this.defaultSettings = {
             // Map Settings
             mapCenter: [74.3, 31.5], // Pakistan coordinates
-            mapZoom: 6,
+            mapZoom: 3,
             mapBearing: 0,
             mapPitch: 0,
             labelsEnabled: true,

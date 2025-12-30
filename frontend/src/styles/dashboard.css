@@ -3278,6 +3278,7 @@ button.custom-nav-btn.terrain-active:hover {
     font-weight: 500;
 }
 
+
 /* ===== Opacity Control (additive) ===== */
 #opacityControlButton {
     width: 25px;
@@ -3885,6 +3886,60 @@ button.custom-nav-btn.terrain-active:hover {
     font-weight: bold;
 }
 
+.news-box .news-tag {
+    background: #28a745;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.news-box .news-country {
+    font-size: 11px;
+    color: #ccc;
+}
+
+.news-box .news-content {
+    margin-top: 6px;
+}
+
+.news-box .news-headline {
+    display: block;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.news-box .news-link {
+    font-size: 11px;
+}
+
+.reddit-news-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.reddit-news-tag {
+    background: #ff4500;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.reddit-news-country {
+    font-size: 11px;
+    color: #ccc;
+}
+
+.reddit-news-stats {
+    font-size: 9px;
+    color: #888;
+}
+
 @keyframes scroll-left {
     0% {
         transform: translateX(0%);
@@ -4452,4 +4507,2543 @@ button.custom-nav-btn.terrain-active:hover {
     border-top: 1px solid #2a2a2a;
     margin-top: 10px;
     padding-top: 10px;
+}
+
+
+/* ============================================================================
+   MOBILE RESPONSIVE STYLES - ENHANCED SIDEBAR SCALING
+   ============================================================================
+   Add this block at the end of your existing CSS file
+   ============================================================================ */
+
+/* ============================================================================
+   LARGE TABLETS & SMALL DESKTOPS (768px - 1024px)
+   ============================================================================ */
+@media (max-width: 1024px) {
+
+    /* NCOP Container */
+    .ncop-container {
+        width: 240px;
+    }
+
+    /* Sidebar Panel - Enhanced Scaling */
+    .sidebar-panel {
+        width: 240px;
+    }
+
+    /* News Modal */
+    .news-modal {
+        left: 15%;
+        width: 80%;
+        height: 70px;
+    }
+
+    .news-scroll {
+        animation: scroll-left 400s linear infinite;
+    }
+
+    /* Time Slider */
+    #temp-slider1 {
+        left: 12%;
+        width: 85%;
+        height: 6.5rem;
+    }
+}
+
+/* ============================================================================
+   TABLETS (481px - 768px)
+   ============================================================================ */
+@media (max-width: 768px) {
+
+    /* ===========================
+       NCOP CONTAINER
+    =========================== */
+    .ncop-container {
+        width: 200px;
+        top: 10px;
+        left: 10px;
+    }
+
+    /* ===========================
+       NAVIGATION CONTROLS
+    =========================== */
+    .nav-controls-wrapper {
+        bottom: 8px;
+        right: 8px;
+    }
+
+    .custom-nav-control {
+        border-radius: 6px;
+    }
+
+    .custom-nav-btn {
+        width: 28px;
+        height: 28px;
+        margin-bottom: 4px;
+    }
+
+    .custom-nav-btn i,
+    .custom-nav-btn .nav-icon {
+        font-size: 12px;
+    }
+
+    .nav-toggle-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* ===========================
+       USER CONTROL
+    =========================== */
+    .custom-user-control {
+        top: 8px;
+        right: 8px;
+    }
+
+    .custom-user-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* ===========================
+       THEME TOGGLE
+    =========================== */
+    .theme-toggle-wrapper {
+        top: 6px;
+        right: 6px;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn {
+        width: 24px;
+        height: 24px;
+        top: 66px;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn .theme-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    /* ===========================
+       MENU CONTROL
+    =========================== */
+    .custom-menu-control {
+        top: 120px;
+        left: 10px;
+    }
+
+    .custom-menu-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* ===========================
+       SIDEBAR PANEL - ENHANCED SCALING
+    =========================== */
+    .sidebar-panel {
+        width: 200px;
+        top: 118px;
+        left: 10px;
+        height: calc(100vh - 85px - 2rem);
+        padding: 8px;
+        border-radius: 12px;
+    }
+
+    /* Sidebar Header - Scaled Down */
+    .sidebar-header {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        gap: 8px;
+    }
+
+    .sidebar-title {
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    /* Search Container - Scaled Down */
+    .search-input-wrapper {
+        height: 24px;
+    }
+
+    .search-input {
+        padding: 4px 24px 4px 24px;
+        font-size: 11px;
+        height: 24px;
+    }
+
+    .search-icon {
+        width: 13px;
+        height: 13px;
+        left: 5px;
+    }
+
+    .clear-search-btn {
+        right: 5px;
+    }
+
+    .clear-icon {
+        width: 7px;
+        height: 7px;
+    }
+
+    .sidebar-close-btn {
+        width: 20px;
+        height: 20px;
+    }
+
+    .sidebar-close-btn i {
+        width: 12px;
+        height: 12px;
+    }
+
+    /* ===========================
+       ACCORDION STYLES - SCALED DOWN
+    =========================== */
+    .sidebar-accordion {
+        margin-bottom: 10px;
+    }
+
+    .accordion-header {
+        padding: 6px;
+        border-radius: 5px;
+    }
+
+    .accordion-header .accordion-title {
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .accordion-icon {
+        width: 10px;
+        height: 10px;
+    }
+
+    .accordion-header .accordion-custom-icon {
+        width: 30px;
+        height: 30px;
+        margin-right: 7px;
+    }
+
+    .accordion-header .accordion-chevron {
+        width: 13px;
+        height: 13px;
+        margin-right: 3px;
+    }
+
+    .accordion-header .accordion-body {
+        padding: 10px;
+        font-size: 11px;
+    }
+
+    .accordion-content.expanded {
+        max-height: 500px;
+        padding-bottom: 12px;
+    }
+
+    /* ===========================
+       NCOP SUBCATEGORIES - SCALED DOWN
+    =========================== */
+    .ncop-subcategory {
+        margin: 3px 0;
+    }
+
+    .ncop-subcategory-header {
+        padding: 5px 8px;
+        border-radius: 3px;
+    }
+
+    .ncop-subcategory-header span {
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .ncop-subcategory-header .subcategory-chevron {
+        width: 14px;
+        height: 14px;
+        margin-left: 4px;
+    }
+
+    .ncop-items-container.visible {
+        max-height: 320px;
+    }
+
+    /* ===========================
+       NCOP ITEMS - SCALED DOWN
+    =========================== */
+    .ncop-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+
+    .ncop-item {
+        padding: 5px;
+        margin: 3px 0;
+    }
+
+    .ncop-item-temporal,
+    .ncop-item-static {
+        padding: 8px 5px;
+        min-height: 95px;
+    }
+
+    .ncop-item .ncop-item-image {
+        width: 40px;
+        height: 40px;
+        /* border-radius: 12px; */
+    }
+
+    .ncop-item .ncop-item-image img {
+        border-radius: 8px;
+        border-width: 2px;
+    }
+
+    .ncop-item .ncop-item-label {
+        font-size: 8px;
+        font-weight: 500;
+    }
+
+    .ncop-item-temporal .ncop-item-label,
+    .ncop-item-static .ncop-item-label {
+        margin-top: 6px;
+        font-size: 9px;
+    }
+
+    .ncop-item-toggle .ncop-item-label {
+        font-size: 10px;
+    }
+
+    /* Toggle - Scaled Down */
+    .ncop-toggle {
+        width: 32px;
+        height: 17px;
+    }
+
+    .ncop-toggle .ncop-toggle-slider:before {
+        height: 10px;
+        width: 10px;
+        left: 2px;
+        bottom: 2px;
+    }
+
+    .ncop-toggle input:checked+.ncop-toggle-slider:before {
+        transform: translateX(15px);
+    }
+
+    /* Dropdown - Scaled Down */
+    .ncop-dropdown {
+        font-size: 9px;
+        padding: 5px 2px;
+        border-radius: 3px;
+    }
+
+    /* ===========================
+       NESTED SECTIONS - SCALED DOWN
+    =========================== */
+    .ncop-nested-subsection {
+        margin: 4px 0;
+        padding-left: 6px;
+        border-left-width: 1.5px;
+    }
+
+    .ncop-nested-header {
+        padding: 5px 8px;
+        border-radius: 3px;
+    }
+
+    .ncop-nested-header span {
+        font-size: 10px;
+    }
+
+    .ncop-nested-header .nested-chevron {
+        width: 13px;
+        height: 13px;
+        margin-left: 4px;
+    }
+
+    .ncop-nested-items-container.visible {
+        max-height: 450px;
+        padding: 3px;
+    }
+
+    .ncop-nested-items-container .ncop-grid {
+        gap: 5px;
+    }
+
+    .ncop-nested-items-container .ncop-item {
+        margin-left: 3px;
+    }
+
+    /* ===========================
+       DROPDOWN TABLES - SCALED DOWN
+    =========================== */
+    .ncop-item-dropdown-group {
+        gap: 10px;
+    }
+
+    .ncop-dropdown-wrapper {
+        border-radius: 3px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 5px 8px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 20px;
+        height: 20px;
+        font-size: 10px;
+        padding: 0 7px;
+    }
+
+    .ncop-dropdown-toggle {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+    }
+
+    .ncop-dropdown-toggle::after {
+        font-size: 8px;
+    }
+
+    .ncop-dropdown-content.expanded {
+        max-height: 320px;
+    }
+
+    .ncop-data-table {
+        font-size: 11px;
+    }
+
+    .ncop-data-table th {
+        padding: 7px 8px;
+        font-size: 11px;
+    }
+
+    .ncop-data-table td {
+        padding: 7px 8px;
+        font-size: 10px;
+    }
+
+    .ncop-checkbox-cell {
+        width: 35px;
+        padding: 7px 6px !important;
+    }
+
+    .ncop-row-checkbox {
+        width: 13px;
+        height: 13px;
+    }
+
+    .ncop-key-cell {
+        min-width: 55px;
+        max-width: 85px;
+        font-size: 10px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 200px;
+        font-size: 10px;
+    }
+
+    /* ===========================
+       NO RESULTS MESSAGE
+    =========================== */
+    .no-results-message {
+        padding: 2rem 0.75rem;
+        font-size: 11px;
+    }
+
+    .no-results-message p {
+        font-size: 13px;
+    }
+
+    .no-results-message small {
+        font-size: 11px;
+    }
+
+    /* ===========================
+       MAP CONTROLS
+    =========================== */
+    .map-controls-wrapper {
+        top: 46px;
+        right: 8px;
+        gap: 3px;
+    }
+
+    .custom-basemap-btn,
+    .custom-layer-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* ===========================
+       PANELS
+    =========================== */
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel {
+        width: 220px;
+        max-height: 340px;
+        right: 36px;
+        padding: 10px;
+    }
+
+    .basemap-panel.visible,
+    .layer-order-panel.visible,
+    .layer-info-panel.visible {
+        right: 36px;
+    }
+
+    /* Basemap Panel */
+    .labels-toggle {
+        padding: 6px 0;
+        margin-bottom: 10px;
+    }
+
+    .labels-toggle-text {
+        font-size: 13px;
+    }
+
+    .toggle-switch {
+        width: 38px;
+        height: 19px;
+    }
+
+    .toggle-slider {
+        width: 15px;
+        height: 15px;
+    }
+
+    .toggle-switch.active .toggle-slider {
+        transform: translateX(19px);
+    }
+
+    .basemap-list {
+        gap: 6px;
+    }
+
+    .basemap-item {
+        padding: 6px;
+    }
+
+    .basemap-image {
+        width: 38px;
+        height: 38px;
+        margin-right: 10px;
+    }
+
+    .basemap-name {
+        font-size: 12px;
+    }
+
+    /* Layer Order Panel */
+    .layer-order-header {
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+    }
+
+    .layer-order-title {
+        font-size: 13px;
+    }
+
+    .layer-order-subtitle {
+        font-size: 11px;
+    }
+
+    .layer-item {
+        padding: 6px;
+        margin-bottom: 3px;
+    }
+
+    .layer-drag-handle {
+        margin-right: 6px;
+    }
+
+    .layer-drag-handle i {
+        width: 10px;
+        height: 10px;
+    }
+
+    .layer-name {
+        font-size: 11px;
+    }
+
+    .layer-visibility i {
+        width: 13px;
+        height: 13px;
+    }
+
+    .layer-popup-btn {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        margin-left: 3px;
+    }
+
+    .layer-popup-btn i {
+        width: 11px;
+        height: 11px;
+    }
+
+    /* Layer Info Panel */
+    .layer-info-header {
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+    }
+
+    .layer-info-title {
+        font-size: 13px;
+    }
+
+    .layer-info-subtitle {
+        font-size: 11px;
+    }
+
+    .layer-info-list {
+        max-height: 280px;
+    }
+
+    .layer-info-panel.has-legend .layer-info-list {
+        max-height: 480px;
+    }
+
+    .layer-info-item {
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+
+    .layer-info-label {
+        font-size: 12px;
+    }
+
+    .layer-info-details {
+        font-size: 11px;
+    }
+
+    .legend-toggle-btn {
+        padding: 5px 8px;
+        font-size: 10px;
+        margin: 5px 0 7px 0;
+    }
+
+    .legend-image-container {
+        margin: 7px 0;
+        padding: 7px;
+    }
+
+    /* ===========================
+       PROJECTION PANEL
+    =========================== */
+    .projection-panel {
+        width: 260px;
+        max-height: 400px;
+    }
+
+    .projection-panel.visible {
+        right: 46px;
+    }
+
+    .projection-item {
+        padding: 10px;
+    }
+
+    .projection-preview {
+        width: 36px;
+        height: 36px;
+    }
+
+    .projection-name {
+        font-size: 13px;
+    }
+
+    .projection-desc {
+        font-size: 11px;
+    }
+
+    /* ===========================
+       TIME SLIDER
+    =========================== */
+    #temp-slider1 {
+        left: 10%;
+        width: 88%;
+        height: 6rem;
+        top: 10px;
+    }
+
+    #tempslider-controls {
+        grid-template-rows: repeat(2, max-content);
+        grid-auto-columns: 26px;
+        gap: 6px 4px;
+        margin-top: 3rem;
+    }
+
+    #tempslider-controls button {
+        width: 22px;
+        height: 22px;
+        font-size: 9px;
+    }
+
+    #tempslider-controls .speed-btn {
+        width: 26px;
+        height: 18px;
+        font-size: 11px;
+    }
+
+    .year-labels1 span {
+        font-size: 11px;
+    }
+
+    .legend-container1 p {
+        font-size: 13px;
+    }
+
+    /* ===========================
+       NEWS MODAL
+    =========================== */
+    .news-modal {
+        left: 5%;
+        width: 90%;
+        height: 65px;
+        bottom: 9px;
+        padding: 0 10px;
+    }
+
+    .news-scroll {
+        animation: scroll-left 300s linear infinite;
+        padding: 8px;
+    }
+
+    .news-box {
+        font-size: 9px;
+        padding: 4px 8px;
+    }
+
+    .rotating-logo {
+        width: 32px;
+        height: 32px;
+    }
+
+    .news-title {
+        font-size: 14px;
+    }
+
+    .news-time {
+        font-size: 11px;
+    }
+
+    .toggle-btn {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+}
+
+/* ============================================================================
+   MOBILE DEVICES (320px - 480px) - AGGRESSIVE SIDEBAR SCALING
+   ============================================================================ */
+@media (max-width: 480px) {
+
+    /* ===========================
+       NCOP CONTAINER
+    =========================== */
+    .ncop-container {
+        width: 180px;
+        top: 8px;
+        left: 8px;
+        display: none;
+    }
+
+    /* ===========================
+       NAVIGATION CONTROLS
+    =========================== */
+    .nav-controls-wrapper {
+        bottom: 6px;
+        right: 6px;
+    }
+
+    .custom-nav-control {
+        border-radius: 5px;
+    }
+
+    .custom-nav-btn {
+        width: 24px;
+        height: 24px;
+        margin-bottom: 3px;
+        border-radius: 5px;
+    }
+
+    .custom-nav-btn i,
+    .custom-nav-btn .nav-icon {
+        font-size: 10px;
+    }
+
+    .custom-nav-btn .nav-text {
+        font-size: 8px;
+    }
+
+    .nav-toggle-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* ===========================
+       USER CONTROL
+    =========================== */
+    .custom-user-control {
+        top: 6px;
+        right: 6px;
+    }
+
+    .custom-user-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .custom-user-btn i {
+        width: 11px;
+        height: 11px;
+    }
+
+    /* .user-panel {
+        width: 140px;
+        height: auto;
+        padding: 10px;
+    }
+
+    .user-panel .user-info .user-icon {
+        width: 25px;
+        height: 25px;
+    } */
+
+    /* ===========================
+       THEME TOGGLE
+    =========================== */
+    .theme-toggle-wrapper {
+        top: 5px;
+        right: 5px;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn {
+        width: 20px;
+        height: 20px;
+        top: 56px;
+        left: 3px;
+    }
+
+    .theme-toggle-wrapper .theme-toggle-btn .theme-icon {
+        width: 11px;
+        height: 11px;
+    }
+
+    /* ===========================
+       MENU CONTROL
+    =========================== */
+    .custom-menu-control {
+        top: 8px;
+        left: 8px;
+    }
+
+    .custom-menu-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .custom-menu-btn i {
+        width: 11px;
+        height: 11px;
+    }
+
+    /* ===========================
+       SIDEBAR PANEL - AGGRESSIVE SCALING
+    =========================== */
+    .sidebar-panel {
+        width: 180px;
+        top: 8px;
+        left: 8px;
+        height: calc(100vh - 60px - 1.5rem);
+        padding: 6px;
+        border-radius: 10px;
+        border-width: 1.5px;
+    }
+
+    /* Sidebar Header - Heavily Scaled Down */
+    .sidebar-header {
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+
+    .sidebar-title {
+        font-size: 12px;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .sidebar-search-container {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Search Container - Heavily Scaled Down */
+    .search-input-wrapper {
+        height: 20px;
+    }
+
+    .search-input {
+        padding: 2px 20px 2px 20px;
+        font-size: 9px;
+        height: 20px;
+    }
+
+    .search-icon {
+        width: 10px;
+        height: 10px;
+        left: 4px;
+    }
+
+    .clear-search-btn {
+        right: 4px;
+        padding: 1px;
+    }
+
+    .clear-icon {
+        width: 5px;
+        height: 5px;
+    }
+
+    .sidebar-close-btn {
+        width: 18px;
+        height: 18px;
+    }
+
+    .sidebar-close-btn i {
+        width: 10px;
+        height: 10px;
+    }
+
+    /* ===========================
+       ACCORDION STYLES - HEAVILY SCALED DOWN
+    =========================== */
+    .sidebar-accordion {
+        margin-bottom: 7px;
+    }
+
+    .accordion-header {
+        padding: 4px;
+        border-radius: 4px;
+        margin-bottom: 3px;
+    }
+
+    .accordion-title {
+        font-size: 10px;
+        font-weight: 500;
+    }
+
+    .accordion-icon {
+        width: 8px;
+        height: 8px;
+    }
+
+    .accordion-custom-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 5px;
+    }
+
+    .accordion-chevron {
+        width: 14px;
+        height: 14px;
+        margin-right: 2px;
+    }
+
+    .accordion-body {
+        padding: 7px;
+        font-size: 9px;
+    }
+
+    .accordion-content.expanded {
+        max-height: 400px;
+        padding-bottom: 8px;
+    }
+
+    /* ===========================
+       NCOP SUBCATEGORIES - HEAVILY SCALED DOWN
+    =========================== */
+    .ncop-subcategory {
+        margin: 2px 0;
+    }
+
+    .ncop-subcategory-header {
+        padding: 4px 6px;
+        border-radius: 3px;
+    }
+
+    .ncop-subcategory-header span {
+        font-size: 9px;
+        font-weight: 500;
+    }
+
+    .ncop-subcategory-header .subcategory-chevron {
+        width: 12px;
+        height: 12px;
+        margin-left: 3px;
+    }
+
+    .ncop-items-container {
+        margin-top: 3px;
+    }
+
+    .ncop-items-container.visible {
+        max-height: 280px;
+        padding-right: 2px;
+    }
+
+    /* ===========================
+       NCOP ITEMS - HEAVILY SCALED DOWN
+    =========================== */
+    /* .ncop-grid {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    } */
+
+    .ncop-item {
+        padding: 4px;
+        margin: 2px 0;
+    }
+
+    .ncop-item-temporal,
+    .ncop-item-static {
+        padding: 6px 4px;
+        min-height: 75px;
+    }
+
+    .ncop-item .ncop-item-image {        
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+    }
+
+
+    .ncop-item .ncop-item-image img {
+        border-radius: 10px;
+        border-width: 2px;
+    }
+
+    .ncop-item-label {
+        font-size: 8px;
+        font-weight: 500;
+        line-height: 1.1;
+    }
+
+    .ncop-item-temporal .ncop-item-label,
+    .ncop-item-static .ncop-item-label {
+        margin-top: 4px;
+        font-size: 8px;
+    }
+
+    .ncop-item-toggle .ncop-item-label {
+        font-size: 8px;
+        margin-right: 6px;
+    }
+
+    .ncop-item-button .ncop-item-label {
+        font-size: 8px;
+        margin-right: 6px;
+    }
+
+    /* Toggle - Heavily Scaled Down */
+    .ncop-toggle {
+        width: 28px;
+        height: 15.5px;
+    }
+
+    .ncop-toggle-slider {
+        border-radius: 15px;
+    }
+
+    .ncop-toggle-slider:before {
+        height: 9px;
+        width: 9px;
+        left: 1px;
+        bottom: 1px;
+    }
+
+    .ncop-toggle input:checked+.ncop-toggle-slider:before {
+        transform: translateX(13px);
+    }
+
+    /* Dropdown - Heavily Scaled Down */
+    .ncop-dropdown {
+        font-size: 8px;
+        padding: 4px 2px;
+        border-radius: 3px;
+    }
+
+    /* ===========================
+       NESTED SECTIONS - HEAVILY SCALED DOWN
+    =========================== */
+    .ncop-nested-subsection {
+        margin: 3px 0;
+        padding-left: 4px;
+        border-left-width: 1.5px;
+    }
+
+    .ncop-nested-header {
+        padding: 4px 6px;
+        border-radius: 3px;
+    }
+
+    .ncop-nested-header::before {
+        width: 2px;
+    }
+
+    .ncop-nested-header span {
+        font-size: 8px;
+        font-weight: 500;
+    }
+
+    .ncop-nested-header .nested-chevron {
+        width: 11px;
+        height: 11px;
+        margin-left: 3px;
+    }
+
+    .ncop-nested-items-container {
+        margin-top: 3px;
+    }
+
+    .ncop-nested-items-container.visible {
+        max-height: 350px;
+        padding: 2px;
+    }
+
+    .ncop-nested-items-container .ncop-grid {
+        gap: 4px;
+    }
+
+    .ncop-nested-items-container .ncop-item {
+        margin-left: 2px;
+    }
+
+    /* ===========================
+       DROPDOWN TABLES - HEAVILY SCALED DOWN
+    =========================== */
+    .ncop-item-dropdown-group {
+        gap: 8px;
+    }
+
+    .ncop-dropdown-wrapper {
+        border-radius: 3px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .ncop-dropdown-header {
+        padding: 4px 6px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 9px;
+        font-weight: 500;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 18px;
+        height: 18px;
+        font-size: 9px;
+        padding: 0 6px;
+    }
+
+    .ncop-dropdown-toggle {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+    }
+
+    .ncop-dropdown-toggle::after {
+        font-size: 7px;
+    }
+
+    .ncop-dropdown-content.expanded {
+        max-height: 280px;
+    }
+
+    .ncop-data-table {
+        font-size: 9px;
+    }
+
+    .ncop-data-table th {
+        padding: 5px 6px;
+        font-size: 9px;
+        font-weight: 600;
+    }
+
+    .ncop-data-table td {
+        padding: 5px 6px;
+        font-size: 8px;
+    }
+
+    .ncop-checkbox-cell {
+        width: 30px;
+        padding: 5px 4px !important;
+    }
+
+    .ncop-row-checkbox {
+        width: 11px;
+        height: 11px;
+    }
+
+    .ncop-key-cell {
+        min-width: 45px;
+        max-width: 70px;
+        font-size: 9px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 140px;
+        font-size: 8px;
+    }
+
+    .ncop-empty-state {
+        padding: 16px;
+        font-size: 10px;
+    }
+
+    .ncop-empty-state-icon {
+        font-size: 18px;
+        margin-bottom: 5px;
+    }
+
+    .ncop-loading-state {
+        padding: 12px;
+        font-size: 10px;
+    }
+
+    .ncop-spinner {
+        width: 10px;
+        height: 10px;
+        margin-right: 5px;
+    }
+
+    .ncop-error-state {
+        padding: 10px;
+        font-size: 10px;
+    }
+
+    /* ===========================
+       NO RESULTS MESSAGE
+    =========================== */
+    .no-results-message {
+        padding: 1.5rem 0.5rem;
+        font-size: 10px;
+    }
+
+    .no-results-message p {
+        font-size: 11px;
+        margin: 0 0 6px 0;
+    }
+
+    .no-results-message small {
+        font-size: 10px;
+    }
+
+    /* ===========================
+       MAP CONTROLS
+    =========================== */
+    .map-controls-wrapper {
+        top: 38px;
+        right: 6px;
+        gap: 2px;
+    }
+
+    .custom-basemap-btn,
+    .custom-layer-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 5px;
+    }
+
+    .custom-basemap-btn i,
+    .custom-layer-btn i {
+        width: 11px;
+        height: 11px;
+    }
+
+    /* ===========================
+       PANELS
+    =========================== */
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel {
+        width: calc(100vw - 60px);
+        max-width: 200px;
+        max-height: 300px;
+        right: 32px;
+        padding: 7px;
+        border-radius: 6px;
+    }
+
+    .basemap-panel.visible,
+    .layer-order-panel.visible,
+    .layer-info-panel.visible {
+        right: 32px;
+    }
+
+    /* Basemap Panel */
+    .labels-toggle {
+        padding: 5px 0;
+        margin-bottom: 8px;
+    }
+
+    .labels-toggle-text {
+        font-size: 11px;
+    }
+
+    .toggle-switch {
+        width: 34px;
+        height: 17px;
+    }
+
+    .toggle-slider {
+        width: 13px;
+        height: 13px;
+    }
+
+    .toggle-switch.active .toggle-slider {
+        transform: translateX(17px);
+    }
+
+    .basemap-list {
+        gap: 5px;
+    }
+
+    .basemap-item {
+        padding: 5px;
+        border-radius: 4px;
+    }
+
+    .basemap-image {
+        width: 32px;
+        height: 32px;
+        margin-right: 8px;
+    }
+
+    .basemap-name {
+        font-size: 10px;
+    }
+
+    /* Layer Order Panel */
+    .layer-order-header {
+        margin-bottom: 8px;
+        padding-bottom: 5px;
+    }
+
+    .layer-order-title {
+        font-size: 11px;
+    }
+
+    .layer-order-subtitle {
+        font-size: 9px;
+    }
+
+    .no-layers-message {
+        font-size: 10px;
+        padding: 14px;
+    }
+
+    .layer-item {
+        padding: 5px;
+        margin-bottom: 3px;
+        border-radius: 4px;
+    }
+
+    .layer-drag-handle {
+        margin-right: 5px;
+    }
+
+    .layer-drag-handle i {
+        width: 9px;
+        height: 9px;
+    }
+
+    .layer-name {
+        font-size: 10px;
+    }
+
+    .layer-visibility i {
+        width: 11px;
+        height: 11px;
+    }
+
+    .layer-popup-btn {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        margin-left: 3px;
+        border-radius: 3px;
+    }
+
+    .layer-popup-btn i {
+        width: 9px;
+        height: 9px;
+    }
+
+    /* Layer Info Panel */
+    .layer-info-header {
+        margin-bottom: 8px;
+        padding-bottom: 5px;
+    }
+
+    .layer-info-title {
+        font-size: 11px;
+    }
+
+    .layer-info-subtitle {
+        font-size: 9px;
+    }
+
+    .layer-info-list {
+        max-height: 240px;
+    }
+
+    .layer-info-panel.has-legend .layer-info-list {
+        max-height: 400px;
+    }
+
+    .layer-info-item {
+        padding: 6px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+    }
+
+    .layer-info-label {
+        font-size: 10px;
+        margin-bottom: 3px;
+    }
+
+    .layer-info-details {
+        font-size: 9px;
+        line-height: 1.3;
+        margin-top: 4px;
+        padding: 4px 0;
+    }
+
+    .legend-toggle-btn {
+        padding: 4px 6px;
+        font-size: 9px;
+        margin: 4px 0 5px 0;
+        border-radius: 3px;
+    }
+
+    .legend-image-container {
+        margin: 5px 0;
+        padding: 5px;
+        border-radius: 3px;
+    }
+
+    .legend-image {
+        border-radius: 3px;
+    }
+
+    .legend-bar-container {
+        height: 22px;
+    }
+
+
+    /* ===========================
+       PROJECTION PANEL
+    =========================== */
+    .projection-panel {
+        width: calc(100vw - 60px);
+        max-width: 240px;
+        max-height: 340px;
+        bottom: 38px;
+        right: 8px;
+        border-radius: 8px;
+    }
+
+    .projection-panel.visible {
+        right: 38px;
+    }
+
+    .projection-header {
+        padding: 10px;
+    }
+
+    .projection-header h3 {
+        font-size: 13px;
+    }
+
+    .projection-close-btn {
+        width: 18px;
+        height: 18px;
+    }
+
+    .projection-close-btn i {
+        width: 11px;
+        height: 11px;
+    }
+
+    .projection-list {
+        max-height: 280px;
+        padding: 5px;
+    }
+
+    .projection-item {
+        padding: 7px;
+        margin: 2px 0;
+        border-radius: 6px;
+    }
+
+    .projection-preview {
+        width: 30px;
+        height: 30px;
+        margin-right: 8px;
+    }
+
+    .projection-name {
+        font-size: 11px;
+    }
+
+    .projection-desc {
+        font-size: 9px;
+    }
+
+    /* ===========================
+       LAYER ATTRIBUTE POPUP
+    =========================== */
+    .layer-attribute-popup {
+        padding: 7px 10px;
+        font-size: 11px;
+        border-radius: 6px;
+    }
+
+    .layer-attribute-popup .popup-label {
+        font-size: 13px;
+        margin-bottom: 7px;
+    }
+
+    .layer-attribute-popup .popup-attributes-scroll {
+        max-height: 160px;
+    }
+
+    .layer-attribute-popup .attr-key {
+        padding: 5px 7px 5px 0;
+        min-width: 60px;
+        font-size: 10px;
+    }
+
+    .layer-attribute-popup .attr-value {
+        padding: 5px 0 5px 7px;
+        font-size: 10px;
+    }
+
+    .layer-attribute-popup::after {
+        bottom: -8px;
+        border-left-width: 10px;
+        border-right-width: 10px;
+        border-top-width: 8px;
+    }
+
+    /* ===========================
+       TIME SLIDER
+    =========================== */
+    #temp-slider1 {
+        left: 9%;
+        width: 83%;
+        height: 7.7rem;
+        top: 8px;
+        border-width: 1.5px;
+    }
+
+    #tempslider-dragresizecontrol {
+        top: 64px;
+        right: 5px;
+        gap: 12px;
+    }
+
+    .dragresizecontrol-btn {
+        width: 18px;
+        height: 18px;
+        border-radius: 2px;
+        background: transparent;
+        border: none;
+    }
+
+    .dragresizecontrol-btn i {
+        font-size: 9px !important;
+    }
+
+    #tempslider-controls {
+        grid-template-rows: repeat(2, max-content);
+        grid-auto-columns: 20px;
+        gap: 8px;
+        margin-top: 64px;
+        left: 2px;
+        z-index: 9999999;
+    }
+
+    #tempslider-controls button {
+        width: 20px;
+        height: 20px;
+        font-size: 7px;
+        border-radius: 2px;
+    }
+
+    #tempslider-controls button i,
+    #tempslider-controls .speed-btn {
+        font-size: 7px !important;
+    }
+
+    #tempslider-controls .speed-btn {
+        width: 20px;
+        height: 15px !important;
+        font-size: 7.5px !important;
+    }
+
+    #playPauseButton1 svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    #opacityControlButton {
+        width: 20px;
+        height: 20px;
+        border-radius: 2px;
+        background: transparent;
+        border: none;
+    }
+
+    #opacityControlButton i {
+        font-size: 9px !important;
+    }
+
+    #opacityControlPopover {
+        padding: 5px 7px;
+        margin-top: 12px;
+        border-radius: 3px;
+    }
+
+    #opacityControlPopover .opacity-popover-label,
+    #opacityControlPopover .opacity-popover-value {
+        font-size: 9px;
+    }
+
+    #opacityControlPopover .opacity-popover-value {
+        width: 26px;
+    }
+
+    .legend-container1 {
+        top: 48%;
+        width: 100%;
+    }
+
+    #legend-container-slider1 {
+        width: 97%;
+    }
+    
+    .legend-bar-container {
+        height: 18px !important;
+    }
+
+    .legend-bar-container .legend-bar .legend-labels {
+        font-size: 9px !important;
+        text-align: center !important;
+    }
+
+    .legend-container1 p {
+        font-size: 11px;
+        margin: 2px auto;
+        font-weight: 500;
+    }
+
+    #slider1 {
+        top: 10%;
+        left: 4%;
+        width: 92%;
+    }
+
+    .slider1 {
+        height: 1.5px;
+    }
+
+    .slider1::-webkit-slider-thumb {
+        width: 12px;
+        height: 12px;
+    }
+
+    .year-labels1 {
+        top: 20%;
+        padding: 0 2px;
+        left: 5px;
+    }
+
+    .year-labels1 span {
+        font-size: 6.5px;
+        font-weight: 500;
+    }
+
+    /* ===========================
+       NEWS MODAL
+    =========================== */
+    .news-modal {
+        left: 2%;
+        width: 89%;
+        height: auto;
+        min-height: 55px;
+        bottom: 7px;
+        padding: 5px 7px;
+        flex-direction: column;
+        align-items: center;
+        border-width: 1.5px;
+    }
+
+    .news-header {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding-right: 0;
+        padding-bottom: 5px;
+        gap: 5px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .logo-container {
+        width: 28px;
+        height: 28px;
+    }
+
+    .rotating-logo {
+        width: 24px;
+        height: 24px;
+    }
+
+    .news-info {
+        text-align: center;
+        flex-direction: row;
+        margin-left: 10px;
+    }
+
+    .news-info hr {
+        width: 55%;
+        margin: auto 10px;
+    }
+
+    .news-title {
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .news-time {
+        font-size: 8px;
+    }
+
+    .divider-line {
+        display: none;
+    }
+
+    .news-scroll-wrapper {
+        width: 100%;
+        margin-top: 0;
+    }
+
+    .news-scroll {
+        animation: scroll-left 1000s linear infinite;
+        padding: 2px;
+        height: 50px;
+    }
+
+    .news-box {
+        font-size: 7px;
+        padding: 3px 5px;
+        border-radius: 3px;
+    }
+
+    .news-box .news-tag {
+        font-size: 8px;
+        padding: 1px 3px;
+    }
+
+    .news-box .news-country {
+        font-size: 9px;
+    }
+
+    .news-box .news-content {
+        margin-top: 4px;
+    }
+
+    .news-box .news-headline {
+        font-size: 9px;
+    }
+
+    .news-box .news-link {
+        font-size: 7px;
+    }
+
+    .reddit-news-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .reddit-news-tag {
+        padding: 1px 3px;
+        font-size: 8px;
+    }
+
+    .reddit-news-country {
+        font-size: 9px;
+    }
+
+    .news-toggle-buttons {
+        gap: 40px;
+        margin-left: 0px;
+        margin-top: 0;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .toggle-btn {
+        font-size: 15px;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+
+    #toggle-social-btn,
+    #fetch-regular-btn {
+        padding: 3px 5px;
+    }
+
+    #toggle-social-btn img,
+    #fetch-regular-btn img {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* ===========================
+       STORY MODE
+    =========================== */
+    #story-modal {
+        width: calc(100vw - 16px);
+        max-width: 280px;
+        max-height: 75vh;
+        margin: 8px;
+    }
+
+    .story-select-container {
+        gap: 5px;
+        margin-bottom: 5px;
+    }
+
+    .story-select {
+        padding: 4px 5px;
+        font-size: 10px;
+        border-radius: 6px;
+    }
+
+    #storyEdit {
+        padding: 4px 7px;
+        font-size: 10px;
+    }
+
+    .story-meta {
+        font-size: 10px;
+        margin-bottom: 4px;
+    }
+
+    .story-chapters {
+        gap: 5px;
+        max-height: 35vh;
+    }
+
+    .chapter-item {
+        padding: 6px;
+        font-size: 10px;
+        border-radius: 5px;
+    }
+
+    .story-editor {
+        padding: 8px;
+        margin-top: 8px;
+    }
+
+    .story-editor input,
+    .story-editor textarea,
+    .story-editor select {
+        padding: 4px 5px;
+        font-size: 10px;
+        border-radius: 5px;
+    }
+
+    .story-editor button {
+        padding: 4px 8px;
+        font-size: 10px;
+        border-radius: 5px;
+    }
+}
+
+/* ============================================================================
+   EXTRA SMALL MOBILE DEVICES (Max 320px) - MAXIMUM COMPRESSION
+   ============================================================================ */
+@media (max-width: 320px) {
+
+    /* ===========================
+       NCOP CONTAINER
+    =========================== */
+    .ncop-container {
+        width: 160px;
+        top: 6px;
+        left: 6px;
+    }
+
+    /* ===========================
+       NAVIGATION CONTROLS
+    =========================== */
+    .custom-nav-btn {
+        width: 22px;
+        height: 22px;
+        margin-bottom: 2px;
+    }
+
+    .custom-nav-btn i,
+    .custom-nav-btn .nav-icon {
+        font-size: 9px;
+    }
+
+    .nav-toggle-btn {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* ===========================
+       SIDEBAR PANEL - MAXIMUM COMPRESSION
+    =========================== */
+    .sidebar-panel {
+        width: 160px;
+        top: 6px;
+        left: 6px;
+        height: calc(100vh - 50px - 1rem);
+        padding: 5px;
+        border-radius: 8px;
+    }
+
+    /* Sidebar Header - Maximum Compression */
+    .sidebar-header {
+        margin-bottom: 6px;
+        padding-bottom: 5px;
+        gap: 5px;
+    }
+
+    .sidebar-title {
+        font-size: 11px;
+    }
+
+    /* Search - Maximum Compression */
+    .search-input-wrapper {
+        height: 18px;
+    }
+
+    .search-input {
+        padding: 2px 18px 2px 18px;
+        font-size: 8px;
+        height: 18px;
+    }
+
+    .search-icon {
+        width: 9px;
+        height: 9px;
+        left: 3px;
+    }
+
+    .clear-search-btn {
+        right: 3px;
+    }
+
+    .clear-icon {
+        width: 4px;
+        height: 4px;
+    }
+
+    .sidebar-close-btn {
+        width: 16px;
+        height: 16px;
+    }
+
+    .sidebar-close-btn i {
+        width: 9px;
+        height: 9px;
+    }
+
+    /* Accordion - Maximum Compression */
+    .sidebar-accordion {
+        margin-bottom: 6px;
+    }
+
+    .accordion-header {
+        padding: 3px;
+        margin-bottom: 2px;
+    }
+
+    .accordion-title {
+        font-size: 9px;
+    }
+
+    .accordion-icon {
+        width: 7px;
+        height: 7px;
+    }
+
+    .accordion-custom-icon {
+        width: 26px;
+        height: 26px;
+        margin-right: 4px;
+    }
+
+    .accordion-chevron {
+        width: 12px;
+        height: 12px;
+        margin-right: 2px;
+    }
+
+    .accordion-body {
+        padding: 6px;
+        font-size: 8px;
+    }
+
+    .accordion-content.expanded {
+        max-height: 350px;
+        padding-bottom: 6px;
+    }
+
+    /* NCOP Subcategories - Maximum Compression */
+    .ncop-subcategory {
+        margin: 2px 0;
+    }
+
+    .ncop-subcategory-header {
+        padding: 3px 5px;
+    }
+
+    .ncop-subcategory-header span {
+        font-size: 8px;
+    }
+
+    .ncop-subcategory-header .subcategory-chevron {
+        width: 10px;
+        height: 10px;
+        margin-left: 2px;
+    }
+
+    .ncop-items-container.visible {
+        max-height: 240px;
+    }
+
+    /* NCOP Items - Maximum Compression */
+    .ncop-grid {
+        gap: 3px;
+    }
+
+    .ncop-item {
+        padding: 3px;
+        margin: 2px 0;
+    }
+
+    .ncop-item-temporal,
+    .ncop-item-static {
+        padding: 5px 3px;
+        min-height: 65px;
+    }
+
+    .ncop-item-image {
+        width: 42px;
+        height: 42px;
+        border-radius: 6px;
+    }
+
+    .ncop-item-image img {
+        border-radius: 6px;
+        border-width: 2px;
+    }
+
+    .ncop-item-label {
+        font-size: 7px;
+        line-height: 1.1;
+    }
+
+    .ncop-item-temporal .ncop-item-label,
+    .ncop-item-static .ncop-item-label {
+        margin-top: 3px;
+        font-size: 7px;
+    }
+
+    .ncop-item-toggle .ncop-item-label,
+    .ncop-item-button .ncop-item-label {
+        font-size: 7px;
+        margin-right: 5px;
+    }
+
+    /* Toggle - Maximum Compression */
+    .ncop-toggle {
+        width: 26px;
+        height: 14px;
+    }
+
+    .ncop-toggle-slider:before {
+        height: 8px;
+        width: 8px;
+        left: 2px;
+        bottom: 2px;
+    }
+
+    .ncop-toggle input:checked+.ncop-toggle-slider:before {
+        transform: translateX(12px);
+    }
+
+    /* Dropdown - Maximum Compression */
+    .ncop-dropdown {
+        font-size: 7px;
+        padding: 3px 2px;
+    }
+
+    /* Nested Sections - Maximum Compression */
+    .ncop-nested-subsection {
+        margin: 2px 0;
+        padding-left: 3px;
+    }
+
+    .ncop-nested-header {
+        padding: 3px 5px;
+    }
+
+    .ncop-nested-header span {
+        font-size: 7px;
+    }
+
+    .ncop-nested-header .nested-chevron {
+        width: 10px;
+        height: 10px;
+        margin-left: 2px;
+    }
+
+    .ncop-nested-items-container.visible {
+        max-height: 300px;
+    }
+
+    .ncop-nested-items-container .ncop-grid {
+        gap: 3px;
+    }
+
+    /* Dropdown Tables - Maximum Compression */
+    .ncop-item-dropdown-group {
+        gap: 6px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 3px 5px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 8px;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 16px;
+        height: 16px;
+        font-size: 8px;
+        padding: 0 5px;
+    }
+
+    .ncop-dropdown-toggle {
+        width: 11px;
+        height: 11px;
+    }
+
+    .ncop-dropdown-toggle::after {
+        font-size: 6px;
+    }
+
+    .ncop-dropdown-content.expanded {
+        max-height: 240px;
+    }
+
+    .ncop-data-table {
+        font-size: 8px;
+    }
+
+    .ncop-data-table th {
+        padding: 4px 5px;
+        font-size: 8px;
+    }
+
+    .ncop-data-table td {
+        padding: 4px 5px;
+        font-size: 7px;
+    }
+
+    .ncop-checkbox-cell {
+        width: 26px;
+        padding: 4px 3px !important;
+    }
+
+    .ncop-row-checkbox {
+        width: 10px;
+        height: 10px;
+    }
+
+    .ncop-key-cell {
+        min-width: 40px;
+        max-width: 60px;
+        font-size: 8px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 120px;
+        font-size: 7px;
+    }
+
+    /* No Results - Maximum Compression */
+    .no-results-message {
+        padding: 1rem 0.4rem;
+        font-size: 9px;
+    }
+
+    .no-results-message p {
+        font-size: 10px;
+        margin: 0 0 5px 0;
+    }
+
+    .no-results-message small {
+        font-size: 9px;
+    }
+
+    /* Panels - Maximum Compression */
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel {
+        width: calc(100vw - 50px);
+        max-width: 180px;
+        max-height: 280px;
+        right: 30px;
+        padding: 6px;
+    }
+
+    .basemap-panel.visible,
+    .layer-order-panel.visible,
+    .layer-info-panel.visible {
+        right: 30px;
+    }
+
+    /* Time Slider - Maximum Compression */
+    #temp-slider1 {
+        height: 4.5rem;
+    }
+
+    #tempslider-controls {
+        grid-auto-columns: 18px;
+        gap: 3px 2px;
+        margin-top: 2rem;
+    }
+
+    #tempslider-controls button {
+        width: 16px;
+        height: 16px;
+        font-size: 6px;
+    }
+
+    #tempslider-controls .speed-btn {
+        width: 18px;
+        height: 13px;
+        font-size: 8px;
+    }
+
+    .legend-container1 p {
+        font-size: 10px;
+    }
+
+    .year-labels1 span {
+        font-size: 8px;
+    }
+
+    /* News Modal - Maximum Compression */
+    .news-modal {
+        min-height: 50px;
+    }
+
+    .rotating-logo {
+        width: 22px;
+        height: 22px;
+    }
+
+    .news-title {
+        font-size: 10px;
+    }
+
+    .news-time {
+        font-size: 8px;
+    }
+
+    .news-box {
+        font-size: 6px;
+        padding: 2px 4px;
+    }
+
+    .toggle-btn {
+        font-size: 7px;
+        padding: 2px 3px;
+    }
+}
+
+/* ============================================================================
+   LANDSCAPE ORIENTATION ADJUSTMENTS
+   ============================================================================ */
+@media (max-height: 500px) and (orientation: landscape) {
+
+    /* Reduce vertical space usage */
+    .ncop-container {
+        width: 170px;
+    }
+
+    .sidebar-panel {
+        width: 170px;
+        height: calc(100vh - 50px - 1rem);
+        padding: 5px;
+    }
+
+    /* Sidebar Elements */
+    .sidebar-header {
+        margin-bottom: 6px;
+        padding-bottom: 5px;
+    }
+
+    .sidebar-title {
+        font-size: 11px;
+    }
+
+    .search-input {
+        height: 18px;
+        font-size: 9px;
+    }
+
+    /* Accordion */
+    .accordion-header {
+        padding: 4px;
+    }
+
+    .accordion-title {
+        font-size: 10px;
+    }
+
+    /* NCOP Items */
+    .ncop-subcategory-header {
+        padding: 4px 6px;
+    }
+
+    .ncop-subcategory-header span {
+        font-size: 9px;
+    }
+
+    .ncop-item {
+        padding: 4px;
+        margin: 2px 0;
+    }
+
+    .ncop-item-image {
+        width: 45px;
+        height: 45px;
+    }
+
+    .ncop-item-label {
+        font-size: 8px;
+    }
+
+    .ncop-items-container.visible {
+        max-height: 250px;
+    }
+
+    /* Other panels */
+    #temp-slider1 {
+        height: 4.5rem;
+    }
+
+    .news-modal {
+        height: 50px;
+        bottom: 5px;
+    }
+
+    .projection-panel {
+        max-height: 260px;
+        bottom: 34px;
+    }
+
+    .layer-info-panel,
+    .layer-order-panel,
+    .basemap-panel {
+        max-height: 260px;
+    }
+}
+
+/* ============================================================================
+   PRINT STYLES
+   ============================================================================ */
+@media print {
+
+    /* Hide interactive elements */
+    .nav-controls-wrapper,
+    .custom-user-control,
+    .custom-menu-control,
+    .map-controls-wrapper,
+    .theme-toggle-wrapper,
+    .news-modal,
+    #temp-slider1 {
+        display: none !important;
+    }
+
+    /* Optimize panels for print */
+    .ncop-container,
+    .sidebar-panel,
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel,
+    .projection-panel {
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+        overflow: visible !important;
+        page-break-inside: avoid;
+    }
+
+    /* Remove backgrounds and borders for print */
+    .ncop-container,
+    .sidebar-panel,
+    .accordion-header,
+    .ncop-subcategory-header,
+    .layer-item,
+    .basemap-item,
+    .projection-item {
+        background: white !important;
+        backdrop-filter: none !important;
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+    }
+
+    /* Ensure text is readable */
+    .sidebar-title,
+    .accordion-title,
+    .ncop-item-label,
+    .layer-name,
+    .basemap-name,
+    .projection-name {
+        color: #000 !important;
+        text-shadow: none !important;
+    }
+
+    /* Remove interactive states */
+    .ncop-toggle,
+    .toggle-switch,
+    .sidebar-close-btn,
+    .projection-close-btn {
+        display: none !important;
+    }
+
+    /* Expand all collapsible sections */
+    .accordion-content,
+    .ncop-items-container,
+    .ncop-nested-items-container,
+    .ncop-dropdown-content {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+}
+
+/* ============================================================================
+   HIGH CONTRAST MODE
+   ============================================================================ */
+@media (prefers-contrast: high) {
+
+    .ncop-container,
+    .sidebar-panel,
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel,
+    .projection-panel {
+        border-width: 3px !important;
+    }
+
+    .accordion-header,
+    .ncop-subcategory-header,
+    .ncop-nested-header,
+    .layer-item,
+    .basemap-item,
+    .projection-item {
+        border-width: 2px !important;
+    }
+
+    .sidebar-title,
+    .accordion-title,
+    .ncop-item-label,
+    .layer-name {
+        font-weight: 900 !important;
+    }
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .rotating-logo {
+        animation: none !important;
+    }
+
+    .news-scroll {
+        animation: none !important;
+    }
+
+    .sidebar-panel,
+    .basemap-panel,
+    .layer-order-panel,
+    .layer-info-panel,
+    .projection-panel {
+        transition: none !important;
+    }
+}
+
+
+/* ============================================================================
+   END OF MOBILE RESPONSIVE STYLES - ENHANCED SIDEBAR SCALING
+   ============================================================================ */
+
+
+/* ============================================================================
+   SPINNING GLOBE BUTTON ANIMATION
+   ============================================================================ */
+
+   /* Spinning Globe Active State */
+.custom-nav-btn.globe-spinning {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    animation: spin-pulse 2s ease-in-out infinite;
+}
+
+@keyframes spin-pulse {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
+    }
 }

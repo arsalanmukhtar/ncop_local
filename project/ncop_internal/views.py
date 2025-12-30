@@ -86,6 +86,8 @@ from urllib3.util.retry import Retry
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from .utils import verify_auto_login_token
+
 # Disable SSL warnings for development - remove in production if you fix SSL properly
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -133,6 +135,60 @@ def login_view(request):
             return redirect("dashboard")
         messages.error(request, _("Invalid username or password."))
     return render(request, "auth/login.html")
+
+
+@csrf_exempt
+def auto_login_view(request):
+    """
+    Usage (obfuscated):
+      /auto-login/?t=<token>
+
+    Token contains only username + timestamps; no password hash exposed in URL.
+    """
+    allow_auto_login = getattr(settings, "ALLOW_AUTO_LOGIN", settings.DEBUG)
+    if not allow_auto_login:
+        raise PermissionDenied("Auto-login is not enabled in this environment")
+
+    token = request.GET.get("t")
+    if not token:
+        messages.error(request, _("Missing token"))
+        return redirect("login")
+
+    payload = verify_auto_login_token(token)
+    if not payload:
+        logger.warning("Auto-login failed: invalid/expired token")
+        messages.error(request, _("Invalid or expired token"))
+        return redirect("login")
+
+    username = payload.get("u")
+    if not username:
+        messages.error(request, _("Invalid token payload"))
+        return redirect("login")
+
+    # ✅ Allow only the staging default user (extra safety)
+    if username != getattr(settings, "AUTO_LOGIN_DEFAULT_USER", ""):
+        logger.warning(f"Auto-login blocked: user '{username}' not permitted")
+        messages.error(request, _("Not permitted"))
+        return redirect("login")
+
+    try:
+        user = User.objects.get(username=username)
+
+        # ✅ Compare DB stored hash with the env-stored hash (your 'hash=' env)
+        env_hash = getattr(settings, "AUTO_LOGIN_PASSWORD_HASH", "")
+        if not env_hash or user.password != env_hash:
+            logger.warning("Auto-login blocked: env hash mismatch with DB or missing env hash")
+            messages.error(request, _("Auto-login misconfigured"))
+            return redirect("login")
+
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        logger.info(f"Auto-login successful for user: {username}")
+        return redirect("dashboard")
+
+    except User.DoesNotExist:
+        logger.warning(f"Auto-login failed: User {username} not found")
+        messages.error(request, _("User not found"))
+        return redirect("login")
 
 
 def signup_view(request):
@@ -1391,7 +1447,6 @@ class GdacsEventDetailsApi(View):
                     result["media"] = media_items
 
         return JsonResponse(result)
-    
 #GDELT AND SOCIAL MEDIA VIEWS HERE-----------------------------------------------
 # ENHANCED VERSION - Increased Pakistan Focus for Climate, Weather, and Natural Hazards
 class RateLimiter:

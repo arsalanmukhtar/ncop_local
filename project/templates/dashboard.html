@@ -8,6 +8,7 @@
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
 
     {# Expose per-request values BEFORE loading the Vite entry #}
+    {% include 'pwa/pwa_meta.html' %}
     <script>
         window.MAPBOX_ACCESS_TOKEN = "{{ mapbox_token|escapejs }}";
         window.USER_ID = "{{ user.id|escapejs }}";
@@ -104,7 +105,20 @@
     </div>
 
     <div id="userPanel"
-        class="fixed top-12 right-2 z-40 bg-black/80 backdrop-filter backdrop-blur-lg border-2 border-white rounded-xl p-4 min-w-[200px] transform transition-all duration-300 translate-x-full opacity-0">
+        class="
+            fixed top-10 md:top-12 right-2 z-40
+            bg-black/80 backdrop-filter backdrop-blur-lg
+            border border-white
+            rounded-lg
+            p-3 md:p-4
+            min-w-[160px] md:min-w-[200px]
+
+            transform transition-all duration-300
+            scale-70 md:scale-80
+            translate-x-full opacity-0
+            user-panel
+        "
+        >
         <div class="flex items-center space-x-3 mb-3">
             <div class="flex items-center justify-center w-8 h-8 bg-white/20 rounded-md">
                 <i data-lucide="user" class="w-4 h-4 text-white"></i>
@@ -194,7 +208,7 @@
                 <img data-asset="ndmaLogo" alt="NDMA Logo" class="logo-spin" />
             </div>
             <div class="news-info">
-                <div class="news-title">Local News</div>
+                <div class="news-title">Global News</div>
                 <hr>
                 <div class="news-time" id="news-time">--:--:--</div>
             </div>

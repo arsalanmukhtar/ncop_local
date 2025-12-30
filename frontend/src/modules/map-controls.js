@@ -1,16 +1,19 @@
 // MapControls.js
 
 /**
- * Handles the Mapbox map instance and core map interactions (labels, projection, terrain).
+ * Handles the Mapbox map instance and core map interactions (labels, projection, terrain, spinning globe).
  * Assumes mapboxgl and ncop_storage are available globally or managed by the caller.
  */
 export class MapControls {
     #map;
     #storage;
+    #spinEnabled = false;
+    #userInteracting = false;
 
     constructor(mapInstance, storageInstance) {
         this.#map = mapInstance;
         this.#storage = storageInstance;
+        this.#setupSpinGlobeListeners();
     }
 
     /**
@@ -136,6 +139,164 @@ export class MapControls {
 
         if (this.#storage) {
             this.#storage.saveSetting("terrainEnabled", false);
+        }
+    }
+
+    // ============================================================
+    // SPINNING GLOBE FUNCTIONALITY
+    // ============================================================
+
+    /**
+     * Setup event listeners for spinning globe interactions
+     * Pauses spinning when user interacts with the map
+     */
+    #setupSpinGlobeListeners() {
+        // Pause spinning on user interaction
+        this.#map.on('mousedown', () => {
+            this.#userInteracting = true;
+        });
+
+        // Restart spinning when interaction ends
+        this.#map.on('mouseup', () => {
+            this.#userInteracting = false;
+            if (this.#spinEnabled) {
+                this.#spinGlobe();
+            }
+        });
+
+        // Handle cases where mouse moves off map
+        this.#map.on('dragend', () => {
+            this.#userInteracting = false;
+            if (this.#spinEnabled) {
+                this.#spinGlobe();
+            }
+        });
+
+        this.#map.on('pitchend', () => {
+            this.#userInteracting = false;
+            if (this.#spinEnabled) {
+                this.#spinGlobe();
+            }
+        });
+
+        this.#map.on('rotateend', () => {
+            this.#userInteracting = false;
+            if (this.#spinEnabled) {
+                this.#spinGlobe();
+            }
+        });
+
+        // Continue spinning when animation completes
+        this.#map.on('moveend', () => {
+            if (this.#spinEnabled) {
+                this.#spinGlobe();
+            }
+        });
+    }
+
+    /**
+     * Core spinning globe logic
+     * Rotates the globe continuously based on zoom level
+     */
+    #spinGlobe() {
+        // Configuration
+        const secondsPerRevolution = 60; // Complete revolution every 2 minutes
+        const maxSpinZoom = 5; // Don't rotate above this zoom
+        const slowSpinZoom = 3; // Start slowing rotation at this zoom
+
+        const zoom = this.#map.getZoom();
+
+        // Only spin if enabled, not interacting, and below max zoom
+        if (this.#spinEnabled && !this.#userInteracting && zoom < maxSpinZoom) {
+            let distancePerSecond = 360 / secondsPerRevolution;
+
+            // Slow down spinning at higher zooms
+            if (zoom > slowSpinZoom) {
+                const zoomDif = (maxSpinZoom - zoom) / (maxSpinZoom - slowSpinZoom);
+                distancePerSecond *= zoomDif;
+            }
+
+            const center = this.#map.getCenter();
+            center.lng -= distancePerSecond;
+
+            // Smoothly animate the map over one second
+            this.#map.easeTo({ 
+                center, 
+                duration: 1000, 
+                easing: (n) => n 
+            });
+        }
+    }
+
+    /**
+     * Toggle spinning globe on/off
+     * @returns {boolean} - New spinning state
+     */
+    toggleSpinGlobe() {
+        this.#spinEnabled = !this.#spinEnabled;
+
+        if (this.#spinEnabled) {
+            // Start spinning
+            console.log("🌍 Starting globe rotation...");
+            
+            // Set globe projection and fog for better effect
+            try {
+                this.#map.setProjection('globe');
+                this.#map.setFog({}); // Default atmosphere
+            } catch (error) {
+                console.warn("Could not set globe projection:", error);
+            }
+
+            // Start the spin
+            this.#spinGlobe();
+
+            // Save state
+            if (this.#storage) {
+                this.#storage.saveSetting('globeSpinning', true);
+            }
+        } else {
+            // Stop spinning
+            console.log("🛑 Stopping globe rotation...");
+            this.#map.stop(); // Immediately end ongoing animation
+            
+            // Save state
+            if (this.#storage) {
+                this.#storage.saveSetting('globeSpinning', false);
+            }
+        }
+
+        return this.#spinEnabled;
+    }
+
+    /**
+     * Get current spinning state
+     * @returns {boolean}
+     */
+    isSpinning() {
+        return this.#spinEnabled;
+    }
+
+    /**
+     * Restore spinning state from storage
+     * Called on initialization to restore previous session state
+     */
+    restoreSpinState() {
+        const savedState = this.#storage?.getSetting('globeSpinning') || false;
+        
+        if (savedState && !this.#spinEnabled) {
+            // Re-enable spinning silently without toggling
+            this.#spinEnabled = true;
+            
+            // Set projection and fog
+            try {
+                this.#map.setProjection('globe');
+                this.#map.setFog({});
+            } catch (error) {
+                console.warn("Could not restore globe projection:", error);
+            }
+            
+            // Start spinning
+            this.#spinGlobe();
         }
     }
 }
@@ -371,7 +532,7 @@ export class StoryManager {
         const prev = this.state.currentIndex;
         const direction = idx > prev ? "down" : "up";
 
-        // When scrolling, always “go to” the current visible chapter.
+        // When scrolling, always "go to" the current visible chapter.
         // _showChapterLayers() already clears previously shown static layers,
         // and _clearTemporal() is called within that flow when switching.
         this.state.currentIndex = idx;
@@ -380,7 +541,7 @@ export class StoryManager {
         this._flyToChapter(idx, true);
 
         // If going UP and the earlier chapter has fewer/no layers,
-        // the net effect is layers progressively “removed” as desired.
+        // the net effect is layers progressively "removed" as desired.
         // (No extra code needed because _showChapterLayers() clears previous.)
       },
       {
@@ -392,7 +553,7 @@ export class StoryManager {
     cards.forEach((card) => io.observe(card));
 
     // Optionally, jump the observer to the first card as initial state
-    // (Don’t auto-fly; let the user scroll to start)
+    // (Don't auto-fly; let the user scroll to start)
   }
 
   _showEditor(story) {
@@ -634,7 +795,7 @@ export function initStoryManager({ map, sourceLayerControl, fetchBase = "" }) {
   return mgr;
 }
 
-// Optional: direct “play by slug” helper
+// Optional: direct "play by slug" helper
 export async function startStoryBySlug(slug, fetchBase = "") {
   if (!window.storyManager) {
     console.warn("StoryManager not ready yet");
