@@ -129,7 +129,8 @@ celerybeat.pid
 
 # Environments
 .env
-.env.*
+.env.mobile-dev
+.env.mobile-prod
 .env.mustafa
 .env.dev
 .env.test
