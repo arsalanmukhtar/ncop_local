@@ -61,9 +61,14 @@ fi
 echo ""
 echo "Step 2: Merging mobile-app into mobile-prod..."
 git checkout mobile-prod
-git pull origin mobile-prod
+
+# Try to pull, but don't fail if remote doesn't exist yet
+git pull origin mobile-prod 2>/dev/null || echo "⚠️  mobile-prod not on remote yet, will push after merge"
+
 git merge mobile-app -m "Merge mobile-app into mobile-prod - $(date +'%Y-%m-%d %H:%M')"
-git push origin mobile-prod
+
+# Push to remote (creates branch if doesn't exist)
+git push -u origin mobile-prod
 echo "✅ mobile-prod updated"
 
 echo ""
