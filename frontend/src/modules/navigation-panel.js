@@ -208,17 +208,14 @@ export class NavigationPanel {
 
     navWrapper.innerHTML = `
       <div class="custom-nav-control" id="navControlsContainer">
+          
           <!-- ZOOM CONTROLS -->
           <button id="zoomIn" class="custom-nav-btn" title="Zoom In">
               <i data-lucide="plus"></i>
           </button>
+
           <button id="zoomOut" class="custom-nav-btn" title="Zoom Out">
               <i data-lucide="minus"></i>
-          </button>
-          
-          <!-- BEARING RESET -->
-          <button id="resetBearing" class="custom-nav-btn" title="Reset Bearing & Tilt">
-              <i data-lucide="compass"></i>
           </button>
           
           <!-- 3D TOGGLE -->
@@ -235,31 +232,17 @@ export class NavigationPanel {
           <button id="spinGlobe" class="custom-nav-btn" title="Toggle Spinning Globe">
               <i data-lucide="rotate-3d"></i>
           </button>
-
-          <!-- LOCATE USER -->
-          <button id="locate" class="custom-nav-btn" title="Find My Location (Islamabad)">
-              <i data-lucide="map-pin"></i>
-          </button>
           
           <!-- LOCAL NEWS TOGGLE -->
           <button id="localNews" class="custom-nav-btn" title="Toggle Local News Panel">
               <i data-lucide="newspaper"></i>
           </button>
-          <!-- OPENSTREETMAP DATA TOGGLE -->
-          <button id="osmData" class="custom-nav-btn" title="OpenStreetMap Data">
-              <i data-lucide="map"></i>
-          </button>
-          <!-- HOME EXTENT (Pakistan / South Asia) -->
-          <button id="homeExtent" class="custom-nav-btn" title="Zoom to South Asia Region">
-              <i data-lucide="house"></i>
-          </button>
-          <button id="storyBtn" class="custom-nav-btn" title="Open Story Panel">
-            <i data-lucide="book-open"></i>
-          </button>
+
           <!-- COLLAPSE/EXPAND -->
           <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
               <i data-lucide="chevron-left"></i>
           </button>
+
       </div>
     `;
 

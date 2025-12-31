@@ -23,22 +23,35 @@ fi
 echo ""
 echo "Step 1: Saving current mobile-app work..."
 git checkout mobile-app
-git add .
-git status
 
-read -p "Commit your changes? (yes/no): " do_commit
-if [ "$do_commit" = "yes" ]; then
-    read -p "Commit message: " commit_msg
-    git commit -m "$commit_msg"
-    git push origin mobile-app
-    echo "✅ mobile-app pushed"
+# Check if there are changes to commit
+if [[ -n $(git status --porcelain) ]]; then
+    git add .
+    git status
+    
+    read -p "Commit your changes? (yes/no): " do_commit
+    if [ "$do_commit" = "yes" ]; then
+        read -p "Commit message: " commit_msg
+        git commit -m "$commit_msg"
+        git push origin mobile-app
+        echo "✅ mobile-app pushed"
+    else
+        echo "⚠️  Warning: You have uncommitted changes"
+        read -p "Continue anyway? (yes/no): " continue_anyway
+        if [ "$continue_anyway" != "yes" ]; then
+            echo "❌ Deployment cancelled"
+            exit 1
+        fi
+    fi
+else
+    echo "✅ No changes to commit on mobile-app"
 fi
 
 echo ""
 echo "Step 2: Merging mobile-app into mobile-prod..."
 git checkout mobile-prod
 git pull origin mobile-prod
-git merge mobile-app -m "Merge mobile-app into mobile-prod"
+git merge mobile-app -m "Merge mobile-app into mobile-prod - $(date +'%Y-%m-%d %H:%M')"
 git push origin mobile-prod
 echo "✅ mobile-prod updated"
 
@@ -53,7 +66,7 @@ export $(grep -v '^#' /home/gtechapp/ncop_app/ncop_local/.env.mobile-prod | xarg
 
 echo ""
 echo "Step 5: Installing dependencies..."
-pip install -r requirements.txt
+pip install -r requirements.txt --quiet
 
 echo ""
 echo "Step 6: Running migrations..."
@@ -62,7 +75,7 @@ python manage.py migrate --noinput
 echo ""
 echo "Step 7: Building frontend..."
 cd ../frontend
-npm install
+npm install --silent
 npm run build
 cd ../project
 
@@ -78,8 +91,22 @@ sudo chmod -R 755 /home/gtechapp/ncop_app/ncop_local/project/static
 echo ""
 echo "Step 10: Restarting production service..."
 sudo systemctl restart ncop-mobile-prod
-sleep 2
-sudo systemctl status ncop-mobile-prod --no-pager
+sleep 3
+
+# Check if service started successfully
+if sudo systemctl is-active --quiet ncop-mobile-prod; then
+    echo "✅ Production service is running"
+    sudo systemctl status ncop-mobile-prod --no-pager -l
+else
+    echo "❌ ERROR: Production service failed to start!"
+    sudo journalctl -u ncop-mobile-prod -n 50 --no-pager
+    exit 1
+fi
+
+echo ""
+echo "Step 11: Switching back to mobile-app branch..."
+git checkout mobile-app
+echo "✅ Back on mobile-app branch for development"
 
 echo ""
 echo "======================================"
@@ -91,4 +118,6 @@ echo "https://robotswithfeelspy.ndma.gov.pk/auto-login/?t=eyJpYXQiOjE3NjcxNjMyND
 echo ""
 echo "Or access dashboard directly:"
 echo "https://robotswithfeelspy.ndma.gov.pk/?p=tyhntynbtggbhjyuvnujvnyuvjtyujtuijvtynb"
+echo ""
+echo "You are now back on mobile-app branch for continued development"
 echo ""

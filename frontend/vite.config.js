@@ -15,7 +15,7 @@ export default defineConfig(() => ({
   // IMPORTANT:
   // Leave URL prefixing to Django (STATIC_URL + django-vite).
   // If you keep "/static/" here, django-vite + Vite can become "/static/static/...".
-  base: "",
+  base: '/static/',
 
   plugins: [
     tailwindcss(),

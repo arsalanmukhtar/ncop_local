@@ -17,22 +17,37 @@ source /home/gtechapp/ncop_app/ncopenv311/bin/activate
 export DJANGO_SETTINGS_MODULE=ncop_project.settings.mobile_dev
 export $(grep -v '^#' /home/gtechapp/ncop_app/ncop_local/.env.mobile-dev | xargs)
 
-# Install dependencies if needed
-pip install -r requirements.txt --quiet
-
-# Run migrations
-python manage.py migrate --noinput
-
 # Create logs directory
 mkdir -p logs
 
 echo ""
-echo "✅ Development server starting..."
-echo "   Local:   http://127.0.0.1:8000"
-echo "   Network: http://182.188.28.163:8000"
+echo "⚠️  IMPORTANT: You need TWO terminals for dev mode:"
 echo ""
-echo "Press Ctrl+C to stop"
+echo "Terminal 1 (this one) - Django:"
+echo "   http://172.18.7.39:8000"
+echo ""
+echo "Terminal 2 (open new terminal) - Vite:"
+echo "   cd /home/gtechapp/ncop_app/ncop_local/frontend"
+echo "   source /home/gtechapp/ncop_app/ncopenv311/bin/activate"
+echo "   npm run dev -- --host 0.0.0.0"
+echo ""
+read -p "Press Enter when Vite server is running in Terminal 2..."
+
+echo ""
+echo "🔍 Checking Vite server..."
+if curl -s http://172.18.7.39:5173/ > /dev/null 2>&1; then
+    echo "✅ Vite server is accessible at http://172.18.7.39:5173/"
+else
+    echo "❌ WARNING: Vite server NOT accessible at http://172.18.7.39:5173/"
+    echo "   Make sure Terminal 2 is running: npm run dev -- --host 0.0.0.0"
+    echo "   Waiting 5 seconds before starting Django anyway..."
+    sleep 5
+fi
+
+echo ""
+echo "✅ Starting Django development server..."
+echo "   Access your app at: http://172.18.7.39:8000/"
 echo ""
 
-# Start server
+# Start Django server
 python manage.py runserver 0.0.0.0:8000
