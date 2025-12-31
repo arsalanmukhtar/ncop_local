@@ -21,13 +21,24 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 echo ""
-echo "Step 1: Saving current mobile-app work..."
+echo "Step 1: Saving current mobile-app work (skipping .env files)..."
 git checkout mobile-app
 
-# Check if there are changes to commit
-if [[ -n $(git status --porcelain) ]]; then
-    git add .
-    git status
+# Explicitly ensure .env files are not tracked
+git update-index --assume-unchanged ../.env.mobile-dev 2>/dev/null || true
+git update-index --assume-unchanged ../.env.mobile-prod 2>/dev/null || true
+
+# Add all changes (respects .gitignore)
+git add .
+
+# Ensure .env files are not staged
+git reset -- ../.env.mobile-dev ../.env.mobile-prod 2>/dev/null || true
+
+# Check if there are STAGED changes to commit (excluding .env files)
+if [[ -n $(git diff --cached --name-only) ]]; then
+    echo "✅ Changes ready to commit:"
+    git diff --cached --name-only
+    echo ""
     
     read -p "Commit your changes? (yes/no): " do_commit
     if [ "$do_commit" = "yes" ]; then
@@ -44,7 +55,7 @@ if [[ -n $(git status --porcelain) ]]; then
         fi
     fi
 else
-    echo "✅ No changes to commit on mobile-app"
+    echo "✅ No changes to commit (excluding .env files)"
 fi
 
 echo ""
