@@ -141,13 +141,26 @@ def login_view(request):
 def auto_login_view(request):
     """
     Usage (obfuscated):
-      /auto-login/?t=<token>
+      /auto-login/?t=<token>&p=<mobile_token>
+    
+    For mobile prod: https://robotswithfeelspy.ndma.gov.pk/auto-login/?t=<token>&p=tyhntynbtggbhjyuvnujvnyuvjtyujtuijvtynb
 
     Token contains only username + timestamps; no password hash exposed in URL.
     """
     allow_auto_login = getattr(settings, "ALLOW_AUTO_LOGIN", settings.DEBUG)
     if not allow_auto_login:
         raise PermissionDenied("Auto-login is not enabled in this environment")
+
+    # Check mobile app token if configured
+    mobile_token_param = getattr(settings, 'MOBILE_APP_TOKEN_PARAM', 'p')
+    mobile_token_value = getattr(settings, 'MOBILE_APP_TOKEN_VALUE', None)
+    
+    if mobile_token_value:
+        provided_mobile_token = request.GET.get(mobile_token_param)
+        if provided_mobile_token != mobile_token_value:
+            logger.warning("Auto-login blocked: invalid mobile token")
+            messages.error(request, _("Invalid authentication"))
+            return redirect("login")
 
     token = request.GET.get("t")
     if not token:
@@ -174,7 +187,7 @@ def auto_login_view(request):
     try:
         user = User.objects.get(username=username)
 
-        # ✅ Compare DB stored hash with the env-stored hash (your 'hash=' env)
+        # ✅ Compare DB stored hash with the env-stored hash
         env_hash = getattr(settings, "AUTO_LOGIN_PASSWORD_HASH", "")
         if not env_hash or user.password != env_hash:
             logger.warning("Auto-login blocked: env hash mismatch with DB or missing env hash")
@@ -189,7 +202,6 @@ def auto_login_view(request):
         logger.warning(f"Auto-login failed: User {username} not found")
         messages.error(request, _("User not found"))
         return redirect("login")
-
 
 def signup_view(request):
     if request.user.is_authenticated:

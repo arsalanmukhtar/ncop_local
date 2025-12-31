@@ -54,3 +54,5 @@ def verify_auto_login_token(token: str) -> dict:
         raise ValueError("Token expired")
 
     return payload
+
+generate_auto_login_token = build_auto_login_token
