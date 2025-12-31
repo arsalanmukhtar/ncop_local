@@ -1152,7 +1152,7 @@ body {
     height: 32px;
     background: var(--primary-bg);
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
     backdrop-filter: blur(15px);
@@ -2121,7 +2121,7 @@ button.custom-nav-btn.terrain-active:hover {
     align-items: flex-end;
     gap: 4px;
     position: absolute;
-    top: 52px;
+    top: 10px;
     /* Just below user control (32px + 10px margin + 10px gap) */
     right: 10px;
     z-index: 1000;
@@ -4970,7 +4970,7 @@ button.custom-nav-btn.terrain-active:hover {
        MAP CONTROLS
     =========================== */
     .map-controls-wrapper {
-        top: 46px;
+        top: 5px;
         right: 8px;
         gap: 3px;
     }
@@ -5276,6 +5276,15 @@ button.custom-nav-btn.terrain-active:hover {
         border-radius: 5px;
     }
 
+        .custom-nav-btn svg {
+            width: 16px;
+            /* icon width */
+            height: 16px;
+            /* icon height */
+            /* stroke-width: 1.8; */
+            /* optional: thicker icons */
+        }
+
     .custom-nav-btn i,
     .custom-nav-btn .nav-icon {
         font-size: 10px;
@@ -5287,8 +5296,13 @@ button.custom-nav-btn.terrain-active:hover {
 
     .nav-toggle-btn {
         width: 24px;
-        height: 24px;
+        height: 30px;
     }
+
+        .nav-toggle-btn  svg {
+            width: 16px;
+            height: 16px;
+        }
 
     /* ===========================
        USER CONTROL
@@ -5755,7 +5769,7 @@ button.custom-nav-btn.terrain-active:hover {
        MAP CONTROLS
     =========================== */
     .map-controls-wrapper {
-        top: 38px;
+        top: 5px;
         right: 6px;
         gap: 2px;
     }
@@ -6416,8 +6430,8 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     .nav-toggle-btn {
-        width: 22px;
-        height: 22px;
+        width: 24px;
+        height: 30px;
     }
 
     /* ===========================

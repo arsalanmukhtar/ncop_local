@@ -237,7 +237,7 @@ export class MapControls {
 
         if (this.#spinEnabled) {
             // Start spinning
-            console.log("🌍 Starting globe rotation...");
+            // console.log("🌍 Starting globe rotation...");
             
             // Set globe projection and fog for better effect
             try {
@@ -256,7 +256,7 @@ export class MapControls {
             }
         } else {
             // Stop spinning
-            console.log("🛑 Stopping globe rotation...");
+            // console.log("🛑 Stopping globe rotation...");
             this.#map.stop(); // Immediately end ongoing animation
             
             // Save state

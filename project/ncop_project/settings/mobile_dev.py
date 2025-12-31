@@ -40,11 +40,28 @@ CSRF_TRUSTED_ORIGINS = env.list(
 )
 
 # =============================================================================
+# STATIC FILES
+# =============================================================================
+STATIC_URL = "/static/"  # ← Back to /static/ for Django
+STATIC_ROOT = BASE_DIR / "static" / "dist"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# =============================================================================
 # VITE FRONTEND CONFIGURATION (DEV MODE)
 # =============================================================================
 DJANGO_VITE["default"]["dev_mode"] = True
 DJANGO_VITE["default"]["dev_server_host"] = env("VITE_DEV_SERVER_HOST", default="localhost")
 DJANGO_VITE["default"]["dev_server_port"] = env.int("VITE_DEV_SERVER_PORT", default=5173)
+
+# CRITICAL FIX for django-vite 3.x: Set static_url_prefix to empty string explicitly
+# This prevents /static/ from being prepended in dev mode
+DJANGO_VITE["default"]["static_url_prefix"] = ""
+
+# Also set the full dev server URL to bypass static URL logic entirely
+vite_host = env("VITE_DEV_SERVER_HOST", default="localhost")
+vite_port = env.int("VITE_DEV_SERVER_PORT", default=5173)
+DJANGO_VITE["default"]["dev_server_protocol"] = "http"
 
 # =============================================================================
 # WSGI
@@ -127,14 +144,6 @@ LOGGING = {
 }
 
 # =============================================================================
-# STATIC FILES
-# =============================================================================
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "static" / "dist"
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-# =============================================================================
 # API KEYS
 # =============================================================================
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default=MAPBOX_ACCESS_TOKEN)
@@ -152,4 +161,5 @@ print("✅ NCOP Mobile App Development Mode")
 print(f"   Debug: {DEBUG}")
 print(f"   Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"   Vite Dev Mode: {DJANGO_VITE['default']['dev_mode']}")
+print(f"   Static URL: {STATIC_URL}")
 print("   Auto-login: Disabled")

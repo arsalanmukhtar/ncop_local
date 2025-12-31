@@ -14,14 +14,14 @@ export class UserControl {
      */
     render() {
         const mapContainer = document.getElementById("map");
-        const userContainer = document.createElement("div");
-        userContainer.className = "custom-user-control";
-        userContainer.innerHTML = `
-            <button id="userToggle" class="custom-user-btn" title="User Info">
-                <i data-lucide="user"></i>
-            </button>
-        `;
-        mapContainer.appendChild(userContainer);
+        // const userContainer = document.createElement("div");
+        // userContainer.className = "custom-user-control";
+        // userContainer.innerHTML = `
+        //     <button id="userToggle" class="custom-user-btn" title="User Info">
+        //         <i data-lucide="user"></i>
+        //     </button>
+        // `;
+        // mapContainer.appendChild(userContainer);
         lucide.createIcons();
     }
 

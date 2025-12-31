@@ -1,5 +1,5 @@
 import { Popup } from "mapbox-gl";
-import {map_icons} from "./map-icons.js"
+import { map_icons } from "./map-icons.js"
 
 import {
   generateDWDSatelliteLayers,
@@ -42,8 +42,8 @@ export const baseUrl = window.baseUrl;
 const images = import.meta.glob("@assets/images/layer_thumbnails/*.webp", { eager: true });
 // Use this function name with image name to load it e.g. getImage('airports.webp')
 function getImage(filename) {
-    const match = Object.entries(images).find(([path]) => path.includes(filename));
-    return match ? match[1].default : null;
+  const match = Object.entries(images).find(([path]) => path.includes(filename));
+  return match ? match[1].default : null;
 }
 const legend_images = import.meta.glob("@assets/images/layer_legends/*.webp", { eager: true });
 function getLegendImage(filename) {
@@ -301,15 +301,15 @@ const ocean_currents_layers = generateOceanCurrentsLayers();
 const ocean_surface_height_layers = generateOceanSurfaceHeightLayers();
 const nems_layers_weeklycloudprecip = generateMeteoblueNEMSCloudPrecipLayers(model, metbluT);
 const mbx_hourly_cloudprecip = generateMBX_MeteoblueHourlyCloudPrecipLayers(model, metbluT);
-const mbx_hourly_temp       = generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT);
-const mbx_radar_composite   = generateMBX_MeteoblueRadarCompositeLayers(metbluT);
-const mbx_snow_hourly       = generateMBX_MeteoblueSnowfallHourlyLayers(model, metbluT);
-const mbx_cape_hourly       = generateMBX_MeteoblueCAPEHourlyLayers(model, metbluT);
-const mbx_helicity_hourly   = generateMBX_MeteoblueStormHelicityHourlyLayers(model, metbluT);
-const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, metbluT);
-const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
-const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
-const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const mbx_hourly_temp = generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT);
+const mbx_radar_composite = generateMBX_MeteoblueRadarCompositeLayers(metbluT);
+const mbx_snow_hourly = generateMBX_MeteoblueSnowfallHourlyLayers(model, metbluT);
+const mbx_cape_hourly = generateMBX_MeteoblueCAPEHourlyLayers(model, metbluT);
+const mbx_helicity_hourly = generateMBX_MeteoblueStormHelicityHourlyLayers(model, metbluT);
+const mbx_snow_daily = generateMBX_MeteoblueDailySnowfallLayers(model, metbluT);
+const mbx_cape_daily = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
+const mbx_warn_official = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
+const mbx_warn_forecast = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
 const mbx_imerg_precip_rate = generateMBX_IMERGPrecipRateLayers();
 
 // Export the layer array globally for the time slider
@@ -355,366 +355,372 @@ export const ncop_menu_items = {
   gis_layers: {
     "Administrative Boundaries": {
       toggle: {
-        national_boundary: {
-          label: "National Boundary",
+        global_boundaries: {
+          label: "Global Boundaries (Countries)",
           theme: null,
-          geometry: "polygon",
+          geometry: "line",
           source: {
-            id: "national_boundary-source",
+            id: "global_boundaries-source",
             type: "vector",
-            scheme: "tms",
+            scheme: "xyz",
             tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:national_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+              "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=c889b7400ecd1d0d"
             ],
-            maxzoom: 22,
+            maxzoom: 15
           },
           layers: [
+            /* Invisible hit / popup layer */
             {
-              id: "national_boundary-fill",
-              type: "fill",
-              source: "national_boundary-source",
-              "source-layer": "national_boundary",
-              paint: {
-                "fill-color": "#ffffff",
-                "fill-opacity": 0,
-              },
-            },
-            {
-              id: "national_boundary-outline",
+              id: "global_boundaries-hit",
               type: "line",
-              source: "national_boundary-source",
-              "source-layer": "national_boundary",
+              source: "global_boundaries-source",
+              "source-layer": "boundaries",
+              filter: ["==", ["get", "kind"], "country"],
               paint: {
-                "line-color": "#000000",
-                "line-width": 2.5,
-              },
+                "line-color": "#ffffff",
+                "line-width": 10,
+                "line-opacity": 0
+              }
             },
-          ],
-          popup: true,
-          information:
-            "The National Boundary layer outlines the borders of the country, providing a clear demarcation of national territory. This layer is essential for understanding geopolitical boundaries and is often used as a reference for other spatial data layers.",
-        },
-        provincial_boundary: {
-          label: "Provincial Boundary",
-          theme: null,
-          geometry: "polygon",
-          source: {
-            id: "provincial_boundary-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
+
+            /* Visible boundary outline */
             {
-              id: "provincial_boundary-fill",
-              type: "fill",
-              source: "provincial_boundary-source",
-              "source-layer": "provincial_boundary",
-              paint: {
-                "fill-color": "#ffffff",
-                "fill-opacity": 0,
-              },
-            },
-            {
-              id: "provincial_boundary-outline",
+              id: "global_boundaries-outline",
               type: "line",
-              source: "provincial_boundary-source",
-              "source-layer": "provincial_boundary",
+              source: "global_boundaries-source",
+              "source-layer": "boundaries",
+              filter: ["==", ["get", "kind"], "country"],
               paint: {
-                "line-color": "#e74c3c",
-                "line-width": 2,
-              },
-            },
+                "line-color": "#505050",
+                "line-width": 1.2
+              }
+            }
           ],
           popup: true,
           information:
-            "The Provincial Boundary layer delineates the borders of provinces within the country. This layer is crucial for regional planning and analysis, allowing users to visualize and manage data at the provincial level.",
+            "Global country boundaries from OpenStreetMap and Natural Earth, delivered as vector tiles. Suitable for worldwide geopolitical reference."
         },
-        district_boundary: {
-          label: "District Boundary",
-          theme: null,
-          source: {
-            id: "district_boundary-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
-            {
-              id: "district_boundary-fill",
-              type: "fill",
-              source: "district_boundary-source",
-              "source-layer": "district_boundary",
-              paint: {
-                "fill-color": "#ffffff",
-                "fill-opacity": 0,
-              },
-            },
-            {
-              id: "district_boundary-outline",
-              type: "line",
-              source: "district_boundary-source",
-              "source-layer": "district_boundary",
-              paint: {
-                "line-color": "#27ae60",
-                "line-width": 1.5,
-              },
-            },
-          ],
-          popup: true,
-          information:
-            "The District Boundary layer outlines the borders of districts within the country. This layer is important for local governance and resource management, providing a clear framework for administrative boundaries.",
-        },
-        tehsil_boundary: {
-          label: "Tehsil Boundary",
-          theme: null,
-          source: {
-            id: "tehsil_boundary-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
-            {
-              id: "tehsil_boundary-fill",
-              type: "fill",
-              source: "tehsil_boundary-source",
-              "source-layer": "tehsil_boundary",
-              paint: {
-                "fill-color": "#ffffff",
-                "fill-opacity": 0,
-              },
-            },
-            {
-              id: "tehsil_boundary-outline",
-              type: "line",
-              source: "tehsil_boundary-source",
-              "source-layer": "tehsil_boundary",
-              paint: {
-                "line-color": "#e1b12c",
-                "line-width": 1,
-              },
-            },
-          ],
-          popup: true,
-          information:
-            "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
-        },
-      },
-    },
-    Infrastructure: {
-      toggle: {
-        airports: {
-          label: "Airports",
-          theme: null,
-          source: {
-            id: "airports-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
-            {
-              id: "airports-symbol",
-              type: "symbol",
-              source: "airports-source",
-              "source-layer": "airports",
-              layout: {
-                "icon-image": map_icons.airportIcon, // Use custom icon name
-                // Interpolate icon-size based on zoom for smooth scaling
-                "icon-size": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  5,
-                  0.25,
-                  10,
-                  0.5,
-                  15,
-                  1,
-                ],
-                "icon-allow-overlap": true,
-              },
-            },
-          ],
-          popup: true,
-          legend: true,
-          legendPath: getLegendImage("airports.webp"),
-          information:
-            "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
-        },
-        // hospitals: {
-        //     label: "Hospitals",
-        //     theme: null,
-        //     source: {
-        //         id: "hospitals-source",
-        //         type: "vector",
-        //         scheme: "tms",
-        //         tiles: ["http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:hospitals@EPSG:900913@pbf/{z}/{x}/{y}.pbf"],
-        //         maxzoom: 22
-        //     },
-        //     layers: [
-        //         {
-        //             id: "hospitals-symbol",
-        //             type: "symbol",
-        //             source: "hospitals-source",
-        //             "source-layer": "hospitals",
-        //             layout: {
-        //                 "icon-image": "/static/icons/map_icons/layer_icons/hospital.webp", // Use custom icon name
-        //                 // Interpolate icon-size based on zoom for smooth scaling
-        //                 "icon-size": [
-        //                     "interpolate",
-        //                     ["linear"],
-        //                     ["zoom"],
-        //                     5, 0.25,
-        //                     10, 0.5,
-        //                     15, 1
-        //                 ],
-        //                 "icon-allow-overlap": true
-        //             }
-        //         }
+        // provincial_boundary: {
+        //   label: "Provincial Boundary",
+        //   theme: null,
+        //   geometry: "polygon",
+        //   source: {
+        //     id: "provincial_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
         //     ],
-        //     information: "The Hospitals layer displays the locations of hospitals within the country. This layer is essential for healthcare planning and emergency response, providing critical information for medical services and facilities.",
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "provincial_boundary-fill",
+        //       type: "fill",
+        //       source: "provincial_boundary-source",
+        //       "source-layer": "provincial_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "provincial_boundary-outline",
+        //       type: "line",
+        //       source: "provincial_boundary-source",
+        //       "source-layer": "provincial_boundary",
+        //       paint: {
+        //         "line-color": "#e74c3c",
+        //         "line-width": 2,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The Provincial Boundary layer delineates the borders of provinces within the country. This layer is crucial for regional planning and analysis, allowing users to visualize and manage data at the provincial level.",
         // },
-        schools: {
-          label: "Schools",
-          theme: null,
-          source: {
-            id: "schools-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:schools@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
-            {
-              id: "schools-symbol",
-              type: "symbol",
-              source: "schools-source",
-              "source-layer": "schools",
-              layout: {
-                "icon-image": map_icons.schoolIcon, // Use custom icon name
-                // Interpolate icon-size based on zoom for smooth scaling
-                "icon-size": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  5,
-                  0.25,
-                  10,
-                  0.5,
-                  15,
-                  1,
-                ],
-                "icon-allow-overlap": false,
-              },
-            },
-          ],
-          popup: true,
-          information:
-            "The Schools layer displays the locations of schools within the country. This layer is essential for education planning and resource allocation, providing critical information for educational services and facilities.",
-        },
-        settlements: {
-          label: "Settlements",
-          theme: null,
-          source: {
-            id: "settlements-source",
-            type: "vector",
-            scheme: "tms",
-            tiles: [
-              "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:settlements@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-            ],
-            maxzoom: 22,
-          },
-          layers: [
-            {
-              id: "settlements-symbol",
-              type: "symbol",
-              source: "settlements-source",
-              "source-layer": "settlements",
-              layout: {
-                "icon-image": map_icons.settlementIcon, // Use custom icon name
-                // Interpolate icon-size based on zoom for smooth scaling
-                "icon-size": [
-                  "interpolate",
-                  ["linear"],
-                  ["zoom"],
-                  5,
-                  0.25,
-                  10,
-                  0.5,
-                  15,
-                  1,
-                ],
-                "icon-allow-overlap": false,
-              },
-            },
-          ],
-          information:
-            "The Settlements layer displays the locations of settlements within the country. This layer is essential for urban planning and resource allocation, providing critical information for residential services and facilities.",
-        },
-        // evacuation_points: {
-        //     label: "Evacuation Points",
-        //     type: "geojson",
-        //     theme: null,
-        //     geometry: null,
+        // district_boundary: {
+        //   label: "District Boundary",
+        //   theme: null,
+        //   source: {
+        //     id: "district_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+        //     ],
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "district_boundary-fill",
+        //       type: "fill",
+        //       source: "district_boundary-source",
+        //       "source-layer": "district_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "district_boundary-outline",
+        //       type: "line",
+        //       source: "district_boundary-source",
+        //       "source-layer": "district_boundary",
+        //       paint: {
+        //         "line-color": "#27ae60",
+        //         "line-width": 1.5,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The District Boundary layer outlines the borders of districts within the country. This layer is important for local governance and resource management, providing a clear framework for administrative boundaries.",
+        // },
+        // tehsil_boundary: {
+        //   label: "Tehsil Boundary",
+        //   theme: null,
+        //   source: {
+        //     id: "tehsil_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+        //     ],
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "tehsil_boundary-fill",
+        //       type: "fill",
+        //       source: "tehsil_boundary-source",
+        //       "source-layer": "tehsil_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "tehsil_boundary-outline",
+        //       type: "line",
+        //       source: "tehsil_boundary-source",
+        //       "source-layer": "tehsil_boundary",
+        //       paint: {
+        //         "line-color": "#e1b12c",
+        //         "line-width": 1,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
         // },
       },
     },
-    "Hydrological Layers": {
-      toggle: {
-        rsc_exceptionally_high_zone: {
-          label: "RSC Exceptionally High Zone",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        rsc_very_high_zone: {
-          label: "RSC Very High Zone",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        rsc_high_zone: {
-          label: "RSC High Zone",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        rsc_medium_zone: {
-          label: "RSC Medium Zone",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        rsc_low_zone: {
-          label: "RSC Low Zone",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-        watershed_boundaries: {
-          label: "Watershed Boundaries",
-          type: "geojson",
-          theme: null,
-          geometry: null,
-        },
-      },
-    },
+    // Infrastructure: {
+    //   toggle: {
+    //     airports: {
+    //       label: "Airports",
+    //       theme: null,
+    //       source: {
+    //         id: "airports-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "airports-symbol",
+    //           type: "symbol",
+    //           source: "airports-source",
+    //           "source-layer": "airports",
+    //           layout: {
+    //             "icon-image": map_icons.airportIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": true,
+    //           },
+    //         },
+    //       ],
+    //       popup: true,
+    //       legend: true,
+    //       legendPath: getLegendImage("airports.webp"),
+    //       information:
+    //         "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
+    //     },
+    //     // hospitals: {
+    //     //     label: "Hospitals",
+    //     //     theme: null,
+    //     //     source: {
+    //     //         id: "hospitals-source",
+    //     //         type: "vector",
+    //     //         scheme: "tms",
+    //     //         tiles: ["http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:hospitals@EPSG:900913@pbf/{z}/{x}/{y}.pbf"],
+    //     //         maxzoom: 22
+    //     //     },
+    //     //     layers: [
+    //     //         {
+    //     //             id: "hospitals-symbol",
+    //     //             type: "symbol",
+    //     //             source: "hospitals-source",
+    //     //             "source-layer": "hospitals",
+    //     //             layout: {
+    //     //                 "icon-image": "/static/icons/map_icons/layer_icons/hospital.webp", // Use custom icon name
+    //     //                 // Interpolate icon-size based on zoom for smooth scaling
+    //     //                 "icon-size": [
+    //     //                     "interpolate",
+    //     //                     ["linear"],
+    //     //                     ["zoom"],
+    //     //                     5, 0.25,
+    //     //                     10, 0.5,
+    //     //                     15, 1
+    //     //                 ],
+    //     //                 "icon-allow-overlap": true
+    //     //             }
+    //     //         }
+    //     //     ],
+    //     //     information: "The Hospitals layer displays the locations of hospitals within the country. This layer is essential for healthcare planning and emergency response, providing critical information for medical services and facilities.",
+    //     // },
+    //     schools: {
+    //       label: "Schools",
+    //       theme: null,
+    //       source: {
+    //         id: "schools-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:schools@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "schools-symbol",
+    //           type: "symbol",
+    //           source: "schools-source",
+    //           "source-layer": "schools",
+    //           layout: {
+    //             "icon-image": map_icons.schoolIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": false,
+    //           },
+    //         },
+    //       ],
+    //       popup: true,
+    //       information:
+    //         "The Schools layer displays the locations of schools within the country. This layer is essential for education planning and resource allocation, providing critical information for educational services and facilities.",
+    //     },
+    //     settlements: {
+    //       label: "Settlements",
+    //       theme: null,
+    //       source: {
+    //         id: "settlements-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:settlements@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "settlements-symbol",
+    //           type: "symbol",
+    //           source: "settlements-source",
+    //           "source-layer": "settlements",
+    //           layout: {
+    //             "icon-image": map_icons.settlementIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": false,
+    //           },
+    //         },
+    //       ],
+    //       information:
+    //         "The Settlements layer displays the locations of settlements within the country. This layer is essential for urban planning and resource allocation, providing critical information for residential services and facilities.",
+    //     },
+    //     // evacuation_points: {
+    //     //     label: "Evacuation Points",
+    //     //     type: "geojson",
+    //     //     theme: null,
+    //     //     geometry: null,
+    //     // },
+    //   },
+    // },
+    // "Hydrological Layers": {
+    //   toggle: {
+    //     rsc_exceptionally_high_zone: {
+    //       label: "RSC Exceptionally High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_very_high_zone: {
+    //       label: "RSC Very High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_high_zone: {
+    //       label: "RSC High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_medium_zone: {
+    //       label: "RSC Medium Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_low_zone: {
+    //       label: "RSC Low Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     watershed_boundaries: {
+    //       label: "Watershed Boundaries",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //   },
+    // },
   },
   weather: {
     "Radar Layers": {
@@ -734,7 +740,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Radar Clouds",
-          information:"The Satellite Infrared layer provides real-time infrared satellite imagery, allowing users to monitor cloud cover and atmospheric conditions. This layer is essential for tracking weather patterns and forecasting.",
+          information: "The Satellite Infrared layer provides real-time infrared satellite imagery, allowing users to monitor cloud cover and atmospheric conditions. This layer is essential for tracking weather patterns and forecasting.",
         },
         dwd_satellite_infrared: {
           label: "DWD Satellite Infrared",
@@ -742,7 +748,7 @@ export const ncop_menu_items = {
           theme: "slider",
           type: "raster",
           title: "DWD Radar (°C)",
-          information:"The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
+          information: "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
         },
         imerg_precipitation_rate_14_days: {
           label: "IMERG Precipitation Rate (14 Days)",
@@ -750,7 +756,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: null,
-          information:"The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
+          information: "The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
         },
       },
     },
@@ -762,7 +768,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Specific Humidity (g/kg)",
-          information:"The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
+          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
         relative_humidity_2m_above_ground: {
           label: "Relative Humidity (%)",
@@ -770,7 +776,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
+          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
         gdps_accumulated_precipitation: {
           label: "Accumulated Precipitation",
@@ -778,7 +784,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
+          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
         },
         precipitation_type_3hrs: {
           label: "Precipitation Type / 3hrs",
@@ -786,7 +792,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Precipitation Type",
-          information:"The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
+          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
         },
       },
     },
@@ -798,7 +804,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Temperature (°C)",
-          information:"The Temperature (850hPa) layer displays the temperature levels at 850 hPa pressure level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
+          information: "The Temperature (850hPa) layer displays the temperature levels at 850 hPa pressure level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
         },
         ecmwf_lightning: {
           label: "Lightning Forecast",
@@ -806,7 +812,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Probability %",
-          information:"The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
+          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
         },
         ecmwf_cyclone: {
           label: "Tropical Cyclone Strike Probability",
@@ -814,7 +820,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           title: "Probability %",
-          information:"The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
+          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
         },
       },
     },
@@ -826,7 +832,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
+          information: "The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
         },
         hourly_precipitation_2m_above_ground: {
           label: "Hourly Precipitation (2m Above Ground)",
@@ -834,7 +840,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Hourly Precipitation (2m Above Ground) layer displays the precipitation levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term rainfall patterns and their impact on the environment.",
+          information: "The Hourly Precipitation (2m Above Ground) layer displays the precipitation levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term rainfall patterns and their impact on the environment.",
         },
         hourly_snowfall_forecast: {
           label: "Hourly Snowfall (Forecast)",
@@ -842,7 +848,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Hourly Snowfall (Forecast) layer displays the snowfall levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term snowfall patterns and their impact on the environment.",
+          information: "The Hourly Snowfall (Forecast) layer displays the snowfall levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term snowfall patterns and their impact on the environment.",
         },
         weekly_snowfall_forecast: {
           label: "Weekly Snow (Forecast)",
@@ -850,7 +856,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Weekly Snow (Forecast) layer displays the total snowfall accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly snowfall patterns and their impact on the environment.",
+          information: "The Weekly Snow (Forecast) layer displays the total snowfall accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly snowfall patterns and their impact on the environment.",
         },
         cape_hourly_forecast: {
           label: "CAPE Hourly (Forecast)",
@@ -858,7 +864,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The CAPE Hourly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on an hourly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
+          information: "The CAPE Hourly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on an hourly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
         },
         cape_weekly_forecast: {
           label: "CAPE Weekly (Forecast)",
@@ -866,7 +872,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The CAPE Weekly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on a weekly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
+          information: "The CAPE Weekly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on a weekly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
         },
         storm_helicity_forecast_0_3km: {
           label: "Storm Helicity Forecast (0-3km)",
@@ -874,7 +880,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Storm Helicity Forecast (0-3km) layer displays the storm helicity levels in the 0-3 km atmospheric layer. This layer is essential for understanding the potential for rotating storms and severe weather development.",
+          information: "The Storm Helicity Forecast (0-3km) layer displays the storm helicity levels in the 0-3 km atmospheric layer. This layer is essential for understanding the potential for rotating storms and severe weather development.",
         },
         precipitation_radar: {
           label: "Precipitation Radar",
@@ -882,7 +888,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Precipitation Radar layer provides real-time precipitation data using radar technology. This layer is crucial for monitoring rainfall intensity and tracking storm systems.",
+          information: "The Precipitation Radar layer provides real-time precipitation data using radar technology. This layer is crucial for monitoring rainfall intensity and tracking storm systems.",
         },
         temperature_2m_above_ground: {
           label: "Temperature (2m Above Ground)",
@@ -890,7 +896,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
+          information: "The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
         },
         official_weather_warnings_forecast: {
           label: "Official Weather Warnings (Forecast)",
@@ -898,7 +904,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
+          information: "The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
         },
         meteorological_risks_forecast: {
           label: "Meteorological Risks (Forecast)",
@@ -906,7 +912,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+          information: "The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
         },
       },
     },
@@ -1606,7 +1612,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Ocean Surface Salinity layer displays the salinity levels of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
+          information: "The Ocean Surface Salinity layer displays the salinity levels of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_temperature: {
           label: "Ocean Surface Temperature (10m)",
@@ -1614,7 +1620,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Ocean Surface Temperature layer displays the temperature of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
+          information: "The Ocean Surface Temperature layer displays the temperature of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_currents: {
           label: "Ocean Surface Currents (10m)",
@@ -1622,7 +1628,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Ocean Surface Currents layer displays the surface currents of the ocean at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
+          information: "The Ocean Surface Currents layer displays the surface currents of the ocean at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_height: {
           label: "Ocean Surface Height w.r.t Geoid",
@@ -1630,7 +1636,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
-          information:"The Ocean Surface Height layer displays the height of the ocean surface with respect to the geoid. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
+          information: "The Ocean Surface Height layer displays the height of the ocean surface with respect to the geoid. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
       },
       toggle: {
@@ -1751,7 +1757,7 @@ export const ncop_menu_items = {
         "GDACS Alerts": {
           static: {
             gdacs_tc_events: {
-              label: "GDACS – Tropical Cyclones (TC)",
+              label: "Tropical Cyclones (TC)",
               image: getImage("gdacs-TC.webp"),
               type: "geojson",
               theme: "legend",
@@ -1821,7 +1827,7 @@ export const ncop_menu_items = {
             },
             //GDACS Flood Events
             gdacs_fl_events: {
-              label: "GDACS – Floods (FL)",
+              label: "Floods (FL)",
               image: getImage("gdacs-FL.webp"),
               type: "geojson",
               theme: "legend",
@@ -1882,7 +1888,7 @@ export const ncop_menu_items = {
             },
             //GDACS Earthquake Events
             gdacs_eq_events: {
-              label: "GDACS – Earthquakes (EQ)",
+              label: "Earthquakes (EQ)",
               image: getImage("gdacs-EQ.webp"),
               type: "geojson",
               theme: "legend",
@@ -1943,7 +1949,7 @@ export const ncop_menu_items = {
             },
             //GDACS Volcano Events
             gdacs_vo_events: {
-              label: "GDACS – Volcanoes (VO)",
+              label: "Volcanoes (VO)",
               image: getImage("gdacs-VO.webp"),
               type: "geojson",
               theme: "legend",
@@ -2004,7 +2010,7 @@ export const ncop_menu_items = {
             },
             //GDACS Wildfire Events
             gdacs_wf_events: {
-              label: "GDACS – Wildfires (WF)",
+              label: "Wildfires (WF)",
               image: getImage("gdacs-WF.webp"),
               type: "geojson",
               theme: "legend",
@@ -2065,7 +2071,7 @@ export const ncop_menu_items = {
             },
             //GDACS Drought Events
             gdacs_dr_events: {
-              label: "GDACS – Drought (DR)",
+              label: "Drought (DR)",
               image: getImage("gdacs-DR.webp"),
               type: "geojson",
               theme: "legend",

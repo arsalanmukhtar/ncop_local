@@ -35,30 +35,30 @@ export class LayerOrderControl {
             controlsWrapper.appendChild(basemapControl);
         }
 
-        if (controlsWrapper) {
-            // Create layer control
-            const layerControl = document.createElement("div");
-            layerControl.className = "custom-layer-control";
-            layerControl.innerHTML = `
-                <button id="layerOrderToggle" class="custom-layer-btn" title="Order Toggled Layers">
-                    <i data-lucide="bring-to-front"></i>
-                </button>
-                <div id="layerOrderPanel" class="layer-order-panel">
-                    <div class="layer-order-header">
-                        <span class="layer-order-title">Layer Order</span>
-                        <div class="layer-order-subtitle">Drag to reorder</div>
-                    </div>
-                    <div id="layerOrderList" class="layer-order-list">
-                        <div class="no-layers-message">No active layers</div>
-                    </div>
-                </div>
-            `;
+        // if (controlsWrapper) {
+        //     // Create layer control
+        //     const layerControl = document.createElement("div");
+        //     layerControl.className = "custom-layer-control";
+        //     layerControl.innerHTML = `
+        //         <button id="layerOrderToggle" class="custom-layer-btn" title="Order Toggled Layers">
+        //             <i data-lucide="bring-to-front"></i>
+        //         </button>
+        //         <div id="layerOrderPanel" class="layer-order-panel">
+        //             <div class="layer-order-header">
+        //                 <span class="layer-order-title">Layer Order</span>
+        //                 <div class="layer-order-subtitle">Drag to reorder</div>
+        //             </div>
+        //             <div id="layerOrderList" class="layer-order-list">
+        //                 <div class="no-layers-message">No active layers</div>
+        //             </div>
+        //         </div>
+        //     `;
 
-            // Add layer control to wrapper
-            controlsWrapper.appendChild(layerControl);
+        //     // Add layer control to wrapper
+        //     controlsWrapper.appendChild(layerControl);
 
-            lucide.createIcons();
-        }
+        //     lucide.createIcons();
+        // }
     }
     addEventListeners() {
         const layerToggle = document.getElementById("layerOrderToggle");
