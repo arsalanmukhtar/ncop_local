@@ -81,31 +81,27 @@ export DJANGO_SETTINGS_MODULE=ncop_project.settings.mobile_prod
 export $(grep -v '^#' /home/gtechapp/ncop_app/ncop_local/.env.mobile-prod | xargs)
 
 echo ""
-echo "Step 5: Installing dependencies..."
-pip install -r requirements.txt --quiet
-
-echo ""
-echo "Step 6: Running migrations..."
+echo "Step 5: Running migrations..."
 python manage.py migrate --noinput
 
 echo ""
-echo "Step 7: Building frontend..."
+echo "Step 6: Building frontend..."
 cd ../frontend
 npm install --silent
 npm run build
 cd ../project
 
 echo ""
-echo "Step 8: Collecting static files..."
+echo "Step 7: Collecting static files..."
 python manage.py collectstatic --noinput --clear
 
 echo ""
-echo "Step 9: Fixing permissions..."
+echo "Step 8: Fixing permissions..."
 sudo chmod o+x /home/gtechapp
 sudo chmod -R 755 /home/gtechapp/ncop_app/ncop_local/project/static
 
 echo ""
-echo "Step 10: Restarting production service..."
+echo "Step 9: Restarting production service..."
 sudo systemctl restart ncop-mobile-prod
 sleep 3
 
@@ -120,7 +116,7 @@ else
 fi
 
 echo ""
-echo "Step 11: Switching back to mobile-app branch..."
+echo "Step 10: Switching back to mobile-app branch..."
 git checkout mobile-app
 echo "✅ Back on mobile-app branch for development"
 
