@@ -732,24 +732,26 @@ class WAQIgeojson(View):
         521242,
     ]
 
-    # High-priority micro city boxes
-    CITY_TILES = [
-        {"lat1": 24.4, "lng1": 66.5, "lat2": 25.4, "lng2": 67.7},  # Karachi
-        {"lat1": 30.9, "lng1": 72.5, "lat2": 31.9, "lng2": 73.7},  # Faisalabad
-        {"lat1": 29.7, "lng1": 70.8, "lat2": 30.7, "lng2": 72.0},  # Multan
-        {"lat1": 29.7, "lng1": 66.3, "lat2": 30.7, "lng2": 67.6},  # Quetta
-        {"lat1": 31.2, "lng1": 74.0, "lat2": 31.8, "lng2": 74.6},  # Lahore
-        {"lat1": 33.4, "lng1": 72.9, "lat2": 34.1, "lng2": 73.6},  # Islamabad/Rawalpindi
-    ]
-
-    # Pakistan-wide tiles
-    PAKISTAN_TILES = [
-        {"lat1": 23.0, "lng1": 66.0, "lat2": 28.5, "lng2": 71.0},
-        {"lat1": 27.0, "lng1": 70.0, "lat2": 34.0, "lng2": 75.5},
-        {"lat1": 31.0, "lng1": 70.0, "lat2": 37.5, "lng2": 74.5},
-        {"lat1": 23.0, "lng1": 60.0, "lat2": 29.5, "lng2": 67.5},
-        {"lat1": 33.0, "lng1": 73.0, "lat2": 37.8, "lng2": 78.0},
-    ]
+    # Global tiles covering the entire world
+    # Using 15-degree chunks for reasonable API load
+    @staticmethod
+    def generate_global_tiles():
+        """Generate tiles covering the entire globe"""
+        tiles = []
+        # Latitude from -90 to 90, Longitude from -180 to 180
+        lat_step = 15
+        lng_step = 15
+        
+        for lat in range(-90, 90, lat_step):
+            for lng in range(-180, 180, lng_step):
+                tiles.append({
+                    "lat1": lat,
+                    "lng1": lng,
+                    "lat2": min(lat + lat_step, 90),
+                    "lng2": min(lng + lng_step, 180)
+                })
+        
+        return tiles
 
     def get(self, request, *args, **kwargs):
         features = self.fetch_waqi_global_data()
@@ -780,8 +782,8 @@ class WAQIgeojson(View):
             logger.error("WAQI_API_TOKEN not configured")
             return []
 
-        # Only Pakistan (city tiles + national tiles). Global chunks removed.
-        chunks = self.CITY_TILES + self.PAKISTAN_TILES
+        # Generate global tiles covering the entire world
+        chunks = self.generate_global_tiles()
 
         features = []
         seen_uids = set()
