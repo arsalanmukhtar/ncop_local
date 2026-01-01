@@ -4260,7 +4260,7 @@ button.custom-nav-btn.terrain-active:hover {
     /* Inherits existing .ncop-item-image styles */
     width: 80px;
     height: 80px;
-    border-radius: 15px;
+    /* border-radius: 15px; */
 }
 
 .ncop-nested-subsection .ncop-item-static .ncop-item-image img {

@@ -516,7 +516,7 @@ export class SidebarMenu {
     itemDiv.innerHTML = `
             <span class="ncop-item-label">${itemData.label}</span>
             <label class="ncop-toggle">
-                <input type="checkbox" data-item-key="${itemKey}">
+                <input type="checkbox" data-item-key="${itemKey}" ${itemKey === "global_boundaries" ? "checked" : ""}>
                 <span class="ncop-toggle-slider"></span>
             </label>
         `;
@@ -535,6 +535,7 @@ export class SidebarMenu {
     // console.log(`✅ Toggle item created successfully:`, itemDiv);
     return itemDiv;
   }
+
   #createTemporalItem(categoryKey, subcategoryKey, itemKey, itemData) {
     // console.log(`🔧 Creating temporal item: ${itemKey}`, itemData);
 
@@ -547,9 +548,8 @@ export class SidebarMenu {
     itemDiv.className = "ncop-item ncop-item-temporal";
     itemDiv.innerHTML = `
             <div class="ncop-item-image">
-                <img src="${
-                  itemData.image || "/static/images/placeholder.png"
-                }" alt="${itemData.label}" />
+                <img src="${itemData.image || "/static/images/placeholder.png"
+      }" alt="${itemData.label}" />
             </div>
             <span class="ncop-item-label">${itemData.label}</span>
         `;
@@ -1044,21 +1044,28 @@ export class SidebarMenu {
       .forEach((toggle) => {
         const itemKey = toggle.dataset.itemKey;
         const savedState = this.#storage.getSetting(`ncop_toggle_${itemKey}`);
+
+        // Force Global Boundaries ON by default (always)
+        if (itemKey === "global_boundaries") {
+          toggle.checked = true;
+          this.#storage.saveSetting(`ncop_toggle_${itemKey}`, true);
+          toggle.dispatchEvent(new Event("change")); // calls your existing handler
+          return;
+        }
+
         if (savedState !== null) {
           toggle.checked = savedState;
+          toggle.dispatchEvent(new Event("change")); // sync map with restored UI
         }
       });
 
     document.querySelectorAll(".ncop-dropdown").forEach((dropdown) => {
       const itemKey = dropdown.dataset.itemKey;
       const savedState = this.#storage.getSetting(`ncop_dropdown_${itemKey}`);
-      if (savedState !== null) {
-        dropdown.value = savedState;
-      }
+      if (savedState !== null) dropdown.value = savedState;
     });
-
-    // console.log("🔄 NCOP control states restored from localStorage");
   }
+
 
   #initializeSearchFunctionality() {
     const searchInput = document.getElementById("sidebarSearch");
