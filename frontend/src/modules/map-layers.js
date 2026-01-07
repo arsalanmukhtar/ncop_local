@@ -14,6 +14,13 @@ import {
   generateCOLayers,
   generateDustLayers,
   generateCH4300Layers,
+  generateSUAOD550Layers,
+  generateBBAOD550Layers,
+  generateCO2_850hPaLayers,
+  generateCO2SurfaceLayers,
+  generateHCHOSurfaceLayers,
+  generateSSAOD550Layers,
+  generateUVIndexDailyMaxLayers,
   generateGDPSRelHumLayers,
   generateGDPSSpecHumLayers,
   generateGDPSAccPreciLayers,
@@ -33,7 +40,22 @@ import {
   generateMBX_MeteoblueDailyCAPELayers,
   generateMBX_MeteoblueOfficialWeatherWarningsLayers,
   generateMBX_MeteoblueForecastWarningsDailyLayers,
+  generateMeteoblueCAMSAirQualityHourlyLayers,
+  generateMeteoblueCAMSAirQualityDailyLayers,
+  generateMeteoblueCAMSDesertDustHourlyLayers,
+  generateMeteoblueCAMSDesertDustDailyLayers,
+  generateMeteoblueCAMSAODHourlyLayers,
+  generateMeteoblueCAMSAODDailyLayers,
+  generateMeteoblueCAMSNO2DailyLayers,
+  generateMeteoblueCAMSCODailyLayers,
+  generateMeteoblueCAMSSO2DailyLayers,
   generateMBX_IMERGPrecipRateLayers,
+  generateSnowDensityWeeklyLayers,
+  generateSnowDepthWeeklyLayers,
+  generateSnowfallHourlyLayers,
+  generateThunderstormProbability3HourlyLayers,
+  generateLiquidFogProbability3HourlyLayers,
+  generateConvectivePrecipitationWeeklyLayers,
 } from "./time-functions.js";
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
@@ -291,6 +313,13 @@ const o3_layers = generateO3Layers();
 const co_layers = generateCOLayers();
 const dust_layers = generateDustLayers();
 const ch4300_layers = generateCH4300Layers();
+const suaod550_layers = generateSUAOD550Layers();
+const bbaod550_layers = generateBBAOD550Layers();
+const co2_850hpa_layers = generateCO2_850hPaLayers();
+const co2_surface_layers = generateCO2SurfaceLayers();
+const hcho_surface_layers = generateHCHOSurfaceLayers();
+const ssaod550_layers = generateSSAOD550Layers();
+const uvindex_layers = generateUVIndexDailyMaxLayers();
 const gdps_relhum_layers = generateGDPSRelHumLayers();
 const gdps_spechum_layers = generateGDPSSpecHumLayers();
 const gdps_accu_precip_layers = generateGDPSAccPreciLayers();
@@ -310,7 +339,22 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const cams_aqi_hourly_layers = generateMeteoblueCAMSAirQualityHourlyLayers(metbluT);
+const cams_aqi_daily_layers = generateMeteoblueCAMSAirQualityDailyLayers(metbluT);
+const cams_desert_dust_hourly_layers = generateMeteoblueCAMSDesertDustHourlyLayers(metbluT);
+const cams_desert_dust_daily_layers = generateMeteoblueCAMSDesertDustDailyLayers(metbluT);
+const cams_aod_hourly_layers = generateMeteoblueCAMSAODHourlyLayers(metbluT);
+const cams_aod_daily_layers = generateMeteoblueCAMSAODDailyLayers(metbluT);
+const cams_no2_daily_layers = generateMeteoblueCAMSNO2DailyLayers(metbluT);
+const cams_co_daily_layers = generateMeteoblueCAMSCODailyLayers(metbluT);
+const cams_so2_daily_layers = generateMeteoblueCAMSSO2DailyLayers(metbluT);
 const mbx_imerg_precip_rate = generateMBX_IMERGPrecipRateLayers();
+const snow_density_weekly_layers = generateSnowDensityWeeklyLayers();
+const snow_depth_weekly_layers = generateSnowDepthWeeklyLayers();
+const snowfall_hourly_layers = generateSnowfallHourlyLayers();
+const thunderstorm_prob_3hourly_layers = generateThunderstormProbability3HourlyLayers();
+const liquid_fog_prob_3hourly_layers = generateLiquidFogProbability3HourlyLayers();
+const convective_precip_weekly_layers = generateConvectivePrecipitationWeeklyLayers();
 
 // Export the layer array globally for the time slider
 window.dwd_satellite_infrared = dwd_layers;
@@ -325,6 +369,13 @@ window.ozone = o3_layers;
 window.carbon_monoxide = co_layers;
 window.dust = dust_layers;
 window.methane_at_300hPa = ch4300_layers;
+window.sulphate_aod_550 = suaod550_layers;
+window.biomass_burning_aod_550 = bbaod550_layers;
+window.co2_850hpa = co2_850hpa_layers;
+window.co2_surface = co2_surface_layers;
+window.hcho_surface = hcho_surface_layers;
+window.sea_salt_aod_550 = ssaod550_layers;
+window.uv_index_daily_max = uvindex_layers;
 window.specific_humidity_2m_above_ground = gdps_spechum_layers;
 window.relative_humidity_2m_above_ground = gdps_relhum_layers;
 window.gdps_accumulated_precipitation = gdps_accu_precip_layers;
@@ -344,7 +395,22 @@ window.weekly_snowfall_forecast = mbx_snow_daily;
 window.cape_weekly_forecast = mbx_cape_daily;
 window.official_weather_warnings_forecast = mbx_warn_official;
 window.meteorological_risks_forecast = mbx_warn_forecast;
+window.cams_air_quality_index_hourly = cams_aqi_hourly_layers;
+window.cams_air_quality_index_daily = cams_aqi_daily_layers;
+window.cams_desert_dust_hourly = cams_desert_dust_hourly_layers;
+window.cams_desert_dust_daily = cams_desert_dust_daily_layers;
+window.cams_aerosol_optical_depth_hourly = cams_aod_hourly_layers;
+window.cams_aerosol_optical_depth_daily = cams_aod_daily_layers;
+window.cams_nitrogen_dioxide_daily = cams_no2_daily_layers;
+window.cams_carbon_monoxide_daily = cams_co_daily_layers;
+window.cams_sulphur_dioxide_daily = cams_so2_daily_layers;
 window.imerg_precipitation_rate_14_days = mbx_imerg_precip_rate;
+window.snow_density_weekly_forecast = snow_density_weekly_layers;
+window.snow_depth_weekly_forecast = snow_depth_weekly_layers;
+window.snowfall_hourly_forecast = snowfall_hourly_layers;
+window.thunderstorm_probability_3hourly_forecast = thunderstorm_prob_3hourly_layers;
+window.liquid_fog_probability_3hourly_forecast = liquid_fog_prob_3hourly_layers;
+window.convective_precipitation_weekly_forecast = convective_precip_weekly_layers;
 // console.log(
 //   "✅ DWD layers created:",
 //   window.dwd_satellite_infrared.length,
@@ -788,6 +854,54 @@ export const ncop_menu_items = {
           title: "Precipitation Type",
           information:"The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
         },
+        snow_density_weekly_forecast: {
+          label: "Snow Density Weekly Forecast",
+          image: getImage("Snow_density_weekly_kgm3_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Snow Density (kg/m³)",
+          information: "The Snow Density Weekly Forecast layer displays the predicted snow density in kilograms per cubic meter over the next 7 days. This layer helps understand snow pack characteristics and water content in snowfall.",
+        },
+        snow_depth_weekly_forecast: {
+          label: "Snow Depth Weekly Forecast",
+          image: getImage("Snow_depth_weekly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Snow Depth (m)",
+          information: "The Snow Depth Weekly Forecast layer displays the predicted snow depth in meters over the next 7 days. This layer is essential for avalanche forecasting, winter sports planning, and water resource management.",
+        },
+        snowfall_hourly_forecast: {
+          label: "Snowfall Hourly Forecast",
+          image: getImage("Snowfall_hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Snowfall Probability (%)",
+          information: "The Snowfall Hourly Forecast layer displays the probability of snowfall at 3-hour intervals over the next 30 hours. This layer helps in short-term winter weather planning and travel decisions.",
+        },
+        thunderstorm_probability_3hourly_forecast: {
+          label: "Thunderstorm Probability 3-Hourly",
+          image: getImage("Thunderstorm_Propability_3hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Thunderstorm Probability (%)",
+          information: "The Thunderstorm Probability 3-Hourly Forecast layer displays the likelihood of thunderstorm occurrence at 3-hour intervals. This layer is critical for severe weather warnings and public safety.",
+        },
+        liquid_fog_probability_3hourly_forecast: {
+          label: "Liquid Fog Probability 3-Hourly",
+          image: getImage("Liquid_Fog_Propability_3hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Fog Visibility (km)",
+          information: "The Liquid Fog Probability 3-Hourly Forecast layer displays the predicted visibility conditions due to liquid fog at 3-hour intervals. This layer is essential for aviation, transportation planning, and safety operations.",
+        },
+        convective_precipitation_weekly_forecast: {
+          label: "Convective Precipitation Weekly",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Convective Precipitation (kg/m²)",
+          information: "The Convective Precipitation Weekly Forecast layer displays the predicted convective precipitation (thunderstorm-related rainfall) in kg/m² over the next 10 days. This layer helps in flood forecasting and severe weather prediction.",
+        },
       },
     },
     "ECMWF Weather Forecast Parameters": {
@@ -947,16 +1061,6 @@ export const ncop_menu_items = {
           popup: true,
           information:
             "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
-        },
-      },
-    },
-    "Indian Meteorological Department (IMD)": {
-      toggle: {
-        precipitation_past_3_days: {
-          label: "Precipitation (Past 3 Days)",
-          type: "geojson",
-          theme: null,
-          geometry: null,
         },
       },
     },
@@ -1434,6 +1538,62 @@ export const ncop_menu_items = {
           title: "Methane (ppbv)",
           information: "The Methane at 300hPa layer displays the concentration of methane at 300 hPa pressure level. This layer is essential for understanding air quality and its impact on human health.",
         },
+        sulphate_aod_550: {
+          label: "Sulphate Aerosol (AOD 550nm)",
+          image: getImage("cams_composition_suaod550.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Sulphate AOD",
+          information: "The Sulphate Aerosol Optical Depth layer displays the concentration of sulphate aerosol particles at 550nm wavelength. These particles form from SO₂ emissions and play a significant role in air quality, visibility reduction, and climate by reflecting sunlight. Major sources include industrial emissions and volcanic activity.",
+        },
+        biomass_burning_aod_550: {
+          label: "Biomass Burning Aerosol (AOD 550nm)",
+          image: getImage("cams_composition_bbaod550_biomass.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Biomass Burning AOD",
+          information: "The Biomass Burning Aerosol Optical Depth layer displays the concentration of smoke particles from wildfires, agricultural burning, and forest fires at 550nm wavelength. These aerosols significantly impact air quality, visibility, and climate. This layer is crucial for monitoring fire seasons and smoke transport.",
+        },
+        co2_850hpa: {
+          label: "Carbon Dioxide at 850hPa",
+          image: getImage("cams_composition_co2_850hpa.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "CO₂ (ppm)",
+          information: "The Carbon Dioxide at 850hPa layer displays the concentration of CO₂ at 850 hPa pressure level (approximately 1.5 km altitude). CO₂ is the primary greenhouse gas from fossil fuel combustion, deforestation, and industrial processes. This layer helps monitor atmospheric CO₂ distribution and transport patterns.",
+        },
+        co2_surface: {
+          label: "Carbon Dioxide at Surface",
+          image: getImage("cams_composition_co2_surface.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "CO₂ (ppm)",
+          information: "The Carbon Dioxide at Surface layer displays ground-level CO₂ concentrations. This layer shows the spatial and temporal variations of atmospheric CO₂, which is crucial for understanding carbon sources and sinks, urban emissions, and the global carbon cycle. Surface measurements are key for climate change monitoring.",
+        },
+        hcho_surface: {
+          label: "Formaldehyde at Surface",
+          image: getImage("cams_composition_co2_surface.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "HCHO (ppbv)",
+          information: "The Formaldehyde at Surface layer displays ground-level HCHO concentrations. Formaldehyde is a volatile organic compound (VOC) produced by incomplete combustion, vegetation, and industrial sources. It contributes to ozone formation and is a respiratory irritant. This layer helps identify pollution sources and photochemical smog formation.",
+        },
+        sea_salt_aod_550: {
+          label: "Sea Salt Aerosol (AOD 550nm)",
+          image: getImage("cams_composition_seasalt.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Sea Salt AOD",
+          information: "The Sea Salt Aerosol Optical Depth layer displays the concentration of sea salt particles at 550nm wavelength. These natural aerosols are generated by wave breaking and sea spray, particularly in high wind conditions. Sea salt aerosols affect climate, cloud formation, and can contribute to reduced visibility in coastal areas.",
+        },
+        uv_index_daily_max: {
+          label: "UV Index (Daily Maximum)",
+          image: getImage("cams_composition_uvindex_daily_max.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "UV Index",
+          information: "The UV Index Daily Maximum layer displays the peak ultraviolet radiation level expected during the day. The UV Index ranges from 0 (low) to 11+ (extreme) and indicates the strength of solar UV radiation reaching the Earth's surface. This layer is essential for sun protection planning and skin cancer prevention. Values above 3 require sun protection measures.",
+        },
       },
       toggle: {
         waqi_stations: {
@@ -1593,6 +1753,82 @@ export const ncop_menu_items = {
           legendPath: getLegendImage("World_AirQuality.webp"),
           information:
             "The WAQI-Stations Air Quality layer displays real-time air quality data from the World Air Quality Index (WAQI) project. This layer is essential for monitoring pollution levels and assessing health risks associated with air quality in various locations worldwide.",
+        },
+      },
+    },
+    "Meteoblue Air-Quality Forecast": {
+      temporal: {
+        cams_air_quality_index_hourly: {
+          label: "Air Quality Index (AQI) Hourly",
+          image: getImage("meteoblue_cams_aqi_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "AQI",
+          information: "The CAMS Air Quality Index (AQI) Hourly layer displays hourly forecasts of overall air quality. The index ranges from good (green) to hazardous (purple), providing an easy-to-understand measure of air pollution levels.",
+        },
+        cams_air_quality_index_daily: {
+          label: "Air Quality Index (AQI) Daily",
+          image: getImage("meteoblue_cams_aqi_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "AQI",
+          information: "The CAMS Air Quality Index (AQI) Daily layer displays daily average forecasts of overall air quality. This layer helps in understanding air quality trends over multiple days.",
+        },
+        cams_desert_dust_hourly: {
+          label: "Desert Dust Hourly Forecast",
+          image: getImage("meteoblue_cams_desert_dust_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "Desert Dust (µg/m³)",
+          information: "The Desert Dust Hourly Forecast layer displays hourly predictions of desert dust concentrations. This is particularly important for monitoring dust storms and their impact on air quality and visibility.",
+        },
+        cams_desert_dust_daily: {
+          label: "Desert Dust Daily Forecast",
+          image: getImage("meteoblue_cams_desert_dust_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "Desert Dust (µg/m³)",
+          information: "The Desert Dust Daily Forecast layer displays daily average predictions of desert dust concentrations, useful for medium-term air quality planning.",
+        },
+        cams_aerosol_optical_depth_hourly: {
+          label: "Aerosol Optical Depth (AOD) Hourly",
+          image: getImage("meteoblue_cams_aod_hourly.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "AOD",
+          information: "The Aerosol Optical Depth (AOD) Hourly layer measures the extinction of solar radiation by aerosols in the atmosphere. Higher AOD values indicate more aerosols and reduced visibility.",
+        },
+        cams_aerosol_optical_depth_daily: {
+          label: "Aerosol Optical Depth (AOD) Daily",
+          image: getImage("meteoblue_cams_aod_hourly.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "AOD",
+          information: "The Aerosol Optical Depth (AOD) Daily layer provides daily average forecasts of atmospheric aerosol levels, useful for air quality monitoring and climate studies.",
+        },
+        cams_nitrogen_dioxide_daily: {
+          label: "Nitrogen Dioxide (NO₂) Daily Forecast",
+          image: getImage("meteoblue_cams_no2_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "NO₂ (µg/m³)",
+          information: "The Nitrogen Dioxide (NO₂) Daily Forecast layer displays daily predictions of NO₂ concentrations. NO₂ is a major air pollutant primarily from combustion processes and vehicle emissions.",
+        },
+        cams_carbon_monoxide_daily: {
+          label: "Carbon Monoxide (CO) Daily Forecast",
+          image: getImage("meteoblue_cams_co_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "CO (µg/m³)",
+          information: "The Carbon Monoxide (CO) Daily Forecast layer displays daily predictions of CO concentrations. CO is a colorless, odorless gas produced by incomplete combustion and is harmful to human health.",
+        },
+        cams_sulphur_dioxide_daily: {
+          label: "Sulphur Dioxide (SO₂) Daily Forecast",
+          image: getImage("meteoblue_cams_so2_daily.webp"),
+          type: "vector",
+          theme: "slider",
+          title: "SO₂ (µg/m³)",
+          information: "The Sulphur Dioxide (SO₂) Daily Forecast layer displays daily predictions of SO₂ concentrations. SO₂ is a major air pollutant from industrial processes and fossil fuel combustion.",
         },
       },
     },

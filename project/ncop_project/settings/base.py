@@ -17,6 +17,9 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 
+# --- Google Earth Engine ---
+GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
+
 # --- Apps ---
 INSTALLED_APPS = [
     "django.contrib.admin",

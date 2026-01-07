@@ -35,6 +35,7 @@ import {
 } from "./time-functions.js";
 import "./map-layers.js"; // Exposes window.dwd_satellite_infrared
 import "./time-slider-functionality.js"; // Exposes global functions
+import { initRainViewerPlayer } from "./rainviewer-player.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 // ===================================================
 
@@ -214,6 +215,17 @@ class DashboardManager {
       if (!labelsEnabled) {
         setTimeout(() => this.#mapControls.toggleMapLabels(false), 1000);
       }
+    }
+    // ------------------------------
+    // RainViewer Player init (standalone)
+    // ------------------------------
+    try {
+      if (!window.__rvInited) {
+        initRainViewerPlayer(this.#map);
+        window.__rvInited = true;
+      }
+    } catch (e) {
+      console.warn("RainViewer Player failed to init:", e);
     }
   }
 
