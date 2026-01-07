@@ -2,6 +2,13 @@
 
 // Import the menu configuration to access item data
 import { ncop_menu_items } from './map-layers.js';
+import {
+  showRainViewerPlayer,
+  hideRainViewerPlayer,
+  initRainViewerPlayer,
+} from "./rainviewer-player.js";
+
+
 
 // In-memory state tracking for all items
 const layerStates = new Map();
@@ -191,12 +198,80 @@ export function handleTemporalInteraction(
   subcategoryKey,
   itemKey,
   isActive,
-  layerConfig  // Add this parameter to receive the config object
+  layerConfig
 ) {
-  // console.log(`🔄 Temporal interaction: ${itemKey}, isActive: ${isActive}`);
+  // ✅ Special-case RainViewer temporal items WITHOUT changing sidebar core logic
+  const isRainViewer =
+    itemKey === "realtime_radar" || itemKey === "satellite_infrared";
 
+  if (isRainViewer) {
+    const map = window.ncop_map || window.map;
+
+    if (!map) {
+      console.error("❌ RainViewer: map not found on window.ncop_map/window.map");
+      return;
+    }
+
+    // Helper: check if the other RainViewer toggle is still ON
+    const otherKey =
+      itemKey === "realtime_radar" ? "satellite_infrared" : "realtime_radar";
+
+    const otherChecked =
+      document.querySelector(`input[data-item-key="${otherKey}"]`)?.checked ===
+      true;
+
+    // Ensure init once (safe-guarded)
+    const ensureInit = () => {
+      if (!window.__rvPlayerInited) {
+        try {
+          initRainViewerPlayer(map);
+          window.__rvPlayerInited = true;
+        } catch (e) {
+          console.warn("RainViewer init failed:", e);
+        }
+      }
+    };
+
+    if (isActive) {
+      ensureInit();
+
+      // Radar vs Satellite mode based on itemKey
+      const mode = itemKey === "satellite_infrared" ? "satellite" : "radar";
+
+      // Show RainViewer slider + lock mode (two separate toggles behavior)
+      // (If your showRainViewerPlayer supports 2nd arg lockMode, keep it true)
+      try {
+        showRainViewerPlayer(mode, true);
+      } catch {
+        // fallback if your function signature is showRainViewerPlayer(mode)
+        showRainViewerPlayer(mode);
+      }
+
+      return; // IMPORTANT: do not run normal temp-slider logic
+    } else {
+      // Turning OFF one toggle:
+      // If the other is still ON, keep RainViewer visible in the other mode.
+      if (otherChecked) {
+        ensureInit();
+        const mode = otherKey === "satellite_infrared" ? "satellite" : "radar";
+        try {
+          showRainViewerPlayer(mode, true);
+        } catch {
+          showRainViewerPlayer(mode);
+        }
+        return;
+      }
+
+      // Otherwise, hide RainViewer slider + remove its layers/sources
+      hideRainViewerPlayer(map);
+      return;
+    }
+  }
+
+  // ---------------------------
+  // Existing behavior for other temporal layers (UNCHANGED)
+  // ---------------------------
   if (isActive) {
-    // Get layer array from window
     const layerArray = window[itemKey];
 
     if (!layerArray) {
@@ -204,28 +279,17 @@ export function handleTemporalInteraction(
       return;
     }
 
-    // console.log(`✅ Found layer array:`, layerArray.length, "steps");
+    const title = layerConfig?.title || subcategoryKey;
 
-    // Extract title from layer config
-    const title = layerConfig?.title || subcategoryKey; // Fallback to subcategoryKey if no title
-
-    // Call the global function with the title
     if (typeof window.updateTempSlider === "function") {
       window.updateTempSlider(layerArray, title, itemKey, null);
-      // console.log(`✅ Slider initialized`);
     } else {
       console.error("❌ updateTempSlider function not found");
     }
   } else {
-    // Hide slider when deselected
-    // console.log(`🔴 Hiding slider for: ${itemKey}`);
-
     const tempSlider = document.getElementById("temp-slider1");
-    if (tempSlider) {
-      tempSlider.style.display = "none";
-    }
+    if (tempSlider) tempSlider.style.display = "none";
 
-    // Call global cleanup functions
     if (typeof window.hideAllSliderLayers === "function") {
       window.hideAllSliderLayers();
     }
@@ -234,6 +298,8 @@ export function handleTemporalInteraction(
     }
   }
 }
+
+
 // Replace the loadGdacsImagesFromData function (around line 217):
 /**
  * Load GDACS images from GeoJSON data dynamically

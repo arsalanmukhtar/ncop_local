@@ -233,7 +233,7 @@ function getLatestSatelliteTime() {
 }
 //---------------------------------------------------------------------------------------------
 /******************************************************
- LAYER definations and additions 
+ ----------------------------------------DWD LAYERS START---------------------------------------------
  ******************************************************/
 export function generateDWDSatelliteLayers() {
   const dwdSatellite = [];
@@ -307,7 +307,12 @@ export function generateDWDSatelliteLayers() {
 
   return dwdSatellite;
 }
-// LAYER definitions and additions
+//----------------------------------------DWD LAYERS END---------------------------------------------
+
+
+/******************************************************
+ ----------------------------------------ECMWF LAYERS START---------------------------------------------
+ ******************************************************/
 // Generate ECMWF Temperature Layers
 export function generateECMWFTempLayers() {
   const ecmwfTemp = [];
@@ -455,22 +460,28 @@ export function generateECMWFLightningLayers() {
 
   return ecmwfLight;
 }
+//------------------------------------------------------------ ECMWF LAYERS END-------------------------------------------
+
 //--------------- LAYER definitions and additions - Air Quality Layers Start-------------------------------------------
 
+/***********************************************************************
+ * CAMS--Air Quality Layers Start--------------------------------------------------------------------------------------------------------
+ ***********************************************************************/
+
+// PM2.5 - Particulate Matter 2.5
 export function generatePM25Layers() {
   const pm25 = [];
 
-  Array.from({ length: 6 }, (_, index) => {
-    const id = `pm25_${index + 1}`;
-    const time = getNextNDays(index, "short");
+  Array.from({ length: 5 }, (_, index) => {
+    const id = `cams_composition_pm2p5${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm2p5&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_pm2p5&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -478,14 +489,15 @@ export function generatePM25Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     pm25.push(entry);
@@ -493,21 +505,20 @@ export function generatePM25Layers() {
 
   return pm25;
 }
-
+// PM10 - Particulate Matter 10
 export function generatePM10Layers() {
   const pm10 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `pm10_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_pm10${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm10&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_pm10&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -515,14 +526,15 @@ export function generatePM10Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     pm10.push(entry);
@@ -531,20 +543,20 @@ export function generatePM10Layers() {
   return pm10;
 }
 
+// NO2 - Nitrogen Dioxide at 850hPa
 export function generateNO2Layers() {
   const no2 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `no2_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_no2_850hpa${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_no2_850hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_no2_850hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -552,14 +564,15 @@ export function generateNO2Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     no2.push(entry);
@@ -568,20 +581,20 @@ export function generateNO2Layers() {
   return no2;
 }
 
+// SO2 - Sulphur Dioxide (total column)
 export function generateSO2Layers() {
   const so2 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `so2_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_so2_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_so2_850hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_so2_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -589,14 +602,15 @@ export function generateSO2Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     so2.push(entry);
@@ -605,20 +619,20 @@ export function generateSO2Layers() {
   return so2;
 }
 
+// O3 - Ozone (total column)
 export function generateO3Layers() {
   const o3 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `o3_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_o3_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_o3_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_o3_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -626,14 +640,15 @@ export function generateO3Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     o3.push(entry);
@@ -642,20 +657,20 @@ export function generateO3Layers() {
   return o3;
 }
 
+// CO - Carbon Monoxide (total column)
 export function generateCOLayers() {
   const co = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `co_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_co_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_co_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -663,14 +678,15 @@ export function generateCOLayers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     co.push(entry);
@@ -679,20 +695,20 @@ export function generateCOLayers() {
   return co;
 }
 
+// Dust AOD (DUAOD550) - Desert Dust Aerosol Optical Depth
 export function generateDustLayers() {
   const dust = [];
 
   Array.from({ length: 5 }, (_, index) => {
-    const id = `dust_${index + 1}`;
+    const id = `cams_composition_duaod550${index}`;
     const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ch4_300hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&STYLES=sh_Oranges_aod&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_duaod550&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -700,11 +716,12 @@ export function generateDustLayers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
       date: getNextNDays(index, "short"),
@@ -716,20 +733,20 @@ export function generateDustLayers() {
   return dust;
 }
 
+// CH4 - Methane at 300hPa
 export function generateCH4300Layers() {
   const ch4300 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `ch4300_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_ch4_300hpa${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_ch4_300hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ch4_300hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -737,14 +754,15 @@ export function generateCH4300Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     ch4300.push(entry);
@@ -753,8 +771,281 @@ export function generateCH4300Layers() {
   return ch4300;
 }
 
+// SUAOD550 - Sulphate Aerosol Optical Depth at 550nm
+export function generateSUAOD550Layers() {
+  const suaod550 = [];
 
-// GDPS Layers
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_suaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_suaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    suaod550.push(entry);
+  });
+
+  return suaod550;
+}
+
+// BBAOD550 - Biomass Burning Aerosol Optical Depth at 550nm
+export function generateBBAOD550Layers() {
+  const bbaod550 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_bbaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_bbaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    bbaod550.push(entry);
+  });
+
+  return bbaod550;
+}
+
+// CO2 at 850hPa - Carbon Dioxide at 850hPa
+export function generateCO2_850hPaLayers() {
+  const co2_850hpa = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_co2_850hpa${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co2_850hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    co2_850hpa.push(entry);
+  });
+
+  return co2_850hpa;
+}
+
+// CO2 Surface - Carbon Dioxide at Surface
+export function generateCO2SurfaceLayers() {
+  const co2_surface = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_co2_surface${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co2_surface&VERSION=1.3.0&FORMAT=image/png&STYLES=sh_Spectral_r_co2_surface&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    co2_surface.push(entry);
+  });
+
+  return co2_surface;
+}
+
+// HCHO Surface - Formaldehyde at Surface
+export function generateHCHOSurfaceLayers() {
+  const hcho_surface = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_hcho_surface${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_hcho_surface&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    hcho_surface.push(entry);
+  });
+
+  return hcho_surface;
+}
+
+// SSAOD550 - Sea Salt Aerosol Optical Depth at 550nm
+export function generateSSAOD550Layers() {
+  const ssaod550 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_ssaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ssaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    ssaod550.push(entry);
+  });
+
+  return ssaod550;
+}
+
+// UV Index Daily Max - Maximum UV Index for the Day
+export function generateUVIndexDailyMaxLayers() {
+  const uvindex = [];
+
+  Array.from({ length: 4 }, (_, index) => {
+    const id = `cams_composition_uvindex_daily_max${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_uvindex_daily_max&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    uvindex.push(entry);
+  });
+
+  return uvindex;
+}
+
+/***********************************************************************
+ * CAMS--Air Quality Layers End----------------------------------------------------------------------------------------------------------
+ ***********************************************************************/
+
+//------------------------------------------------------------ Air Quality Layers END-------------------------------------------
+
+/***********************************************************************
+ * GDPS--Global Deterministic Prediction System (GDPS) START
+ ***********************************************************************/
 // Relative Humidity only
 export function generateGDPSRelHumLayers() {
   const gdpsRelHumLayers = [];
@@ -961,6 +1252,223 @@ export function generateGDPSPreciTypesLayers() {
   });
 
   return gdpsPreciTypes;
+}
+// GDPS - Snow Density Weekly Forecast (kg/m³)
+export function generateSnowDensityWeeklyLayers() {
+  const out = [];
+
+  Array.from({ length: 7 }, (_, index) => {
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
+    const sourceId = `snow_density_weekly_kgm3_forecast_${index}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_DN.3h`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+// GDPS - Snow Depth Weekly Forecast (m)
+export function generateSnowDepthWeeklyLayers() {
+  const out = [];
+
+  Array.from({ length: 7 }, (_, index) => {
+    const date = getNextNDays(index, "short");
+    const timeParam = getNextNDaysWithTime(index, "00", "00", "00");
+    const sourceId = `snow_depth_weekly_forecast_${index}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_SD`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+// GDPS - Snowfall Hourly Forecast (Probability)
+export function generateSnowfallHourlyLayers() {
+  const out = [];
+  const hours = ["03", "06", "09", "12", "15", "18", "21", "03", "06", "09"];
+  const daysOffset = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1];
+
+  Array.from({ length: 10 }, (_, i) => {
+    const timeParam = getNextNDaysWithTime(daysOffset[i], hours[i], "00", "00");
+    const date = getNextNHoursWithTime(hours[i], "00", "00", "gmt", "short");
+    const sourceId = `snowfall_hourly_forecast_${i}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Snow-Prob`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": i === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 1000 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+//GDPS - Thunderstorm Probability 3-Hourly Forecast
+export function generateThunderstormProbability3HourlyLayers() {
+  const out = [];
+  const hours = ["03", "06", "09", "12", "15", "18", "21", "23", "03", "06"];
+  const daysOffset = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1];
+
+  Array.from({ length: 10 }, (_, i) => {
+    const timeParam = getNextNDaysWithTime(daysOffset[i], hours[i], "00", "00");
+    const date = getNextNHoursWithTime(hours[i], "00", "00", "gmt", "short");
+    const sourceId = `thunderstorm_probability_3hourly_forecast_${i}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Thunderstorm-Prob`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": i === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 1000 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+
+//GDPS - Liquid Fog Probability 3-Hourly Forecast (Visibility)
+export function generateLiquidFogProbability3HourlyLayers() {
+  const out = [];
+  const hours = ["03", "06", "09", "12", "15", "18", "21", "23", "03", "06"];
+  const daysOffset = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1];
+
+  Array.from({ length: 10 }, (_, i) => {
+    const timeParam = getNextNDaysWithTime(daysOffset[i], hours[i], "00", "00");
+    const date = getNextNHoursWithTime(hours[i], "00", "00", "gmt", "short");
+    const sourceId = `liquid_fog_probability_3hourly_forecast_${i}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_LiquidFogVisibility`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": i === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 1000 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+//GDPS - Convective Precipitation Weekly Forecast (kg/m²)
+export function generateConvectivePrecipitationWeeklyLayers() {
+  const out = [];
+
+  Array.from({ length: 10 }, (_, index) => {
+    const date = getNextNDays(index + 1, "short");
+    const timeParam = getNextNDaysWithTime(index + 1, "00", "00", "00");
+    const sourceId = `convective_precipitation_weekly_kgm2_forecast_${index + 1}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "raster",
+        tiles: [
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+        ],
+      },
+      layers: [
+        {
+          id: sourceId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
 }
 
 // Ocean Salinity Layers
@@ -1222,7 +1730,7 @@ export function generateOceanSurfaceHeightLayers() {
 
   return oceanSurfaceHeightLayers;
 }
-
+//---------------------------------------GDPS END--------------------------------------------------
 //--------------- LAYER definitions and additions - Air Quality Layers END-------------------------------------------
 /******************************************************
  * SUFFIX HELPERS (consistent, conflict-free naming)
@@ -2205,6 +2713,705 @@ export function generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT)
               90, "rgba(148, 0, 166, 1.0)"
             ],
           },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Air Quality Index (AQI) Hourly Forecast
+ * 12 hourly frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSAirQualityHourlyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, i) => {
+    const timeParam = getNextNHoursWithTime(i);
+    const date = getPastHours(-i, "short");
+    const suffix = i === 0 ? "" : `_${['onehourahead', 'twohourahead', 'threehourahead', 'fourhourahead', 'fivehourahead', 'sixhourahead', 'sevenhourahead', 'eighthourahead', 'ninehourahead', 'tenhourahead', 'elevenhourahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_airquality_hourly_forecast${suffix}`;
+    const layerId = `meteoblue_cams_airquality_hourly${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/aqiColortable~706~sfc~hourly~none~contourSteps~-10.0~25.0~50.0~75.0~100.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "aqiColortable",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -10.0,
+              "rgba(0, 228, 0, 1.0)",
+              25.0,
+              "rgba(255, 255, 0, 1.0)",
+              50.0,
+              "rgba(255, 126, 0, 1.0)",
+              75.0,
+              "rgba(255, 0, 0, 1.0)",
+              100.0,
+              "rgba(143, 63, 151, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Air Quality Index (AQI) Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSAirQualityDailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodayahead', 'threedayahead', 'fourdayahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_airquality_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_airquality_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/aqiColortable~706~sfc~daily~mean~contourSteps~-10.0~25.0~50.0~75.0~100.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "aqiColortable",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -10.0,
+              "rgba(0, 228, 0, 1.0)",
+              25.0,
+              "rgba(255, 255, 0, 1.0)",
+              50.0,
+              "rgba(255, 126, 0, 1.0)",
+              75.0,
+              "rgba(255, 0, 0, 1.0)",
+              100.0,
+              "rgba(143, 63, 151, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Desert Dust Hourly Forecast
+ * 12 hourly frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSDesertDustHourlyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, i) => {
+    const timeParam = getNextNHoursWithTime(i);
+    const date = getPastHours(-i, "short");
+    const suffix = i === 0 ? "" : `_${['onehourahead', 'twohourahead', 'threehourahead', 'fourhourahead', 'fivehourahead', 'sixhourahead', 'sevenhourahead', 'eighthourahead', 'ninehourahead', 'tenhourahead', 'elevenhourahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_desertdust_hourly_forecast${suffix}`;
+    const layerId = `meteoblue_cams_desertdust_hourly${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/desertDust~702~sfc~hourly~none~contourSteps~30.0~50.0~100.0~150.0~200.0~250.0~300.0~400.0~600.0~800.0~1500.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "desertDust",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              30.0,
+              "rgba(178, 163, 70, 1.0)",
+              50.0,
+              "rgba(217, 192, 0, 1.0)",
+              100.0,
+              "rgba(212, 161, 43, 1.0)",
+              150.0,
+              "rgba(208, 141, 55, 1.0)",
+              200.0,
+              "rgba(231, 136, 53, 1.0)",
+              250.0,
+              "rgba(255, 83, 90, 1.0)",
+              300.0,
+              "rgba(168, 0, 90, 1.0)",
+              400.0,
+              "rgba(153, 9, 74, 1.0)",
+              600.0,
+              "rgba(121, 0, 56, 1.0)",
+              800.0,
+              "rgba(90, 3, 40, 1.0)",
+              1500.0,
+              "rgba(46, 0, 0, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Desert Dust Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSDesertDustDailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodayahead', 'threedayahead', 'fourdayahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_desertdust_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_desertdust_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/desertDust~702~sfc~daily~mean~contourSteps~30.0~50.0~100.0~150.0~200.0~250.0~300.0~400.0~600.0~800.0~1500.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "desertDust",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              30.0,
+              "rgba(178, 163, 70, 1.0)",
+              50.0,
+              "rgba(217, 192, 0, 1.0)",
+              100.0,
+              "rgba(212, 161, 43, 1.0)",
+              150.0,
+              "rgba(208, 141, 55, 1.0)",
+              200.0,
+              "rgba(231, 136, 53, 1.0)",
+              250.0,
+              "rgba(255, 83, 90, 1.0)",
+              300.0,
+              "rgba(168, 0, 90, 1.0)",
+              400.0,
+              "rgba(153, 9, 74, 1.0)",
+              600.0,
+              "rgba(121, 0, 56, 1.0)",
+              800.0,
+              "rgba(90, 3, 40, 1.0)",
+              1500.0,
+              "rgba(46, 0, 0, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Aerosol Optical Depth (AOD) Hourly Forecast
+ * 12 hourly frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSAODHourlyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 12 }, (_, i) => {
+    const timeParam = getNextNHoursWithTime(i);
+    const date = getPastHours(-i, "short");
+    const suffix = i === 0 ? "" : `_${['onehourahead', 'twohourahead', 'threehourahead', 'fourhourahead', 'fivehourahead', 'sixhourahead', 'sevenhourahead', 'eighthourahead', 'ninehourahead', 'tenhourahead', 'elevenhourahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_aod_hourly_forecast${suffix}`;
+    const layerId = `meteoblue_cams_aod_hourly${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSGLOBAL/${timeParam}/aod~703~atmos col~hourly~none~contourSteps~-10.0~0.05~0.1~0.15~0.2~0.25~0.3~0.35~0.4~0.45~0.5~0.6~0.7~0.8~0.9~1.0~1.5~2.0~3.0~5.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "aod",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -10.0,
+              "rgba(90, 90, 90, 1.0)",
+              0.05,
+              "rgba(93, 87, 115, 1.0)",
+              0.1,
+              "rgba(95, 87, 131, 1.0)",
+              0.15,
+              "rgba(72, 101, 143, 1.0)",
+              0.2,
+              "rgba(5, 124, 141, 1.0)",
+              0.25,
+              "rgba(0, 143, 128, 1.0)",
+              0.3,
+              "rgba(0, 151, 111, 1.0)",
+              0.35,
+              "rgba(74, 158, 90, 1.0)",
+              0.4,
+              "rgba(112, 161, 72, 1.0)",
+              0.45,
+              "rgba(150, 160, 71, 1.0)",
+              0.5,
+              "rgba(165, 158, 77, 1.0)",
+              0.6,
+              "rgba(191, 155, 92, 1.0)",
+              0.7,
+              "rgba(217, 153, 113, 1.0)",
+              0.8,
+              "rgba(238, 151, 145, 1.0)",
+              0.9,
+              "rgba(255, 150, 175, 1.0)",
+              1.0,
+              "rgba(255, 155, 195, 1.0)",
+              1.5,
+              "rgba(240, 186, 207, 1.0)",
+              2.0,
+              "rgba(233, 198, 212, 1.0)",
+              3.0,
+              "rgba(226, 211, 217, 1.0)",
+              5.0,
+              "rgba(220, 220, 220, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - Aerosol Optical Depth (AOD) Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSAODDailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodayahead', 'threedayahead', 'fourdayahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_aod_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_aod_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSGLOBAL/${timeParam}/aod~703~atmos col~daily~mean~contourSteps~-10.0~0.05~0.1~0.15~0.2~0.25~0.3~0.35~0.4~0.45~0.5~0.6~0.7~0.8~0.9~1.0~1.5~2.0~3.0~5.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "aod",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -10.0,
+              "rgba(90, 90, 90, 1.0)",
+              0.05,
+              "rgba(93, 87, 115, 1.0)",
+              0.1,
+              "rgba(95, 87, 131, 1.0)",
+              0.15,
+              "rgba(72, 101, 143, 1.0)",
+              0.2,
+              "rgba(5, 124, 141, 1.0)",
+              0.25,
+              "rgba(0, 143, 128, 1.0)",
+              0.3,
+              "rgba(0, 151, 111, 1.0)",
+              0.35,
+              "rgba(74, 158, 90, 1.0)",
+              0.4,
+              "rgba(112, 161, 72, 1.0)",
+              0.45,
+              "rgba(150, 160, 71, 1.0)",
+              0.5,
+              "rgba(165, 158, 77, 1.0)",
+              0.6,
+              "rgba(191, 155, 92, 1.0)",
+              0.7,
+              "rgba(217, 153, 113, 1.0)",
+              0.8,
+              "rgba(238, 151, 145, 1.0)",
+              0.9,
+              "rgba(255, 150, 175, 1.0)",
+              1.0,
+              "rgba(255, 155, 195, 1.0)",
+              1.5,
+              "rgba(240, 186, 207, 1.0)",
+              2.0,
+              "rgba(233, 198, 212, 1.0)",
+              3.0,
+              "rgba(226, 211, 217, 1.0)",
+              5.0,
+              "rgba(220, 220, 220, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - NO2 Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSNO2DailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodaysahead', 'threedaysahead', 'fourdaysahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_no2_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_no2_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/no2~705~sfc~daily~mean~contourSteps~-0.1~1.0~2.0~3.0~4.0~5.0~7.0~10.0~15.0~20.0~25.0~30.0~40.0~60.0~100.0~150.0~200.0~250.0~300.0~350.0~400.0~500.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "no2",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -0.1,
+              "rgba(62, 142, 181, 1.0)",
+              1.0,
+              "rgba(125, 182, 209, 1.0)",
+              2.0,
+              "rgba(170, 183, 189, 1.0)",
+              3.0,
+              "rgba(194, 195, 125, 1.0)",
+              4.0,
+              "rgba(199, 181, 113, 1.0)",
+              5.0,
+              "rgba(204, 167, 100, 1.0)",
+              7.0,
+              "rgba(208, 153, 88, 1.0)",
+              10.0,
+              "rgba(213, 139, 75, 1.0)",
+              15.0,
+              "rgba(218, 125, 63, 1.0)",
+              20.0,
+              "rgba(223, 111, 50, 1.0)",
+              25.0,
+              "rgba(227, 97, 38, 1.0)",
+              30.0,
+              "rgba(232, 83, 25, 1.0)",
+              40.0,
+              "rgba(189, 52, 19, 1.0)",
+              60.0,
+              "rgba(137, 32, 10, 1.0)",
+              100.0,
+              "rgba(75, 12, 0, 1.0)",
+              150.0,
+              "rgba(68, 40, 28, 1.0)",
+              200.0,
+              "rgba(61, 57, 57, 1.0)",
+              250.0,
+              "rgba(92, 72, 87, 1.0)",
+              300.0,
+              "rgba(123, 87, 118, 1.0)",
+              350.0,
+              "rgba(138, 94, 133, 1.0)",
+              400.0,
+              "rgba(153, 101, 148, 1.0)",
+              500.0,
+              "rgba(184, 116, 178, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - CO Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSCODailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodaysahead', 'threedaysahead', 'fourdaysahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_co_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_co_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/COColorTable~711~sfc~daily~mean~contourSteps~0.0~35.0~70.0~90.0~110.0~130.0~150.0~170.0~200.0~230.0~260.0~300.0~350.0~400.0~450.0~600.0~800.0~1000.0~1200.0~1400.0~1800.0~2200.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "COColorTable",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              0.0,
+              "rgba(62, 142, 181, 1.0)",
+              35.0,
+              "rgba(125, 182, 209, 1.0)",
+              70.0,
+              "rgba(170, 183, 189, 1.0)",
+              90.0,
+              "rgba(194, 195, 125, 1.0)",
+              110.0,
+              "rgba(199, 181, 113, 1.0)",
+              130.0,
+              "rgba(204, 167, 100, 1.0)",
+              150.0,
+              "rgba(208, 153, 88, 1.0)",
+              170.0,
+              "rgba(213, 139, 75, 1.0)",
+              200.0,
+              "rgba(218, 125, 63, 1.0)",
+              230.0,
+              "rgba(223, 111, 50, 1.0)",
+              260.0,
+              "rgba(227, 97, 38, 1.0)",
+              300.0,
+              "rgba(232, 83, 25, 1.0)",
+              350.0,
+              "rgba(189, 52, 19, 1.0)",
+              400.0,
+              "rgba(137, 32, 10, 1.0)",
+              450.0,
+              "rgba(75, 12, 0, 1.0)",
+              600.0,
+              "rgba(68, 40, 28, 1.0)",
+              800.0,
+              "rgba(61, 57, 57, 1.0)",
+              1000.0,
+              "rgba(92, 72, 87, 1.0)",
+              1200.0,
+              "rgba(123, 87, 118, 1.0)",
+              1400.0,
+              "rgba(138, 94, 133, 1.0)",
+              1800.0,
+              "rgba(153, 101, 148, 1.0)",
+              2200.0,
+              "rgba(184, 116, 178, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date,
+    });
+  });
+
+  return out;
+}
+/***********************************************************************
+ * Meteoblue CAMS - SO2 Daily Forecast
+ * 5 daily frames
+ ***********************************************************************/
+export function generateMeteoblueCAMSSO2DailyLayers(metbluT) {
+  const out = [];
+
+  Array.from({ length: 5 }, (_, i) => {
+    const timeParam = getNextDaysMidnight(i);
+    const date = getNextNDays(i, "short");
+    const suffix = i === 0 ? "" : `_${['onedayahead', 'twodaysahead', 'threedaysahead', 'fourdaysahead'][i - 1]}`;
+    const sourceId = `meteoblue_cams_so2_daily_forecast${suffix}`;
+    const layerId = `meteoblue_cams_so2_daily${suffix}`;
+
+    out.push({
+      source: {
+        id: sourceId,
+        type: "vector",
+        tiles: [
+          `https://maps-api.meteoblue.com/v1/map/vector/CAMSAUTO/${timeParam}/so2~704~sfc~daily~mean~contourSteps~-0.1~1.0~2.0~3.0~4.0~5.0~7.0~10.0~15.0~20.0~25.0~30.0~40.0~60.0~100.0~150.0~200.0~250.0~300.0~350.0~400.0~500.0/{z}/{x}/{y}?apikey=${metbluT}`,
+        ],
+      },
+      layers: [
+        {
+          id: layerId,
+          type: "fill",
+          source: sourceId,
+          "source-layer": "so2",
+          paint: {
+            "fill-antialias": false,
+            "fill-opacity": i === 0 ? 1 : 0,
+            "fill-opacity-transition": { duration: 500 },
+            "fill-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "minValue"],
+              -0.1,
+              "rgba(62, 142, 181, 1.0)",
+              1.0,
+              "rgba(125, 182, 209, 1.0)",
+              2.0,
+              "rgba(170, 183, 189, 1.0)",
+              3.0,
+              "rgba(194, 195, 125, 1.0)",
+              4.0,
+              "rgba(199, 181, 113, 1.0)",
+              5.0,
+              "rgba(204, 167, 100, 1.0)",
+              7.0,
+              "rgba(208, 153, 88, 1.0)",
+              10.0,
+              "rgba(213, 139, 75, 1.0)",
+              15.0,
+              "rgba(218, 125, 63, 1.0)",
+              20.0,
+              "rgba(223, 111, 50, 1.0)",
+              25.0,
+              "rgba(227, 97, 38, 1.0)",
+              30.0,
+              "rgba(232, 83, 25, 1.0)",
+              40.0,
+              "rgba(189, 52, 19, 1.0)",
+              60.0,
+              "rgba(137, 32, 10, 1.0)",
+              100.0,
+              "rgba(75, 12, 0, 1.0)",
+              150.0,
+              "rgba(68, 40, 28, 1.0)",
+              200.0,
+              "rgba(61, 57, 57, 1.0)",
+              250.0,
+              "rgba(92, 72, 87, 1.0)",
+              300.0,
+              "rgba(123, 87, 118, 1.0)",
+              350.0,
+              "rgba(138, 94, 133, 1.0)",
+              400.0,
+              "rgba(153, 101, 148, 1.0)",
+              500.0,
+              "rgba(184, 116, 178, 1.0)",
+            ],
+          },
+          layout: { visibility: "visible" },
         },
       ],
       date,

@@ -362,6 +362,38 @@ export const legends = {
     ],
     ["0", "2", "5", "10", "20", "30", "40", "50", "75", "100", "150", "200"]
   ),
+  co2_850hpa: gradientLegendBar(
+    [
+      "#0c0c0c",
+      "#3800a3",
+      "#007ddd",
+      "#00aa90",
+      "#00c700",
+      "#b0ff00",
+      "#ffb100",
+      "#db0000",
+      "#66001e",
+      "#66001e",
+      "#66001e",
+    ],
+    ["380", "390", "400", "405", "410", "415", "420", "425", "430", "435", "440", "450+"]
+  ),
+  co2_surface: gradientLegendBar(
+    [
+      "#5e4fa2",
+      "#3485bc",
+      "#60bba8",
+      "#a2daa4",
+      "#edf8a3",
+      "#fff8b2",
+      "#ffe999",
+      "#febf6f",
+      "#f8844d",
+      "#e2514a",
+      "#9e0142",
+    ],
+    ["380", "390", "400", "405", "410", "415", "420", "425", "430", "435", "440", "450+"]
+  ),
   ozone: gradientLegendBar(
     [
       "#c6e9f3",
@@ -465,6 +497,71 @@ export const legends = {
       "#66001e",
     ],
     ["0", "1780", "1840", "1900", "1960", "2020", "2080", "2140", "10000"]
+  ),
+  sulphate_aod_550: gradientLegendBar(
+    [
+      "#0000f2",
+      "#004cff",
+      "#00b1ff",
+      "#29ffce",
+      "#7dff7a",
+      "#ceff29",
+      "#ffc500",
+      "#ff6800",
+      "#f20700",
+    ],
+    ["0", "0.02", "0.05", "0.1", "0.15", "0.2", "0.3", "0.4", "0.5", "0.8+"]
+  ),
+  biomass_burning_aod_550: gradientLegendBar(
+    [
+      "#0000f2",
+      "#004cff",
+      "#00b1ff",
+      "#29ffce",
+      "#7dff7a",
+      "#ceff29",
+      "#ffc500",
+      "#ff6800",
+      "#f20700",
+    ],
+    ["0", "0.05", "0.1", "0.2", "0.3", "0.5", "0.8", "1.0", "1.5", "2.0+"]
+  ),
+  sea_salt_aod_550: gradientLegendBar(
+    [
+      "#F0F9FF",
+      "#CCE4F0",
+      "#99CCE0",
+      "#66B3D1",
+      "#3399C2",
+      "#0080B3",
+      "#006699",
+      "#004D80",
+    ],
+    ["0", "0.02", "0.05", "0.1", "0.15", "0.2", "0.3", "0.4", "0.6+"]
+  ),
+  hcho_surface: gradientLegendBar(
+    [
+      "#F7FCF5",
+      "#E5F5E0",
+      "#C7E9C0",
+      "#A1D99B",
+      "#74C476",
+      "#41AB5D",
+      "#238B45",
+      "#006D2C",
+      "#00441B",
+    ],
+    ["0", "1", "2", "3", "5", "7", "10", "15", "20", "30+"]
+  ),
+  uv_index_daily_max: gradientLegendBar(
+    [
+      "#42a631", // Low
+      "#fff300", // Moderate
+      "#ef8a00", // High
+      "#e63510", // Very High
+      "#b565a5", // Extreme
+    ],
+    ["0-2 (Low)", "3-5 (Moderate)", "6-7 (High)", "8-10 (Very High)", "11+ (Extreme)"]
   ),
   ocean_salinity: gradientLegendBar(
     [
@@ -879,5 +976,282 @@ export const legends = {
       "rgba(255, 128, 224, 1.0)",
     ],
     ["150", "200", "250", "300", "400", "600", "800", "1000"]
+  ),
+  snow_density_weekly_forecast: gradientLegendBar(
+    [
+      "#00088F",
+      "#0013DF",
+      "#011FFF",
+      "#007FFF",
+      "#01DFFF",
+      "#00FFFF",
+      "#5FFF9F",
+      "#BFFE3E",
+      "#FFFE03",
+      "#FF7F00",
+      "#7F0000",
+    ],
+    ["0", "50", "100", "150", "200", "250", "300", "350", "400", "450", "500"]
+  ),
+  snow_depth_weekly_forecast: gradientLegendBar(
+    [
+      "#00088F",
+      "#0013DF",
+      "#011FFF",
+      "#007FFF",
+      "#01DFFF",
+      "#00FFFF",
+      "#5FFF9F",
+      "#BFFE3E",
+      "#FFFE03",
+      "#FF7F00",
+      "#4e0000",
+    ],
+    ["0", "0.1", "0.2", "0.3", "0.5", "0.7", "1.0", "1.5", "2.0", "3.0", "5.0"]
+  ),
+  snowfall_hourly_forecast: gradientLegendBar(
+    [
+      "#FFFFFF",
+      "#2149FF",
+      "#0054FE",
+      "#10BBEC",
+      "#68FF95",
+      "#CEFE2D",
+      "#FCD100",
+      "#FF9F4E",
+      "#FF5F7A",
+      "#CD1547",
+      "#7B0029",
+    ],
+    ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"]
+  ),
+  thunderstorm_probability_3hourly_forecast: gradientLegendBar(
+    [
+      "#FFFFFF",
+      "#7BC8FF",
+      "#011CFF",
+      "#0094FE",
+      "#2FFFCE",
+      "#92FF6D",
+      "#FAFE04",
+      "#FFA000",
+      "#FF3365",
+      "#AA0032",
+    ],
+    ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%"]
+  ),
+  liquid_fog_probability_3hourly_forecast: gradientLegendBar(
+    [
+      "#FFFFFF",
+      "#F3EDFF",
+      "#E6DBFF",
+      "#D6C5FF",
+      "#C7AFFF",
+      "#B899FF",
+      "#A983FF",
+      "#9A6DFF",
+      "#8B57FF",
+      "#8B4DFF",
+    ],
+    [">10km", "5-10km", "2-5km", "1-2km", "0.5-1km", "0.2-0.5km", "0.1-0.2km", "50-100m", "20-50m", "<20m"]
+  ),
+  convective_precipitation_weekly_forecast: gradientLegendBar(
+    [
+      "#FFFFFF",
+      "#B8D5FF",
+      "#A1C7FF",
+      "#7AACFF",
+      "#3DA0F3",
+      "#1FCADF",
+      "#27E4D5",
+      "#62FF9B",
+      "#CCFE32",
+      "#FF9600",
+      "#290000",
+    ],
+    ["0", "5", "10", "15", "20", "30", "40", "50", "75", "100", "150"]
+  ),
+  cams_air_quality_index_hourly: gradientLegendBar(
+    [
+      "#00E400", // Good
+      "#FFFF00", // Moderate
+      "#FF7E00", // Unhealthy for Sensitive
+      "#FF0000", // Unhealthy
+      "#8F3F97", // Very Unhealthy
+    ],
+    ["-10 (Good)", "25 (Moderate)", "50 (Unhealthy SG)", "75 (Unhealthy)", "100 (Very Unhealthy)"]
+  ),
+  cams_air_quality_index_daily: gradientLegendBar(
+    [
+      "#00E400", // Good
+      "#FFFF00", // Moderate
+      "#FF7E00", // Unhealthy for Sensitive
+      "#FF0000", // Unhealthy
+      "#8F3F97", // Very Unhealthy
+    ],
+    ["-10 (Good)", "25 (Moderate)", "50 (Unhealthy SG)", "75 (Unhealthy)", "100 (Very Unhealthy)"]
+  ),
+  cams_desert_dust_hourly: gradientLegendBar(
+    [
+      "#B2A346", // Light brown
+      "#D9C000", // Yellow-brown
+      "#D4A12B", // Orange-brown
+      "#D08D37", // Darker orange-brown
+      "#E78835", // Orange
+      "#FF535A", // Red-orange
+      "#A8005A", // Dark red-purple
+      "#99094A", // Purple-red
+      "#790038", // Dark purple
+      "#5A0328", // Very dark purple
+      "#2E0000", // Almost black
+    ],
+    ["30", "50", "100", "150", "200", "250", "300", "400", "600", "800", "1500"]
+  ),
+  cams_desert_dust_daily: gradientLegendBar(
+    [
+      "#B2A346", // Light brown
+      "#D9C000", // Yellow-brown
+      "#D4A12B", // Orange-brown
+      "#D08D37", // Darker orange-brown
+      "#E78835", // Orange
+      "#FF535A", // Red-orange
+      "#A8005A", // Dark red-purple
+      "#99094A", // Purple-red
+      "#790038", // Dark purple
+      "#5A0328", // Very dark purple
+      "#2E0000", // Almost black
+    ],
+    ["30", "50", "100", "150", "200", "250", "300", "400", "600", "800", "1500"]
+  ),
+  cams_aerosol_optical_depth_hourly: gradientLegendBar(
+    [
+      "#5A5A5A", // Dark gray
+      "#5D5773", // Purple-gray
+      "#5F5783", // Light purple
+      "#48658F", // Blue
+      "#057C8D", // Teal
+      "#008F80", // Cyan-green
+      "#00976F", // Green-cyan
+      "#4A9E5A", // Green
+      "#70A148", // Yellow-green
+      "#96A047", // Lime
+      "#A59E4D", // Yellow-brown
+      "#BF9B5C", // Orange-tan
+      "#D99971", // Light orange
+      "#EE9791", // Salmon
+      "#FF96AF", // Pink
+      "#FF9BC3", // Light pink
+      "#F0BACF", // Pale pink
+      "#E9C6D4", // Very pale pink
+      "#E2D3D9", // Light gray-pink
+      "#DCDCDC", // Light gray
+    ],
+    ["-10", "0.05", "0.1", "0.15", "0.2", "0.25", "0.3", "0.35", "0.4", "0.45", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.5", "2.0", "3.0", "5.0"]
+  ),
+  cams_aerosol_optical_depth_daily: gradientLegendBar(
+    [
+      "#5A5A5A", // Dark gray
+      "#5D5773", // Purple-gray
+      "#5F5783", // Light purple
+      "#48658F", // Blue
+      "#057C8D", // Teal
+      "#008F80", // Cyan-green
+      "#00976F", // Green-cyan
+      "#4A9E5A", // Green
+      "#70A148", // Yellow-green
+      "#96A047", // Lime
+      "#A59E4D", // Yellow-brown
+      "#BF9B5C", // Orange-tan
+      "#D99971", // Light orange
+      "#EE9791", // Salmon
+      "#FF96AF", // Pink
+      "#FF9BC3", // Light pink
+      "#F0BACF", // Pale pink
+      "#E9C6D4", // Very pale pink
+      "#E2D3D9", // Light gray-pink
+      "#DCDCDC", // Light gray
+    ],
+    ["-10", "0.05", "0.1", "0.15", "0.2", "0.25", "0.3", "0.35", "0.4", "0.45", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.5", "2.0", "3.0", "5.0"]
+  ),
+  cams_nitrogen_dioxide_daily: gradientLegendBar(
+    [
+      "#3E8EB5", // Blue
+      "#7DB6D1", // Light blue
+      "#AAB7BD", // Gray-blue
+      "#C2C37D", // Yellow-green
+      "#C7B571", // Yellow-brown
+      "#CCA764", // Orange-brown
+      "#D09958", // Orange
+      "#D58B4B", // Dark orange
+      "#DA7D3F", // Red-orange
+      "#DF6F32", // Red
+      "#E36126", // Dark red
+      "#E85319", // Very dark red
+      "#BD3413", // Brown-red
+      "#89200A", // Dark brown
+      "#4B0C00", // Very dark brown
+      "#44281C", // Brown-gray
+      "#3D3939", // Dark gray
+      "#5C4857", // Purple-gray
+      "#7B5776", // Purple
+      "#8A5E85", // Light purple
+      "#996594", // Pink-purple
+      "#B874B2", // Pink
+    ],
+    ["-0.1", "1", "2", "3", "4", "5", "7", "10", "15", "20", "25", "30", "40", "60", "100", "150", "200", "250", "300", "350", "400", "500"]
+  ),
+  cams_carbon_monoxide_daily: gradientLegendBar(
+    [
+      "#3E8EB5", // Blue
+      "#7DB6D1", // Light blue
+      "#AAB7BD", // Gray-blue
+      "#C2C37D", // Yellow-green
+      "#C7B571", // Yellow-brown
+      "#CCA764", // Orange-brown
+      "#D09958", // Orange
+      "#D58B4B", // Dark orange
+      "#DA7D3F", // Red-orange
+      "#DF6F32", // Red
+      "#E36126", // Dark red
+      "#E85319", // Very dark red
+      "#BD3413", // Brown-red
+      "#89200A", // Dark brown
+      "#4B0C00", // Very dark brown
+      "#44281C", // Brown-gray
+      "#3D3939", // Dark gray
+      "#5C4857", // Purple-gray
+      "#7B5776", // Purple
+      "#8A5E85", // Light purple
+      "#996594", // Pink-purple
+      "#B874B2", // Pink
+    ],
+    ["0", "35", "70", "90", "110", "130", "150", "170", "200", "230", "260", "300", "350", "400", "450", "600", "800", "1000", "1200", "1400", "1800", "2200"]
+  ),
+  cams_sulphur_dioxide_daily: gradientLegendBar(
+    [
+      "#3E8EB5", // Blue
+      "#7DB6D1", // Light blue
+      "#AAB7BD", // Gray-blue
+      "#C2C37D", // Yellow-green
+      "#C7B571", // Yellow-brown
+      "#CCA764", // Orange-brown
+      "#D09958", // Orange
+      "#D58B4B", // Dark orange
+      "#DA7D3F", // Red-orange
+      "#DF6F32", // Red
+      "#E36126", // Dark red
+      "#E85319", // Very dark red
+      "#BD3413", // Brown-red
+      "#89200A", // Dark brown
+      "#4B0C00", // Very dark brown
+      "#44281C", // Brown-gray
+      "#3D3939", // Dark gray
+      "#5C4857", // Purple-gray
+      "#7B5776", // Purple
+      "#8A5E85", // Light purple
+      "#996594", // Pink-purple
+      "#B874B2", // Pink
+    ],
+    ["-0.1", "1", "2", "3", "4", "5", "7", "10", "15", "20", "25", "30", "40", "60", "100", "150", "200", "250", "300", "350", "400", "500"]
   ),
 };
