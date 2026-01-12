@@ -10,18 +10,22 @@ const __dirname = dirname(__filename);
 
 const HMR_HOST = process.env.VITE_HMR_HOST || "localhost";
 
-export default defineConfig(() => ({
-  base: "/static/",
+export default defineConfig(({ command }) => ({
+  // CRITICAL FIX: Use "/" in dev, "/static/" in production
+  base: command === "serve" ? "/" : "/static/",
+
   plugins: [
     tailwindcss(),
   ],
+
   resolve: {
     alias: {
       "@assets": resolve(__dirname, "src/assets"),
     },
   },
+
   server: {
-    host: "0.0.0.0", // bind on all ifaces
+    host: "0.0.0.0", // bind on all interfaces
     port: 5173,
     strictPort: true,
     hmr: {
@@ -38,6 +42,7 @@ export default defineConfig(() => ({
       },
     },
   },
+
   build: {
     outDir: "dist",
     manifest: true,
