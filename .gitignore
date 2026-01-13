@@ -180,3 +180,4 @@ staticfiles
 
 # Vite cache
 .vite
+../logs/
