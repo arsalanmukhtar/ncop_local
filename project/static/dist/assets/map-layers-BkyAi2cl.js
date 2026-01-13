@@ -1,0 +1,1 @@
+import{n as e,t}from"./dashboard_main-uS2Q7C3p.js";export{t as baseUrl,e as ncop_menu_items};

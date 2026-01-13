@@ -397,7 +397,7 @@ export class SidebarMenu {
   }
   /**
    * 🆕 NEW: Create nested sub-accordion sections
-   * Handles sub-accordions within subcategories (e.g., "GDACS Alerts" inside "Hazard Alerts")
+   * Handles sub-accordions within subcategories (e.g., "GDACS and their respective alerts Alerts" inside "Hazard Alerts")
    */
   #createNestedSubSection(
     categoryKey,

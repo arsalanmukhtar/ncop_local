@@ -2,12 +2,12 @@ import os, sys
 from pathlib import Path
 import environ
 
-GDAL_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\gdal307.dll'
-GEOS_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\geos_c.dll'
+# GDAL_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\gdal307.dll'
+# GEOS_LIBRARY_PATH = r'C:\Program Files\QGIS 3.32.3\bin\geos_c.dll'
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # .../project
 env = environ.Env(DEBUG=(bool, False))
-environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env"))  # repo/.env
+environ.Env.read_env(os.path.join(BASE_DIR.parent, ".env.prod"))  # repo/.env
 
 # --- Core ---
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
@@ -16,6 +16,7 @@ WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+HEALTH_RESTART_TOKEN = env("HEALTH_RESTART_TOKEN", default="")
 
 # --- Google Earth Engine ---
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")

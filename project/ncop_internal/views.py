@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, get_user_model
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required , user_passes_test
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.shortcuts import render, redirect, get_object_or_404
@@ -51,6 +51,7 @@ from datetime import datetime, timedelta
 from requests.adapters import HTTPAdapter
 from PIL import Image, ImageDraw, ImageFont
 from functools import lru_cache
+
 # from ncop.models import (
 #     DistrictBoundary, MajorDamsLevel, LayerInfo, Incident,
 #     IncidentFeatures, IncidentsMedia, NcopHazardAlert,
@@ -82,6 +83,9 @@ import csv
 import io
 import ee
 import urllib3
+import psutil
+import subprocess
+from pathlib import Path
 from urllib3.util.retry import Retry
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -263,6 +267,432 @@ def password_reset_confirm_view(request, uidb64, token):
     return render(request, "auth/password_reset_confirm.html")
 
 
+
+
+# PRODUCTION HEALTH CHECK View-------------------------------------------------------------
+class ProductionHealthMonitor:
+    """Real-time production health monitoring"""
+    
+    def __init__(self):
+        self.project_root = Path(settings.BASE_DIR).parent
+        self.frontend_dir = self.project_root / "frontend"
+        self.project_dir = self.project_root / "project"
+        
+    def get_server_status(self):
+        """Check if Waitress is running"""
+        try:
+            # Check port 8000
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('127.0.0.1', 8000))
+            sock.close()
+            
+            running = result == 0
+            
+            # Get process info if running
+            process_info = None
+            if running:
+                for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
+                    try:
+                        cmdline = ' '.join(proc.info['cmdline'] or [])
+                        if 'waitress' in cmdline.lower() or 'ncop-waitress' in cmdline.lower():
+                            process_info = {
+                                "pid": proc.info['pid'],
+                                "name": proc.info['name'],
+                                "memory_mb": round(proc.memory_info().rss / 1024 / 1024, 2),
+                                "cpu_percent": round(proc.cpu_percent(interval=0.1), 2),
+                                "uptime_hours": round((time.time() - proc.info['create_time']) / 3600, 2),
+                                "threads": proc.num_threads()
+                            }
+                            break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+            
+            return {
+                "running": running,
+                "port": 8000,
+                "process": process_info,
+                "status": "healthy" if running else "down"
+            }
+        except Exception as e:
+            return {
+                "running": False,
+                "error": str(e),
+                "status": "error"
+            }
+    
+    def get_build_status(self):
+        """Check build integrity"""
+        manifest_path = self.frontend_dir / "dist" / ".vite" / "manifest.json"
+        
+        if not manifest_path.exists():
+            return {
+                "valid": False,
+                "error": "Manifest not found",
+                "status": "missing"
+            }
+        
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            
+            # Check critical entry points
+            critical_entries = [
+                "src/entries/dashboard_main.js",
+                "src/entries/auth_login.js",
+                "src/entries/auth_signup.js",
+                "src/entries/auth_reset.js",
+                "src/entries/auth_reset_confirm.js",
+            ]
+            
+            missing_entries = []
+            existing_entries = []
+            
+            for entry in critical_entries:
+                if entry in manifest:
+                    file_path = self.frontend_dir / "dist" / manifest[entry]["file"]
+                    if file_path.exists():
+                        existing_entries.append({
+                            "name": entry,
+                            "file": manifest[entry]["file"],
+                            "size_kb": round(file_path.stat().st_size / 1024, 2)
+                        })
+                    else:
+                        missing_entries.append(entry)
+                else:
+                    missing_entries.append(entry)
+            
+            build_time = datetime.fromtimestamp(manifest_path.stat().st_mtime)
+            
+            return {
+                "valid": len(missing_entries) == 0,
+                "total_entries": len(manifest),
+                "critical_entries": len(existing_entries),
+                "missing_entries": missing_entries,
+                "entries": existing_entries,
+                "build_time": build_time.isoformat(),
+                "age_hours": round((datetime.now() - build_time).total_seconds() / 3600, 1),
+                "status": "healthy" if len(missing_entries) == 0 else "degraded"
+            }
+        except Exception as e:
+            return {
+                "valid": False,
+                "error": str(e),
+                "status": "error"
+            }
+    
+    def get_static_collection_status(self):
+        """Check static file collection"""
+        static_root = self.project_dir / "static" / "dist"
+        
+        if not static_root.exists():
+            return {
+                "collected": False,
+                "error": "Static root not found",
+                "status": "missing"
+            }
+        
+        try:
+            assets_dir = static_root / "assets"
+            if not assets_dir.exists():
+                return {
+                    "collected": False,
+                    "error": "Assets directory not found",
+                    "status": "missing"
+                }
+            
+            js_files = list(assets_dir.glob("*.js"))
+            css_files = list(assets_dir.glob("*.css"))
+            
+            return {
+                "collected": True,
+                "js_count": len(js_files),
+                "css_count": len(css_files),
+                "total_size_mb": round(sum(f.stat().st_size for f in js_files + css_files) / 1024 / 1024, 2),
+                "status": "healthy"
+            }
+        except Exception as e:
+            return {
+                "collected": False,
+                "error": str(e),
+                "status": "error"
+            }
+    
+    def get_database_status(self):
+        """Check database connectivity and stats"""
+        try:
+            # Test connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                result = cursor.fetchone()
+            
+            # Get database info
+            db_config = settings.DATABASES['default']
+            
+            # Get table count
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                """)
+                table_count = cursor.fetchone()[0]
+            
+            return {
+                "connected": True,
+                "engine": db_config['ENGINE'].split('.')[-1],
+                "name": db_config['NAME'],
+                "host": db_config['HOST'],
+                "table_count": table_count,
+                "status": "healthy"
+            }
+        except Exception as e:
+            return {
+                "connected": False,
+                "error": str(e),
+                "status": "error"
+            }
+    
+    def get_system_resources(self):
+        """Get system resource usage"""
+        try:
+            # CPU
+            cpu_percent = psutil.cpu_percent(interval=0.5)
+            cpu_count = psutil.cpu_count()
+            
+            # Memory
+            memory = psutil.virtual_memory()
+            
+            # Disk
+            disk = psutil.disk_usage('/')
+            
+            # Load average (Linux)
+            load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else [0, 0, 0]
+            
+            return {
+                "cpu": {
+                    "percent": round(cpu_percent, 2),
+                    "count": cpu_count,
+                    "load_avg": [round(x, 2) for x in load_avg]
+                },
+                "memory": {
+                    "total_gb": round(memory.total / 1024**3, 2),
+                    "used_gb": round(memory.used / 1024**3, 2),
+                    "available_gb": round(memory.available / 1024**3, 2),
+                    "percent": round(memory.percent, 2)
+                },
+                "disk": {
+                    "total_gb": round(disk.total / 1024**3, 2),
+                    "used_gb": round(disk.used / 1024**3, 2),
+                    "free_gb": round(disk.free / 1024**3, 2),
+                    "percent": round(disk.percent, 2)
+                },
+                "status": "healthy" if cpu_percent < 80 and memory.percent < 80 and disk.percent < 80 else "warning"
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "status": "error"
+            }
+    
+    def get_api_health(self):
+        """Check external API health"""
+        apis = {
+            "mapbox": {
+                "url": f"https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/0/0/0.mvt?access_token={settings.MAPBOX_ACCESS_TOKEN}",
+                "name": "Mapbox"
+            },
+            "meteoblue": {
+                "url": f"https://my.meteoblue.com/packages/basic-1h?apikey={settings.METEOBLUE_TOKEN}&lat=33.6&lon=73.0&format=json",
+                "name": "Meteoblue"
+            }
+        }
+        
+        results = {}
+        for key, api in apis.items():
+            try:
+                start_time = time.time()
+                response = requests.get(api["url"], timeout=5)
+                response_time = round((time.time() - start_time) * 1000, 2)
+                
+                results[key] = {
+                    "name": api["name"],
+                    "status_code": response.status_code,
+                    "response_time_ms": response_time,
+                    "status": "healthy" if response.status_code == 200 else "degraded"
+                }
+            except Exception as e:
+                results[key] = {
+                    "name": api["name"],
+                    "error": str(e),
+                    "status": "error"
+                }
+        
+        return results
+    
+    def get_recent_logs(self, lines=50):
+        """Get recent log entries"""
+        log_file = self.project_root / "logs" / "django.log"
+        
+        if not log_file.exists():
+            return []
+        
+        try:
+            with open(log_file, 'r') as f:
+                # Get last N lines
+                all_lines = f.readlines()
+                recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+            
+            logs = []
+            for line in recent_lines:
+                if line.strip():
+                    logs.append({
+                        "message": line.strip(),
+                        "level": self._detect_log_level(line)
+                    })
+            
+            return logs
+        except Exception as e:
+            return [{"message": f"Error reading logs: {e}", "level": "error"}]
+    
+    def _detect_log_level(self, line):
+        """Detect log level from line"""
+        line_lower = line.lower()
+        if 'error' in line_lower or 'exception' in line_lower:
+            return 'error'
+        elif 'warning' in line_lower or 'warn' in line_lower:
+            return 'warning'
+        elif 'info' in line_lower:
+            return 'info'
+        else:
+            return 'debug'
+    
+    def get_full_health_report(self):
+        """Get comprehensive health report"""
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "server": self.get_server_status(),
+            "build": self.get_build_status(),
+            "static": self.get_static_collection_status(),
+            "database": self.get_database_status(),
+            "resources": self.get_system_resources(),
+            "apis": self.get_api_health(),
+            "logs": self.get_recent_logs(30)
+        }
+
+# ==================== VIEWS ====================
+@never_cache
+def production_health_dashboard(request):
+    """Public health dashboard view (no login required)"""
+    monitor = ProductionHealthMonitor()
+    health_data = monitor.get_full_health_report()
+
+    statuses = [
+        health_data['server']['status'],
+        health_data['build']['status'],
+        health_data['static']['status'],
+        health_data['database']['status'],
+        health_data['resources']['status'],
+    ]
+
+    error_count = statuses.count('error')
+    warning_count = statuses.count('warning') + statuses.count('degraded')
+
+    if error_count > 0:
+        overall_status = 'critical'
+    elif warning_count > 2:
+        overall_status = 'degraded'
+    else:
+        overall_status = 'healthy'
+
+    health_data['overall_status'] = overall_status
+
+    return render(request, 'health/dashboard_health.html', {
+        'health': health_data,
+        'refresh_interval': 30
+    })
+
+
+@never_cache
+def production_health_api(request):
+    """Public API endpoint for health data (no login required)"""
+    monitor = ProductionHealthMonitor()
+    health_data = monitor.get_full_health_report()
+
+    statuses = [
+        health_data['server']['status'],
+        health_data['build']['status'],
+        health_data['static']['status'],
+        health_data['database']['status'],
+        health_data['resources']['status'],
+    ]
+
+    error_count = statuses.count('error')
+    warning_count = statuses.count('warning') + statuses.count('degraded')
+
+    if error_count > 0:
+        overall_status = 'critical'
+    elif warning_count > 2:
+        overall_status = 'degraded'
+    else:
+        overall_status = 'healthy'
+
+    health_data['overall_status'] = overall_status
+    return JsonResponse(health_data)
+
+
+@never_cache
+def production_logs_api(request):
+    """Public logs endpoint (no login required)"""
+    monitor = ProductionHealthMonitor()
+    lines = int(request.GET.get('lines', 50))
+    logs = monitor.get_recent_logs(lines)
+    return JsonResponse({'logs': logs})
+
+
+def _valid_restart_token(request) -> bool:
+    """
+    Token-based protection for restart.
+    Put HEALTH_RESTART_TOKEN in your .env.prod and load into settings.
+    """
+    expected = getattr(settings, "HEALTH_RESTART_TOKEN", "")
+    if not expected:
+        return False  # fail closed if not configured
+
+    provided = request.headers.get("X-Health-Token", "")
+    # constant-time compare
+    return hmac.compare_digest(provided, expected)
+
+
+@never_cache
+@csrf_exempt
+def production_restart_service(request):
+    """
+    Restart Waitress service.
+    Protected by X-Health-Token header (works without login/CSRF).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    if not _valid_restart_token(request):
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    try:
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'ncop-waitress.service'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            return JsonResponse({'success': True, 'message': 'Service restarted successfully'})
+        else:
+            return JsonResponse({'success': False, 'error': result.stderr}, status=500)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+# Production Health Check View END -------------------------------------------------------------
 #STORY MODE LOGIC _______________________------------------------------------------------------
 def _story_path(slug: str) -> Optional[os.PathLike]:
     """Constructs the path for a story JSON file by slug."""
