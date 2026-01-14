@@ -19,8 +19,8 @@ export class BasemapPanel {
     #mapControls;
     #basemapStyles = [
         { id: "streets-v12", name: "Streets", image: streetsLogo },
-        { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
-        { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
+        // { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
+        // { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
         { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
         { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
         { id: "navigation-day-v1", name: "Day", image: lightLogo },
