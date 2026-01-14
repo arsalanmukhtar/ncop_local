@@ -8,7 +8,7 @@
 // ADDED: Async temporal loader (updateTempSliderAsync) that waits for map readiness
 // ADDED: Temporal Opacity Controller (global factor applied to all temporal layers/steps)
 
-import { legends } from "./temporal-layer-legends";
+import { legends, legendCompact } from "./temporal-layer-legends";
 
 // ===== GLOBAL VARIABLES =====
 let sliderLayers = []; // Array of arrays of layer ids for each timestep
@@ -36,6 +36,49 @@ let _sliderRestore = {
   currentIndex: 0,
 };
 let _styleLoadHandlerBound = false;
+
+// Dynamic label + responsive legend helpers (slider1)
+let _yearLabelsDivRef = null;
+let _layersMetaForLabels = null;
+let _legendResponsive = { container: null, layerKey: null };
+
+function _updateDynamicYearLabel(stepIndex) {
+  if (!_yearLabelsDivRef || !_layersMetaForLabels) return;
+  const meta = _layersMetaForLabels[stepIndex];
+  const label = meta?.date ?? meta?.label ?? String(stepIndex + 1);
+  const span = _yearLabelsDivRef.querySelector("span");
+  if (span) span.textContent = label;
+}
+
+function _applyLegendResponsiveness() {
+  const container = _legendResponsive.container;
+  const layerKey = _legendResponsive.layerKey;
+  if (!container || !layerKey) return;
+  const labels = Array.from(container.querySelectorAll(".legend-labels"));
+  if (!labels.length) return;
+
+  const isSmall = window.matchMedia && window.matchMedia("(max-width: 480px)").matches;
+  if (!isSmall) {
+    labels.forEach((el) => (el.style.display = ""));
+    return;
+  }
+
+  // Prefer config from temporal-layer-legends.js (derived from same ticks)
+  const cfg = (typeof legendCompact !== "undefined" && legendCompact[layerKey]) ? legendCompact[layerKey] : null;
+  const midIdx = Math.floor((labels.length - 1) / 2);
+
+  labels.forEach((el, i) => {
+    const show = i === 0 || i === midIdx || i === labels.length - 1;
+    el.style.display = show ? "" : "none";
+  });
+
+  // Ensure the visible labels are exactly min/mean/max (even if ticks were dense)
+  if (cfg) {
+    labels[0].textContent = cfg.min;
+    labels[midIdx].textContent = cfg.mean;
+    labels[labels.length - 1].textContent = cfg.max;
+  }
+}
 
 // Drag and Resize variables
 let isDragging = false;
@@ -124,7 +167,7 @@ function formatPropertyValue(value) {
             })
           );
         }
-      } catch {}
+      } catch { }
     }
   }
   if (typeof value === "object") {
@@ -134,7 +177,7 @@ function formatPropertyValue(value) {
       return `<span style="font-family:monospace;font-size:11px;">${escapeHtml(
         truncated
       )}</span>`;
-    } catch {}
+    } catch { }
   }
   return escapeHtml(String(value));
 }
@@ -155,15 +198,15 @@ function buildPopupContent(layerId, feature) {
     .sort(
       ([a], [b]) =>
         (PROPERTY_PRIORITY[a.toLowerCase()] || 99) -
-          (PROPERTY_PRIORITY[b.toLowerCase()] || 99) || a.localeCompare(b)
+        (PROPERTY_PRIORITY[b.toLowerCase()] || 99) || a.localeCompare(b)
     );
 
   let rows = `
     <tr style="border-bottom:1px solid rgba(255,255,255,0.5);">
       <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;white-space:nowrap;">Layer</td>
       <td style="padding:8px 0;color:rgba(255,255,255,0.75);font-weight:500;word-break:break-word;">${escapeHtml(
-        layerId
-      )}</td>
+    layerId
+  )}</td>
     </tr>`;
 
   if (sorted.length) {
@@ -171,9 +214,8 @@ function buildPopupContent(layerId, feature) {
       .map(([k, v], i) => {
         const last = i === sorted.length - 1;
         return `
-        <tr style="border-bottom:1px solid rgba(255,255,255,${
-          last ? "0" : "0.5"
-        });">
+        <tr style="border-bottom:1px solid rgba(255,255,255,${last ? "0" : "0.5"
+          });">
           <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;white-space:nowrap;vertical-align:top;">${escapeHtml(
             formatPropertyKey(k)
           )}:</td>
@@ -325,7 +367,7 @@ function setLayerOpacity(id, value) {
   if (_getLayerType(id) === "symbol") {
     try {
       map.setPaintProperty(id, "text-opacity", rounded);
-    } catch {}
+    } catch { }
   }
 }
 
@@ -439,6 +481,7 @@ function showTimeStepLayers(stepIndex) {
     });
   }
   _lastStepIndex = stepIndex;
+  _updateDynamicYearLabel(stepIndex);
 }
 
 // Re-apply global opacity to current frame
@@ -481,14 +524,14 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
           t === "raster"
             ? "raster-opacity"
             : t === "fill"
-            ? "fill-opacity"
-            : t === "line"
-            ? "line-opacity"
-            : t === "circle"
-            ? "circle-opacity"
-            : t === "symbol"
-            ? "icon-opacity"
-            : null;
+              ? "fill-opacity"
+              : t === "line"
+                ? "line-opacity"
+                : t === "circle"
+                  ? "circle-opacity"
+                  : t === "symbol"
+                    ? "icon-opacity"
+                    : null;
         if (opacityProp) _opacityPropCache.set(layerDef.id, opacityProp);
       }
       const initialOpacity =
@@ -547,7 +590,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
   try {
     window.lucide?.createIcons();
-  } catch {}
+  } catch { }
 
   if (playBtn) playBtn.style.display = "inline-block";
   if (pauseBtn) pauseBtn.style.display = "none";
@@ -604,14 +647,14 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
         (layerDef.type === "raster"
           ? "raster-opacity"
           : layerDef.type === "fill"
-          ? "fill-opacity"
-          : layerDef.type === "line"
-          ? "line-opacity"
-          : layerDef.type === "circle"
-          ? "circle-opacity"
-          : layerDef.type === "symbol"
-          ? "icon-opacity"
-          : null);
+            ? "fill-opacity"
+            : layerDef.type === "line"
+              ? "line-opacity"
+              : layerDef.type === "circle"
+                ? "circle-opacity"
+                : layerDef.type === "symbol"
+                  ? "icon-opacity"
+                  : null);
 
       let initialOpacity = 0;
       if (index === 0) {
@@ -647,15 +690,15 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   setTimeout(addClickListeners, 300);
 
   if (yearLabelsDiv) {
-    const frag = document.createDocumentFragment();
-    layers.forEach((l) => {
-      const span = document.createElement("span");
-      span.textContent = l.date;
-      span.style.marginRight = "10px";
-      frag.appendChild(span);
-    });
+    // Store refs so we can update label as slider moves (keep slider core logic unchanged)
+    _yearLabelsDivRef = yearLabelsDiv;
+    _layersMetaForLabels = layers;
+
+    // Show only ONE label, updated dynamically (e.g., Day 1 → Day 2 → Day 3)
     yearLabelsDiv.innerHTML = "";
-    yearLabelsDiv.appendChild(frag);
+    const span = document.createElement("span");
+    span.textContent = layers?.[0]?.date ?? "";
+    yearLabelsDiv.appendChild(span);
   }
 
   const sliderEl = document.getElementById("slider1");
@@ -673,9 +716,12 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     if (legendContainer) {
       legendContainer.innerHTML = legends[layerKey];
       legendContainer.style.display = "block";
+      _legendResponsive = { container: legendContainer, layerKey };
+      _applyLegendResponsiveness();
     }
   } else if (legendContainer) {
     legendContainer.style.display = "none";
+    _legendResponsive = { container: null, layerKey: null };
   }
 
   updateLegendBarWidths();
@@ -721,7 +767,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   try {
     window.lucide?.createIcons();
-  } catch {}
+  } catch { }
   initDragResize();
 
   if (speedBtn) speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
@@ -748,7 +794,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (pauseBtn) pauseBtn.style.display = "inline-block";
       try {
         window.lucide?.createIcons();
-      } catch {}
+      } catch { }
     });
   }
   if (pauseBtn) {
@@ -761,7 +807,7 @@ document.addEventListener("DOMContentLoaded", function () {
       pauseBtn.style.display = "none";
       try {
         window.lucide?.createIcons();
-      } catch {}
+      } catch { }
     });
   }
   if (slider) {
@@ -828,7 +874,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       try {
         window.lucide?.createIcons();
-      } catch {}
+      } catch { }
     });
   }
 
@@ -848,6 +894,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // No click-away closing — popover toggles only from its button
   window.addEventListener("resize", () => {
     if (pop && pop.style.display === "block") positionPopover();
+    _applyLegendResponsiveness();
   });
 
   // Expose manual helper for console

@@ -6092,14 +6092,26 @@ button.custom-nav-btn.terrain-active:hover {
         font-size: 9px !important;
     }
 
-    #tempslider-controls {
-        grid-template-rows: repeat(2, max-content);
-        grid-auto-columns: 20px;
-        gap: 8px;
-        margin-top: 64px;
-        left: 2px;
-        z-index: 9999999;
-    }
+        #tempslider-controls {
+            display: grid;
+    
+            /* 1️⃣ Take full width of parent */
+            width: 100%;
+    
+            /* 2️⃣ Grid layout */
+            grid-template-rows: repeat(1, max-content);
+            grid-auto-columns: 20px;
+            grid-auto-flow: column;
+    
+            /* 3️⃣ Center items horizontally */
+            justify-content: center;
+    
+            /* 4️⃣ Spacing & position */
+            gap: 8px;
+            margin-top: 5.8rem;
+            left: 2px;
+            z-index: 9999999;
+        }
 
     #tempslider-controls button {
         width: 20px;
@@ -6152,7 +6164,7 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     .legend-container1 {
-        top: 48%;
+        top: 58%;
         width: 100%;
     }
 
@@ -6161,18 +6173,26 @@ button.custom-nav-btn.terrain-active:hover {
     }
     
     .legend-bar-container {
-        height: 18px !important;
+        height: 20px !important;
     }
 
+    /* Black halo for legend labels */
     .legend-bar-container .legend-bar .legend-labels {
-        font-size: 9px !important;
+        font-size: 10px !important;
         text-align: center !important;
+        color: #ffffff !important;
+        /* keep text readable */
+        text-shadow:
+            0 0 2px #000,
+            0 0 4px #000,
+            1px 1px 2px #000,
+            -1px -1px 2px #000 !important;
     }
 
     .legend-container1 p {
         font-size: 11px;
         margin: 2px auto;
-        font-weight: 500;
+        font-weight: 700;
     }
 
     #slider1 {
@@ -6190,15 +6210,29 @@ button.custom-nav-btn.terrain-active:hover {
         height: 12px;
     }
 
+    /* REPLACE the existing .year-labels1 block with this */
     .year-labels1 {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        /* center the whole label container */
         top: 20%;
-        padding: 0 2px;
-        left: 5px;
+        /* sits under the slider and above legend */
+        width: auto;
+        /* no full-width, so it can truly center */
+        display: flex;
+        justify-content: center;
+        padding: 0;
+        pointer-events: none;
+        /* doesn't block slider dragging */
     }
 
+    /* Make sure the single dynamic span is not rotated and stays centered */
     .year-labels1 span {
-        font-size: 6.5px;
-        font-weight: 500;
+        transform: none !important;
+        /* kill any rotation if applied elsewhere */
+        white-space: nowrap;
+        text-align: center;
     }
 
     /* ===========================

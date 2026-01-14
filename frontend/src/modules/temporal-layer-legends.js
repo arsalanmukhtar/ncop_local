@@ -22,14 +22,27 @@ function gradientLegendBar(colors, values) {
     } else {
       style += `left: calc(${leftPercent}% - 24px); min-width: 48px; text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis;`;
     }
-    html += `<span class="legend-labels" style="${style}">${val}</span>`;
+    html += `<span class="legend-labels" data-legend-index="${i}" style="${style}">${val}</span>`;
   });
   html += `</div></div>`;
   return html;
 }
 
+// Compact tick config (min/mean/max) derived from the same values used to build each legend.
+export const legendCompact = {};
+
+function makeLegend(key, colors, values) {
+  const n = values.length;
+  legendCompact[key] = {
+    min: values[0],
+    mean: values[Math.floor((n - 1) / 2)],
+    max: values[n - 1],
+  };
+  return gradientLegendBar(colors, values);
+}
+
 export const legends = {
-  dwd_satellite_infrared: gradientLegendBar(
+  dwd_satellite_infrared: makeLegend("dwd_satellite_infrared",
     [
       "rgb(255, 204, 255)",
       "rgb(255, 143, 255)",
@@ -77,11 +90,11 @@ export const legends = {
       "40",
     ]
   ),
-  rainviewerSatInfra: gradientLegendBar(
+  rainviewerSatInfra: makeLegend("rainviewerSatInfra",
     ["#565B54", "#7B7C7B", "#A3A3A3", "#C8C8C8", "#EAEAEA", "#F5F5F5"],
     ["Low", "Med-Low", "Medium", "Med-High", "High", "Very High"]
   ),
-  rainviewerRadar: gradientLegendBar(
+  rainviewerRadar: makeLegend("rainviewerRadar",
     [
       "#63eb63",
       "#3dc63d",
@@ -97,7 +110,7 @@ export const legends = {
     ],
     ["0.1", "0.5", "1", "2", "5", "10", "20", "30", "50", "100", "150"]
   ),
-  specific_humidity_2m_above_ground: gradientLegendBar(
+  specific_humidity_2m_above_ground: makeLegend("specific_humidity_2m_above_ground",
     [
       "#FFFFFF",
       "#0010CC",
@@ -114,11 +127,15 @@ export const legends = {
     ],
     ["0", "5", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]
   ),
-  gdpsSpecificHum: gradientLegendBar(
-    ["#001AB4", "#1AA3E3", "#B4FE4B", "#FE7201", "#AD1300"],
-    ["Very Low", "Low", "Moderate", "High", "Very High"]
+  // gdpsSpecificHum: makeLegend("gdpsSpecificHum",
+  //   ["#001AB4", "#1AA3E3", "#B4FE4B", "#FE7201", "#AD1300"],
+  //   ["Very Low", "Low", "Moderate", "High", "Very High"]
+  // ),
+  relative_humidity_2m_above_ground: makeLegend("relative_humidity_2m_above_ground",
+    ["#FFFFFF", "#0010CC", "#0031FE", "#00B3FE", "#28FDD4", "#90FD6D", "#F6FE05", "#FEA300", "#FE3B00", "#DC0000", "#B10000", "#830000", "#490000"],
+    ["0", "5", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "120"]
   ),
-  gdps_accumulated_precipitation: gradientLegendBar(
+  gdps_accumulated_precipitation: makeLegend("gdps_accumulated_precipitation",
     [
       "#FFFFFF",
       "#B8D5FF",
@@ -156,11 +173,11 @@ export const legends = {
       "150",
     ]
   ),
-  precipitation_type_3hrs: gradientLegendBar(
+  precipitation_type_3hrs: makeLegend("precipitation_type_3hrs",
     ["#007700", "#EECC00", "#FF0000", "#FF06FF", "#005599"],
     ["Rain", "Rain-Snow", "Freezing Rain", "Ice-Pellets", "Snow"]
   ),
-  ecmwf_temperature_850hPa: gradientLegendBar(
+  ecmwf_temperature_850hPa: makeLegend("ecmwf_temperature_850hPa",
     [
       "#e133e1",
       "#ae33ae",
@@ -216,7 +233,7 @@ export const legends = {
       "44",
     ]
   ),
-  imerg_precipitation_rate_14_days: gradientLegendBar(
+  imerg_precipitation_rate_14_days: makeLegend("imerg_precipitation_rate_14_days",
     [
       "rgba(56,160,58,1.0)",
       "rgba(141,198,63,1.0)",
@@ -250,11 +267,11 @@ export const legends = {
       "≥53.0",
     ]
   ),
-  ecmwf_lightning: gradientLegendBar(
+  ecmwf_lightning: makeLegend("ecmwf_lightning",
     ["#87ff89", "#feff59", "#fcb12d", "#f65319", "#b10a0a"],
     ["Very Low", "Low", "Moderate", "High", "Very High"]
   ),
-  ecmwf_cyclone: gradientLegendBar(
+  ecmwf_cyclone: makeLegend("ecmwf_cyclone",
     [
       "#FF06FF",
       "#FF4F01",
@@ -269,7 +286,7 @@ export const legends = {
     ],
     ["5", "10", "20", "30", "40", "50", "60", "70", "80", "90"]
   ),
-  particulate_matter_25: gradientLegendBar(
+  particulate_matter_25: makeLegend("particulate_matter_25",
     [
       "#ffffff",
       "#ecfac5",
@@ -285,7 +302,7 @@ export const legends = {
     ],
     ["0", "20", "30", "40", "50", "60", "80", "100", "150", "200", "300"]
   ),
-  particulate_matter_10: gradientLegendBar(
+  particulate_matter_10: makeLegend("particulate_matter_10",
     [
       "#265ba0",
       "#269170",
@@ -315,7 +332,7 @@ export const legends = {
       "50",
     ]
   ),
-  nitrogen_dioxide_850hPa: gradientLegendBar(
+  nitrogen_dioxide_850hPa: makeLegend("nitrogen_dioxide_850hPa",
     [
       "#265ba0",
       "#269170",
@@ -345,7 +362,7 @@ export const legends = {
       "50",
     ]
   ),
-  sulphur_dioxide_850hPa: gradientLegendBar(
+  sulphur_dioxide_850hPa: makeLegend("sulphur_dioxide_850hPa",
     [
       "#c6e9f3",
       "#b3dfeb",
@@ -362,7 +379,7 @@ export const legends = {
     ],
     ["0", "2", "5", "10", "20", "30", "40", "50", "75", "100", "150", "200"]
   ),
-  ozone: gradientLegendBar(
+  ozone: makeLegend("ozone",
     [
       "#c6e9f3",
       "#b3dfeb",
@@ -392,7 +409,7 @@ export const legends = {
       "1000",
     ]
   ),
-  carbon_monoxide: gradientLegendBar(
+  carbon_monoxide: makeLegend("carbon_monoxide",
     [
       "#c6e9f3",
       "#b3dfeb",
@@ -422,7 +439,7 @@ export const legends = {
       "1000",
     ]
   ),
-  dust: gradientLegendBar(
+  dust: makeLegend("dust",
     [
       "#FFFFFE",
       "#FEF7F0",
@@ -437,7 +454,7 @@ export const legends = {
     ],
     ["0.1", "0.15", "0.2", "0.25", "0.3", "0.35", "0.4", "0.5", "0.8", "1.0"]
   ),
-  methane_at_300hPa: gradientLegendBar(
+  methane_at_300hPa: makeLegend("methane_at_300hPa",
     [
       "#0c0c0c",
       "#680177",
@@ -466,7 +483,7 @@ export const legends = {
     ],
     ["0", "1780", "1840", "1900", "1960", "2020", "2080", "2140", "10000"]
   ),
-  ocean_salinity: gradientLegendBar(
+  ocean_salinity: makeLegend("ocean_salinity",
     [
       "#000DB9",
       "#0014ED",
@@ -504,7 +521,7 @@ export const legends = {
       "33-37",
     ]
   ),
-  ocean_temperature: gradientLegendBar(
+  ocean_temperature: makeLegend("ocean_temperature",
     [
       "#00067F",
       "#012EDC",
@@ -517,7 +534,7 @@ export const legends = {
     ],
     ["271K", "278K", "284K", "290K", "296K", "297K", "303K", "400K"]
   ),
-  ocean_surface_currents: gradientLegendBar(
+  ocean_surface_currents: makeLegend("ocean_surface_currents",
     [
       "#99E8FD",
       "#9994FF",
@@ -547,7 +564,7 @@ export const legends = {
       "2.50",
     ]
   ),
-  ocean_surface_height: gradientLegendBar(
+  ocean_surface_height: makeLegend("ocean_surface_height",
     [
       "#000892",
       "#000EBD",
@@ -593,7 +610,7 @@ export const legends = {
       "3.0",
     ]
   ),
-  weekly_precipitation_2m_above_ground: gradientLegendBar(
+  weekly_precipitation_2m_above_ground: makeLegend("weekly_precipitation_2m_above_ground",
     [
       "#C2FBFA",
       "#87A9FD",
@@ -611,7 +628,7 @@ export const legends = {
     ],
     ["0", "0.25", "1", "2", "4", "6", "10", "15", "20", "30", "50", "70", "100"]
   ),
-  hourly_precipitation_2m_above_ground: gradientLegendBar(
+  hourly_precipitation_2m_above_ground: makeLegend("hourly_precipitation_2m_above_ground",
     [
       "#C2FBFA",
       "#87A9FD",
@@ -629,7 +646,7 @@ export const legends = {
     ],
     ["0", "0.25", "1", "2", "4", "6", "10", "15", "20", "30", "50", "70", "100"]
   ),
-  temperature_2m_above_ground: gradientLegendBar(
+  temperature_2m_above_ground: makeLegend("temperature_2m_above_ground",
     [
       "#348CFE",
       "#51D4D9",
@@ -663,11 +680,11 @@ export const legends = {
       "46",
     ]
   ),
-  precipitation_radar: gradientLegendBar(
+  precipitation_radar: makeLegend("precipitation_radar",
     ["#7AE1E8", "#02C8D8", "#2D7BEA", "#BE46EB", "#E60B0B"],
     ["Drizzle", "Light", "Moderate", "Heavy", "Extreme"]
   ),
-  weekly_snowfall_forecast: gradientLegendBar(
+  weekly_snowfall_forecast: makeLegend("weekly_snowfall_forecast",
     [
       "rgba(230, 250, 255, 0.8)",
       "rgba(191, 236, 243, 1.0)",
@@ -707,7 +724,7 @@ export const legends = {
       "360",
     ]
   ),
-  hourly_snowfall_forecast: gradientLegendBar(
+  hourly_snowfall_forecast: makeLegend("hourly_snowfall_forecast",
     [
       "rgba(230, 250, 255, 0.8)",
       "rgba(191, 236, 243, 1.0)",
@@ -747,7 +764,7 @@ export const legends = {
       "140",
     ]
   ),
-  cape_hourly_forecast: gradientLegendBar(
+  cape_hourly_forecast: makeLegend("cape_hourly_forecast",
     [
       "rgba(180, 170, 255, 0.8)",
       "rgba(130, 120, 255, 1.0)",
@@ -793,7 +810,7 @@ export const legends = {
       "5000",
     ]
   ),
-  cape_weekly_forecast: gradientLegendBar(
+  cape_weekly_forecast: makeLegend("cape_weekly_forecast",
     [
       "rgba(180, 170, 255, 0.8)",
       "rgba(130, 120, 255, 1.0)",
@@ -839,7 +856,7 @@ export const legends = {
       "5000",
     ]
   ),
-  meteorological_risks_forecast: gradientLegendBar(
+  meteorological_risks_forecast: makeLegend("meteorological_risks_forecast",
     [
       "rgba(248, 246, 0, 1.0)",
       "rgba(255, 173, 0, 1.0)",
@@ -857,7 +874,7 @@ export const legends = {
       "Severe Precip",
     ]
   ),
-  official_weather_warnings_forecast: gradientLegendBar(
+  official_weather_warnings_forecast: makeLegend("official_weather_warnings_forecast",
     [
       "rgba(255, 0, 0, 0.6)",
       "rgba(255, 125, 0, 0.6)",
@@ -867,7 +884,7 @@ export const legends = {
     ],
     ["Extreme", "Severe", "Moderate", "Minor", "Unknown"]
   ),
-  storm_helicity_forecast_0_3km: gradientLegendBar(
+  storm_helicity_forecast_0_3km: makeLegend("storm_helicity_forecast_0_3km",
     [
       "rgba(170, 255, 102, 1.0)",
       "rgba(214, 255, 0, 1.0)",
