@@ -62,10 +62,7 @@ export default defineConfig(() => ({
         auth_login: resolve(__dirname, "src/entries/auth_login.js"),
         auth_signup: resolve(__dirname, "src/entries/auth_signup.js"),
         auth_reset: resolve(__dirname, "src/entries/auth_reset.js"),
-        auth_reset_confirm: resolve(
-          __dirname,
-          "src/entries/auth_reset_confirm.js"
-        ),
+        auth_reset_confirm: resolve(__dirname, "src/entries/auth_reset_confirm.js"),
         dashboard_main: resolve(__dirname, "src/entries/dashboard_main.js"),
       },
     },
