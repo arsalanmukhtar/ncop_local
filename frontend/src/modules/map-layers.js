@@ -776,6 +776,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          title: "Relative Humidity (%)",
           information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
         gdps_accumulated_precipitation: {
@@ -783,6 +784,7 @@ export const ncop_menu_items = {
           image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
           type: "raster",
           theme: "slider",
+          title: "Accumulated Precipitation (mm)",
           geometry: null,
           information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
         },
@@ -1853,507 +1855,384 @@ export const ncop_menu_items = {
     },
   },
   "Disaster Early Warning (DEW)": {
-    // "API Features": {
-    //   dropdown: {
-    //     dew_exposures: {
-    //       exposure_id_endpoint: "http://172.18.1.108:8000/get-exposures/",
-    //       exposure_feature_endpoint: `http://172.18.1.108:8000/get-exposures/?exposure_id=<individual_exposure_id>`,
-    //       key: "id",
-    //       attribute: "remarks",
-    //       type: "geojson",
-    //       popup: true,
-    //       information:
-    //         "The DEW Exposures layer provides detailed information on various exposure points related to disaster early warning systems. This layer is crucial for identifying vulnerable areas and populations, enabling targeted interventions and resource allocation during disaster events.",
-    //     },
-    //   },
-    // },
-    // ========================================================================
-    // âœ… UPDATED: "DEW Polygons" renamed to "Hazard Alerts" with nested structure
-    // ========================================================================
-    "Hazard Alerts": {
-      nested: {
-        // 🆕 NEW: GDACS Alerts sub-accordion with static layers
-        "GDACS Alerts": {
-          static: {
-            gdacs_tc_events: {
-              label: "Tropical Cyclones (TC)",
-              image: getImage("gdacs-TC.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_TC",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/TC/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_TC_fill",
-                  type: "fill",
-                  source: "gdacs_TC",
-                  paint: {
-                    "fill-color": [
-                      "case",
-                      ["==", ["get", "Class"], "Poly_Green"],
-                      "#00FF00",
-                      ["==", ["get", "Class"], "Poly_Orange"],
-                      "#FFA500",
-                      ["==", ["get", "Class"], "Poly_Red"],
-                      "#FF0000",
-                      "#CCCCCC",
-                    ],
-                    "fill-opacity": 0.4,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_TC_outline",
-                  type: "line",
-                  source: "gdacs_TC",
-                  paint: {
-                    "line-opacity": 1,
-                    "line-color": "#FFFF00",
-                    "line-width": 2,
-                  },
-                  filter: ["==", "$type", "LineString"],
-                },
-                {
-                  id: "gdacs_TC_label",
-                  type: "symbol",
-                  source: "gdacs_TC",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_TC_icon",
-                  type: "symbol",
-                  source: "gdacs_TC",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_TropicalCyclones.webp"),
-              information:
-                "Displays GDACS Tropical Cyclone alerts (TC) including polygons, tracks, and icons colored by alert level (Green, Orange, Red).",
-            },
-            //GDACS Flood Events
-            gdacs_fl_events: {
-              label: "Floods (FL)",
-              image: getImage("gdacs-FL.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_FL",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/FL/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_FL_fill",
-                  type: "fill",
-                  source: "gdacs_FL",
-                  paint: {
-                    "fill-color": "#FF0000",
-                    "fill-opacity": 0.3,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_FL_outline",
-                  type: "line",
-                  source: "gdacs_FL",
-                  paint: {
-                    "line-opacity": 0.8,
-                    "line-color": "#FF0000",
-                    "line-width": 1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_FL_label",
-                  type: "symbol",
-                  source: "gdacs_FL",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_FL_icon",
-                  type: "symbol",
-                  source: "gdacs_FL",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_Floods.webp"),
-              information:
-                "Displays GDACS Flood alerts (FL) with polygons and points representing active flood events and their alert levels.",
-            },
-            //GDACS Earthquake Events
-            gdacs_eq_events: {
-              label: "Earthquakes (EQ)",
-              image: getImage("gdacs-EQ.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_EQ",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/EQ/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_EQ_fill",
-                  type: "fill",
-                  source: "gdacs_EQ",
-                  paint: {
-                    "fill-color": "#FF0000",
-                    "fill-opacity": 0.1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_EQ_outline",
-                  type: "line",
-                  source: "gdacs_EQ",
-                  paint: {
-                    "line-opacity": 0.8,
-                    "line-color": "#FF0000",
-                    "line-width": 1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_EQ_label",
-                  type: "symbol",
-                  source: "gdacs_EQ",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_EQ_icon",
-                  type: "symbol",
-                  source: "gdacs_EQ",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_Earthquakes.webp"),
-              information:
-                "Displays GDACS Earthquake alerts (EQ), including affected polygons and epicenter markers with alert-level icons.",
-            },
-            //GDACS Volcano Events
-            gdacs_vo_events: {
-              label: "Volcanoes (VO)",
-              image: getImage("gdacs-VO.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_VO",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/VO/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_VO_fill",
-                  type: "fill",
-                  source: "gdacs_VO",
-                  paint: {
-                    "fill-color": "#FF0000",
-                    "fill-opacity": 0.5,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_VO_outline",
-                  type: "line",
-                  source: "gdacs_VO",
-                  paint: {
-                    "line-opacity": 0.8,
-                    "line-color": "#FF0000",
-                    "line-width": 1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_VO_label",
-                  type: "symbol",
-                  source: "gdacs_VO",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_VO_icon",
-                  type: "symbol",
-                  source: "gdacs_VO",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_Volcanoes.webp"),
-              information:
-                "Displays GDACS Volcano alerts (VO) including affected zones and volcano locations with alert icons.",
-            },
-            //GDACS Wildfire Events
-            gdacs_wf_events: {
-              label: "Wildfires (WF)",
-              image: getImage("gdacs-WF.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_WF",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/WF/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_WF_fill",
-                  type: "fill",
-                  source: "gdacs_WF",
-                  paint: {
-                    "fill-color": "#FF0000",
-                    "fill-opacity": 0.5,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_WF_outline",
-                  type: "line",
-                  source: "gdacs_WF",
-                  paint: {
-                    "line-opacity": 0.8,
-                    "line-color": "#FF0000",
-                    "line-width": 1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_WF_label",
-                  type: "symbol",
-                  source: "gdacs_WF",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_WF_icon",
-                  type: "symbol",
-                  source: "gdacs_WF",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_Wildfires.webp"),
-              information:
-                "Displays GDACS Wildfire alerts (WF) and their alert levels using polygons and point icons.",
-            },
-            //GDACS Drought Events
-            gdacs_dr_events: {
-              label: "Drought (DR)",
-              image: getImage("gdacs-DR.webp"),
-              type: "geojson",
-              theme: "legend",
-              source: {
-                id: "gdacs_DR",
-                type: "geojson",
-                data: `${baseUrl}/get-gdacs-events/DR/`,
-              },
-              layers: [
-                {
-                  id: "gdacs_DR_fill",
-                  type: "fill",
-                  source: "gdacs_DR",
-                  paint: {
-                    "fill-color": "#FF0000",
-                    "fill-opacity": 0.5,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_DR_outline",
-                  type: "line",
-                  source: "gdacs_DR",
-                  paint: {
-                    "line-opacity": 0.8,
-                    "line-color": "#FF0000",
-                    "line-width": 1,
-                  },
-                  filter: ["==", "$type", "Polygon"],
-                },
-                {
-                  id: "gdacs_DR_label",
-                  type: "symbol",
-                  source: "gdacs_DR",
-                  layout: {
-                    "text-field": "{polygonlabel}",
-                    "text-size": 12,
-                    "text-offset": [0, 0],
-                    "text-anchor": "left",
-                  },
-                },
-                {
-                  id: "gdacs_DR_icon",
-                  type: "symbol",
-                  source: "gdacs_DR",
-                  layout: {
-                    "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                    "icon-anchor": "bottom",
-                    "icon-allow-overlap": true,
-                  },
-                  filter: ["==", "$type", "Point"],
-                },
-              ],
-              legend: true,
-              legendPath: getLegendImage("GDACS_Drought.webp"),
-              information:
-                "Displays GDACS Drought alerts (DR) with affected areas and drought alert-level markers.",
-            },
+    "GDACS Alerts": {
+      static: {
+        gdacs_tc_events: {
+          label: "Tropical Cyclones (TC)",
+          image: getImage("gdacs-TC.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_TC",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/TC/`,
           },
+          layers: [
+            {
+              id: "gdacs_TC_fill",
+              type: "fill",
+              source: "gdacs_TC",
+              paint: {
+                "fill-color": [
+                  "case",
+                  ["==", ["get", "Class"], "Poly_Green"],
+                  "#00FF00",
+                  ["==", ["get", "Class"], "Poly_Orange"],
+                  "#FFA500",
+                  ["==", ["get", "Class"], "Poly_Red"],
+                  "#FF0000",
+                  "#CCCCCC",
+                ],
+                "fill-opacity": 0.4,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_TC_outline",
+              type: "line",
+              source: "gdacs_TC",
+              paint: {
+                "line-opacity": 1,
+                "line-color": "#FFFF00",
+                "line-width": 2,
+              },
+              filter: ["==", "$type", "LineString"],
+            },
+            {
+              id: "gdacs_TC_label",
+              type: "symbol",
+              source: "gdacs_TC",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_TC_icon",
+              type: "symbol",
+              source: "gdacs_TC",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_TropicalCyclones.webp"),
+          information:
+            "Displays GDACS Tropical Cyclone alerts (TC) including polygons, tracks, and icons colored by alert level (Green, Orange, Red).",
         },
-
-        // âœ… EXISTING: Regional Alerts (kept as toggle items)
-        // "Regional Alerts": {
-        //   toggle: {
-        //     rajanpur_and_dg_khan: {
-        //       label: "Rajanpur and DG Khan",
-        //       type: "geojson",
-        //       theme: null,
-        //       geometry: null,
-        //     },
-        //     balochistan_drought: {
-        //       label: "Balochistan Drought Alert",
-        //       type: "geojson",
-        //       theme: null,
-        //       geometry: null,
-        //     },
-        //     sindh_heatwave: {
-        //       label: "Sindh Heatwave Alert",
-        //       type: "geojson",
-        //       theme: null,
-        //       geometry: null,
-        //     },
-        //   },
-        // },
-
-        // âœ… EXISTING: Infrastructure Alerts (kept as toggle items)
-        // "Infrastructure Alerts": {
-        //   toggle: {
-        //     dam_structural_alert: {
-        //       label: "Dam Structural Alert",
-        //       type: "geojson",
-        //       theme: null,
-        //       geometry: null,
-        //     },
-        //     bridge_safety_alert: {
-        //       label: "Bridge Safety Alert",
-        //       type: "geojson",
-        //       theme: null,
-        //       geometry: null,
-        //     },
-        //   },
-        // },
+        //GDACS Flood Events
+        gdacs_fl_events: {
+          label: "Floods (FL)",
+          image: getImage("gdacs-FL.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_FL",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/FL/`,
+          },
+          layers: [
+            {
+              id: "gdacs_FL_fill",
+              type: "fill",
+              source: "gdacs_FL",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.3,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_FL_outline",
+              type: "line",
+              source: "gdacs_FL",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_FL_label",
+              type: "symbol",
+              source: "gdacs_FL",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_FL_icon",
+              type: "symbol",
+              source: "gdacs_FL",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Floods.webp"),
+          information:
+            "Displays GDACS Flood alerts (FL) with polygons and points representing active flood events and their alert levels.",
+        },
+        //GDACS Earthquake Events
+        gdacs_eq_events: {
+          label: "Earthquakes (EQ)",
+          image: getImage("gdacs-EQ.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_EQ",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/EQ/`,
+          },
+          layers: [
+            {
+              id: "gdacs_EQ_fill",
+              type: "fill",
+              source: "gdacs_EQ",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_EQ_outline",
+              type: "line",
+              source: "gdacs_EQ",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_EQ_label",
+              type: "symbol",
+              source: "gdacs_EQ",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_EQ_icon",
+              type: "symbol",
+              source: "gdacs_EQ",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Earthquakes.webp"),
+          information:
+            "Displays GDACS Earthquake alerts (EQ), including affected polygons and epicenter markers with alert-level icons.",
+        },
+        //GDACS Volcano Events
+        gdacs_vo_events: {
+          label: "Volcanoes (VO)",
+          image: getImage("gdacs-VO.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_VO",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/VO/`,
+          },
+          layers: [
+            {
+              id: "gdacs_VO_fill",
+              type: "fill",
+              source: "gdacs_VO",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_VO_outline",
+              type: "line",
+              source: "gdacs_VO",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_VO_label",
+              type: "symbol",
+              source: "gdacs_VO",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_VO_icon",
+              type: "symbol",
+              source: "gdacs_VO",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Volcanoes.webp"),
+          information:
+            "Displays GDACS Volcano alerts (VO) including affected zones and volcano locations with alert icons.",
+        },
+        //GDACS Wildfire Events
+        gdacs_wf_events: {
+          label: "Wildfires (WF)",
+          image: getImage("gdacs-WF.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_WF",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/WF/`,
+          },
+          layers: [
+            {
+              id: "gdacs_WF_fill",
+              type: "fill",
+              source: "gdacs_WF",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_WF_outline",
+              type: "line",
+              source: "gdacs_WF",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_WF_label",
+              type: "symbol",
+              source: "gdacs_WF",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_WF_icon",
+              type: "symbol",
+              source: "gdacs_WF",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Wildfires.webp"),
+          information:
+            "Displays GDACS Wildfire alerts (WF) and their alert levels using polygons and point icons.",
+        },
+        //GDACS Drought Events
+        gdacs_dr_events: {
+          label: "Drought (DR)",
+          image: getImage("gdacs-DR.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_DR",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/DR/`,
+          },
+          layers: [
+            {
+              id: "gdacs_DR_fill",
+              type: "fill",
+              source: "gdacs_DR",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_DR_outline",
+              type: "line",
+              source: "gdacs_DR",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_DR_label",
+              type: "symbol",
+              source: "gdacs_DR",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_DR_icon",
+              type: "symbol",
+              source: "gdacs_DR",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Drought.webp"),
+          information:
+            "Displays GDACS Drought alerts (DR) with affected areas and drought alert-level markers.",
+        },
       },
     },
-    // "DEW Parameters": {
-    //   button: {
-    //     tech_ew: {
-    //       label: "Tech EW",
-    //       color: "#FF5733", // Bright Orange-Red (Existing)
-    //       outline: "#C70039", // Dark Red (Existing)
-    //     },
-    //     nidm: {
-    //       label: "NIDM",
-    //       color: "#3366FF", // Royal Blue (Formal/Professional)
-    //       outline: "#0033CC",
-    //     },
-    //     mobile_app: {
-    //       label: "Mobile App",
-    //       color: "#00CC99", // Teal (Modern/Digital)
-    //       outline: "#008066",
-    //     },
-    //     media_comm: {
-    //       label: "Media Comm",
-    //       color: "#FFC300", // Gold/Amber (Communication/Alerts)
-    //       outline: "#CC9900",
-    //     },
-    //     drr: {
-    //       label: "DRR",
-    //       color: "#339933", // Forest Green (Safety/Environment)
-    //       outline: "#1E661E",
-    //     },
-    //     infra_development: {
-    //       label: "Infra Development",
-    //       color: "#607D8B", // Slate Blue-Gray (Structure/Construction)
-    //       outline: "#455A64",
-    //     },
-    //     operations: {
-    //       label: "Operations",
-    //       color: "#CC0066", // Deep Magenta (Action/Management)
-    //       outline: "#99004C",
-    //     },
-    //     plans: {
-    //       label: "Plans",
-    //       color: "#663399", // Deep Purple (Strategy/Planning)
-    //       outline: "#4C2673",
-    //     },
-    //     intl_colaboration: {
-    //       label: "Intl Collaboration",
-    //       color: "#33CCFF", // Bright Sky Blue (Global/Partnership)
-    //       outline: "#0099CC",
-    //     },
-    //     rm_and_m: {
-    //       label: "RM & M",
-    //       color: "#996633", // Earthy Brown (Resource Management)
-    //       outline: "#664422",
-    //     },
-    //     cdrf: {
-    //       label: "CDRF",
-    //       color: "#00BFA5", // Mint Teal (Finance/Sustainability)
-    //       outline: "#00897B",
-    //     },
-    //   },
-    // },
   },
 };
 window.ncop_menu_items = ncop_menu_items;
