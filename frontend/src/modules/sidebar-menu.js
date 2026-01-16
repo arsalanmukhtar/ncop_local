@@ -149,8 +149,8 @@ export class SidebarMenu {
         icon: "layers",
         customIcon: gisLayersIcon,
       },
-      weather: {
-        title: "Weather Systems",
+      weather_monitoring: {
+        title: "Weather Monitoring",
         icon: "cloud",
         customIcon: weatherSystemsIcon,
       },
@@ -164,13 +164,13 @@ export class SidebarMenu {
         icon: "wind",
         customIcon: airQualityIcon,
       },
-      "ocean/coastal": {
-        title: "Ocean & Coastal",
+      oceanography: {
+        title: "Oceanography",
         icon: "anchor",
         customIcon: oceanCoastalIcon,
       },
-      "Disaster Early Warning (DEW)": {
-        title: "Early Warning",
+      recent_hazard_events: {
+        title: "Recent Hazard Events",
         icon: "alert-triangle",
         customIcon: earlyWarningIcon,
       },

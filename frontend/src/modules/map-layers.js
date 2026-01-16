@@ -352,622 +352,385 @@ window.imerg_precipitation_rate_14_days = mbx_imerg_precip_rate;
 // );
 
 export const ncop_menu_items = {
-  gis_layers: {
-    "Administrative Boundaries": {
-      toggle: {
-        global_boundaries: {
-          label: "Global Boundaries (Countries)",
-          theme: null,
-          geometry: "line",
+  recent_hazard_events: {
+    "Alerts": {
+      static: {
+        gdacs_tc_events: {
+          label: "Tropical Cyclones (TC)",
+          image: getImage("gdacs-TC.webp"),
+          type: "geojson",
+          theme: "legend",
           source: {
-            id: "global_boundaries-source",
-            type: "vector",
-            scheme: "xyz",
-            tiles: [
-              "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=c889b7400ecd1d0d"
-            ],
-            maxzoom: 15
+            id: "gdacs_TC",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/TC/`,
           },
           layers: [
-            /* Invisible hit / popup layer */
             {
-              id: "global_boundaries-hit",
-              type: "line",
-              source: "global_boundaries-source",
-              "source-layer": "boundaries",
-              filter: ["==", ["get", "kind"], "country"],
+              id: "gdacs_TC_fill",
+              type: "fill",
+              source: "gdacs_TC",
               paint: {
-                "line-color": "#ffffff",
-                "line-width": 10,
-                "line-opacity": 0
-              }
+                "fill-color": [
+                  "case",
+                  ["==", ["get", "Class"], "Poly_Green"],
+                  "#00FF00",
+                  ["==", ["get", "Class"], "Poly_Orange"],
+                  "#FFA500",
+                  ["==", ["get", "Class"], "Poly_Red"],
+                  "#FF0000",
+                  "#CCCCCC",
+                ],
+                "fill-opacity": 0.4,
+              },
+              filter: ["==", "$type", "Polygon"],
             },
-
-            /* Visible boundary outline */
             {
-              id: "global_boundaries-outline",
+              id: "gdacs_TC_outline",
               type: "line",
-              source: "global_boundaries-source",
-              "source-layer": "boundaries",
-              filter: ["==", ["get", "kind"], "country"],
+              source: "gdacs_TC",
               paint: {
-                "line-color": "#505050",
-                "line-width": 1.2
-              }
-            }
+                "line-opacity": 1,
+                "line-color": "#FFFF00",
+                "line-width": 2,
+              },
+              filter: ["==", "$type", "LineString"],
+            },
+            {
+              id: "gdacs_TC_label",
+              type: "symbol",
+              source: "gdacs_TC",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_TC_icon",
+              type: "symbol",
+              source: "gdacs_TC",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
           ],
-          popup: true,
+          legend: true,
+          legendPath: getLegendImage("GDACS_TropicalCyclones.webp"),
           information:
-            "Global country boundaries from OpenStreetMap and Natural Earth, delivered as vector tiles. Suitable for worldwide geopolitical reference."
+            "Displays GDACS Tropical Cyclone alerts (TC) including polygons, tracks, and icons colored by alert level (Green, Orange, Red).",
         },
-        // provincial_boundary: {
-        //   label: "Provincial Boundary",
-        //   theme: null,
-        //   geometry: "polygon",
-        //   source: {
-        //     id: "provincial_boundary-source",
-        //     type: "vector",
-        //     scheme: "tms",
-        //     tiles: [
-        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-        //     ],
-        //     maxzoom: 22,
-        //   },
-        //   layers: [
-        //     {
-        //       id: "provincial_boundary-fill",
-        //       type: "fill",
-        //       source: "provincial_boundary-source",
-        //       "source-layer": "provincial_boundary",
-        //       paint: {
-        //         "fill-color": "#ffffff",
-        //         "fill-opacity": 0,
-        //       },
-        //     },
-        //     {
-        //       id: "provincial_boundary-outline",
-        //       type: "line",
-        //       source: "provincial_boundary-source",
-        //       "source-layer": "provincial_boundary",
-        //       paint: {
-        //         "line-color": "#e74c3c",
-        //         "line-width": 2,
-        //       },
-        //     },
-        //   ],
-        //   popup: true,
-        //   information:
-        //     "The Provincial Boundary layer delineates the borders of provinces within the country. This layer is crucial for regional planning and analysis, allowing users to visualize and manage data at the provincial level.",
-        // },
-        // district_boundary: {
-        //   label: "District Boundary",
-        //   theme: null,
-        //   source: {
-        //     id: "district_boundary-source",
-        //     type: "vector",
-        //     scheme: "tms",
-        //     tiles: [
-        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-        //     ],
-        //     maxzoom: 22,
-        //   },
-        //   layers: [
-        //     {
-        //       id: "district_boundary-fill",
-        //       type: "fill",
-        //       source: "district_boundary-source",
-        //       "source-layer": "district_boundary",
-        //       paint: {
-        //         "fill-color": "#ffffff",
-        //         "fill-opacity": 0,
-        //       },
-        //     },
-        //     {
-        //       id: "district_boundary-outline",
-        //       type: "line",
-        //       source: "district_boundary-source",
-        //       "source-layer": "district_boundary",
-        //       paint: {
-        //         "line-color": "#27ae60",
-        //         "line-width": 1.5,
-        //       },
-        //     },
-        //   ],
-        //   popup: true,
-        //   information:
-        //     "The District Boundary layer outlines the borders of districts within the country. This layer is important for local governance and resource management, providing a clear framework for administrative boundaries.",
-        // },
-        // tehsil_boundary: {
-        //   label: "Tehsil Boundary",
-        //   theme: null,
-        //   source: {
-        //     id: "tehsil_boundary-source",
-        //     type: "vector",
-        //     scheme: "tms",
-        //     tiles: [
-        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-        //     ],
-        //     maxzoom: 22,
-        //   },
-        //   layers: [
-        //     {
-        //       id: "tehsil_boundary-fill",
-        //       type: "fill",
-        //       source: "tehsil_boundary-source",
-        //       "source-layer": "tehsil_boundary",
-        //       paint: {
-        //         "fill-color": "#ffffff",
-        //         "fill-opacity": 0,
-        //       },
-        //     },
-        //     {
-        //       id: "tehsil_boundary-outline",
-        //       type: "line",
-        //       source: "tehsil_boundary-source",
-        //       "source-layer": "tehsil_boundary",
-        //       paint: {
-        //         "line-color": "#e1b12c",
-        //         "line-width": 1,
-        //       },
-        //     },
-        //   ],
-        //   popup: true,
-        //   information:
-        //     "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
-        // },
-      },
-    },
-    // Infrastructure: {
-    //   toggle: {
-    //     airports: {
-    //       label: "Airports",
-    //       theme: null,
-    //       source: {
-    //         id: "airports-source",
-    //         type: "vector",
-    //         scheme: "tms",
-    //         tiles: [
-    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-    //         ],
-    //         maxzoom: 22,
-    //       },
-    //       layers: [
-    //         {
-    //           id: "airports-symbol",
-    //           type: "symbol",
-    //           source: "airports-source",
-    //           "source-layer": "airports",
-    //           layout: {
-    //             "icon-image": map_icons.airportIcon, // Use custom icon name
-    //             // Interpolate icon-size based on zoom for smooth scaling
-    //             "icon-size": [
-    //               "interpolate",
-    //               ["linear"],
-    //               ["zoom"],
-    //               5,
-    //               0.25,
-    //               10,
-    //               0.5,
-    //               15,
-    //               1,
-    //             ],
-    //             "icon-allow-overlap": true,
-    //           },
-    //         },
-    //       ],
-    //       popup: true,
-    //       legend: true,
-    //       legendPath: getLegendImage("airports.webp"),
-    //       information:
-    //         "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
-    //     },
-    //     // hospitals: {
-    //     //     label: "Hospitals",
-    //     //     theme: null,
-    //     //     source: {
-    //     //         id: "hospitals-source",
-    //     //         type: "vector",
-    //     //         scheme: "tms",
-    //     //         tiles: ["http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:hospitals@EPSG:900913@pbf/{z}/{x}/{y}.pbf"],
-    //     //         maxzoom: 22
-    //     //     },
-    //     //     layers: [
-    //     //         {
-    //     //             id: "hospitals-symbol",
-    //     //             type: "symbol",
-    //     //             source: "hospitals-source",
-    //     //             "source-layer": "hospitals",
-    //     //             layout: {
-    //     //                 "icon-image": "/static/icons/map_icons/layer_icons/hospital.webp", // Use custom icon name
-    //     //                 // Interpolate icon-size based on zoom for smooth scaling
-    //     //                 "icon-size": [
-    //     //                     "interpolate",
-    //     //                     ["linear"],
-    //     //                     ["zoom"],
-    //     //                     5, 0.25,
-    //     //                     10, 0.5,
-    //     //                     15, 1
-    //     //                 ],
-    //     //                 "icon-allow-overlap": true
-    //     //             }
-    //     //         }
-    //     //     ],
-    //     //     information: "The Hospitals layer displays the locations of hospitals within the country. This layer is essential for healthcare planning and emergency response, providing critical information for medical services and facilities.",
-    //     // },
-    //     schools: {
-    //       label: "Schools",
-    //       theme: null,
-    //       source: {
-    //         id: "schools-source",
-    //         type: "vector",
-    //         scheme: "tms",
-    //         tiles: [
-    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:schools@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-    //         ],
-    //         maxzoom: 22,
-    //       },
-    //       layers: [
-    //         {
-    //           id: "schools-symbol",
-    //           type: "symbol",
-    //           source: "schools-source",
-    //           "source-layer": "schools",
-    //           layout: {
-    //             "icon-image": map_icons.schoolIcon, // Use custom icon name
-    //             // Interpolate icon-size based on zoom for smooth scaling
-    //             "icon-size": [
-    //               "interpolate",
-    //               ["linear"],
-    //               ["zoom"],
-    //               5,
-    //               0.25,
-    //               10,
-    //               0.5,
-    //               15,
-    //               1,
-    //             ],
-    //             "icon-allow-overlap": false,
-    //           },
-    //         },
-    //       ],
-    //       popup: true,
-    //       information:
-    //         "The Schools layer displays the locations of schools within the country. This layer is essential for education planning and resource allocation, providing critical information for educational services and facilities.",
-    //     },
-    //     settlements: {
-    //       label: "Settlements",
-    //       theme: null,
-    //       source: {
-    //         id: "settlements-source",
-    //         type: "vector",
-    //         scheme: "tms",
-    //         tiles: [
-    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:settlements@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
-    //         ],
-    //         maxzoom: 22,
-    //       },
-    //       layers: [
-    //         {
-    //           id: "settlements-symbol",
-    //           type: "symbol",
-    //           source: "settlements-source",
-    //           "source-layer": "settlements",
-    //           layout: {
-    //             "icon-image": map_icons.settlementIcon, // Use custom icon name
-    //             // Interpolate icon-size based on zoom for smooth scaling
-    //             "icon-size": [
-    //               "interpolate",
-    //               ["linear"],
-    //               ["zoom"],
-    //               5,
-    //               0.25,
-    //               10,
-    //               0.5,
-    //               15,
-    //               1,
-    //             ],
-    //             "icon-allow-overlap": false,
-    //           },
-    //         },
-    //       ],
-    //       information:
-    //         "The Settlements layer displays the locations of settlements within the country. This layer is essential for urban planning and resource allocation, providing critical information for residential services and facilities.",
-    //     },
-    //     // evacuation_points: {
-    //     //     label: "Evacuation Points",
-    //     //     type: "geojson",
-    //     //     theme: null,
-    //     //     geometry: null,
-    //     // },
-    //   },
-    // },
-    // "Hydrological Layers": {
-    //   toggle: {
-    //     rsc_exceptionally_high_zone: {
-    //       label: "RSC Exceptionally High Zone",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //     rsc_very_high_zone: {
-    //       label: "RSC Very High Zone",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //     rsc_high_zone: {
-    //       label: "RSC High Zone",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //     rsc_medium_zone: {
-    //       label: "RSC Medium Zone",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //     rsc_low_zone: {
-    //       label: "RSC Low Zone",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //     watershed_boundaries: {
-    //       label: "Watershed Boundaries",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //   },
-    // },
-  },
-  weather: {
-    "Radar Layers": {
-      temporal: {
-        // realtime_radar: {
-        //   label: "Realtime Radar",
-        //   image: getImage("rainViewer_radar_precip.webp"),
-        //   type: "raster",
-        //   theme: "slider",
-        //   title: "Radar",
-        //   information:
-        //     "The Realtime Radar layer provides up-to-the-minute radar imagery, allowing users to monitor precipitation patterns and intensity in real-time. This layer is crucial for tracking weather events such as storms, rainfall, and severe weather conditions.",
-        // },
-        // satellite_infrared: {
-        //   label: "Satellite Infrared",
-        //   image: getImage("rainViewer_satellite.webp"),
-        //   type: "raster",
-        //   theme: "slider",
-        //   title: "Radar Clouds",
-        //   information: "The Satellite Infrared layer provides real-time infrared satellite imagery, allowing users to monitor cloud cover and atmospheric conditions. This layer is essential for tracking weather patterns and forecasting.",
-        // },
-        dwd_satellite_infrared: {
-          label: "DWD Satellite Infrared",
-          image: getImage("dwd_radar.webp"),
-          theme: "slider",
-          type: "raster",
-          title: "DWD Radar (°C)",
-          information: "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
+        //GDACS Flood Events
+        gdacs_fl_events: {
+          label: "Floods (FL)",
+          image: getImage("gdacs-FL.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_FL",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/FL/`,
+          },
+          layers: [
+            {
+              id: "gdacs_FL_fill",
+              type: "fill",
+              source: "gdacs_FL",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.3,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_FL_outline",
+              type: "line",
+              source: "gdacs_FL",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_FL_label",
+              type: "symbol",
+              source: "gdacs_FL",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_FL_icon",
+              type: "symbol",
+              source: "gdacs_FL",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Floods.webp"),
+          information:
+            "Displays GDACS Flood alerts (FL) with polygons and points representing active flood events and their alert levels.",
         },
-        imerg_precipitation_rate_14_days: {
-          label: "IMERG Precipitation Rate (14 Days)",
-          image: getImage("IMERG_precip_rate_past12d.webp"),
-          type: "raster",
-          theme: "slider",
-          title: null,
-          information: "The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
+        //GDACS Earthquake Events
+        gdacs_eq_events: {
+          label: "Earthquakes (EQ)",
+          image: getImage("gdacs-EQ.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_EQ",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/EQ/`,
+          },
+          layers: [
+            {
+              id: "gdacs_EQ_fill",
+              type: "fill",
+              source: "gdacs_EQ",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_EQ_outline",
+              type: "line",
+              source: "gdacs_EQ",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_EQ_label",
+              type: "symbol",
+              source: "gdacs_EQ",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_EQ_icon",
+              type: "symbol",
+              source: "gdacs_EQ",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Earthquakes.webp"),
+          information:
+            "Displays GDACS Earthquake alerts (EQ), including affected polygons and epicenter markers with alert-level icons.",
+        },
+        //GDACS Volcano Events
+        gdacs_vo_events: {
+          label: "Volcanoes (VO)",
+          image: getImage("gdacs-VO.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_VO",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/VO/`,
+          },
+          layers: [
+            {
+              id: "gdacs_VO_fill",
+              type: "fill",
+              source: "gdacs_VO",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_VO_outline",
+              type: "line",
+              source: "gdacs_VO",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_VO_label",
+              type: "symbol",
+              source: "gdacs_VO",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_VO_icon",
+              type: "symbol",
+              source: "gdacs_VO",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Volcanoes.webp"),
+          information:
+            "Displays GDACS Volcano alerts (VO) including affected zones and volcano locations with alert icons.",
+        },
+        //GDACS Wildfire Events
+        gdacs_wf_events: {
+          label: "Wildfires (WF)",
+          image: getImage("gdacs-WF.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_WF",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/WF/`,
+          },
+          layers: [
+            {
+              id: "gdacs_WF_fill",
+              type: "fill",
+              source: "gdacs_WF",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_WF_outline",
+              type: "line",
+              source: "gdacs_WF",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_WF_label",
+              type: "symbol",
+              source: "gdacs_WF",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_WF_icon",
+              type: "symbol",
+              source: "gdacs_WF",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Wildfires.webp"),
+          information:
+            "Displays GDACS Wildfire alerts (WF) and their alert levels using polygons and point icons.",
+        },
+        //GDACS Drought Events
+        gdacs_dr_events: {
+          label: "Drought (DR)",
+          image: getImage("gdacs-DR.webp"),
+          type: "geojson",
+          theme: "legend",
+          source: {
+            id: "gdacs_DR",
+            type: "geojson",
+            data: `${baseUrl}/get-gdacs-events/DR/`,
+          },
+          layers: [
+            {
+              id: "gdacs_DR_fill",
+              type: "fill",
+              source: "gdacs_DR",
+              paint: {
+                "fill-color": "#FF0000",
+                "fill-opacity": 0.5,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_DR_outline",
+              type: "line",
+              source: "gdacs_DR",
+              paint: {
+                "line-opacity": 0.8,
+                "line-color": "#FF0000",
+                "line-width": 1,
+              },
+              filter: ["==", "$type", "Polygon"],
+            },
+            {
+              id: "gdacs_DR_label",
+              type: "symbol",
+              source: "gdacs_DR",
+              layout: {
+                "text-field": "{polygonlabel}",
+                "text-size": 12,
+                "text-offset": [0, 0],
+                "text-anchor": "left",
+              },
+            },
+            {
+              id: "gdacs_DR_icon",
+              type: "symbol",
+              source: "gdacs_DR",
+              layout: {
+                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+              },
+              filter: ["==", "$type", "Point"],
+            },
+          ],
+          legend: true,
+          legendPath: getLegendImage("GDACS_Drought.webp"),
+          information:
+            "Displays GDACS Drought alerts (DR) with affected areas and drought alert-level markers.",
         },
       },
     },
-    "Global Deterministic Prediction System (GDPS)": {
-      temporal: {
-        specific_humidity_2m_above_ground: {
-          label: "Specific Humidity (2m Above Ground)",
-          image: getImage("specific_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Specific Humidity (g/kg)",
-          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        relative_humidity_2m_above_ground: {
-          label: "Relative Humidity (%)",
-          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          title: "Relative Humidity (%)",
-          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        gdps_accumulated_precipitation: {
-          label: "Accumulated Precipitation",
-          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Accumulated Precipitation (mm)",
-          geometry: null,
-          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
-        },
-        precipitation_type_3hrs: {
-          label: "Precipitation Type / 3hrs",
-          image: getImage("Precipitation_3hourly_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Precipitation Type",
-          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
-        },
-      },
-    },
-    "ECMWF Weather Forecast Parameters": {
-      temporal: {
-        // ecmwf_temperature_850hPa: {
-        //   label: "Temperature (850hPa)",
-        //   image: getImage("temperature_cams.webp"),
-        //   type: "raster",
-        //   theme: "slider",
-        //   title: "Temperature (°C)",
-        //   information: "The Temperature (850hPa) layer displays the temperature levels at 850 hPa pressure level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
-        // },
-        ecmwf_lightning: {
-          label: "Lightning Forecast",
-          image: getImage("lightning_forcasting.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
-        },
-        ecmwf_cyclone: {
-          label: "Tropical Cyclone Strike Probability",
-          image: getImage("Tropical_Cyclone_strike_propability.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
-        },
-      },
-    },
-    // "Meteoblue Forecast": {
-    //   temporal: {
-    //     weekly_precipitation_2m_above_ground: {
-    //       label: "Weekly Precipitation (2m Above Ground)",
-    //       image: getImage("nems_cloudprecipitation.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
-    //     },
-    //     hourly_precipitation_2m_above_ground: {
-    //       label: "Hourly Precipitation (2m Above Ground)",
-    //       image: getImage("nems_cloudprecipitation.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Hourly Precipitation (2m Above Ground) layer displays the precipitation levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term rainfall patterns and their impact on the environment.",
-    //     },
-    //     hourly_snowfall_forecast: {
-    //       label: "Hourly Snowfall (Forecast)",
-    //       image: getImage("nems_snowfall_hourly.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Hourly Snowfall (Forecast) layer displays the snowfall levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term snowfall patterns and their impact on the environment.",
-    //     },
-    //     weekly_snowfall_forecast: {
-    //       label: "Weekly Snow (Forecast)",
-    //       image: getImage("nems_snowfall_weekly.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Weekly Snow (Forecast) layer displays the total snowfall accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly snowfall patterns and their impact on the environment.",
-    //     },
-    //     cape_hourly_forecast: {
-    //       label: "CAPE Hourly (Forecast)",
-    //       image: getImage("nems_cape_hourly.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The CAPE Hourly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on an hourly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
-    //     },
-    //     cape_weekly_forecast: {
-    //       label: "CAPE Weekly (Forecast)",
-    //       image: getImage("nems_cape_hourly.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The CAPE Weekly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on a weekly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
-    //     },
-    //     storm_helicity_forecast_0_3km: {
-    //       label: "Storm Helicity Forecast (0-3km)",
-    //       image: getImage("nems_storms_helicity_forecast.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Storm Helicity Forecast (0-3km) layer displays the storm helicity levels in the 0-3 km atmospheric layer. This layer is essential for understanding the potential for rotating storms and severe weather development.",
-    //     },
-    //     precipitation_radar: {
-    //       label: "Precipitation Radar",
-    //       image: getImage("global_precipitation.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Precipitation Radar layer provides real-time precipitation data using radar technology. This layer is crucial for monitoring rainfall intensity and tracking storm systems.",
-    //     },
-    //     temperature_2m_above_ground: {
-    //       label: "Temperature (2m Above Ground)",
-    //       image: getImage("meteoblue_nems_temperature.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
-    //     },
-    //     official_weather_warnings_forecast: {
-    //       label: "Official Weather Warnings (Forecast)",
-    //       image: getImage("nems_forecast_offical_warnings.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
-    //     },
-    //     meteorological_risks_forecast: {
-    //       label: "Meteorological Risks (Forecast)",
-    //       image: getImage("nems_forecast_met_warnings.webp"),
-    //       type: "raster",
-    //       theme: "slider",
-    //       geometry: null,
-    //       information: "The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
-    //     },
-    //   },
-    // },
-    // "Pakistan Meteorological Department (PMD)": {
-    //   toggle: {
-    //     pmd_weather_stations: {
-    //       label: "PMD Weather Stations",
-    //       theme: null,
-    //       source: {
-    //         id: "pmd_weather_stations-source",
-    //         type: "geojson",
-    //         data: `${baseUrl}/get-weather-pmdffd-data/`,
-    //         maxzoom: 22,
-    //       },
-    //       layers: [
-    //         {
-    //           id: "pmd_weather_stations-symbol",
-    //           type: "symbol",
-    //           source: "pmd_weather_stations-source",
-    //           layout: {
-    //             "icon-image": map_icons.weatherStationIcon, // Use custom icon name
-    //             // Interpolate icon-size based on zoom for smooth scaling
-    //             "icon-size": [
-    //               "interpolate",
-    //               ["linear"],
-    //               ["zoom"],
-    //               5,
-    //               0.25,
-    //               10,
-    //               0.5,
-    //               15,
-    //               1,
-    //             ],
-    //             "icon-allow-overlap": true,
-    //           },
-    //         },
-    //       ],
-    //       popup: true,
-    //       information:
-    //         "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
-    //     },
-    //   },
-    // },
-    // "Indian Meteorological Department (IMD)": {
-    //   toggle: {
-    //     precipitation_past_3_days: {
-    //       label: "Precipitation (Past 3 Days)",
-    //       type: "geojson",
-    //       theme: null,
-    //       geometry: null,
-    //     },
-    //   },
-    // },
   },
   // flood: {
   //   "Flood Forecasting Division (FFD-Data)": {
@@ -1724,7 +1487,257 @@ export const ncop_menu_items = {
   //     // },
   //   },
   // },
-  "ocean/coastal": {
+  weather_monitoring: {
+    "Hindcast": {
+      temporal: {
+        // realtime_radar: {
+        //   label: "Realtime Radar",
+        //   image: getImage("rainViewer_radar_precip.webp"),
+        //   type: "raster",
+        //   theme: "slider",
+        //   title: "Radar",
+        //   information:
+        //     "The Realtime Radar layer provides up-to-the-minute radar imagery, allowing users to monitor precipitation patterns and intensity in real-time. This layer is crucial for tracking weather events such as storms, rainfall, and severe weather conditions.",
+        // },
+        // satellite_infrared: {
+        //   label: "Satellite Infrared",
+        //   image: getImage("rainViewer_satellite.webp"),
+        //   type: "raster",
+        //   theme: "slider",
+        //   title: "Radar Clouds",
+        //   information: "The Satellite Infrared layer provides real-time infrared satellite imagery, allowing users to monitor cloud cover and atmospheric conditions. This layer is essential for tracking weather patterns and forecasting.",
+        // },
+        dwd_satellite_infrared: {
+          label: "DWD Satellite Infrared",
+          image: getImage("dwd_radar.webp"),
+          theme: "slider",
+          type: "raster",
+          title: "DWD Radar (°C)",
+          information: "The DWD Satellite Infrared layer provides real-time infrared satellite imagery from the German Weather Service (DWD). This layer is essential for monitoring cloud cover, weather patterns, and atmospheric conditions, aiding in weather forecasting and analysis.",
+        },
+        imerg_precipitation_rate_14_days: {
+          label: "IMERG Precipitation Rate (14 Days)",
+          image: getImage("IMERG_precip_rate_past12d.webp"),
+          type: "raster",
+          theme: "slider",
+          title: null,
+          information: "The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
+        },
+      },
+    },
+    "Nowcast": {
+
+    },
+    "Forecast": {
+      temporal: {
+        specific_humidity_2m_above_ground: {
+          label: "Specific Humidity (2m Above Ground)",
+          image: getImage("specific_humidity_weekly_2m_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Specific Humidity (g/kg)",
+          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
+        },
+        relative_humidity_2m_above_ground: {
+          label: "Relative Humidity (%)",
+          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          geometry: null,
+          title: "Relative Humidity (%)",
+          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
+        },
+        gdps_accumulated_precipitation: {
+          label: "Accumulated Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Accumulated Precipitation (mm)",
+          geometry: null,
+          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
+        },
+        precipitation_type_3hrs: {
+          label: "Precipitation Type / 3hrs",
+          image: getImage("Precipitation_3hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Precipitation Type",
+          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
+        },
+        ecmwf_lightning: {
+          label: "Lightning Forecast",
+          image: getImage("lightning_forcasting.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Probability %",
+          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
+        },
+        ecmwf_cyclone: {
+          label: "Tropical Cyclone Strike Probability",
+          image: getImage("Tropical_Cyclone_strike_propability.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "Probability %",
+          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
+        },
+      },
+    },
+    // "ECMWF Weather Forecast Parameters": {
+    //   temporal: {
+    //     // ecmwf_temperature_850hPa: {
+    //     //   label: "Temperature (850hPa)",
+    //     //   image: getImage("temperature_cams.webp"),
+    //     //   type: "raster",
+    //     //   theme: "slider",
+    //     //   title: "Temperature (°C)",
+    //     //   information: "The Temperature (850hPa) layer displays the temperature levels at 850 hPa pressure level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
+    //     // },
+    //   },
+    // },
+    // "Meteoblue Forecast": {
+    //   temporal: {
+    //     weekly_precipitation_2m_above_ground: {
+    //       label: "Weekly Precipitation (2m Above Ground)",
+    //       image: getImage("nems_cloudprecipitation.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
+    //     },
+    //     hourly_precipitation_2m_above_ground: {
+    //       label: "Hourly Precipitation (2m Above Ground)",
+    //       image: getImage("nems_cloudprecipitation.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Hourly Precipitation (2m Above Ground) layer displays the precipitation levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term rainfall patterns and their impact on the environment.",
+    //     },
+    //     hourly_snowfall_forecast: {
+    //       label: "Hourly Snowfall (Forecast)",
+    //       image: getImage("nems_snowfall_hourly.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Hourly Snowfall (Forecast) layer displays the snowfall levels at 2 meters above ground level on an hourly basis. This layer is essential for understanding short-term snowfall patterns and their impact on the environment.",
+    //     },
+    //     weekly_snowfall_forecast: {
+    //       label: "Weekly Snow (Forecast)",
+    //       image: getImage("nems_snowfall_weekly.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Weekly Snow (Forecast) layer displays the total snowfall accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly snowfall patterns and their impact on the environment.",
+    //     },
+    //     cape_hourly_forecast: {
+    //       label: "CAPE Hourly (Forecast)",
+    //       image: getImage("nems_cape_hourly.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The CAPE Hourly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on an hourly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
+    //     },
+    //     cape_weekly_forecast: {
+    //       label: "CAPE Weekly (Forecast)",
+    //       image: getImage("nems_cape_hourly.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The CAPE Weekly (Forecast) layer displays the Convective Available Potential Energy (CAPE) levels on a weekly basis. This layer is essential for understanding atmospheric instability and its potential for severe weather development.",
+    //     },
+    //     storm_helicity_forecast_0_3km: {
+    //       label: "Storm Helicity Forecast (0-3km)",
+    //       image: getImage("nems_storms_helicity_forecast.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Storm Helicity Forecast (0-3km) layer displays the storm helicity levels in the 0-3 km atmospheric layer. This layer is essential for understanding the potential for rotating storms and severe weather development.",
+    //     },
+    //     precipitation_radar: {
+    //       label: "Precipitation Radar",
+    //       image: getImage("global_precipitation.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Precipitation Radar layer provides real-time precipitation data using radar technology. This layer is crucial for monitoring rainfall intensity and tracking storm systems.",
+    //     },
+    //     temperature_2m_above_ground: {
+    //       label: "Temperature (2m Above Ground)",
+    //       image: getImage("meteoblue_nems_temperature.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
+    //     },
+    //     official_weather_warnings_forecast: {
+    //       label: "Official Weather Warnings (Forecast)",
+    //       image: getImage("nems_forecast_offical_warnings.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
+    //     },
+    //     meteorological_risks_forecast: {
+    //       label: "Meteorological Risks (Forecast)",
+    //       image: getImage("nems_forecast_met_warnings.webp"),
+    //       type: "raster",
+    //       theme: "slider",
+    //       geometry: null,
+    //       information: "The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+    //     },
+    //   },
+    // },
+    // "Pakistan Meteorological Department (PMD)": {
+    //   toggle: {
+    //     pmd_weather_stations: {
+    //       label: "PMD Weather Stations",
+    //       theme: null,
+    //       source: {
+    //         id: "pmd_weather_stations-source",
+    //         type: "geojson",
+    //         data: `${baseUrl}/get-weather-pmdffd-data/`,
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "pmd_weather_stations-symbol",
+    //           type: "symbol",
+    //           source: "pmd_weather_stations-source",
+    //           layout: {
+    //             "icon-image": map_icons.weatherStationIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": true,
+    //           },
+    //         },
+    //       ],
+    //       popup: true,
+    //       information:
+    //         "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+    //     },
+    //   },
+    // },
+    // "Indian Meteorological Department (IMD)": {
+    //   toggle: {
+    //     precipitation_past_3_days: {
+    //       label: "Precipitation (Past 3 Days)",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //   },
+    // },
+  },
+  oceanography: {
     Oceanography: {
       temporal: {
         ocean_salinity: {
@@ -1853,386 +1866,377 @@ export const ncop_menu_items = {
       //   },
       // },
     },
-  },
-  "Disaster Early Warning (DEW)": {
-    "GDACS Alerts": {
-      static: {
-        gdacs_tc_events: {
-          label: "Tropical Cyclones (TC)",
-          image: getImage("gdacs-TC.webp"),
-          type: "geojson",
-          theme: "legend",
+  }, 
+  gis_layers: {
+    "Administrative Boundaries": {
+      toggle: {
+        global_boundaries: {
+          label: "Global Boundaries (Countries)",
+          theme: null,
+          geometry: "line",
           source: {
-            id: "gdacs_TC",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/TC/`,
+            id: "global_boundaries-source",
+            type: "vector",
+            scheme: "xyz",
+            tiles: [
+              "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=c889b7400ecd1d0d"
+            ],
+            maxzoom: 15
           },
           layers: [
+            /* Invisible hit / popup layer */
             {
-              id: "gdacs_TC_fill",
-              type: "fill",
-              source: "gdacs_TC",
-              paint: {
-                "fill-color": [
-                  "case",
-                  ["==", ["get", "Class"], "Poly_Green"],
-                  "#00FF00",
-                  ["==", ["get", "Class"], "Poly_Orange"],
-                  "#FFA500",
-                  ["==", ["get", "Class"], "Poly_Red"],
-                  "#FF0000",
-                  "#CCCCCC",
-                ],
-                "fill-opacity": 0.4,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_TC_outline",
+              id: "global_boundaries-hit",
               type: "line",
-              source: "gdacs_TC",
+              source: "global_boundaries-source",
+              "source-layer": "boundaries",
+              filter: ["==", ["get", "kind"], "country"],
               paint: {
-                "line-opacity": 1,
-                "line-color": "#FFFF00",
-                "line-width": 2,
-              },
-              filter: ["==", "$type", "LineString"],
+                "line-color": "#ffffff",
+                "line-width": 10,
+                "line-opacity": 0
+              }
             },
+
+            /* Visible boundary outline */
             {
-              id: "gdacs_TC_label",
-              type: "symbol",
-              source: "gdacs_TC",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_TC_icon",
-              type: "symbol",
-              source: "gdacs_TC",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
-          ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_TropicalCyclones.webp"),
-          information:
-            "Displays GDACS Tropical Cyclone alerts (TC) including polygons, tracks, and icons colored by alert level (Green, Orange, Red).",
-        },
-        //GDACS Flood Events
-        gdacs_fl_events: {
-          label: "Floods (FL)",
-          image: getImage("gdacs-FL.webp"),
-          type: "geojson",
-          theme: "legend",
-          source: {
-            id: "gdacs_FL",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/FL/`,
-          },
-          layers: [
-            {
-              id: "gdacs_FL_fill",
-              type: "fill",
-              source: "gdacs_FL",
-              paint: {
-                "fill-color": "#FF0000",
-                "fill-opacity": 0.3,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_FL_outline",
+              id: "global_boundaries-outline",
               type: "line",
-              source: "gdacs_FL",
+              source: "global_boundaries-source",
+              "source-layer": "boundaries",
+              filter: ["==", ["get", "kind"], "country"],
               paint: {
-                "line-opacity": 0.8,
-                "line-color": "#FF0000",
-                "line-width": 1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_FL_label",
-              type: "symbol",
-              source: "gdacs_FL",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_FL_icon",
-              type: "symbol",
-              source: "gdacs_FL",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
+                "line-color": "#505050",
+                "line-width": 1.2
+              }
+            }
           ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_Floods.webp"),
+          popup: true,
           information:
-            "Displays GDACS Flood alerts (FL) with polygons and points representing active flood events and their alert levels.",
+            "Global country boundaries from OpenStreetMap and Natural Earth, delivered as vector tiles. Suitable for worldwide geopolitical reference."
         },
-        //GDACS Earthquake Events
-        gdacs_eq_events: {
-          label: "Earthquakes (EQ)",
-          image: getImage("gdacs-EQ.webp"),
-          type: "geojson",
-          theme: "legend",
-          source: {
-            id: "gdacs_EQ",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/EQ/`,
-          },
-          layers: [
-            {
-              id: "gdacs_EQ_fill",
-              type: "fill",
-              source: "gdacs_EQ",
-              paint: {
-                "fill-color": "#FF0000",
-                "fill-opacity": 0.1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_EQ_outline",
-              type: "line",
-              source: "gdacs_EQ",
-              paint: {
-                "line-opacity": 0.8,
-                "line-color": "#FF0000",
-                "line-width": 1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_EQ_label",
-              type: "symbol",
-              source: "gdacs_EQ",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_EQ_icon",
-              type: "symbol",
-              source: "gdacs_EQ",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
-          ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_Earthquakes.webp"),
-          information:
-            "Displays GDACS Earthquake alerts (EQ), including affected polygons and epicenter markers with alert-level icons.",
-        },
-        //GDACS Volcano Events
-        gdacs_vo_events: {
-          label: "Volcanoes (VO)",
-          image: getImage("gdacs-VO.webp"),
-          type: "geojson",
-          theme: "legend",
-          source: {
-            id: "gdacs_VO",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/VO/`,
-          },
-          layers: [
-            {
-              id: "gdacs_VO_fill",
-              type: "fill",
-              source: "gdacs_VO",
-              paint: {
-                "fill-color": "#FF0000",
-                "fill-opacity": 0.5,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_VO_outline",
-              type: "line",
-              source: "gdacs_VO",
-              paint: {
-                "line-opacity": 0.8,
-                "line-color": "#FF0000",
-                "line-width": 1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_VO_label",
-              type: "symbol",
-              source: "gdacs_VO",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_VO_icon",
-              type: "symbol",
-              source: "gdacs_VO",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
-          ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_Volcanoes.webp"),
-          information:
-            "Displays GDACS Volcano alerts (VO) including affected zones and volcano locations with alert icons.",
-        },
-        //GDACS Wildfire Events
-        gdacs_wf_events: {
-          label: "Wildfires (WF)",
-          image: getImage("gdacs-WF.webp"),
-          type: "geojson",
-          theme: "legend",
-          source: {
-            id: "gdacs_WF",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/WF/`,
-          },
-          layers: [
-            {
-              id: "gdacs_WF_fill",
-              type: "fill",
-              source: "gdacs_WF",
-              paint: {
-                "fill-color": "#FF0000",
-                "fill-opacity": 0.5,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_WF_outline",
-              type: "line",
-              source: "gdacs_WF",
-              paint: {
-                "line-opacity": 0.8,
-                "line-color": "#FF0000",
-                "line-width": 1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_WF_label",
-              type: "symbol",
-              source: "gdacs_WF",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_WF_icon",
-              type: "symbol",
-              source: "gdacs_WF",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
-          ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_Wildfires.webp"),
-          information:
-            "Displays GDACS Wildfire alerts (WF) and their alert levels using polygons and point icons.",
-        },
-        //GDACS Drought Events
-        gdacs_dr_events: {
-          label: "Drought (DR)",
-          image: getImage("gdacs-DR.webp"),
-          type: "geojson",
-          theme: "legend",
-          source: {
-            id: "gdacs_DR",
-            type: "geojson",
-            data: `${baseUrl}/get-gdacs-events/DR/`,
-          },
-          layers: [
-            {
-              id: "gdacs_DR_fill",
-              type: "fill",
-              source: "gdacs_DR",
-              paint: {
-                "fill-color": "#FF0000",
-                "fill-opacity": 0.5,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_DR_outline",
-              type: "line",
-              source: "gdacs_DR",
-              paint: {
-                "line-opacity": 0.8,
-                "line-color": "#FF0000",
-                "line-width": 1,
-              },
-              filter: ["==", "$type", "Polygon"],
-            },
-            {
-              id: "gdacs_DR_label",
-              type: "symbol",
-              source: "gdacs_DR",
-              layout: {
-                "text-field": "{polygonlabel}",
-                "text-size": 12,
-                "text-offset": [0, 0],
-                "text-anchor": "left",
-              },
-            },
-            {
-              id: "gdacs_DR_icon",
-              type: "symbol",
-              source: "gdacs_DR",
-              layout: {
-                "icon-image": ["get", "icon"], // Use the full URL directly from the icon property
-                "icon-anchor": "bottom",
-                "icon-allow-overlap": true,
-              },
-              filter: ["==", "$type", "Point"],
-            },
-          ],
-          legend: true,
-          legendPath: getLegendImage("GDACS_Drought.webp"),
-          information:
-            "Displays GDACS Drought alerts (DR) with affected areas and drought alert-level markers.",
-        },
+        // provincial_boundary: {
+        //   label: "Provincial Boundary",
+        //   theme: null,
+        //   geometry: "polygon",
+        //   source: {
+        //     id: "provincial_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+        //     ],
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "provincial_boundary-fill",
+        //       type: "fill",
+        //       source: "provincial_boundary-source",
+        //       "source-layer": "provincial_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "provincial_boundary-outline",
+        //       type: "line",
+        //       source: "provincial_boundary-source",
+        //       "source-layer": "provincial_boundary",
+        //       paint: {
+        //         "line-color": "#e74c3c",
+        //         "line-width": 2,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The Provincial Boundary layer delineates the borders of provinces within the country. This layer is crucial for regional planning and analysis, allowing users to visualize and manage data at the provincial level.",
+        // },
+        // district_boundary: {
+        //   label: "District Boundary",
+        //   theme: null,
+        //   source: {
+        //     id: "district_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+        //     ],
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "district_boundary-fill",
+        //       type: "fill",
+        //       source: "district_boundary-source",
+        //       "source-layer": "district_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "district_boundary-outline",
+        //       type: "line",
+        //       source: "district_boundary-source",
+        //       "source-layer": "district_boundary",
+        //       paint: {
+        //         "line-color": "#27ae60",
+        //         "line-width": 1.5,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The District Boundary layer outlines the borders of districts within the country. This layer is important for local governance and resource management, providing a clear framework for administrative boundaries.",
+        // },
+        // tehsil_boundary: {
+        //   label: "Tehsil Boundary",
+        //   theme: null,
+        //   source: {
+        //     id: "tehsil_boundary-source",
+        //     type: "vector",
+        //     scheme: "tms",
+        //     tiles: [
+        //       "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+        //     ],
+        //     maxzoom: 22,
+        //   },
+        //   layers: [
+        //     {
+        //       id: "tehsil_boundary-fill",
+        //       type: "fill",
+        //       source: "tehsil_boundary-source",
+        //       "source-layer": "tehsil_boundary",
+        //       paint: {
+        //         "fill-color": "#ffffff",
+        //         "fill-opacity": 0,
+        //       },
+        //     },
+        //     {
+        //       id: "tehsil_boundary-outline",
+        //       type: "line",
+        //       source: "tehsil_boundary-source",
+        //       "source-layer": "tehsil_boundary",
+        //       paint: {
+        //         "line-color": "#e1b12c",
+        //         "line-width": 1,
+        //       },
+        //     },
+        //   ],
+        //   popup: true,
+        //   information:
+        //     "The Tehsil Boundary layer marks the subdivisions within districts, known as tehsils. This layer is important for local governance and administrative purposes, helping to manage resources and services at a more granular level.",
+        // },
       },
     },
+    // Infrastructure: {
+    //   toggle: {
+    //     airports: {
+    //       label: "Airports",
+    //       theme: null,
+    //       source: {
+    //         id: "airports-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "airports-symbol",
+    //           type: "symbol",
+    //           source: "airports-source",
+    //           "source-layer": "airports",
+    //           layout: {
+    //             "icon-image": map_icons.airportIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": true,
+    //           },
+    //         },
+    //       ],
+    //       popup: true,
+    //       legend: true,
+    //       legendPath: getLegendImage("airports.webp"),
+    //       information:
+    //         "The Airports layer displays the locations of airports within the country. This layer is essential for transportation planning and logistics, providing critical information for air travel and connectivity.",
+    //     },
+    //     // hospitals: {
+    //     //     label: "Hospitals",
+    //     //     theme: null,
+    //     //     source: {
+    //     //         id: "hospitals-source",
+    //     //         type: "vector",
+    //     //         scheme: "tms",
+    //     //         tiles: ["http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:hospitals@EPSG:900913@pbf/{z}/{x}/{y}.pbf"],
+    //     //         maxzoom: 22
+    //     //     },
+    //     //     layers: [
+    //     //         {
+    //     //             id: "hospitals-symbol",
+    //     //             type: "symbol",
+    //     //             source: "hospitals-source",
+    //     //             "source-layer": "hospitals",
+    //     //             layout: {
+    //     //                 "icon-image": "/static/icons/map_icons/layer_icons/hospital.webp", // Use custom icon name
+    //     //                 // Interpolate icon-size based on zoom for smooth scaling
+    //     //                 "icon-size": [
+    //     //                     "interpolate",
+    //     //                     ["linear"],
+    //     //                     ["zoom"],
+    //     //                     5, 0.25,
+    //     //                     10, 0.5,
+    //     //                     15, 1
+    //     //                 ],
+    //     //                 "icon-allow-overlap": true
+    //     //             }
+    //     //         }
+    //     //     ],
+    //     //     information: "The Hospitals layer displays the locations of hospitals within the country. This layer is essential for healthcare planning and emergency response, providing critical information for medical services and facilities.",
+    //     // },
+    //     schools: {
+    //       label: "Schools",
+    //       theme: null,
+    //       source: {
+    //         id: "schools-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:schools@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "schools-symbol",
+    //           type: "symbol",
+    //           source: "schools-source",
+    //           "source-layer": "schools",
+    //           layout: {
+    //             "icon-image": map_icons.schoolIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": false,
+    //           },
+    //         },
+    //       ],
+    //       popup: true,
+    //       information:
+    //         "The Schools layer displays the locations of schools within the country. This layer is essential for education planning and resource allocation, providing critical information for educational services and facilities.",
+    //     },
+    //     settlements: {
+    //       label: "Settlements",
+    //       theme: null,
+    //       source: {
+    //         id: "settlements-source",
+    //         type: "vector",
+    //         scheme: "tms",
+    //         tiles: [
+    //           "http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:settlements@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+    //         ],
+    //         maxzoom: 22,
+    //       },
+    //       layers: [
+    //         {
+    //           id: "settlements-symbol",
+    //           type: "symbol",
+    //           source: "settlements-source",
+    //           "source-layer": "settlements",
+    //           layout: {
+    //             "icon-image": map_icons.settlementIcon, // Use custom icon name
+    //             // Interpolate icon-size based on zoom for smooth scaling
+    //             "icon-size": [
+    //               "interpolate",
+    //               ["linear"],
+    //               ["zoom"],
+    //               5,
+    //               0.25,
+    //               10,
+    //               0.5,
+    //               15,
+    //               1,
+    //             ],
+    //             "icon-allow-overlap": false,
+    //           },
+    //         },
+    //       ],
+    //       information:
+    //         "The Settlements layer displays the locations of settlements within the country. This layer is essential for urban planning and resource allocation, providing critical information for residential services and facilities.",
+    //     },
+    //     // evacuation_points: {
+    //     //     label: "Evacuation Points",
+    //     //     type: "geojson",
+    //     //     theme: null,
+    //     //     geometry: null,
+    //     // },
+    //   },
+    // },
+    // "Hydrological Layers": {
+    //   toggle: {
+    //     rsc_exceptionally_high_zone: {
+    //       label: "RSC Exceptionally High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_very_high_zone: {
+    //       label: "RSC Very High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_high_zone: {
+    //       label: "RSC High Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_medium_zone: {
+    //       label: "RSC Medium Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     rsc_low_zone: {
+    //       label: "RSC Low Zone",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //     watershed_boundaries: {
+    //       label: "Watershed Boundaries",
+    //       type: "geojson",
+    //       theme: null,
+    //       geometry: null,
+    //     },
+    //   },
+    // },
   },
+  
 };
 window.ncop_menu_items = ncop_menu_items;
