@@ -100,871 +100,6 @@
 }
 
 /* ===========================
-   NIGHT MODE THEME - OPTIMIZED WITH NESTED CSS
-=========================== */
-
-[data-theme="night"] {
-    /* ===========================
-       CSS VARIABLES - DARKER GRAY GLASSMORPHISM
-    =========================== */
-    /* Backgrounds */
-    --primary-bg: rgba(190, 190, 190, 0.88);
-    --secondary-bg: rgba(180, 180, 180, 0.85);
-    --tertiary-bg: rgba(200, 200, 200, 0.90);
-    --accent-bg-green: rgba(190, 210, 190, 0.85);
-    --accent-bg-blue: rgba(190, 205, 220, 0.85);
-    --accent-bg-red: rgba(220, 190, 190, 0.85);
-    --overlay-bg: rgba(195, 195, 195, 0.75);
-    --frost-bg: rgba(205, 205, 205, 0.80);
-
-    /* Text Colors */
-    --text-primary: rgba(0, 0, 0, 0.95);
-    --text-secondary: rgba(20, 20, 20, 0.90);
-    --text-muted: rgba(40, 40, 40, 0.85);
-    --text-inverse: rgba(255, 255, 255, 0.95);
-    --text-accent-green: #0a5f0a;
-    --text-accent-blue: #0d4a7a;
-    --text-accent-red: #a00000;
-
-    /* Borders */
-    --border-dark: rgba(100, 100, 100, 0.90);
-    --border-light: rgba(80, 80, 80, 0.92);
-    --border-strong: rgba(60, 60, 60, 0.95);
-    --border-green: rgba(40, 150, 40, 0.60);
-    --border-blue: rgba(30, 120, 200, 0.60);
-    --border-red: rgba(200, 40, 40, 0.60);
-
-    /* Button States */
-    --btn-green-bg: rgba(195, 215, 195, 0.90);
-    --btn-green-hover: rgba(185, 210, 185, 0.93);
-    --btn-blue-bg: rgba(195, 205, 220, 0.90);
-    --btn-blue-hover: rgba(185, 200, 215, 0.93);
-    --btn-red-bg: rgba(220, 195, 195, 0.90);
-    --btn-red-hover: rgba(215, 185, 185, 0.93);
-
-    /* Interaction States */
-    --hover-bg: rgba(170, 170, 170, 0.88);
-    --active-bg: rgba(155, 155, 155, 0.92);
-    --focus-ring: rgba(70, 70, 70, 0.75);
-    --glass-highlight: rgba(210, 210, 210, 0.92);
-
-
-    /* ===========================
-           STORY MODAL
-        =========================== */
-    #story-modal {
-        background: var(--primary-bg) !important;
-        border: 2px solid var(--border-light) !important;
-        backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.25),
-            0 4px 12px rgba(0, 0, 0, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-        color: var(--text-primary) !important;
-
-        /* Story Modal Header */
-        >div:first-child {
-            border-bottom: 1.5px solid var(--border-dark) !important;
-            background: var(--secondary-bg) !important;
-            backdrop-filter: blur(15px) !important;
-
-            >div {
-                >div:first-child {
-                    font-weight: 900 !important;
-                    color: var(--text-primary) !important;
-                    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
-                }
-
-                >div:last-child {
-                    color: var(--text-secondary) !important;
-                    font-weight: 700 !important;
-                    opacity: 1 !important;
-                }
-            }
-        }
-
-        /* Story Root Container */
-        #story-root {
-            background: transparent !important;
-
-            /* Story Select Dropdown */
-            #storySelect {
-                background: var(--tertiary-bg) !important;
-                border: 2px solid var(--border-dark) !important;
-                color: var(--text-primary) !important;
-                font-weight: 800 !important;
-                padding: 8px 10px !important;
-                border-radius: 6px !important;
-
-                option {
-                    background: var(--secondary-bg) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 700 !important;
-                }
-
-                &:focus {
-                    outline: 2px solid var(--focus-ring) !important;
-                    outline-offset: 1px !important;
-                }
-
-                &:hover {
-                    background: var(--glass-highlight) !important;
-                    border-color: var(--border-strong) !important;
-                }
-            }
-
-            /* Story Edit Button */
-            #storyEdit {
-                background: var(--tertiary-bg) !important;
-                border: 2px solid var(--border-dark) !important;
-                color: var(--text-primary) !important;
-                font-weight: 900 !important;
-                backdrop-filter: blur(12px) saturate(105%) !important;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
-                    0 1px 2px rgba(0, 0, 0, 0.10),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-
-                &:hover {
-                    background: var(--glass-highlight) !important;
-                    transform: translateY(-1px) !important;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
-                        0 2px 4px rgba(0, 0, 0, 0.12),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
-                }
-
-                svg {
-                    color: var(--text-primary) !important;
-                    filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
-                }
-            }
-
-            /* Story Meta */
-            #storyMeta {
-                color: var(--text-secondary) !important;
-                font-weight: 700 !important;
-                opacity: 1 !important;
-            }
-
-            /* Story Chapters Container */
-            #storyChapters {
-
-                /* Scrollbar styling */
-                &::-webkit-scrollbar {
-                    width: 6px;
-                }
-
-                &::-webkit-scrollbar-track {
-                    background: var(--tertiary-bg);
-                    border-radius: 3px;
-                }
-
-                &::-webkit-scrollbar-thumb {
-                    background: var(--border-dark);
-                    border-radius: 3px;
-
-                    &:hover {
-                        background: var(--border-strong);
-                    }
-                }
-
-                /* Firefox scrollbar */
-                scrollbar-width: thin;
-                scrollbar-color: var(--border-dark) var(--tertiary-bg);
-
-                /* Empty state / placeholder */
-                >div {
-                    border: 2px dashed var(--border-dark) !important;
-                    background: var(--secondary-bg) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 700 !important;
-                    opacity: 1 !important;
-                    backdrop-filter: blur(10px) !important;
-                }
-
-                /* Chapter items (when populated) */
-                .chapter-item {
-                    background: var(--secondary-bg) !important;
-                    border: 1.5px solid var(--border-dark) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 800 !important;
-                    backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
-                        0 1px 3px rgba(0, 0, 0, 0.10),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
-
-                    &:hover {
-                        background: var(--glass-highlight) !important;
-                        border-color: var(--border-strong) !important;
-                        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.20),
-                            0 2px 6px rgba(0, 0, 0, 0.12),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
-                    }
-
-                    &.active,
-                    &.selected {
-                        background: rgba(170, 195, 215, 0.90) !important;
-                        border: 2px solid rgba(30, 120, 200, 0.75) !important;
-                        box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
-                            0 4px 12px rgba(0, 0, 0, 0.15),
-                            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
-                    }
-                }
-            }
-
-            /* Story Editor */
-            #storyEditor {
-                border-top: 1.5px solid var(--border-dark) !important;
-                background: var(--secondary-bg) !important;
-                backdrop-filter: blur(15px) !important;
-                padding: 12px !important;
-                border-radius: 6px !important;
-                margin-top: 12px !important;
-
-                /* Editor text elements */
-                * {
-                    color: var(--text-primary) !important;
-                    font-weight: 700 !important;
-                }
-
-                /* Editor inputs */
-                input,
-                textarea,
-                select {
-                    background: var(--tertiary-bg) !important;
-                    border: 2px solid var(--border-dark) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 700 !important;
-                    border-radius: 6px !important;
-                    padding: 6px 8px !important;
-
-                    &:focus {
-                        outline: 2px solid var(--focus-ring) !important;
-                        outline-offset: 1px !important;
-                        border-color: var(--border-strong) !important;
-                    }
-
-                    &::placeholder {
-                        color: var(--text-secondary) !important;
-                        font-weight: 600 !important;
-                    }
-                }
-
-                /* Editor buttons */
-                button {
-                    background: var(--tertiary-bg) !important;
-                    border: 2px solid var(--border-dark) !important;
-                    color: var(--text-primary) !important;
-                    font-weight: 800 !important;
-                    padding: 6px 12px !important;
-                    border-radius: 6px !important;
-                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
-
-                    &:hover {
-                        background: var(--glass-highlight) !important;
-                        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18) !important;
-                        transform: translateY(-1px) !important;
-                    }
-
-                    &:active {
-                        transform: translateY(0) !important;
-                    }
-
-                    &.primary,
-                    &.save {
-                        background: rgba(40, 150, 40, 0.90) !important;
-                        color: var(--text-inverse) !important;
-                        border-color: rgba(30, 130, 30, 0.75) !important;
-
-                        &:hover {
-                            background: rgba(35, 140, 35, 0.93) !important;
-                        }
-                    }
-
-                    &.danger,
-                    &.delete {
-                        background: rgba(200, 40, 40, 0.90) !important;
-                        color: var(--text-inverse) !important;
-                        border-color: rgba(180, 30, 30, 0.75) !important;
-
-                        &:hover {
-                            background: rgba(190, 35, 35, 0.93) !important;
-                        }
-                    }
-                }
-
-                /* Editor labels */
-                label {
-                    color: var(--text-primary) !important;
-                    font-weight: 900 !important;
-                }
-
-                /* Editor descriptions/hints */
-                .hint,
-                .description,
-                small {
-                    color: var(--text-secondary) !important;
-                    font-weight: 600 !important;
-                }
-            }
-        }
-
-        /* Close Button (custom-nav-btn) */
-        #storyCloseBtn {
-            background: var(--tertiary-bg) !important;
-            border: 2px solid var(--border-dark) !important;
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-
-            svg {
-                color: var(--text-primary) !important;
-                filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
-            }
-
-            &:hover {
-                background: rgba(220, 190, 190, 0.90) !important;
-                border-color: rgba(200, 40, 40, 0.60) !important;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22),
-                    0 2px 4px rgba(0, 0, 0, 0.12) !important;
-            }
-        }
-    }
-
-    /* ===========================
-       GLOBAL TRANSITIONS
-    =========================== */
-    /* * {
-        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
-            box-shadow 0.3s ease, transform 0.2s ease !important;
-    } */
-
-    /* ===========================
-       PRIMARY TEXT STYLES
-    =========================== */
-    .sidebar-title,
-    .accordion-title,
-    .ncop-item-label,
-    .custom-nav-btn,
-    .custom-user-btn,
-    .custom-menu-btn,
-    .custom-basemap-btn,
-    .custom-layer-btn,
-    .basemap-name,
-    .layer-name,
-    .layer-info-title,
-    .layer-info-label,
-    .projection-name,
-    .ncop-subcategory-header span,
-    .ncop-nested-header span,
-    .news-title {
-        color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
-    }
-
-    /* Secondary Text */
-    .sidebar-search-container .search-input,
-    .layer-info-subtitle,
-    .layer-order-subtitle,
-    .projection-desc,
-    .news-time {
-        color: var(--text-secondary) !important;
-        font-weight: 800 !important;
-    }
-
-    /* Tertiary Text */
-    .layer-info-details,
-    .no-layers-message,
-    .accordion-body,
-    .ncop-dropdown-label {
-        color: var(--text-primary) !important;
-        font-weight: 700 !important;
-    }
-
-    /* ===========================
-       GLASS PANELS - PRIMARY CONTAINERS
-    =========================== */
-    .ncop-container,
-    .sidebar-panel,
-    .basemap-panel,
-    .layer-order-panel,
-    .layer-info-panel,
-    .projection-panel,
-    #temp-slider1,
-    .news-modal {
-        background: var(--primary-bg) !important;
-        backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(110%) brightness(1.0) !important;
-        border: 2px solid var(--border-light) !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.20),
-            0 2px 8px rgba(0, 0, 0, 0.12),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-    }
-
-    /* ===========================
-       GLASS PANELS - SECONDARY ELEMENTS
-    =========================== */
-    .accordion-header,
-    .ncop-subcategory-header,
-    .ncop-nested-header,
-    .layer-item,
-    .ncop-dropdown-wrapper {
-        background: var(--secondary-bg) !important;
-        /* backdrop-filter: blur(15px) saturate(105%) brightness(0.98) !important; */
-        /* border: 1px solid var(--border-dark) !important; */
-        /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15),
-            0 1px 3px rgba(0, 0, 0, 0.10),
-            inset 0 1px 0 rgba(255, 255, 255, 0.20) !important; */
-
-        &:hover {
-            background: var(--glass-highlight) !important;
-        }
-    }
-
-    .ncop-subcategory-header {
-        background: rgba(0, 0, 0, 0.15) !important;
-    }
-
-    /* ===========================
-       BUTTONS - CONTROL ELEMENTS
-    =========================== */
-    .custom-nav-btn,
-    .custom-user-btn,
-    .custom-menu-btn,
-    .custom-basemap-btn,
-    .custom-layer-btn {
-        background: var(--tertiary-bg) !important;
-        backdrop-filter: blur(12px) saturate(105%) !important;
-        border: 2px solid var(--border-dark) !important;
-        color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
-            0 1px 2px rgba(0, 0, 0, 0.10),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-    }
-
-    /* ===========================
-       ACTIVE STATES
-    =========================== */
-    .accordion-header.active,
-    .ncop-subcategory-header.expanded,
-    .ncop-nested-header.expanded,
-    .basemap-item.active,
-    .projection-item.active {
-        background: var(--ndma-blue-gradient) !important;
-        /* border: 2px solid rgba(30, 120, 200, 0.75) !important;
-        box-shadow: 0 0 20px rgba(30, 120, 200, 0.30),
-            0 4px 12px rgba(0, 0, 0, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.35) !important; */
-    }
-
-    /* ===========================
-       INPUTS & SEARCH
-    =========================== */
-    .search-input {
-        /* background: rgba(205, 205, 205, 0.88) !important; */
-        color: var(--text-primary) !important;
-        /* font-weight: 700 !important; */
-        /* border: 1.5px solid var(--border-dark) !important; */
-        /* border-radius: 6px !important; */
-
-        &::placeholder {
-            color: var(--text-secondary) !important;
-            font-weight: 600 !important;
-        }
-    }
-
-    /* .ncop-dropdown {
-        background: var(--tertiary-bg) !important;
-        border: 2px solid var(--border-dark) !important;
-        color: var(--text-primary) !important;
-        font-weight: 800 !important;
-    } */
-
-    /* ===========================
-       TOGGLES & SWITCHES
-    =========================== */
-    .ncop-toggle-slider {
-        background: rgba(175, 175, 175, 0.88) !important;
-        /* border: 2px solid var(--border-dark) !important; */
-    }
-
-    .ncop-toggle input:checked+.ncop-toggle-slider {
-        background: rgba(40, 150, 40, 0.88) !important;
-        /* border-color: rgba(30, 130, 30, 0.75) !important; */
-    }
-
-    .toggle-switch {
-        background: var(--tertiary-bg) !important;
-        /* border: 1.5px solid var(--border-dark) !important; */
-
-        &.active {
-            background: rgba(30, 120, 200, 0.88) !important;
-        }
-    }
-
-    /* ===========================
-       ICONS & SYMBOLS
-    =========================== */
-    .accordion-icon,
-    .accordion-chevron,
-    .subcategory-chevron,
-    .nested-chevron,
-    .search-icon,
-    .clear-icon {
-        color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.2)) !important;
-    }
-
-    /* ===========================
-       SPECIAL ELEMENTS
-    =========================== */
-    .no-results-message {
-        background: var(--tertiary-bg) !important;
-        border: 2px solid var(--border-dark) !important;
-        color: var(--text-primary) !important;
-        font-weight: 800 !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
-    }
-
-    .layer-attribute-popup {
-        background: var(--primary-bg) !important;
-        border: 2px solid var(--border-strong) !important;
-        backdrop-filter: blur(25px) saturate(110%) brightness(1.0) !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
-            0 4px 12px rgba(0, 0, 0, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
-
-        .popup-label {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
-        }
-
-        .attr-key {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-        }
-
-        .attr-value {
-            color: var(--text-secondary) !important;
-            font-weight: 800 !important;
-        }
-    }
-
-    /* ===========================
-       TIME SLIDER
-    =========================== */
-    #opacityControlPopover {
-        background: var(--secondary-bg) !important;
-        border: 2px solid var(--border-dark) !important;
-        backdrop-filter: blur(18px) saturate(105%) !important;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18) !important;
-    }
-
-    .opacity-popover-label,
-    .opacity-popover-value,
-    .year-labels1 span,
-    .legend-container1 p {
-        color: var(--text-primary) !important;
-        font-weight: 900 !important;
-        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.25) !important;
-    }
-
-    /* ===========================
-       DATA TABLES
-    =========================== */
-    .ncop-data-table {
-        background: var(--secondary-bg) !important;
-        border: 1.5px solid var(--border-dark) !important;
-
-        th {
-            background: rgba(185, 185, 185, 0.93) !important;
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-            border-bottom: 2px solid var(--border-strong) !important;
-        }
-
-        td {
-            color: var(--text-primary) !important;
-            font-weight: 700 !important;
-        }
-
-        tbody tr:hover {
-            background: rgba(175, 175, 175, 0.88) !important;
-        }
-    }
-
-    /* ===========================
-       NEWS SECTION
-    =========================== */
-    .news-box {
-        background: rgba(190, 190, 190, 0.90) !important;
-        color: var(--text-primary) !important;
-        font-weight: 800 !important;
-        border: 1.5px solid var(--border-dark) !important;
-
-        &:hover {
-            background: rgba(180, 180, 180, 0.93) !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-        }
-
-        &.selected {
-            background: rgba(170, 195, 215, 0.92) !important;
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-            border-color: rgba(30, 120, 200, 0.75) !important;
-        }
-    }
-
-    .toggle-btn {
-        background: rgba(190, 190, 190, 0.90) !important;
-        color: var(--text-primary) !important;
-        font-weight: 800 !important;
-        border: 1.5px solid var(--border-dark) !important;
-
-        &:hover {
-            background: rgba(180, 180, 180, 0.93) !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-        }
-
-        &.active {
-            background: rgba(40, 150, 40, 0.90) !important;
-            color: var(--text-inverse) !important;
-            font-weight: 900 !important;
-            border-color: rgba(30, 130, 30, 0.75) !important;
-        }
-    }
-
-    /* ===========================
-       NEWS TOGGLE BUTTONS & ICONS
-    =========================== */
-    #toggle-social-btn,
-    #fetch-regular-btn {
-        background: rgba(190, 190, 190, 0.90) !important;
-        color: var(--text-primary) !important;
-        font-weight: 800 !important;
-
-        &:hover {
-            background: rgba(180, 180, 180, 0.93) !important;
-
-            img {
-                opacity: 1 !important;
-                filter: brightness(0) saturate(100%) invert(0%) !important;
-                /* transform: scale(1.05); */
-            }
-        }
-
-        &.active {
-            background: rgba(40, 150, 40, 0.90) !important;
-            color: var(--text-inverse) !important;
-            font-weight: 900 !important;
-
-            img {
-                filter: brightness(0) saturate(100%) invert(100%) !important;
-                opacity: 1 !important;
-            }
-        }
-
-        &:active img {
-            transform: scale(0.95);
-        }
-
-        img {
-            filter: brightness(0) saturate(100%) invert(0%) !important;
-            opacity: 0.85 !important;
-            transition: all 0.3s ease !important;
-            display: block;
-            width: 16px;
-            height: 16px;
-            margin: 0 auto;
-        }
-    }
-
-    /* ===========================
-       NCOP CONTAINER - COMPREHENSIVE TEXT STYLING
-    =========================== */
-    .ncop-container {
-
-        &,
-        & * {
-            color: var(--text-primary) !important;
-        }
-
-        .ncop-item-label,
-        .ncop-dropdown-label,
-        .ncop-subcategory-header span,
-        .ncop-nested-header span,
-        .accordion-title,
-        .sidebar-title,
-        label,
-        span,
-        p,
-        div {
-            color: var(--text-primary) !important;
-            font-weight: 800 !important;
-        }
-
-        .ncop-dropdown,
-        select,
-        option {
-            color: var(--text-primary) !important;
-            font-weight: 800 !important;
-        }
-
-        .ncop-data-table {
-
-            th,
-            td,
-            .ncop-key-cell,
-            .ncop-attribute-cell {
-                color: var(--text-primary) !important;
-                font-weight: 800 !important;
-            }
-
-            thead th {
-                font-weight: 900 !important;
-            }
-
-            tbody td {
-                font-weight: 700 !important;
-            }
-        }
-
-        .ncop-dropdown-label,
-        .ncop-dropdown-count {
-            color: var(--text-primary) !important;
-            font-weight: 800 !important;
-        }
-
-        .ncop-empty-state-text,
-        .ncop-loading-state {
-            color: var(--text-primary) !important;
-            font-weight: 700 !important;
-        }
-
-        input::placeholder,
-        select::placeholder {
-            color: var(--text-secondary) !important;
-            font-weight: 700 !important;
-        }
-
-        i,
-        .accordion-icon,
-        .accordion-chevron,
-        .subcategory-chevron,
-        .nested-chevron {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-        }
-
-        .ncop-nested-subsection,
-        .ncop-nested-subsection * {
-            color: var(--text-primary) !important;
-        }
-
-        .ncop-nested-header span {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-        }
-
-        .ncop-dropdown-wrapper,
-        .ncop-dropdown-wrapper * {
-            color: var(--text-primary) !important;
-            font-weight: 800 !important;
-        }
-
-        table,
-        table * {
-            color: var(--text-primary) !important;
-        }
-    }
-
-    .ncop-dropdown-header {
-        border: 1px solid var(--white);
-    }
-
-    .ncop-dropdown-toggle::after {
-        color: black;
-    }
-
-    .ncop-dropdown-count {
-        color: #2a2a2a;
-        font-weight: 500;
-    }
-
-    /* ===========================
-       THEME TOGGLE BUTTON
-    =========================== */
-    .theme-toggle-btn,
-    .theme-toggle-wrapper .theme-toggle-btn {
-        color: var(--text-primary) !important;
-        /* font-weight: 900 !important; */
-        /* background: var(--tertiary-bg) !important; */
-    }
-
-    .theme-toggle-wrapper .theme-toggle-btn:hover {
-        /* background: rgba(185, 185, 185, 0.92) !important; */
-        transform: scale(1.1);
-    }
-
-    /* Basemap and Layer Panels */
-
-    /* Labels Toggle */
-    .labels-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 0;
-        margin-bottom: 12px;
-        border-bottom: 1px solid var(--border-dark);
-    }
-
-    .labels-toggle-text {
-        color: var(--black);
-        font-weight: 600;
-    }
-
-    .basemap-item,
-    .projection-item {
-        background: rgba(0, 0, 0, 0.15);
-    }
-
-    .layer-order-title {
-        color: var(--black);
-        font-weight: 700;
-    }
-
-    .projection-header h3 {
-        color: var(--black);
-        font-weight: 800;
-    }
-
-    .legend-image-container {
-        background-color: rgba(0, 0, 0, 0.15);
-    }
-
-    /* Legend Toggle Button */
-    .legend-toggle-btn {
-        background: rgba(0, 0, 0, 0.2);
-        color: var(--black);
-    }
-
-    .dragresizecontrol-btn,
-    #tempslider-controls button {
-        background: var(--tertiary-bg);
-        /* border: 1.5px solid var(--border-dark); */
-        color: var(--text-primary);
-    }
-
-    #tempslider-controls button i,
-    #tempslider-controls .speed-btn {
-        color: var(--black);
-        font-weight: 500;
-    }
-}
-
-/* ===========================
    THEME TOGGLE WRAPPER (DAY MODE)
 =========================== */
 .theme-toggle-wrapper {
@@ -1004,15 +139,6 @@
 
         &:active {
             transform: scale(0.95);
-        }
-
-        &:not([data-theme="night"]) {
-            color: #fbbf24;
-
-            /* &:hover {
-                background: rgba(251, 191, 36, 0.1);
-                border-color: rgba(251, 191, 36, 0.3);
-            } */
         }
 
         .theme-icon {
@@ -1450,6 +576,8 @@ button.custom-nav-btn.terrain-active:hover {
 /* Sidebar Content */
 .sidebar-content {
     color: var(--white);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .sidebar-accordion {
@@ -1524,7 +652,12 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 .ncop-subcategory-header.expanded {
-    border: 1px solid var(--ndma-blue);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 6px 2px;
+    margin: 6px 0 4px 0;
+    border-bottom: 1.5px solid var(--ndma-blue);
 }
 
 .ncop-subcategory-header .subcategory-chevron {
@@ -1542,6 +675,12 @@ button.custom-nav-btn.terrain-active:hover {
     color: var(--white);
 }
 
+.ncop-subcategory-header.expanded span {
+    color: var(--ndma-blue-light);
+    font-weight: 600;
+}
+
+
 .ncop-subcategory-header.expanded .subcategory-chevron {
     transform: rotate(90deg);
 }
@@ -1553,11 +692,45 @@ button.custom-nav-btn.terrain-active:hover {
     margin-top: 4px;
 }
 
+/* Primary scroll fix: the opened items container becomes a scroll region */
 .ncop-items-container.visible {
-    max-height: 400px;
+    max-height: min(55vh, 420px);
     overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
     scroll-behavior: smooth;
-    scroll-padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+
+/* Make the sidebar scrollbars visible for the NCOP items region (overrides global hidden thumb) */
+.ncop-items-container.visible {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-dark) transparent;
+}
+
+.ncop-items-container.visible::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ncop-items-container.visible::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ncop-items-container.visible::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+    border-radius: 10px;
+}
+
+.ncop-items-container.visible::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+}
+
+@media (max-width: 480px) {
+    .ncop-items-container.visible {
+        max-height: min(50vh, 320px);
+    }
 }
 
 .ncop-grid {
@@ -1566,6 +739,12 @@ button.custom-nav-btn.terrain-active:hover {
     gap: 8px;
     align-items: start;
 }
+
+/* If the grid is constrained by a parent, it can also become scrollable (CSS-only) */
+.ncop-items-container.visible .ncop-grid {
+    min-height: 0;
+}
+
 
 /* Single column grid for button items */
 .ncop-grid:has(.ncop-item-button) {
@@ -1810,6 +989,55 @@ button.custom-nav-btn.terrain-active:hover {
     max-height: 600px;
     padding-bottom: 16px;
     /* Extra space for last subcategories */
+}
+
+/* =====================================================================
+   CRITICAL SCROLL FIX (CSS-only)
+   ---------------------------------------------------------------------
+   Why scroll was "not working":
+   - The sidebar panel itself can scroll, but the expanded accordion body
+     (.accordion-content.expanded) was hard-capped (e.g., 600px) AND its
+     base state uses overflow:hidden.
+   - Anything beyond that cap gets clipped, so you cannot scroll to the
+     cropped Forecast/Nowcast tiles (exactly what your screenshots show).
+   
+   Fix strategy (no JS changes):
+   - Allow the expanded accordion to grow large enough so content is not
+     clipped. The sidebar-panel's own overflow-y:auto then naturally
+     provides scrolling for the whole sidebar.
+   - Keep the existing transition behavior (requires max-height). We use
+     a very large max-height instead of 'none'.
+   ===================================================================== */
+
+.accordion-content.expanded {
+    max-height: 9999px !important;
+    overflow: visible !important;
+}
+
+/* Subcategory header: underline-only + blue text (no box/background/border) */
+.ncop-subcategory-header.expanded {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--ndma-blue) !important;
+}
+
+.ncop-subcategory-header.expanded span {
+    color: #d8efff !important;
+    /* text-decoration: underline;
+    text-underline-offset: 4px; */
+}
+
+/* Items container: keep as a scroll region when it exceeds available height */
+.ncop-items-container.visible {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optional: if a grid itself becomes the limiting box, allow it to scroll too */
+.ncop-items-container.visible .ncop-grid {
+    min-height: 0;
 }
 
 .custom-basemap-btn {
@@ -2758,26 +1986,26 @@ button.custom-nav-btn.terrain-active:hover {
 
 /* Webkit scrollbar customization (Chrome, Safari, Edge) */
 .layer-info-panel::-webkit-scrollbar {
-    width: 6px;
+    width: 3px;
 }
 
 .layer-info-panel::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: transparent;
     border-radius: 3px;
 }
 
 .layer-info-panel::-webkit-scrollbar-thumb {
-    background: #ccc;
+    background: transparent;
     border-radius: 3px;
 }
 
 .layer-info-panel::-webkit-scrollbar-thumb:hover {
-    background: #999;
+    background: transparent;
 }
 
 /* Firefox scrollbar customization */
 .layer-info-panel {
-    scrollbar-color: #ccc #f1f1f1;
+    scrollbar-color: transparent transparent;
     scrollbar-width: thin;
 }
 
@@ -3472,28 +2700,28 @@ button.custom-nav-btn.terrain-active:hover {
 
 /* Scrollbar styling for dropdown content */
 .ncop-dropdown-content::-webkit-scrollbar {
-    width: 6px;
+    width: 3px;
 }
 
 .ncop-dropdown-content::-webkit-scrollbar-track {
-    background: #f5f5f5;
+    background: transparent;
     border-radius: 3px;
 }
 
 .ncop-dropdown-content::-webkit-scrollbar-thumb {
-    background: #bdbdbd;
+    background: transparent;
     border-radius: 3px;
     transition: all 0.2s ease;
 }
 
 .ncop-dropdown-content::-webkit-scrollbar-thumb:hover {
-    background: #9e9e9e;
+    background: transparent;
 }
 
 /* Firefox scrollbar */
 .ncop-dropdown-content {
     scrollbar-width: thin;
-    scrollbar-color: #bdbdbd #f5f5f5;
+    scrollbar-color: transparent transparent;
 }
 
 /* ========================================================================
@@ -5276,14 +4504,14 @@ button.custom-nav-btn.terrain-active:hover {
         border-radius: 5px;
     }
 
-        .custom-nav-btn svg {
-            width: 16px;
-            /* icon width */
-            height: 16px;
-            /* icon height */
-            /* stroke-width: 1.8; */
-            /* optional: thicker icons */
-        }
+    .custom-nav-btn svg {
+        width: 16px;
+        /* icon width */
+        height: 16px;
+        /* icon height */
+        /* stroke-width: 1.8; */
+        /* optional: thicker icons */
+    }
 
     .custom-nav-btn i,
     .custom-nav-btn .nav-icon {
@@ -5299,10 +4527,10 @@ button.custom-nav-btn.terrain-active:hover {
         height: 30px;
     }
 
-        .nav-toggle-btn  svg {
-            width: 16px;
-            height: 16px;
-        }
+    .nav-toggle-btn svg {
+        width: 16px;
+        height: 16px;
+    }
 
     /* ===========================
        USER CONTROL
@@ -5513,8 +4741,12 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     .ncop-items-container.visible {
-        max-height: 280px;
+        /* max-height: 280px; */
         padding-right: 2px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        /* -webkit-overflow-scrolling: touch; */
+        overscroll-behavior: contain;
     }
 
     /* ===========================
@@ -5536,7 +4768,7 @@ button.custom-nav-btn.terrain-active:hover {
         min-height: 75px;
     }
 
-    .ncop-item .ncop-item-image {        
+    .ncop-item .ncop-item-image {
         width: 48px;
         height: 48px;
         border-radius: 10px;
@@ -5632,8 +4864,12 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     .ncop-nested-items-container.visible {
-        max-height: 350px;
+        /* max-height: 350px; */
         padding: 2px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     }
 
     .ncop-nested-items-container .ncop-grid {
@@ -6092,26 +5328,26 @@ button.custom-nav-btn.terrain-active:hover {
         font-size: 9px !important;
     }
 
-        #tempslider-controls {
-            display: grid;
-    
-            /* 1️⃣ Take full width of parent */
-            width: 100%;
-    
-            /* 2️⃣ Grid layout */
-            grid-template-rows: repeat(1, max-content);
-            grid-auto-columns: 20px;
-            grid-auto-flow: column;
-    
-            /* 3️⃣ Center items horizontally */
-            justify-content: center;
-    
-            /* 4️⃣ Spacing & position */
-            gap: 8px;
-            margin-top: 5.8rem;
-            left: 2px;
-            z-index: 9999999;
-        }
+    #tempslider-controls {
+        display: grid;
+
+        /* 1️⃣ Take full width of parent */
+        width: 100%;
+
+        /* 2️⃣ Grid layout */
+        grid-template-rows: repeat(1, max-content);
+        grid-auto-columns: 20px;
+        grid-auto-flow: column;
+
+        /* 3️⃣ Center items horizontally */
+        justify-content: center;
+
+        /* 4️⃣ Spacing & position */
+        gap: 8px;
+        margin-top: 5.8rem;
+        left: 2px;
+        z-index: 9999999;
+    }
 
     #tempslider-controls button {
         width: 20px;
@@ -6171,7 +5407,7 @@ button.custom-nav-btn.terrain-active:hover {
     #legend-container-slider1 {
         width: 97%;
     }
-    
+
     .legend-bar-container {
         height: 20px !important;
     }
@@ -7081,16 +6317,19 @@ button.custom-nav-btn.terrain-active:hover {
    SPINNING GLOBE BUTTON ANIMATION
    ============================================================================ */
 
-   /* Spinning Globe Active State */
+/* Spinning Globe Active State */
 .custom-nav-btn.globe-spinning {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     animation: spin-pulse 2s ease-in-out infinite;
 }
 
 @keyframes spin-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
     }
+
     50% {
         box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
     }
