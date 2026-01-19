@@ -5267,37 +5267,158 @@ button.custom-nav-btn.terrain-active:hover {
        LAYER ATTRIBUTE POPUP
     =========================== */
     .layer-attribute-popup {
-        padding: 7px 10px;
-        font-size: 11px;
+        padding: 7px 8px;
+        font-size: 8px;
         border-radius: 6px;
+        background: var(--white);
     }
 
     .layer-attribute-popup .popup-label {
-        font-size: 13px;
+        font-size: 10px;
         margin-bottom: 7px;
     }
 
+    /* keep scroll */
     .layer-attribute-popup .popup-attributes-scroll {
         max-height: 160px;
+        overflow-y: auto;
+        /* ensure scroll */
+        overflow-x: hidden;
     }
 
+    /* ===========================
+           POPUP ATTRIBUTE TABLE
+        =========================== */
+
+    .layer-attribute-popup .popup-attributes {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: var(--white);
+    }
+
+    /* CELL STYLING — THIS IS THE KEY FIX */
+    .layer-attribute-popup .popup-attributes th,
+    .layer-attribute-popup .popup-attributes td {
+        text-align: start;
+        padding: 6px 8px;
+
+        border: 1px solid var(--ndma-blue);
+        /* 🔵 BLUE BORDER */
+        border-radius: 3px;
+        /* subtle rounding */
+
+        font-size: 10px;
+        vertical-align: top;
+    }
+
+    /* spacing between rows so radius is visible */
+    .layer-attribute-popup .popup-attributes tr {
+        display: table-row;
+    }
+
+    /* prevent borders from sticking together */
+    .layer-attribute-popup .popup-attributes {
+        border-spacing: 4px;
+        /* IMPORTANT for rounded cells */
+    }
+
+    /* key column */
     .layer-attribute-popup .attr-key {
-        padding: 5px 7px 5px 0;
-        min-width: 60px;
-        font-size: 10px;
+        min-width: 70px;
+        font-weight: 600;
+        white-space: nowrap;
     }
 
+    /* value column */
     .layer-attribute-popup .attr-value {
-        padding: 5px 0 5px 7px;
-        font-size: 10px;
+        word-break: break-word;
     }
 
+    /* pointer triangle */
     .layer-attribute-popup::after {
-        bottom: -8px;
-        border-left-width: 10px;
-        border-right-width: 10px;
-        border-top-width: 8px;
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -10px;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+
+        border-left: 12px solid transparent;
+        border-right: 12px solid transparent;
+        border-top: 10px solid var(--white);
+
+        opacity: 1;
+        pointer-events: none;
     }
+
+    /* ===========================
+       GDACS buttons (compact + single row)
+    =========================== */
+    
+    .gdacs-popup .gdacs-table th, .gdacs-popup .gdacs-table td {
+        border: 1px solid var(--border-blue);
+        padding: 3px;
+        text-align: start;
+    }
+
+    .gdacs-popup .gdacs-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 6px;
+
+        flex-wrap: nowrap;
+    }
+
+    .gdacs-popup .gdacs-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 5px;
+        padding: 3px 8px;
+        /* smaller */
+        font-size: 10px;
+        /* smaller */
+        font-weight: 600;
+        line-height: 1;
+
+        min-height: 24px;
+        /* compact height */
+        white-space: nowrap;
+        /* keep text on one line */
+
+        color: #ffffff;
+        background-color: #1e5bd7;
+        border: 1px solid #1648ad;
+        border-radius: 4px;
+
+        text-decoration: none;
+        cursor: pointer;
+
+        transition: background-color 0.2s ease,
+        border-color 0.2s ease,
+        transform 0.1s ease;
+    }
+
+    .gdacs-popup .gdacs-btn-secondary {
+        background-color: #245fe0;
+        border-color: #1b4fc2;
+    }
+
+    .gdacs-popup .gdacs-btn:hover {
+        background-color: #1648ad;
+        border-color: #123c91;
+    }
+
+    .gdacs-popup .gdacs-btn[aria-disabled="true"] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
 
     /* ===========================
        TIME SLIDER

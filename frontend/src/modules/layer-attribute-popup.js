@@ -41,7 +41,7 @@ function pruneCacheMap(cacheObj, maxSize, destroyCb) {
     if (destroyCb && cacheObj[k]) {
       try {
         destroyCb(cacheObj[k]);
-      } catch (_) {}
+      } catch (_) { }
     }
     delete cacheObj[k];
   }
@@ -365,9 +365,8 @@ function buildWaqiPopupContent(props) {
     <div style="font-size:11px;">${props.continent || ""}</div>
     <div style="font-size:11px;">${props.time}</div>
     <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-      <button class="aqi-infograph-inline-btn" data-waqi-uid="${
-        props.uid
-      }" data-popup-id="${popupUID}" data-expanded="false" data-loaded="false" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;font-size:11px;line-height:1.2;cursor:pointer;">Show Station Infograph</button>
+      <button class="aqi-infograph-inline-btn" data-waqi-uid="${props.uid
+    }" data-popup-id="${popupUID}" data-expanded="false" data-loaded="false" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;font-size:11px;line-height:1.2;cursor:pointer;">Show Station Infograph</button>
       ${stationDetailsHtml}
     </div>
     <div id="aqi-inline-metrics-${popupUID}" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
@@ -583,6 +582,111 @@ function handleFfdPopupClick(e) {
 
 // ========== END FFD-SPECIFIC CODE ==========
 
+// ========== GDACS-SPECIFIC HELPERS ==========
+function formatGdacsDate(val) {
+  if (!val) return "(empty)";
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return String(val);
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function escHtml(v) {
+  // Small escape helper to avoid accidentally injecting HTML into the popup.
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildGdacsPopupContent(props) {
+  // Safe parse helper (works if value is already an object OR a JSON string)
+  const asObject = (v) => {
+    if (!v) return null;
+    if (typeof v === "object") return v;
+    if (typeof v === "string") {
+      try { return JSON.parse(v); } catch { return null; }
+    }
+    return null;
+  };
+
+  // Only render the subset you asked for.
+  const eventType = props.eventtype ?? "";
+  const name = props.name ?? props.eventname ?? "";
+  const htmlDescription = props.htmldescription ?? props.description ?? "";
+
+  const urlObj = asObject(props.url) || {};
+  const reportUrl = urlObj.report ?? "";
+  const detailsUrl = urlObj.details ?? "";
+
+  const alertLevel = props.alertlevel ?? "";
+  const country = props.country ?? "";
+
+  // ✅ correct key name is fromdate (lowercase)
+  const fromDate = props.fromdate ?? "";
+  const toDate = props.todate ?? "";
+
+  const sevObj = asObject(props.severitydata) || {};
+  const severityText = sevObj.severitytext ?? "";
+  const severityUnit = sevObj.severityunit ?? "";
+
+  // console.log("[GDACS subset]", {
+  //   eventType, name, htmlDescription, alertLevel, country,
+  //   fromDate, toDate, severityText, severityUnit,
+  //   reportUrl, detailsUrl,
+  // });
+
+
+  const row = (k, v, isHtml = false) => {
+    const safeVal = isHtml ? v : escHtml(v);
+    return `
+      <tr>
+        <th scope="row">${escHtml(k)}</th>
+        <td>${safeVal || "(empty)"}</td>
+      </tr>
+    `;
+  };
+
+  const buttons = `
+    <div class="gdacs-actions">
+      <a class="gdacs-btn" href="${escHtml(reportUrl)}" target="_blank" rel="noopener noreferrer" ${reportUrl ? "" : 'aria-disabled="true" tabindex="-1"'
+    }>${reportUrl ? "Open Report" : "Report N/A"}</a>
+      <a class="gdacs-btn gdacs-btn-secondary" href="${escHtml(
+      detailsUrl
+    )}" target="_blank" rel="noopener noreferrer" ${detailsUrl ? "" : 'aria-disabled="true" tabindex="-1"'
+    }>${detailsUrl ? "Open Details" : "Details N/A"}</a>
+    </div>
+  `;
+
+  return `
+    <div class="gdacs-popup">
+      <table class="gdacs-table" role="table">
+        <tbody>
+          ${row("Event Type", eventType)}
+          ${row("Alert Level", alertLevel)}
+          ${row("Country", country)}
+          ${row("From", escHtml(formatGdacsDate(fromDate)), true)}
+          ${row("To", escHtml(formatGdacsDate(toDate)), true)}
+          ${row("Severity", severityText)}
+          ${row("Severity Unit", severityUnit)}
+          ${row("Description", htmlDescription)}
+        </tbody>
+      </table>
+      ${buttons}
+    </div>
+  `;
+}
+
+// ========== END GDACS-SPECIFIC HELPERS ==========
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;
@@ -656,12 +760,44 @@ export default class LayerAttributePopup {
     }
   }
 
+  #ensurePopupSkeleton() {
+    // If anything is missing (due to invalid HTML injection or browser table-fixing),
+    // restore the base skeleton exactly like #createEl() created it.
+    let labelEl = this.popupEl.querySelector(".popup-label");
+    let scrollEl = this.popupEl.querySelector(".popup-attributes-scroll");
+    let tableEl = this.popupEl.querySelector(".popup-attributes");
+
+    if (labelEl && scrollEl && tableEl) {
+      return { labelEl, scrollEl, tableEl };
+    }
+
+    // Restore base structure
+    this.popupEl.innerHTML =
+      `<div class="popup-content">` +
+      `<div class="popup-label"></div>` +
+      `<div class="popup-attributes-scroll">` +
+      `<table class="popup-attributes"></table>` +
+      `</div>` +
+      `</div>`;
+
+    labelEl = this.popupEl.querySelector(".popup-label");
+    scrollEl = this.popupEl.querySelector(".popup-attributes-scroll");
+    tableEl = this.popupEl.querySelector(".popup-attributes");
+
+    return { labelEl, scrollEl, tableEl };
+  }
+
   #setContent({ title, properties }) {
-    const labelEl = this.popupEl.querySelector(".popup-label");
-    const tableEl = this.popupEl.querySelector(".popup-attributes");
+    const { labelEl, scrollEl, tableEl } = this.#ensurePopupSkeleton();
+
+    // If GDACS content was previously injected into scrollEl,
+    // restore default scroll content to the default table structure.
+    // (We will override this in the GDACS branch when needed.)
+    scrollEl.innerHTML = `<table class="popup-attributes"></table>`;
+    const freshTableEl = scrollEl.querySelector(".popup-attributes");
 
     labelEl.textContent = title || "Attributes";
-    tableEl.innerHTML = "";
+    freshTableEl.innerHTML = "";
 
     const props = properties || {};
     const keys = Object.keys(props);
@@ -669,7 +805,7 @@ export default class LayerAttributePopup {
     if (keys.length === 0) {
       const tr = document.createElement("tr");
       tr.innerHTML = `<td class="attr-value" colspan="2" style="color: #888; font-style: italic;">No attributes found for this feature</td>`;
-      tableEl.appendChild(tr);
+      freshTableEl.appendChild(tr);
       return;
     }
 
@@ -686,12 +822,12 @@ export default class LayerAttributePopup {
           val = "(empty)";
         }
 
-        // Try to parse JSON strings
+        // Try to parse JSON strings (safe)
         if (typeof val === "string") {
           try {
             const parsed = JSON.parse(val);
             if (parsed && typeof parsed === "object") val = parsed;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         const indent = level * 16;
@@ -714,8 +850,9 @@ export default class LayerAttributePopup {
     };
 
     addRows(props);
-    tableEl.appendChild(fragment);
+    freshTableEl.appendChild(fragment);
   }
+
 
   // Basic indexing from config only; respects popup:true strictly
   #indexPopupEligible() {
@@ -1132,6 +1269,9 @@ export default class LayerAttributePopup {
   #bindEvents() {
     // Enhanced click handler
     this.map.on("click", async (e) => {
+      // Reset any special styling from previous popups
+      this.popupEl.classList.remove("gdacs-light");
+
       this.#refreshDynamicExposureLookups();
 
       const features = this.#queryFeaturesAtPoint(e.point);
@@ -1196,17 +1336,29 @@ export default class LayerAttributePopup {
       // GDACS SUPPORT
       if (this.#isGDACSLayer(layerId, sourceId)) {
         const properties = { ...(eligible.properties || {}) };
-        const alertType = this.#getGDACSAlertType(layerId, sourceId);
-        const eventName =
-          properties.eventname || properties.name || "GDACS Event";
-        const alertLevel = properties.alertlevel || "Unknown";
 
-        let title = `${alertType}: ${eventName}`;
-        if (alertLevel !== "Unknown") {
-          title += ` (${alertLevel})`;
+        const alertType = this.#getGDACSAlertType(layerId, sourceId);
+        const eventName = properties.Name || properties.eventname || properties.name || "GDACS Event";
+
+        // Light themed, table-based popup content for GDACS (subset of attributes only)
+        const scrollEl = this.popupEl.querySelector(".popup-attributes-scroll");
+        const tableEl = this.popupEl.querySelector(".popup-attributes"); // keep for cleanup
+        const labelEl = this.popupEl.querySelector(".popup-label");
+
+        if (labelEl) {
+          labelEl.textContent = eventName;
         }
 
-        this.#setContent({ title, properties });
+        // IMPORTANT: avoid invalid HTML by not injecting <div>/<table> inside a <table>
+        if (tableEl) {
+          tableEl.innerHTML = ""; // ensure the base table is cleared
+        }
+        if (scrollEl) {
+          scrollEl.innerHTML = buildGdacsPopupContent(properties);
+        }
+
+        this.popupEl.classList.add("gdacs-light");
+
         this.#show();
         this.#updatePosition();
         this.#attachMoveListeners();
