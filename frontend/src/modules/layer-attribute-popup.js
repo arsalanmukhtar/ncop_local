@@ -359,31 +359,192 @@ function buildWaqiPopupContent(props) {
     stationDetailsHtml = `<a href="https://aqicn.org/station/@${props.uid}/" target="_blank" style="font-size:12px;color:#fff;text-decoration:underline;">Station Details</a>`;
   }
 
-  return `<div id="popup-airquality-${popupUID}" style="color:white;font-size:14px;line-height:1.4;max-width:240px;">
-    <div style="font-weight:bold;font-size:14px;">${props.name}</div>
-    <div style="font-size:13px;"><strong>AQI: ${props.aqi}</strong></div>
-    <div style="font-size:11px;">${props.continent || ""}</div>
-    <div style="font-size:11px;">${props.time}</div>
-    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-      <button class="aqi-infograph-inline-btn" data-waqi-uid="${props.uid
-    }" data-popup-id="${popupUID}" data-expanded="false" data-loaded="false" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;font-size:11px;line-height:1.2;cursor:pointer;">Show Station Infograph</button>
+  return `
+<div id="popup-airquality-${popupUID}" style="
+  width:100%;
+  max-width:320px;
+  background:#ffffff;
+  color:#000000;
+  font-size:11px;
+  line-height:1.25;
+  border:1px solid #1e88e5;
+  border-radius:8px;
+  padding:8px;
+  box-sizing:border-box;
+">
+
+  <!-- HEADER (full width) -->
+  <div style="
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid #1e88e5;
+    border-radius:6px;
+    padding:6px 8px;
+    font-weight:700;
+    font-size:12px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  ">
+    ${props.name}
+  </div>
+
+  <!-- INFO GRID TABLE -->
+  <table style="
+    width:100%;
+    box-sizing:border-box;
+    border-collapse:collapse;
+    margin-top:6px;
+    font-size:11px;
+  ">
+    <tr>
+      <td style="width:38%;border:1px solid #1e88e5;padding:6px 6px;font-weight:700;vertical-align:top;">
+        AQI
+      </td>
+      <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;vertical-align:top;">
+        ${props.aqi}
+      </td>
+    </tr>
+
+    <tr>
+      <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;vertical-align:top;">
+        Region
+      </td>
+      <td style="border:1px solid #1e88e5;padding:6px 6px;vertical-align:top;">
+        ${props.continent || ""}
+      </td>
+    </tr>
+
+    <tr>
+      <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;vertical-align:top;">
+        Updated
+      </td>
+      <td style="border:1px solid #1e88e5;padding:6px 6px;vertical-align:top;word-break:break-word;">
+        ${props.time || ""}
+      </td>
+    </tr>
+  </table>
+
+  <!-- ACTIONS (full-width stacked) -->
+  <div style="width:100%;box-sizing:border-box;margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+    <button class="aqi-infograph-inline-btn"
+      data-waqi-uid="${props.uid}"
+      data-popup-id="${popupUID}"
+      data-expanded="false"
+      data-loaded="false"
+      style="
+        width:100%;
+        box-sizing:border-box;
+        background:#ffffff;
+        color:#000000;
+        border:1px solid #1e88e5;
+        border-radius:6px;
+        padding:7px 8px;
+        font-size:11px;
+        font-weight:700;
+        cursor:pointer;
+        text-align:center;
+      ">
+      Show Station Infograph
+    </button>
+
+    <!-- Keep your existing injected station details (force to full width) -->
+    <div style="width:100%;box-sizing:border-box;">
       ${stationDetailsHtml}
     </div>
-    <div id="aqi-inline-metrics-${popupUID}" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
-      <button class="aqi-inline-metric-btn" data-metric="pm25" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM2.5</button>
-      <button class="aqi-inline-metric-btn" data-metric="pm10" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM10</button>
-      <button class="aqi-inline-metric-btn" data-metric="co2" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">CO₂</button>
-      <button class="aqi-inline-metric-btn" data-metric="tvoc" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">TVOC</button>
-      <button class="aqi-inline-metric-btn" data-metric="met.t" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">Temp</button>
-      <button class="aqi-inline-metric-btn" data-metric="met.h" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">RH</button>
+  </div>
+
+  <!-- METRICS (compact, full-width, grid-like) -->
+  <div id="aqi-inline-metrics-${popupUID}" style="
+    display:none;
+    width:100%;
+    box-sizing:border-box;
+    margin-top:8px;
+  ">
+    <div style="
+      width:100%;
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:6px;
+      box-sizing:border-box;
+    ">
+      <button class="aqi-inline-metric-btn" data-metric="pm25" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        PM2.5
+      </button>
+      <button class="aqi-inline-metric-btn" data-metric="pm10" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        PM10
+      </button>
+      <button class="aqi-inline-metric-btn" data-metric="co2" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        CO₂
+      </button>
+      <button class="aqi-inline-metric-btn" data-metric="tvoc" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        TVOC
+      </button>
+      <button class="aqi-inline-metric-btn" data-metric="met.t" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        Temp
+      </button>
+      <button class="aqi-inline-metric-btn" data-metric="met.h" data-popup-id="${popupUID}"
+        style="width:100%;box-sizing:border-box;background:#fff;color:#000;border:1px solid #1e88e5;border-radius:6px;padding:6px 6px;font-size:10px;font-weight:700;cursor:pointer;">
+        RH
+      </button>
     </div>
-    <div id="aqi-inline-chart-wrapper-${popupUID}" style="display:none;margin-top:8px;background:#1a1a1a;border:1px solid #444;border-radius:4px;padding:6px;">
-      <div id="aqi-inline-station-name-${popupUID}" style="font-size:11px;font-weight:bold;color:#fff;"></div>
-      <div id="aqi-inline-updated-time-${popupUID}" style="font-size:10px;color:#aaa;line-height:1.2;margin-bottom:4px;"></div>
-      <canvas id="aqiInlineChart-${popupUID}" style="width:220px;height:140px;max-width:100%;"></canvas>
-      <div id="aqi-inline-attrib-${popupUID}" style="font-size:9px;color:#888;margin-top:4px;line-height:1.3;"></div>
-    </div>
-  </div>`;
+  </div>
+
+  <!-- CHART (full width, white container, blue border) -->
+  <div id="aqi-inline-chart-wrapper-${popupUID}" style="
+    display:none;
+    width:100%;
+    box-sizing:border-box;
+    margin-top:8px;
+    border:1px solid #1e88e5;
+    border-radius:8px;
+    padding:8px;
+    background:#ffffff;
+  ">
+    <div id="aqi-inline-station-name-${popupUID}" style="
+      width:100%;
+      box-sizing:border-box;
+      font-size:11px;
+      font-weight:700;
+      margin-bottom:2px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    "></div>
+
+    <div id="aqi-inline-updated-time-${popupUID}" style="
+      width:100%;
+      box-sizing:border-box;
+      font-size:10px;
+      margin-bottom:6px;
+      color:#333;
+      word-break:break-word;
+    "></div>
+
+    <canvas id="aqiInlineChart-${popupUID}" style="
+      width:100% !important;
+      height:150px;
+      display:block;
+    "></canvas>
+
+    <div id="aqi-inline-attrib-${popupUID}" style="
+      width:100%;
+      box-sizing:border-box;
+      font-size:9px;
+      margin-top:6px;
+      color:#333;
+      word-break:break-word;
+    "></div>
+  </div>
+
+</div>`;
+
+
 }
 
 // ========== END WAQI-SPECIFIC CODE ==========
@@ -397,44 +558,153 @@ function buildFfdPopupContent(props) {
     .substr(2, 9)}`;
   const inflow = props.inflow_discharge !== "n/a" ? props.inflow_discharge : 0;
 
-  return `<div style="overflow-y:auto;">
-    <div style="background:black;color:white;font-weight:bold;text-align:center;padding:5px;border-radius:5px;">${props.name} - ${props.status}</div>
-    <div class="ffd-info" id="ffd-info-${popupId}">
-      <table style="width:100%;border-collapse:collapse;color:white;">
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow:</td>
-          <td style="padding:4px;">${props.outflow_discharge} cusecs</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Inflow:</td>
-          <td style="padding:4px;">${inflow} cusecs</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow Trend:</td>
-          <td style="padding:4px;">${props.outflow_trend}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Inflow Trend:</td>
-          <td style="padding:4px;">${props.inflow_trend}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Recording Time:</td>
-          <td style="padding:4px;">${props.recording_time}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow Time:</td>
-          <td style="padding:4px;">${props.outflow_time}</td>
-        </tr>
-      </table>
+  return `
+<div style="
+  overflow-y:auto;
+  width:100%;
+  max-width:260px;
+  background:#ffffff;
+  border:1px solid #1e88e5;
+  border-radius:8px;
+  padding:8px;
+  box-sizing:border-box;
+  font-size:11px;
+  line-height:1.25;
+">
+
+  <!-- HEADER (blue title like image 2) -->
+  <div style="
+    width:100%;
+    box-sizing:border-box;
+    color:#1e88e5;
+    font-weight:700;
+    font-size:12px;
+    margin-bottom:6px;
+  ">
+    ${props.name} ${props.status ? `- ${props.status}` : ""}
+  </div>
+
+  <!-- INFO TABLE (blue borders, white bg, BLACK text) -->
+  <div class="ffd-info" id="ffd-info-${popupId}" style="width:100%;box-sizing:border-box;">
+    <table style="
+      width:100%;
+      border-collapse:collapse;
+      background:#ffffff;
+      font-size:10.5px;
+      table-layout:fixed;
+    ">
+      <tr>
+        <td style="width:42%;border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Outflow
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${props.outflow_discharge} cusecs
+        </td>
+      </tr>
+
+      <tr>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Inflow
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${inflow} cusecs
+        </td>
+      </tr>
+
+      <tr>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Outflow Trend
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${props.outflow_trend}
+        </td>
+      </tr>
+
+      <tr>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Inflow Trend
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${props.inflow_trend}
+        </td>
+      </tr>
+
+      <tr>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Recording Time
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${props.recording_time}
+        </td>
+      </tr>
+
+      <tr>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+          Outflow Time
+        </td>
+        <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+          ${props.outflow_time}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- BUTTON (blue pill style like "Open Report/Open Details") -->
+  <button class="show-ffd-graph"
+    data-popup-id="${popupId}"
+    style="
+      width:100%;
+      margin-top:8px;
+      background:#1976d2;
+      color:#ffffff;
+      border:none;
+      padding:8px 16px;
+      border-radius:20px;
+      cursor:pointer;
+      font-size:11px;
+      font-weight:600;
+      box-sizing:border-box;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    ">
+    Show Graph
+  </button>
+
+  <!-- CHART WRAPPER (white bg + blue border) -->
+  <div class="ffd-chart-container"
+    id="ffd-chart-container-${popupId}"
+    style="
+      display:none;
+      width:100%;
+      margin-top:8px;
+      text-align:center;
+      opacity:0;
+      transition:opacity 0.5s ease-in-out;
+      background:#ffffff;
+      border:1px solid #1e88e5;
+      border-radius:8px;
+      padding:8px;
+      box-sizing:border-box;
+    ">
+
+    <canvas id="ffd-chart-canvas-${popupId}"
+      style="width:100% !important;height:150px;display:block;">
+    </canvas>
+
+    <div class="chart-legend" style="
+      margin-top:6px;
+      font-size:9.5px;
+      color:#000000;
+      line-height:1.2;
+      word-break:break-word;
+    ">
+      <span style="font-weight:700;">Outflow:</span> ${props.outflow_discharge} cusecs (${props.outflow_trend})
+      <span style="color:#666;"> | </span>
+      <span style="font-weight:700;">Inflow:</span> ${inflow} cusecs (${props.inflow_trend})
     </div>
-    <button class="show-ffd-graph" data-popup-id="${popupId}" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;cursor:pointer;font-size:12px;">Show Graph</button>
-    <div class="ffd-chart-container" id="ffd-chart-container-${popupId}" style="display:none;text-align:center;opacity:0;transition:opacity 0.5s ease-in-out;">
-      <canvas id="ffd-chart-canvas-${popupId}" style="width:230px;height:150px;"></canvas>
-      <div class="chart-legend" style="color:white;font-weight:bold;margin-top:5px;font-size:11px;">
-        <span>Outflow: ${props.outflow_discharge} cusecs (${props.outflow_trend})</span> | <span>Inflow: ${inflow} cusecs (${props.inflow_trend})</span>
-      </div>
-    </div>
-  </div>`;
+  </div>
+
+</div>`;
+
 }
 
 function createFfdChart(
