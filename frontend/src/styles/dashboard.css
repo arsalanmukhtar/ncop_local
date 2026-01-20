@@ -2307,7 +2307,7 @@ button.custom-nav-btn.terrain-active:hover {
     backdrop-filter: blur(15px);
     padding: 14px 18px 14px 18px;
     touch-action: none;
-    z-index: 1000;
+    z-index: 500;
 }
 
 /* ===== HEADER ROW: Title + Date ===== */
@@ -5662,7 +5662,8 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     #opacityControlPopover {
-        width: 325px;
+        left: 0 !important;
+        width: 100%;
         border-radius: 15px;
         padding: 4px 8px;
     }
@@ -5671,6 +5672,7 @@ button.custom-nav-btn.terrain-active:hover {
     #opacityControlPopover .opacity-popover-value {
         font-size: 8px;
     }
+    
 
     /* ===========================
        NEWS MODAL
@@ -6635,4 +6637,159 @@ button.custom-nav-btn.terrain-active:hover {
     50% {
         box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
     }
+}
+
+/* ===========================
+   NCOP CUSTOM GEOCODER (collapsed -> expands on click)
+   Scoped styles to avoid clashing
+=========================== */
+
+.ncop-geocoder-wrapper {
+    position: absolute;
+    top: 65px;
+    right: 6px;
+    z-index: 1000;
+    width: 24px;
+    height: 24px;
+    /* collapsed width */
+    overflow: hidden;
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    background: var(--secondary-bg);
+    border: 2px solid var(--border-dark);  
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+    color: var(--white);
+
+    cursor: pointer;
+    transition: width 180ms ease;
+    margin-left: auto;
+}
+
+.ncop-geocoder-wrapper.is-open {
+    width: 230px;
+    /* expanded width */
+    cursor: default;
+    overflow: visible; 
+}
+
+.ncop-geocoder-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.95;
+}
+
+.ncop-geocoder-icon i,
+.ncop-geocoder-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.ncop-geocoder-mount {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+}
+
+.ncop-geocoder-wrapper.is-open .ncop-geocoder-mount {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ---- Scoped overrides: ONLY inside .ncop-geocoder-wrapper ---- */
+.ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder {
+    position: relative !important;
+        /* ✅ add */
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+}
+
+.ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder--input {
+    width: 100% !important;
+    height: 26px !important;
+    line-height: 26px !important;
+
+    background: transparent !important;
+    border: 0 !important;
+    outline: none !important;
+
+    color: var(--white) !important;
+    font-size: 11px !important;
+    padding: 0 !important;
+}
+
+.ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder--input::placeholder {
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* Hide Mapbox default icons/buttons (we use our own icon) */
+.ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder--icon,
+.ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder--button {
+    display: none !important;
+}
+
+/* Dropdown results */
+.ncop-geocoder-wrapper .suggestions {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    /* dropdown sits under bar */
+    left: 0 !important;
+    right: 0 !important;
+    /* ✅ makes width = input width */
+    width: 100% !important;
+    /* ✅ reinforce */
+    min-width: 0 !important;
+    /* ✅ kill Mapbox defaults */
+    max-width: none !important;
+
+    background: rgba(15, 15, 20, 0.95) !important;
+    border: 2px solid var(--border-dark) !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    margin-top: 0 !important;
+    /* ✅ since top already adds spacing */
+    z-index: 2000 !important;
+}
+
+.ncop-geocoder-wrapper .suggestions>li>a {
+    color: var(--white) !important;
+    font-size: 11px !important;
+    padding: 8px 10px !important;
+}
+
+.ncop-geocoder-wrapper .suggestions>li>a:hover,
+.ncop-geocoder-wrapper .suggestions>li.active>a {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ===========================
+   SPINNING GLOBE ACTIVE STATE
+=========================== */
+.custom-nav-btn.spin-active {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    box-shadow: 0 0 10px var(--ndma-blue-glow);
+    color: #ffffff !important;
 }

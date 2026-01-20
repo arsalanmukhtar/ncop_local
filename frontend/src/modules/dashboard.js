@@ -175,16 +175,15 @@ class DashboardManager {
 
     this.#map = new mapboxgl.Map({
       container: "map",
-      style: "mapbox://styles/mapbox/standard-satellite", // default
+      style: "mapbox://styles/mapbox/standard-satellite",
       center: savedCenter,
       zoom: savedZoom,
       projection: savedProjection || "mercator",
       hash: true,
     });
 
-    // CRITICAL: Expose map globally so slider can access it
+    // Expose map globally (used by slider & other modules)
     window.ncop_map = this.#map;
-    // console.log("✅ Map exposed as window.ncop_map");
   }
 
   #onMapLoad() {
