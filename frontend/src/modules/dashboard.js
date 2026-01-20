@@ -175,7 +175,7 @@ class DashboardManager {
 
     this.#map = new mapboxgl.Map({
       container: "map",
-      style: "mapbox://styles/mapbox/streets-v12", // default
+      style: "mapbox://styles/mapbox/standard-satellite", // default
       center: savedCenter,
       zoom: savedZoom,
       projection: savedProjection || "mercator",

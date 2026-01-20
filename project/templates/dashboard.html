@@ -176,46 +176,78 @@
 
     <div id="map"></div>
 
-    <!-- Time Slider Container -->
+    <!-- Time Slider Container - REDESIGNED -->
     <div id="temp-slider1" style="display:none;">
-        <!-- Drag and Resize Controls -->
-        <!-- <div id="tempslider-dragresizecontrol">
-            <button id="dragControlButton" class="dragresizecontrol-btn" title="Drag slider">
-                <i data-lucide="move"></i>
-            </button>
-            <button id="resizeControlButton" class="dragresizecontrol-btn" title="Resize slider">
-                <i data-lucide="expand"></i>
-            </button>
-        </div> -->
-        <div id="tempslider-controls">
-            <button id="playPauseButton1" title="Play/Pause animation">
-                <i data-lucide="play" class="fas fa-play"></i>
-            </button>
-            <button id="playPauseButton2" title="Play/Pause animation">
-                <i data-lucide="pause" class="fas fa-pause"></i>
-            </button>
-
-            <!-- NEW: Opacity control button (HTML-owned) -->
-            <button id="opacityControlButton" title="Temporal opacity" aria-expanded="false"
-                aria-controls="opacityControlPopover">
-                <i data-lucide="droplet"></i>
-            </button>
-
-            <button id="speedControlButton" class="speed-btn" title="Change animation speed">1x</button>
+        <!-- Header Row: Title and Date -->
+        <div class="tempslider-header">
+            <div class="tempslider-title">
+                <p></p>
+            </div>
+            <div class="tempslider-date">
+                <div><i data-lucide="calendar" class="calendar-icon"></i></div>
+                <div><span class="year-labels1"></span></div>
+            </div>
         </div>
-        <!-- NEW: Opacity popover (HTML-owned) -->
+    
+        <!-- Legend Row: Color bar with min/max labels -->
+        <div class="tempslider-legend-row">
+            <span class="legend-min-label">0</span>
+            <div class="legend-container1">
+                <div id="legend-container-slider1"></div>
+            </div>
+            <span class="legend-max-label">150</span>
+        </div>
+    
+        <!-- Controls Row: Opacity, Play, Slider, Speed -->
+        <div class="tempslider-controls-row">
+            <div id="tempslider-controls">
+            
+                <!-- Opacity Control -->
+                <div class="control-item">
+                    <button id="opacityControlButton" title="Layer opacity" aria-expanded="false"
+                        aria-controls="opacityControlPopover" class="control-btn opacity-btn">
+                        <i data-lucide="blend"></i>
+                    </button>
+                    <span class="btn-label">Opacity</span>
+                </div>
+            
+                <!-- Play Button -->
+                <div class="control-item">
+                    <button id="playPauseButton1" title="Play animation" class="control-btn play-btn">
+                        <i data-lucide="play"></i>
+                    </button>
+                    <span class="btn-label">Play</span>
+                </div>
+            
+                <!-- Pause Button -->
+                <div class="control-item" id="pauseControl" style="display: none;">
+                    <button id="playPauseButton2" title="Pause animation" class="control-btn pause-btn">
+                        <i data-lucide="pause"></i>
+                    </button>
+                    <span class="btn-label">Pause</span>
+                </div>
+            
+            </div>
+
+            <!-- Slider -->
+            <div class="tempslider-slider-wrapper">
+                <input type="range" min="0" step="1" value="0" class="slider1" id="slider1"
+                    title="Drag to change time step">
+            </div>
+    
+            <!-- Speed Control -->
+            <div class="speed-control">
+                <button id="speedControlButton" class="control-btn speed-btn" title="Change animation speed">Speed 1x</button>
+            </div>
+        </div>
+    
+        <!-- Opacity Popover -->
         <div id="opacityControlPopover" role="dialog" aria-hidden="true">
             <div class="opacity-popover-row">
                 <span class="opacity-popover-label">Opacity</span>
                 <input id="opacityRange" type="range" min="0" max="100" step="5" />
                 <span id="opacityValueLabel" class="opacity-popover-value">100%</span>
             </div>
-        </div>
-        <input type="range" min="0" step="1" value="0" class="slider1" id="slider1" title="Drag to change time step">
-        <div class="year-labels1"></div>
-        <div class="legend-container1">
-            <div id="legend-container-slider1"></div>
-            <p></p>
         </div>
     </div>
 

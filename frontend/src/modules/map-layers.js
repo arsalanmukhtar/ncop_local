@@ -1520,7 +1520,7 @@ export const ncop_menu_items = {
           image: getImage("IMERG_precip_rate_past12d.webp"),
           type: "raster",
           theme: "slider",
-          title: null,
+          title: "Precipitation Rate (mm/hr)",
           information: "The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
         },
       },
@@ -1569,7 +1569,7 @@ export const ncop_menu_items = {
           image: getImage("lightning_forcasting.webp"),
           type: "raster",
           theme: "slider",
-          title: "Probability %",
+          title: "Lightning Probability %",
           information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
         },
         ecmwf_cyclone: {
@@ -1577,159 +1577,9 @@ export const ncop_menu_items = {
           image: getImage("Tropical_Cyclone_strike_propability.webp"),
           type: "raster",
           theme: "slider",
-          title: "Probability %",
+          title: "Cyclone Probability %",
           information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
-        },
-        specific_humidity_2m_above_ground: {
-          label: "Specific Humidity (2m Above Ground)",
-          image: getImage("specific_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Specific Humidity (g/kg)",
-          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        relative_humidity_2m_above_ground: {
-          label: "Relative Humidity (%)",
-          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          title: "Relative Humidity (%)",
-          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        gdps_accumulated_precipitation: {
-          label: "Accumulated Precipitation",
-          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Accumulated Precipitation (mm)",
-          geometry: null,
-          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
-        },
-        precipitation_type_3hrs: {
-          label: "Precipitation Type / 3hrs",
-          image: getImage("Precipitation_3hourly_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Precipitation Type",
-          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
-        },
-        ecmwf_lightning: {
-          label: "Lightning Forecast",
-          image: getImage("lightning_forcasting.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
-        },
-        ecmwf_cyclone: {
-          label: "Tropical Cyclone Strike Probability",
-          image: getImage("Tropical_Cyclone_strike_propability.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
-        },
-        dpecific_humidity_2m_above_ground: {
-          label: "Specific Humidity (2m Above Ground)",
-          image: getImage("specific_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Specific Humidity (g/kg)",
-          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        selative_humidity_2m_above_ground: {
-          label: "Relative Humidity (%)",
-          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          title: "Relative Humidity (%)",
-          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        mdps_accumulated_precipitation: {
-          label: "Accumulated Precipitation",
-          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Accumulated Precipitation (mm)",
-          geometry: null,
-          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
-        },
-        yrecipitation_type_3hrs: {
-          label: "Precipitation Type / 3hrs",
-          image: getImage("Precipitation_3hourly_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Precipitation Type",
-          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
-        },
-        ecmwf_lightning: {
-          label: "Lightning Forecast",
-          image: getImage("lightning_forcasting.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
-        },
-        ecmwf_cyclone: {
-          label: "Tropical Cyclone Strike Probability",
-          image: getImage("Tropical_Cyclone_strike_propability.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
-        },
-        specific_humidity_2m_above_ground: {
-          label: "Specific Humidity (2m Above Ground)",
-          image: getImage("specific_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Specific Humidity (g/kg)",
-          information: "The Specific Humidity (2m Above Ground) layer displays the specific humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        relative_humidity_2m_above_ground: {
-          label: "Relative Humidity (%)",
-          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          title: "Relative Humidity (%)",
-          information: "The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
-        },
-        gdps_accumulated_precipitation: {
-          label: "Accumulated Precipitation",
-          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Accumulated Precipitation (mm)",
-          geometry: null,
-          information: "The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
-        },
-        precipitation_type_3hrs: {
-          label: "Precipitation Type / 3hrs",
-          image: getImage("Precipitation_3hourly_forecast.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Precipitation Type",
-          information: "The Precipitation Type layer displays the type of precipitation (rain, snow, etc.) expected over the next 3 hours. This layer is essential for understanding short-term weather impacts and planning.",
-        },
-        ecmwf_lightning: {
-          label: "Lightning Forecast",
-          image: getImage("lightning_forcasting.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Lightning Forecast layer provides predictions of lightning activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during thunderstorms.",
-        },
-        ecmwf_cyclone: {
-          label: "Tropical Cyclone Strike Probability",
-          image: getImage("Tropical_Cyclone_strike_propability.webp"),
-          type: "raster",
-          theme: "slider",
-          title: "Probability %",
-          information: "The Tropical Cyclone Strike Probability layer provides predictions of tropical cyclone activity based on ECMWF data. This layer is crucial for anticipating severe weather events and ensuring safety during cyclonic conditions.",
-        },
+        }
       },
     },
     // "ECMWF Weather Forecast Parameters": {
@@ -1896,6 +1746,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          title: "Ocean Surface Salinity (PSU)",
           information: "The Ocean Surface Salinity layer displays the salinity levels of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_temperature: {
@@ -1904,6 +1755,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          title: "Ocean Surface Temperature (°C)",
           information: "The Ocean Surface Temperature layer displays the temperature of the ocean surface at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_currents: {
@@ -1912,6 +1764,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          title: "Ocean Surface Currents (m/s)",
           information: "The Ocean Surface Currents layer displays the surface currents of the ocean at a depth of 10 meters. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
         ocean_surface_height: {
@@ -1920,6 +1773,7 @@ export const ncop_menu_items = {
           type: "raster",
           theme: "slider",
           geometry: null,
+          title: "Ocean Surface Height (m)",
           information: "The Ocean Surface Height layer displays the height of the ocean surface with respect to the geoid. This layer is essential for understanding oceanographic processes and their impact on marine ecosystems.",
         },
       },
@@ -2035,18 +1889,18 @@ export const ncop_menu_items = {
           },
           layers: [
             /* Invisible hit / popup layer */
-            {
-              id: "global_boundaries-hit",
-              type: "line",
-              source: "global_boundaries-source",
-              "source-layer": "boundaries",
-              filter: ["==", ["get", "kind"], "country"],
-              paint: {
-                "line-color": "#ffffff",
-                "line-width": 10,
-                "line-opacity": 0
-              }
-            },
+            // {
+            //   id: "global_boundaries-hit",
+            //   type: "line",
+            //   source: "global_boundaries-source",
+            //   "source-layer": "boundaries",
+            //   filter: ["==", ["get", "kind"], "country"],
+            //   paint: {
+            //     "line-color": "#ffffff",
+            //     "line-width": 10,
+            //     "line-opacity": 0
+            //   }
+            // },
 
             /* Visible boundary outline */
             {
@@ -2056,14 +1910,58 @@ export const ncop_menu_items = {
               "source-layer": "boundaries",
               filter: ["==", ["get", "kind"], "country"],
               paint: {
-                "line-color": "#505050",
-                "line-width": 1.2
+                "line-color": "#1e1e1e",
+                "line-width": 2.5
               }
             }
           ],
-          popup: true,
+          popup: false,
           information:
             "Global country boundaries from OpenStreetMap and Natural Earth, delivered as vector tiles. Suitable for worldwide geopolitical reference."
+        },
+        national_boundary: {
+          label: "Global Boundaries (Countries)",
+          theme: null,
+          geometry: "line",
+          source: {
+            id: "national_boundary-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/admin_boundaries_global:national_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf"
+            ],
+            maxzoom: 15
+          },
+          layers: [
+            /* Invisible hit / popup layer */
+            // {
+            //   id: "national_boundary-hit",
+            //   type: "line",
+            //   source: "national_boundary-source",
+            //   "source-layer": "boundaries",
+            //   filter: ["==", ["get", "kind"], "country"],
+            //   paint: {
+            //     "line-color": "#ffffff",
+            //     "line-width": 10,
+            //     "line-opacity": 0
+            //   }
+            // },
+
+            /* Visible boundary outline */
+            {
+              id: "national_boundary-outline",
+              type: "line",
+              source: "national_boundary-source",
+              "source-layer": "national_boundary",
+              paint: {
+                "line-color": "#1e1e1e",
+                "line-width": 2.5
+              }
+            }
+          ],
+          popup: false,
+          information:
+            "National Boundary from OpenStreetMap and Natural Earth, delivered as vector tiles. Suitable for worldwide geopolitical reference."
         },
         // provincial_boundary: {
         //   label: "Provincial Boundary",

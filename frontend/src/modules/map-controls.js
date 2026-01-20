@@ -242,7 +242,7 @@ export class MapControls {
             // Set globe projection and fog for better effect
             try {
                 this.#map.setProjection('globe');
-                this.#map.setFog({}); // Default atmosphere
+                // this.#map.setFog({}); // Default atmosphere
             } catch (error) {
                 console.warn("Could not set globe projection:", error);
             }

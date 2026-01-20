@@ -630,12 +630,12 @@ export class SidebarMenu {
     const itemDiv = document.createElement("div");
     itemDiv.className = "ncop-item ncop-item-toggle";
     itemDiv.innerHTML = `
-            <span class="ncop-item-label">${itemData.label}</span>
-            <label class="ncop-toggle">
-                <input type="checkbox" data-item-key="${itemKey}" ${itemKey === "global_boundaries" ? "checked" : ""}>
-                <span class="ncop-toggle-slider"></span>
-            </label>
-        `;
+        <span class="ncop-item-label">${itemData.label}</span>
+        <label class="ncop-toggle">
+          <input type="checkbox" data-item-key="${itemKey}" ${(itemKey === "global_boundaries" || itemKey === "national_boundary") ? "checked" : ""}>
+          <span class="ncop-toggle-slider"></span>
+        </label>
+      `;
 
     // Add event listener for toggle interaction
     const checkbox = itemDiv.querySelector('input[type="checkbox"]');
@@ -1162,7 +1162,7 @@ export class SidebarMenu {
         const savedState = this.#storage.getSetting(`ncop_toggle_${itemKey}`);
 
         // Force Global Boundaries ON by default (always)
-        if (itemKey === "global_boundaries") {
+        if (itemKey === "global_boundaries" || itemKey === "national_boundary") {
           toggle.checked = true;
           this.#storage.saveSetting(`ncop_toggle_${itemKey}`, true);
           toggle.dispatchEvent(new Event("change")); // calls your existing handler

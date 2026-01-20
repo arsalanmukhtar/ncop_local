@@ -588,12 +588,23 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   const playBtn = document.getElementById("playPauseButton1");
   const pauseBtn = document.getElementById("playPauseButton2");
 
+  // NEW: wrapper refs (because labels are now outside the button)
+  const playControl = playBtn ? playBtn.closest(".control-item") : null;
+  const pauseControl =
+    document.getElementById("pauseControl") ||
+    (pauseBtn ? pauseBtn.closest(".control-item") : null);
+
   try {
     window.lucide?.createIcons();
   } catch { }
 
-  if (playBtn) playBtn.style.display = "inline-block";
-  if (pauseBtn) pauseBtn.style.display = "none";
+  // Show PLAY wrapper, hide PAUSE wrapper (not just buttons)
+  if (playControl) playControl.style.display = "";
+  else if (playBtn) playBtn.style.display = "";
+
+  if (pauseControl) pauseControl.style.display = "none";
+  else if (pauseBtn) pauseBtn.style.display = "none";
+
   clearInterval(interval);
   isPlaying = false;
 
@@ -697,7 +708,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     // Show only ONE label, updated dynamically (e.g., Day 1 → Day 2 → Day 3)
     yearLabelsDiv.innerHTML = "";
     const span = document.createElement("span");
-    span.textContent = layers?.[0]?.date ?? "";
+    span.textContent = layers?.[0]?.date ?? layers?.[0]?.label ?? "";
     yearLabelsDiv.appendChild(span);
   }
 
@@ -707,7 +718,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     sliderEl.value = 0;
   }
 
-  const titleElement = document.querySelector("#temp-slider1 p");
+  const titleElement = document.querySelector("#temp-slider1 .tempslider-title p");
   if (titleElement) {
     titleElement.textContent = textContent;
   }
@@ -722,6 +733,19 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   } else if (legendContainer) {
     legendContainer.style.display = "none";
     _legendResponsive = { container: null, layerKey: null };
+  }
+
+  // Update min/max labels dynamically based on legend data
+  if (typeof legendCompact !== "undefined" && legendCompact[layerKey]) {
+    const minLabel = document.querySelector("#temp-slider1 .legend-min-label");
+    const maxLabel = document.querySelector("#temp-slider1 .legend-max-label");
+
+    if (minLabel) {
+      minLabel.textContent = legendCompact[layerKey].min;
+    }
+    if (maxLabel) {
+      maxLabel.textContent = legendCompact[layerKey].max;
+    }
   }
 
   updateLegendBarWidths();
@@ -765,12 +789,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const slider = document.getElementById("slider1");
   const speedBtn = document.getElementById("speedControlButton");
 
+  // NEW: wrapper refs for correct show/hide after DOM change
+  const playControl = playBtn ? playBtn.closest(".control-item") : null;
+  const pauseControl =
+    document.getElementById("pauseControl") ||
+    (pauseBtn ? pauseBtn.closest(".control-item") : null);
+
   try {
     window.lucide?.createIcons();
   } catch { }
   initDragResize();
 
-  if (speedBtn) speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
+  if (speedBtn) speedBtn.textContent = "Speed " + speedLevels[currentSpeedIndex] + "x";
 
   function playAnimation() {
     interval = setInterval(() => {
@@ -790,11 +820,17 @@ document.addEventListener("DOMContentLoaded", function () {
       window.isTemporalAnimating = true; // <-- ADD THIS LINE
       clearInterval(interval);
       playAnimation();
-      playBtn.style.display = "none";
-      if (pauseBtn) pauseBtn.style.display = "inline-block";
+      // Hide PLAY wrapper + show PAUSE wrapper (so label switches too)
+      if (playControl) playControl.style.display = "none";
+      else playBtn.style.display = "none";
+
+      if (pauseControl) pauseControl.style.display = "";
+      else if (pauseBtn) pauseBtn.style.display = "";
+
       try {
         window.lucide?.createIcons();
       } catch { }
+
     });
   }
   if (pauseBtn) {
@@ -803,11 +839,17 @@ document.addEventListener("DOMContentLoaded", function () {
       isPlaying = false;
       window.isTemporalAnimating = false; // <-- ADD THIS LINE
       clearInterval(interval);
-      if (playBtn) playBtn.style.display = "inline-block";
-      pauseBtn.style.display = "none";
+      // Show PLAY wrapper + hide PAUSE wrapper (so label switches too)
+      if (playControl) playControl.style.display = "";
+      else if (playBtn) playBtn.style.display = "";
+
+      if (pauseControl) pauseControl.style.display = "none";
+      else pauseBtn.style.display = "none";
+
       try {
         window.lucide?.createIcons();
       } catch { }
+
     });
   }
   if (slider) {
@@ -822,7 +864,7 @@ document.addEventListener("DOMContentLoaded", function () {
     speedBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
       currentSpeedIndex = (currentSpeedIndex + 1) % speedLevels.length;
-      speedBtn.textContent = speedLevels[currentSpeedIndex] + "x";
+      speedBtn.textContent = "Speed " + speedLevels[currentSpeedIndex] + "x";
       if (isPlaying) {
         clearInterval(interval);
         playAnimation();
@@ -847,8 +889,11 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!root || !controls || !pop) return;
     const controlsRect = controls.getBoundingClientRect();
     const rootRect = root.getBoundingClientRect();
-    const left = controlsRect.right - rootRect.left + 8; // 8px gap
-    const top = controlsRect.top - rootRect.top + 4;
+
+    // Position below the controls row
+    const left = controlsRect.left - rootRect.left;
+    const top = controlsRect.bottom - rootRect.top + 8; // 8px gap below controls
+
     pop.style.left = `${left}px`;
     pop.style.top = `${top}px`;
   }
