@@ -1109,6 +1109,7 @@ class WAQIgeojson(View):
                         forced_out.append(waqi_feat)
 
         return forced_out
+    
 # OIl SLicks 
 class SlickPlusGeojsonApi(View):
     def get(self, request, *args, **kwargs):

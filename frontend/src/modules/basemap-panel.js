@@ -18,13 +18,13 @@ export class BasemapPanel {
     #storage = window.ncop_storage;
     #mapControls;
     #basemapStyles = [
+        { id: "satellite-streets-v12", name: "Satellite", image: satelliteLogo },
         { id: "streets-v12", name: "Streets", image: streetsLogo },
+        { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
         // { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
         // { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
-        { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
-        { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
-        { id: "navigation-day-v1", name: "Day", image: lightLogo },
-        { id: "navigation-night-v1", name: "Night", image: darkLogo },
+        // { id: "navigation-day-v1", name: "Day", image: lightLogo },
+        // { id: "navigation-night-v1", name: "Night", image: darkLogo },
         // { id: "light-v11", name: "Light", image: "/static/images/basemap_images/day.webp" },
         // { id: "dark-v11", name: "Dark", image: "/static/images/basemap_images/night.webp" },
     ];
@@ -38,7 +38,7 @@ export class BasemapPanel {
         this.#map = mapInstance;
         this.#mapControls = mapControlsInstance;
         // Always default to streets-v12, no storage for basemap
-        this.#currentStyle = "streets-v12";
+        this.#currentStyle = "satellite-streets-v12";
         this.#labelsEnabled = this.#storage ? this.#storage.getLabelsState() : true;
         this.render();
         this.addEventListeners();

@@ -2169,87 +2169,32 @@ button.custom-nav-btn.terrain-active:hover {
 /* ===========================
    LAYER ATTRIBUTE POPUP
 =========================== */
+/* ===========================
+   LAYER ATTRIBUTE POPUP
+   Minimal container - inline styles handle content
+=========================== */
 .layer-attribute-popup {
     position: fixed;
     z-index: 9999;
-    background: var(--primary-bg);
-    box-shadow: 0 8px 32px var(--shadow-soft);
-    border-radius: 8px;
-    padding: 10px 15px;
-    font-size: 13px;
-    font-family: 'Inter', Arial, sans-serif;
-    border: 1px solid var(--border-dark);
-    backdrop-filter: blur(15px) saturate(180%);
-    -webkit-backdrop-filter: blur(15px) saturate(180%);
-    transition: opacity 0.2s;
+    transition: opacity 0.2s ease;
     opacity: 1;
-    display: flex;
-    flex-direction: column;
     transform: translate(-50%, -100%);
+    pointer-events: auto;
 }
 
 .layer-attribute-popup.hidden {
     display: none;
     opacity: 0;
+    pointer-events: none;
 }
 
-.layer-attribute-popup .popup-label {
-    font-weight: 700;
-    font-size: 17px;
-    margin-bottom: 10px;
-    color: var(--ndma-blue);
-    letter-spacing: 0.5px;
-    text-shadow: 0 1px 8px var(--shadow-glow-blue);
-    text-align: left;
-}
-
+/* Content container - no styling, inline styles handle it */
 .layer-attribute-popup .popup-content {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
+    position: relative;
+    /* Minimal reset only - content builds own styles inline */
 }
 
-.layer-attribute-popup .popup-attributes {
-    width: 100%;
-    border-spacing: 0;
-    background: transparent;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: hidden;
-}
-
-.layer-attribute-popup .popup-attributes-scroll {
-    max-height: 220px;
-    overflow-y: auto;
-    margin-bottom: 0;
-    background: transparent;
-}
-
-.layer-attribute-popup .popup-attributes tr {
-    border-bottom: 0.5px solid var(--glass-highlight);
-    color: var(--white);
-}
-
-.layer-attribute-popup .popup-attributes tr:last-child {
-    border-bottom: none;
-}
-
-.layer-attribute-popup .attr-key {
-    font-weight: 500;
-    color: var(--text-accent-green);
-    background: transparent;
-    padding: 7px 10px 7px 0;
-    min-width: 90px;
-    vertical-align: top;
-}
-
-.layer-attribute-popup .attr-value {
-    color: var(--white);
-    padding: 7px 0 7px 10px;
-    word-break: break-word;
-    background: transparent;
-}
-
+/* Popup arrow/pointer */
 .layer-attribute-popup::after {
     content: '';
     position: absolute;
@@ -2258,11 +2203,8 @@ button.custom-nav-btn.terrain-active:hover {
     transform: translateX(-50%);
     border-left: 12px solid transparent;
     border-right: 12px solid transparent;
-    border-top: 10px solid var(--secondary-bg);
-    backdrop-filter: blur(15px) saturate(180%);
-    -webkit-backdrop-filter: blur(15px) saturate(180%);
-    transition: opacity 0.2s;
-    opacity: 1;
+    border-top: 10px solid var(--border-light);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     pointer-events: none;
 }
 
@@ -5387,7 +5329,7 @@ button.custom-nav-btn.terrain-active:hover {
         padding: 7px 8px;
         font-size: 8px;
         border-radius: 6px;
-        background: var(--white);
+        background: none;
     }
 
     .layer-attribute-popup .popup-label {
@@ -5432,6 +5374,7 @@ button.custom-nav-btn.terrain-active:hover {
     /* spacing between rows so radius is visible */
     .layer-attribute-popup .popup-attributes tr {
         display: table-row;
+        color: var(--black);
     }
 
     /* prevent borders from sticking together */
@@ -5457,7 +5400,7 @@ button.custom-nav-btn.terrain-active:hover {
         content: '';
         position: absolute;
         left: 50%;
-        bottom: -10px;
+        bottom: -2px;
         transform: translateX(-50%);
         width: 0;
         height: 0;
@@ -5470,74 +5413,106 @@ button.custom-nav-btn.terrain-active:hover {
         pointer-events: none;
     }
 
-    /* ===========================
-       GDACS buttons (compact + single row)
-    =========================== */
-
-    .gdacs-popup .gdacs-table th,
-    .gdacs-popup .gdacs-table td {
-        border: 1px solid var(--border-blue);
-        padding: 3px;
-        text-align: start;
-    }
-
-    .gdacs-popup .gdacs-actions {
-        display: flex;
-        gap: 6px;
-        justify-content: flex-end;
-        align-items: center;
-        margin-top: 6px;
-
-        flex-wrap: nowrap;
-    }
-
-    .gdacs-popup .gdacs-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-top: 5px;
-        padding: 3px 8px;
-        /* smaller */
-        font-size: 10px;
-        /* smaller */
-        font-weight: 600;
-        line-height: 1;
-
-        min-height: 24px;
-        /* compact height */
-        white-space: nowrap;
-        /* keep text on one line */
-
-        color: #ffffff;
-        background-color: #1e5bd7;
-        border: 1px solid #1648ad;
-        border-radius: 4px;
-
-        text-decoration: none;
-        cursor: pointer;
-
-        transition: background-color 0.2s ease,
-            border-color 0.2s ease,
-            transform 0.1s ease;
-    }
-
-    .gdacs-popup .gdacs-btn-secondary {
-        background-color: #245fe0;
-        border-color: #1b4fc2;
-    }
-
-    .gdacs-popup .gdacs-btn:hover {
-        background-color: #1648ad;
-        border-color: #123c91;
-    }
-
-    .gdacs-popup .gdacs-btn[aria-disabled="true"] {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-
+        /* ===========================
+           GDACS Popup Styles (Ultra-Compact Design)
+        =========================== */
+    
+        .gdacs-popup {
+            width: 90%;
+            max-width: 250px;
+            box-sizing: border-box;
+            padding: 6px;
+        }
+    
+        .gdacs-popup .gdacs-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid var(--border-dark);
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--glass-medium);
+            margin-bottom: 6px;
+        }
+    
+        .gdacs-popup .gdacs-table th,
+        .gdacs-popup .gdacs-table td {
+            padding: 3px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--border-dark);
+            text-align: left;
+            transition: background 0.2s ease;
+        }
+    
+        .gdacs-popup .gdacs-table th {
+            width: 40%;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: var(--glass-dark);
+            border-right: 1px solid var(--border-dark);
+        }
+    
+        .gdacs-popup .gdacs-table td {
+            width: 60%;
+            color: var(--text-primary);
+            background: var(--frost-bg);
+            word-break: break-word;
+        }
+    
+        .gdacs-popup .gdacs-table tr:last-child th,
+        .gdacs-popup .gdacs-table tr:last-child td {
+            border-bottom: none;
+        }
+    
+        .gdacs-popup .gdacs-table tr:hover {
+            background: var(--hover-bg);
+        }
+    
+        .gdacs-popup .gdacs-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+    
+        .gdacs-popup .gdacs-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            font-size: 9px;
+            font-weight: 600;
+            min-height: 24px;
+            white-space: nowrap;
+            color: var(--white);
+            background: var(--btn-blue-bg);
+            border: 2px solid var(--border-blue);
+            border-radius: 16px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+    
+        .gdacs-popup .gdacs-btn-secondary {
+            background: linear-gradient(to right, rgba(70, 178, 255, 0.6), rgba(30, 144, 255, 0.7));
+            border-color: var(--border-blue);
+        }
+    
+        .gdacs-popup .gdacs-btn:hover {
+            background: var(--btn-blue-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-glow-blue);
+        }
+    
+        .gdacs-popup .gdacs-btn[aria-disabled="true"] {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
     /* ===========================
        TIME SLIDER - TABLET RESPONSIVE
     =========================== */
@@ -5621,6 +5596,7 @@ button.custom-nav-btn.terrain-active:hover {
         justify-content: start;
         gap: 5px;
     }
+
     #tempslider-controls .control-item .btn-label {
         font-size: 7px;
         color: #fff;
@@ -5672,7 +5648,7 @@ button.custom-nav-btn.terrain-active:hover {
     #opacityControlPopover .opacity-popover-value {
         font-size: 8px;
     }
-    
+
 
     /* ===========================
        NEWS MODAL
@@ -6659,7 +6635,7 @@ button.custom-nav-btn.terrain-active:hover {
     gap: 6px;
     padding: 4px;
     background: var(--secondary-bg);
-    border: 2px solid var(--border-dark);  
+    border: 2px solid var(--border-dark);
     border-radius: 6px;
     backdrop-filter: blur(10px);
     color: var(--white);
@@ -6673,7 +6649,7 @@ button.custom-nav-btn.terrain-active:hover {
     width: 230px;
     /* expanded width */
     cursor: default;
-    overflow: visible; 
+    overflow: visible;
 }
 
 .ncop-geocoder-icon {
@@ -6710,7 +6686,7 @@ button.custom-nav-btn.terrain-active:hover {
 /* ---- Scoped overrides: ONLY inside .ncop-geocoder-wrapper ---- */
 .ncop-geocoder-wrapper .mapboxgl-ctrl-geocoder {
     position: relative !important;
-        /* ✅ add */
+    /* ✅ add */
     min-width: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -6792,4 +6768,334 @@ button.custom-nav-btn.terrain-active:hover {
     border-color: var(--ndma-blue) !important;
     box-shadow: 0 0 10px var(--ndma-blue-glow);
     color: #ffffff !important;
+}
+
+/* ============================================================================
+   AQI POPUP STYLES - Professional Glassmorphic Design
+   ============================================================================ */
+
+/* Main Popup Container */
+.aqi-popup-container {
+    width: 300px;
+    box-sizing: border-box;
+    background: var(--primary-bg);
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-light);
+    border-radius: 12px;
+    padding: 16px;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    box-shadow: var(--shadow-soft);
+}
+
+/* Header Section */
+.aqi-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.aqi-popup-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+}
+
+.aqi-popup-badge {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ndma-blue);
+    padding: 4px 12px;
+    background: var(--frost-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-blue);
+}
+
+/* Information Table */
+.aqi-info-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 14px;
+    border: 2px solid var(--border-dark);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--glass-medium);
+}
+
+.aqi-info-table tr {
+    transition: background 0.2s ease;
+}
+
+.aqi-info-table tr:hover {
+    background: var(--hover-bg);
+}
+
+.aqi-info-table td {
+    padding: 10px 14px;
+    font-size: 12px;
+    vertical-align: middle;
+}
+
+.aqi-info-table td:first-child {
+    width: 40%;
+    font-weight: 700;
+    color: var(--text-secondary);
+    background: var(--glass-dark);
+    border-right: 1px solid var(--border-dark);
+}
+
+.aqi-info-table td:last-child {
+    width: 60%;
+    color: var(--text-primary);
+    background: var(--frost-bg);
+}
+
+.aqi-info-table tr:not(:last-child) td {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+/* Value Highlights */
+.aqi-value-highlight {
+    color: var(--ndma-blue);
+    font-weight: 700;
+}
+
+.aqi-timestamp {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* Action Buttons */
+.aqi-action-btn {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--btn-blue-bg);
+    color: var(--text-primary);
+    border: 2px solid var(--border-blue);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.aqi-action-btn:hover {
+    background: var(--btn-blue-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow-blue);
+}
+
+.aqi-action-btn:active {
+    transform: translateY(0);
+}
+
+.aqi-action-btn.expanded {
+    background: var(--ndma-green-opaque);
+    border-color: var(--border-green);
+}
+
+.aqi-action-btn.expanded:hover {
+    background: var(--btn-green-hover);
+    box-shadow: var(--shadow-glow-green);
+}
+
+.aqi-btn-icon {
+    transition: transform 0.3s ease;
+}
+
+.aqi-action-btn.expanded .aqi-btn-icon {
+    transform: rotate(180deg);
+}
+
+/* Station Details Section */
+.aqi-station-details {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+/* Metrics Grid */
+.aqi-metrics-section {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.aqi-metrics-section.hidden {
+    max-height: 0;
+    margin-bottom: 0;
+    opacity: 0;
+}
+
+.aqi-metrics-section.visible {
+    max-height: 200px;
+    opacity: 1;
+}
+
+.aqi-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.aqi-metric-btn {
+    box-sizing: border-box;
+    background: var(--glass-lighter);
+    color: var(--text-primary);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.aqi-metric-btn:hover {
+    background: var(--glass-highlight);
+    border-color: var(--border-blue);
+    color: var(--ndma-blue);
+    transform: translateY(-1px);
+}
+
+.aqi-metric-btn:active {
+    transform: translateY(0);
+}
+
+.aqi-metric-btn.active {
+    background: var(--ndma-blue-opaque);
+    border-color: var(--ndma-blue);
+    color: var(--white);
+    box-shadow: var(--shadow-glow-blue);
+}
+
+/* Chart Wrapper */
+.aqi-chart-wrapper {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--glass-lighter);
+    border: 2px solid var(--border-dark);
+    border-radius: 10px;
+    padding: 14px;
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.aqi-chart-wrapper.hidden {
+    max-height: 0;
+    padding: 0;
+    border-width: 0;
+    opacity: 0;
+}
+
+.aqi-chart-wrapper.visible {
+    max-height: 400px;
+    opacity: 1;
+}
+
+.aqi-chart-header {
+    margin-bottom: 10px;
+}
+
+.aqi-chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aqi-chart-timestamp {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.aqi-chart-canvas {
+    width: 100% !important;
+    height: 180px !important;
+    display: block;
+    border-radius: 6px;
+}
+
+.aqi-chart-attribution {
+    font-size: 9px;
+    margin-top: 10px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* Loading State */
+.aqi-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.aqi-loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-dark);
+    border-top-color: var(--ndma-blue);
+    border-radius: 50%;
+    animation: aqi-spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes aqi-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 400px) {
+    .aqi-popup-container {
+        width: 280px;
+        padding: 14px;
+    }
+
+    .aqi-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .aqi-chart-canvas {
+        height: 160px !important;
+    }
+}
+
+/* Accessibility */
+.aqi-action-btn:focus,
+.aqi-metric-btn:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Dark Theme Enhancements */
+@media (prefers-color-scheme: dark) {
+    .aqi-popup-container {
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
 }
