@@ -455,22 +455,26 @@ export function generateECMWFLightningLayers() {
 
   return ecmwfLight;
 }
-//--------------- LAYER definitions and additions - Air Quality Layers Start-------------------------------------------
 
+
+/***********************************************************************
+ * CAMS--Air Quality Layers Start--------------------------------------------------------------------------------------------------------
+ ***********************************************************************/
+
+// PM2.5 - Particulate Matter 2.5
 export function generatePM25Layers() {
   const pm25 = [];
 
-  Array.from({ length: 6 }, (_, index) => {
-    const id = `pm25_${index + 1}`;
-    const time = getNextNDays(index, "short");
+  Array.from({ length: 5 }, (_, index) => {
+    const id = `cams_composition_pm2p5${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm2p5&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_pm2p5&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -478,14 +482,15 @@ export function generatePM25Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     pm25.push(entry);
@@ -493,21 +498,20 @@ export function generatePM25Layers() {
 
   return pm25;
 }
-
+// PM10 - Particulate Matter 10
 export function generatePM10Layers() {
   const pm10 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `pm10_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_pm10${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_pm10&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_pm10&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -515,14 +519,15 @@ export function generatePM10Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     pm10.push(entry);
@@ -531,20 +536,20 @@ export function generatePM10Layers() {
   return pm10;
 }
 
+// NO2 - Nitrogen Dioxide at 850hPa
 export function generateNO2Layers() {
   const no2 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `no2_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_no2_850hpa${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_no2_850hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_no2_850hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -552,14 +557,15 @@ export function generateNO2Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     no2.push(entry);
@@ -568,20 +574,20 @@ export function generateNO2Layers() {
   return no2;
 }
 
+// SO2 - Sulphur Dioxide (total column)
 export function generateSO2Layers() {
   const so2 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `so2_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_so2_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_so2_850hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_so2_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -589,14 +595,15 @@ export function generateSO2Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     so2.push(entry);
@@ -605,20 +612,20 @@ export function generateSO2Layers() {
   return so2;
 }
 
+// O3 - Ozone (total column)
 export function generateO3Layers() {
   const o3 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `o3_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_o3_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_o3_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_o3_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -626,14 +633,15 @@ export function generateO3Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     o3.push(entry);
@@ -642,20 +650,20 @@ export function generateO3Layers() {
   return o3;
 }
 
+// CO - Carbon Monoxide (total column)
 export function generateCOLayers() {
   const co = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `co_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_co_totalcolumn${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_co_totalcolumn&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co_totalcolumn&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -663,14 +671,15 @@ export function generateCOLayers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     co.push(entry);
@@ -679,20 +688,20 @@ export function generateCOLayers() {
   return co;
 }
 
+// Dust AOD (DUAOD550) - Desert Dust Aerosol Optical Depth
 export function generateDustLayers() {
   const dust = [];
 
   Array.from({ length: 5 }, (_, index) => {
-    const id = `dust_${index + 1}`;
+    const id = `cams_composition_duaod550${index}`;
     const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ch4_300hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&STYLES=sh_Oranges_aod&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_duaod550&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -700,11 +709,12 @@ export function generateDustLayers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
       date: getNextNDays(index, "short"),
@@ -716,20 +726,20 @@ export function generateDustLayers() {
   return dust;
 }
 
+// CH4 - Methane at 300hPa
 export function generateCH4300Layers() {
   const ch4300 = [];
 
   Array.from({ length: 6 }, (_, index) => {
-    const id = `ch4300_${index + 1}`;
-    const time = getNextNDays(index, "short");
+    const id = `cams_composition_ch4_300hpa${index}`;
+    const time = getNextNDays(index);
 
     const entry = {
       source: {
         id,
         type: "raster",
-        tileSize: 256,
         tiles: [
-          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=false&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&LAYERS=composition_ch4_300hpa&TIME=${time}-2025T00:00:00Z`,
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ch4_300hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
         ],
       },
       layers: [
@@ -737,14 +747,15 @@ export function generateCH4300Layers() {
           id,
           type: "raster",
           source: id,
-          layout: { visibility: "none" },
           paint: {
-            "raster-opacity": 1,
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
             "raster-opacity-transition": { duration: 500 },
           },
+          layout: { visibility: "visible" },
         },
       ],
-      date: time,
+      date: getNextNDays(index, "short"),
     };
 
     ch4300.push(entry);
@@ -753,6 +764,277 @@ export function generateCH4300Layers() {
   return ch4300;
 }
 
+// SUAOD550 - Sulphate Aerosol Optical Depth at 550nm
+export function generateSUAOD550Layers() {
+  const suaod550 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_suaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_suaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    suaod550.push(entry);
+  });
+
+  return suaod550;
+}
+
+// BBAOD550 - Biomass Burning Aerosol Optical Depth at 550nm
+export function generateBBAOD550Layers() {
+  const bbaod550 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_bbaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_bbaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    bbaod550.push(entry);
+  });
+
+  return bbaod550;
+}
+
+// CO2 at 850hPa - Carbon Dioxide at 850hPa
+export function generateCO2_850hPaLayers() {
+  const co2_850hpa = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_co2_850hpa${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co2_850hpa&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    co2_850hpa.push(entry);
+  });
+
+  return co2_850hpa;
+}
+
+// CO2 Surface - Carbon Dioxide at Surface
+export function generateCO2SurfaceLayers() {
+  const co2_surface = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_co2_surface${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_co2_surface&VERSION=1.3.0&FORMAT=image/png&STYLES=sh_Spectral_r_co2_surface&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    co2_surface.push(entry);
+  });
+
+  return co2_surface;
+}
+
+// HCHO Surface - Formaldehyde at Surface
+export function generateHCHOSurfaceLayers() {
+  const hcho_surface = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_hcho_surface${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_hcho_surface&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    hcho_surface.push(entry);
+  });
+
+  return hcho_surface;
+}
+
+// SSAOD550 - Sea Salt Aerosol Optical Depth at 550nm
+export function generateSSAOD550Layers() {
+  const ssaod550 = [];
+
+  Array.from({ length: 6 }, (_, index) => {
+    const id = `cams_composition_ssaod550${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_ssaod550&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    ssaod550.push(entry);
+  });
+
+  return ssaod550;
+}
+
+// UV Index Daily Max - Maximum UV Index for the Day
+export function generateUVIndexDailyMaxLayers() {
+  const uvindex = [];
+
+  Array.from({ length: 4 }, (_, index) => {
+    const id = `cams_composition_uvindex_daily_max${index}`;
+    const time = getNextNDays(index);
+
+    const entry = {
+      source: {
+        id,
+        type: "raster",
+        tiles: [
+          `https://eccharts.ecmwf.int/wms/?token=public&SERVICE=WMS&REQUEST=GetMap&LAYERS=composition_uvindex_daily_max&VERSION=1.3.0&FORMAT=image/png&TRANSPARENT=true&WIDTH=256&HEIGHT=256&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&TIME=${time}T00:00:00Z`,
+        ],
+      },
+      layers: [
+        {
+          id,
+          type: "raster",
+          source: id,
+          paint: {
+            "raster-opacity": index === 0 ? 1 : 0,
+            "raster-fade-duration": 500,
+            "raster-opacity-transition": { duration: 500 },
+          },
+          layout: { visibility: "visible" },
+        },
+      ],
+      date: getNextNDays(index, "short"),
+    };
+
+    uvindex.push(entry);
+  });
+
+  return uvindex;
+}
+
+/***********************************************************************
+ * CAMS--Air Quality Layers End----------------------------------------------------------------------------------------------------------
+ ***********************************************************************/
+
+//------------------------------------------------------------ Air Quality Layers END-------------------------------------------
 
 // GDPS Layers
 // Relative Humidity only

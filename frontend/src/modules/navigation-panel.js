@@ -6,6 +6,8 @@
 // Single source of truth for navigation + news
 
 import { MapControls } from "./map-controls.js";
+import MapboxGeocoder from "@mapbox/mapbox-gl-geocoder";
+import "@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css";
 
 /**
  * South Asia Geographic Coordinates
@@ -165,6 +167,7 @@ export class NavigationPanel {
   // ============================================================
   #map;
   #mapControls;
+  #geocoder = null;
 
   // News-related state
   #newsSelected = {};
@@ -172,7 +175,17 @@ export class NavigationPanel {
   #scrollPaused = false;
   #includeSocialMedia = false;
   #baseUrl = window.location.origin;
+  // Globe spin (Mapbox official pattern)
+  #spinEnabled = false;
+  #userInteracting = false;
 
+  // Spin tuning (same idea as Mapbox demo)
+  #secondsPerRevolution = 100; // 🔥 faster than 120 so you can SEE it
+  #maxSpinZoom = 5;
+  #slowSpinZoom = 3;
+
+  // "first touch stops forever" rule
+  #spinStoppedByUser = false;
   /**
    * @param {mapboxgl.Map} mapInstance
    * @param {MapControls} mapControlsInstance
@@ -184,7 +197,13 @@ export class NavigationPanel {
     this.projectionPanel = projectionPanelInstance;
 
     this.render();
+    // Start globe spinning on initial load
     this.addEventListeners();
+    // Start spin automatically when style is ready (matches Mapbox example)
+    this.#map.on("style.load", () => {
+      // Optional: if you use globe + fog, keep your existing fog code elsewhere.
+      this.#startInitialGlobeSpin();
+    });
     this.setupNewsIntegration();
     this.#initializeNewsModal();
     this.#updateNewsClock();
@@ -238,6 +257,11 @@ export class NavigationPanel {
               <i data-lucide="newspaper"></i>
           </button>
 
+          <!-- ZOOM TO HOME (GLOBAL VIEW) -->
+          <button id="zoomHome" class="custom-nav-btn" title="Zoom to Global View">
+              <i data-lucide="fullscreen"></i>
+          </button>
+
           <!-- COLLAPSE/EXPAND -->
           <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
               <i data-lucide="chevron-left"></i>
@@ -247,6 +271,8 @@ export class NavigationPanel {
     `;
 
     mapContainer.appendChild(navWrapper);
+    this.#renderGeocoder(mapContainer);
+    
 
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
@@ -271,6 +297,7 @@ export class NavigationPanel {
     mapContainer.appendChild(storyModal);
     lucide.createIcons();
   }
+
 
   /**
    * Add event listeners to all navigation buttons
@@ -314,11 +341,18 @@ export class NavigationPanel {
       .getElementById("locate")
       ?.addEventListener("click", this.#handleLocate.bind(this));
 
-    // Home Extent (South Asia)
-    document
-      .getElementById("homeExtent")
-      ?.addEventListener("click", this.#handleHomeExtent.bind(this));
-
+    // =====================================================
+    // ZOOM TO HOME (GLOBAL VIEW)
+    // =====================================================
+    document.getElementById("zoomHome")?.addEventListener("click", () => {
+      map.flyTo({
+        center: [0, 0],   // Center of the globe
+        zoom: 1,          // Global zoom level
+        bearing: 0,
+        pitch: 0,
+        essential: true
+      });
+    });
     // Local News Toggle
     document
       .getElementById("localNews")
@@ -340,9 +374,59 @@ export class NavigationPanel {
     });
 
     // Spinning Globe Toggle
-    document
-      .getElementById("spinGlobe")
-      ?.addEventListener("click", this.#handleSpinGlobe.bind(this));
+    // document
+    //   .getElementById("spinGlobe")
+    //   ?.addEventListener("click", this.#handleSpinGlobe.bind(this));
+    // Spinning Globe Toggle (manual button)
+    document.getElementById("spinGlobe")?.addEventListener("click", () => {
+      // If the user already touched the map, button acts as normal toggle (optional)
+      // If you want it to NEVER spin again even via button, remove the next 3 lines.
+      if (this.#spinStoppedByUser) this.#spinStoppedByUser = false;
+
+      this.#spinEnabled = !this.#spinEnabled;
+
+      if (this.#spinEnabled) {
+        this.#updateSpinButtonUI();
+        this.#spinGlobeTick();
+      } else {
+        this.#map.stop();
+        this.#updateSpinButtonUI();
+      }
+    });
+    // Pause spinning on interaction (first touch/click stops spinning + deactivates button)
+    this.#map.on("mousedown", () => {
+      this.#userInteracting = true;
+      this.#stopGlobeSpinByUser();
+    });
+
+    this.#map.on("touchstart", () => {
+      this.#userInteracting = true;
+      this.#stopGlobeSpinByUser();
+    });
+
+    this.#map.on("wheel", () => {
+      this.#stopGlobeSpinByUser();
+    });
+
+    // Safety: if interaction ends, we WOULD resume in Mapbox demo,
+    // but your requirement is "stop on first touch" so we do nothing.
+    this.#map.on("mouseup", () => {
+      this.#userInteracting = false;
+    });
+    this.#map.on("dragend", () => {
+      this.#userInteracting = false;
+    });
+    this.#map.on("pitchend", () => {
+      this.#userInteracting = false;
+    });
+    this.#map.on("rotateend", () => {
+      this.#userInteracting = false;
+    });
+
+    // Mapbox demo loop trigger: when movement ends, attempt next spin step
+    this.#map.on("moveend", () => {
+      this.#spinGlobeTick();
+    });
 
   }
 
@@ -365,6 +449,63 @@ export class NavigationPanel {
     newsModal.style.display = "none";
     localNewsBtn?.classList.remove("active-news");
   }
+  #updateSpinButtonUI() {
+    const btn = document.getElementById("spinGlobe");
+    if (!btn) return;
+
+    if (this.#spinEnabled && !this.#spinStoppedByUser) {
+      btn.classList.add("spin-active");
+      btn.title = "Spinning Globe (auto). Touch map to stop.";
+    } else {
+      btn.classList.remove("spin-active");
+      btn.title = "Toggle Spinning Globe";
+    }
+  }
+
+  #spinGlobeTick() {
+    // Block if user already stopped it by interacting
+    if (this.#spinStoppedByUser) return;
+
+    const zoom = this.#map.getZoom();
+    if (this.#spinEnabled && !this.#userInteracting && zoom < this.#maxSpinZoom) {
+      let distancePerSecond = 360 / this.#secondsPerRevolution;
+
+      if (zoom > this.#slowSpinZoom) {
+        const zoomDif =
+          (this.#maxSpinZoom - zoom) / (this.#maxSpinZoom - this.#slowSpinZoom);
+        distancePerSecond *= zoomDif;
+      }
+
+      const center = this.#map.getCenter();
+      center.lng -= distancePerSecond;
+
+      // IMPORTANT: easeTo triggers moveend → which triggers next tick
+      this.#map.easeTo({
+        center,
+        duration: 1000,
+        easing: (n) => n,
+      });
+    }
+  }
+
+  #startInitialGlobeSpin() {
+    // Start only once, on initial load
+    if (this.#spinStoppedByUser) return;
+
+    this.#spinEnabled = true;
+    this.#updateSpinButtonUI();
+    this.#spinGlobeTick(); // kick off the moveend loop
+  }
+
+  #stopGlobeSpinByUser() {
+    if (this.#spinStoppedByUser) return;
+
+    this.#spinStoppedByUser = true;
+    this.#spinEnabled = false;
+    this.#map.stop(); // immediately cancel ongoing easeTo
+    this.#updateSpinButtonUI();
+  }
+
 
   /**
    * Handle navigation panel collapse/expand
@@ -397,6 +538,103 @@ export class NavigationPanel {
       duration: 500,
     });
   }
+  
+  #renderGeocoder(mapContainer) {
+    // Prevent duplicates
+    if (document.getElementById("ncopGeocoderWrapper")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.id = "ncopGeocoderWrapper";
+    wrapper.className = "ncop-geocoder-wrapper"; // collapsed by default (no is-open)
+
+    wrapper.innerHTML = `
+    <div class="ncop-geocoder-icon" title="Search">
+      <i data-lucide="search"></i>
+    </div>
+    <div class="ncop-geocoder-mount" id="ncopGeocoderMount"></div>
+  `;
+
+    mapContainer.appendChild(wrapper);
+
+    // Create icons
+    if (window.lucide?.createIcons) window.lucide.createIcons();
+
+    const mount = wrapper.querySelector("#ncopGeocoderMount");
+    if (!mount) return;
+
+    // Create geocoder (keep it always "not collapsed"; we manage collapsing ourselves)
+    try {
+      this.#geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+        mapboxgl,
+        marker: false,
+        flyTo: { speed: 1.2, curve: 1.2, essential: true },
+        placeholder: "Search place…",
+        collapsed: false,
+        clearAndBlurOnEsc: true,
+      });
+
+      mount.appendChild(this.#geocoder.onAdd(this.#map));
+    } catch (e) {
+      console.warn("⚠️ Geocoder failed to initialize:", e);
+      return;
+    }
+
+    // Helper: get the input inside geocoder
+    const getInput = () =>
+      wrapper.querySelector(".mapboxgl-ctrl-geocoder--input");
+
+    const open = () => {
+      wrapper.classList.add("is-open");
+      const input = getInput();
+      if (input) {
+        input.focus();
+        // optional: select existing text
+        try { input.select(); } catch (_) { }
+      }
+    };
+
+    const close = () => {
+      wrapper.classList.remove("is-open");
+      const input = getInput();
+      if (input) input.blur();
+    };
+
+    // Click icon/wrapper to open
+    wrapper.addEventListener("click", (ev) => {
+      // If already open, don't force close on internal clicks
+      if (!wrapper.classList.contains("is-open")) open();
+      ev.stopPropagation();
+    });
+
+    // Close when clicking outside
+    document.addEventListener("click", (ev) => {
+      if (!wrapper.classList.contains("is-open")) return;
+      if (!wrapper.contains(ev.target)) close();
+    });
+
+    // Close on ESC (even if suggestions open)
+    wrapper.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        close();
+        ev.stopPropagation();
+      }
+    });
+
+    // After selecting a result, optionally auto-close
+    this.#geocoder.on("result", () => {
+      close();
+    });
+
+    // Prevent map drag/zoom while interacting with the control
+    ["dblclick", "mousedown", "touchstart", "wheel"].forEach((evt) => {
+      wrapper.addEventListener(evt, (ev) => ev.stopPropagation(), {
+        passive: evt === "wheel",
+      });
+    });
+  }
+
+
 
   /**
    * Handle 3D toggle
@@ -597,20 +835,13 @@ export class NavigationPanel {
   /**
    * Handle spinning globe toggle
    */
-  #handleSpinGlobe() {
-      const spinBtn = document.getElementById("spinGlobe");
-      const isSpinning = this.#mapControls.toggleSpinGlobe();
-      
-      if (spinBtn) {
-          if (isSpinning) {
-              spinBtn.classList.add("globe-spinning");
-              spinBtn.title = "Stop Spinning Globe";
-          } else {
-              spinBtn.classList.remove("globe-spinning");
-              spinBtn.title = "Start Spinning Globe";
-          }
-      }
-  }
+  // #handleSpinGlobe() {
+  //   if (this.#isGlobeSpinning) {
+  //     this.#stopGlobeSpin();
+  //   } else {
+  //     this.#startGlobeSpin();
+  //   }
+  // }
 
   /**
    * Fetch news from Django backend

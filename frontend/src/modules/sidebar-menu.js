@@ -149,8 +149,8 @@ export class SidebarMenu {
         icon: "layers",
         customIcon: gisLayersIcon,
       },
-      weather: {
-        title: "Weather Systems",
+      weather_monitoring: {
+        title: "Weather Monitoring",
         icon: "cloud",
         customIcon: weatherSystemsIcon,
       },
@@ -164,13 +164,13 @@ export class SidebarMenu {
         icon: "wind",
         customIcon: airQualityIcon,
       },
-      "ocean/coastal": {
-        title: "Ocean & Coastal",
+      oceanography: {
+        title: "Oceanography",
         icon: "anchor",
         customIcon: oceanCoastalIcon,
       },
-      "Disaster Early Warning (DEW)": {
-        title: "Early Warning",
+      recent_hazard_events: {
+        title: "Recent Hazard Events",
         icon: "alert-triangle",
         customIcon: earlyWarningIcon,
       },
@@ -216,185 +216,301 @@ export class SidebarMenu {
     return sectionDiv;
   }
 
+
+  // #createNCOPSubcategorySection(categoryKey, subcategoryKey, subcategoryData) {
+    
+  //   const subcategoryDiv = document.createElement("div");
+  //   subcategoryDiv.className = "ncop-subcategory";
+
+  //   const subcategoryHeader = document.createElement("div");
+  //   subcategoryHeader.className = "ncop-subcategory-header";
+  //   subcategoryHeader.innerHTML = `<span>${subcategoryKey}</span><i data-lucide="chevron-right" class="subcategory-chevron"></i>`;
+    
+    
+  //   const itemsContainer = document.createElement("div");
+  //   itemsContainer.className = "ncop-items-container";
+
+  //   // --- Render items by type: toggle, temporal, dropdown, button ---
+  //   // console.log(`🔍 Rendering subcategory: ${subcategoryKey}`, subcategoryData);
+
+  //   Object.keys(subcategoryData).forEach((typeKey) => {
+  //     const items = subcategoryData[typeKey];
+  //     // console.log(`🔍 Processing type: ${typeKey}`, items);
+
+  //     // --- TOGGLE CASE ---
+  //     // JSON: { toggle: { itemKey: { label: ... }, ... } }
+  //     // HTML: label + switch
+  //     if (typeKey === "toggle") {
+  //       // console.log(`✅ Creating toggle items for ${typeKey}:`, Object.keys(items));
+  //       Object.keys(items).forEach((itemKey) => {
+  //         // console.log(`🔍 Creating toggle item: ${itemKey}`, items[itemKey]);
+  //         const toggleElement = this.#createToggleItem(
+  //           categoryKey,
+  //           subcategoryKey,
+  //           itemKey,
+  //           items[itemKey]
+  //         );
+  //         if (toggleElement) {
+  //           // console.log(`✅ Created toggle element:`, toggleElement);
+  //           itemsContainer.appendChild(toggleElement);
+  //         } else {
+  //           console.error(`❌ Failed to create toggle element for ${itemKey}`);
+  //         }
+  //       });
+  //     }
+  //     // --- TEMPORAL CASE ---
+  //     // JSON: { temporal: { itemKey: { label: ..., image: ... }, ... } }
+  //     // HTML: 2-col grid, image + label
+  //     else if (typeKey === "temporal") {
+  //       // console.log(`✅ Creating temporal items for ${typeKey}:`, Object.keys(items));
+  //       const grid = document.createElement("div");
+  //       grid.className = "ncop-grid";
+  //       Object.keys(items).forEach((itemKey) => {
+  //         // console.log(`🔍 Creating temporal item: ${itemKey}`, items[itemKey]);
+  //         const temporalElement = this.#createTemporalItem(
+  //           categoryKey,
+  //           subcategoryKey,
+  //           itemKey,
+  //           items[itemKey]
+  //         );
+  //         if (temporalElement) {
+  //           // console.log(`✅ Created temporal element:`, temporalElement);
+  //           grid.appendChild(temporalElement);
+  //         } else {
+  //           console.error(
+  //             `❌ Failed to create temporal element for ${itemKey}`
+  //           );
+  //         }
+  //       });
+  //       itemsContainer.appendChild(grid);
+  //     }
+  //     // --- DROPDOWN CASE ---            // JSON: { dropdown: { endpoint: ..., key: ..., attribute: ... } }
+  //     // HTML: async select, populated from endpoint
+  //     // Only dropdowns use endpoint/key/attribute
+  //     else if (typeKey === "dropdown") {
+  //       // console.log(`✅ Creating dropdown item for ${typeKey}:`, items);
+  //       const dropdownElement = this.#createDropdownItem(
+  //         categoryKey,
+  //         subcategoryKey,
+  //         typeKey,
+  //         items
+  //       );
+  //       if (dropdownElement) {
+  //         // console.log(`✅ Created dropdown element:`, dropdownElement);
+  //         itemsContainer.appendChild(dropdownElement);
+  //       } else {
+  //         console.error(`❌ Failed to create dropdown element for ${typeKey}`);
+  //       }
+  //     }
+  //     // --- BUTTON CASE ---
+  //     // JSON: { button: { itemKey: { label: ..., color: ..., outline: ... }, ... } }
+  //     // HTML: colored, rounded button grid
+  //     else if (typeKey === "button") {
+  //       // console.log(`✅ Creating button items for ${typeKey}:`, Object.keys(items));
+  //       const grid = document.createElement("div");
+  //       grid.className = "ncop-grid";
+  //       Object.keys(items).forEach((itemKey) => {
+  //         // console.log(`🔍 Creating button item: ${itemKey}`, items[itemKey]);
+  //         const buttonElement = this.#createButtonItem(
+  //           categoryKey,
+  //           subcategoryKey,
+  //           itemKey,
+  //           items[itemKey]
+  //         );
+  //         if (buttonElement) {
+  //           // console.log(`✅ Created button element:`, buttonElement);
+  //           grid.appendChild(buttonElement);
+  //         } else {
+  //           console.error(`❌ Failed to create button element for ${itemKey}`);
+  //         }
+  //       });
+  //       itemsContainer.appendChild(grid);
+  //     }
+  //     // --- STATIC CASE ---
+  //     // JSON: { static: { itemKey: { label: ..., image: ... }, ... } }
+  //     else if (typeKey === "static") {
+  //       // console.log(`✅ Creating static items for ${typeKey}:`, Object.keys(items));
+  //       const grid = document.createElement("div");
+  //       grid.className = "ncop-grid";
+  //       Object.keys(items).forEach((itemKey) => {
+  //         // console.log(`🔍 Creating static item: ${itemKey}`, items[itemKey]);
+  //         const staticElement = this.#createStaticItem(
+  //           categoryKey,
+  //           subcategoryKey,
+  //           itemKey,
+  //           items[itemKey]
+  //         );
+  //         if (staticElement) {
+  //           // console.log(`✅ Created static element:`, staticElement);
+  //           grid.appendChild(staticElement);
+  //         } else {
+  //           console.error(`❌ Failed to create static element for ${itemKey}`);
+  //         }
+  //       });
+  //       itemsContainer.appendChild(grid);
+  //     } else if (typeKey === "nested") {
+  //       // 🆕 NEW: Nested sub-accordions (e.g., "GDACS Alerts", "Regional Alerts")
+  //       Object.keys(items).forEach((nestedSubKey) => {
+  //         const nestedSubData = items[nestedSubKey];
+  //         const nestedElement = this.#createNestedSubSection(
+  //           categoryKey,
+  //           subcategoryKey,
+  //           nestedSubKey,
+  //           nestedSubData
+  //         );
+  //         if (nestedElement) {
+  //           itemsContainer.appendChild(nestedElement);
+  //         }
+  //       });
+  //       // Handle other item types
+  //     }
+
+  //     // --- OTHER CASES ---
+  //     // If new types are added in map-layers.js, add their logic here.
+  //     else {
+  //       console.warn(`⚠️ Unknown item type: ${typeKey}`, items);
+  //     }
+  //   });
+
+  //   subcategoryHeader.addEventListener("click", function () {
+  //     const isExpanded = this.classList.contains("expanded");
+  //     const parentContent = this.closest(".accordion-content");
+  //     const otherHeaders = parentContent?.querySelectorAll(
+  //       ".ncop-subcategory-header"
+  //     );
+
+  //     otherHeaders?.forEach((header) => {
+  //       if (header !== this) {
+  //         header.classList.remove("expanded");
+  //         header.nextElementSibling?.classList.remove("visible");
+  //       }
+  //     });
+
+  //     if (!isExpanded) {
+  //       this.classList.add("expanded");
+  //       itemsContainer.classList.add("visible");
+  //     } else {
+  //       this.classList.remove("expanded");
+  //       itemsContainer.classList.remove("visible");
+  //     }
+  //   });
+
+  //   subcategoryDiv.appendChild(subcategoryHeader);
+  //   subcategoryDiv.appendChild(itemsContainer);
+  //   return subcategoryDiv;
+  // }
   #createNCOPSubcategorySection(categoryKey, subcategoryKey, subcategoryData) {
     const subcategoryDiv = document.createElement("div");
     subcategoryDiv.className = "ncop-subcategory";
 
     const subcategoryHeader = document.createElement("div");
     subcategoryHeader.className = "ncop-subcategory-header";
-    subcategoryHeader.innerHTML = `<span>${subcategoryKey}</span><i data-lucide="chevron-right" class="subcategory-chevron"></i>`;
+
+    // ✅ Subcategory is NOT an accordion anymore — just a heading text
+    // (No chevron, no click toggle)
+    subcategoryHeader.innerHTML = `<span>${subcategoryKey}</span>`;
+
     const itemsContainer = document.createElement("div");
     itemsContainer.className = "ncop-items-container";
 
-    // --- Render items by type: toggle, temporal, dropdown, button ---
-    // console.log(`🔍 Rendering subcategory: ${subcategoryKey}`, subcategoryData);
+    // ✅ Always visible by default (no collapsing)
+    subcategoryHeader.classList.add("expanded");
+    itemsContainer.classList.add("visible");
 
+    // --- Render items by type: toggle, temporal, dropdown, button, static ---
     Object.keys(subcategoryData).forEach((typeKey) => {
       const items = subcategoryData[typeKey];
-      // console.log(`🔍 Processing type: ${typeKey}`, items);
 
       // --- TOGGLE CASE ---
-      // JSON: { toggle: { itemKey: { label: ... }, ... } }
-      // HTML: label + switch
       if (typeKey === "toggle") {
-        // console.log(`✅ Creating toggle items for ${typeKey}:`, Object.keys(items));
         Object.keys(items).forEach((itemKey) => {
-          // console.log(`🔍 Creating toggle item: ${itemKey}`, items[itemKey]);
           const toggleElement = this.#createToggleItem(
             categoryKey,
             subcategoryKey,
             itemKey,
             items[itemKey]
           );
-          if (toggleElement) {
-            // console.log(`✅ Created toggle element:`, toggleElement);
-            itemsContainer.appendChild(toggleElement);
-          } else {
-            console.error(`❌ Failed to create toggle element for ${itemKey}`);
-          }
+          if (toggleElement) itemsContainer.appendChild(toggleElement);
         });
       }
+
       // --- TEMPORAL CASE ---
-      // JSON: { temporal: { itemKey: { label: ..., image: ... }, ... } }
-      // HTML: 2-col grid, image + label
       else if (typeKey === "temporal") {
-        // console.log(`✅ Creating temporal items for ${typeKey}:`, Object.keys(items));
         const grid = document.createElement("div");
         grid.className = "ncop-grid";
+
         Object.keys(items).forEach((itemKey) => {
-          // console.log(`🔍 Creating temporal item: ${itemKey}`, items[itemKey]);
           const temporalElement = this.#createTemporalItem(
             categoryKey,
             subcategoryKey,
             itemKey,
             items[itemKey]
           );
-          if (temporalElement) {
-            // console.log(`✅ Created temporal element:`, temporalElement);
-            grid.appendChild(temporalElement);
-          } else {
-            console.error(
-              `❌ Failed to create temporal element for ${itemKey}`
-            );
-          }
+          if (temporalElement) grid.appendChild(temporalElement);
         });
+
         itemsContainer.appendChild(grid);
       }
-      // --- DROPDOWN CASE ---            // JSON: { dropdown: { endpoint: ..., key: ..., attribute: ... } }
-      // HTML: async select, populated from endpoint
-      // Only dropdowns use endpoint/key/attribute
+
+      // --- DROPDOWN CASE ---
       else if (typeKey === "dropdown") {
-        // console.log(`✅ Creating dropdown item for ${typeKey}:`, items);
         const dropdownElement = this.#createDropdownItem(
           categoryKey,
           subcategoryKey,
           typeKey,
           items
         );
-        if (dropdownElement) {
-          // console.log(`✅ Created dropdown element:`, dropdownElement);
-          itemsContainer.appendChild(dropdownElement);
-        } else {
-          console.error(`❌ Failed to create dropdown element for ${typeKey}`);
-        }
+        if (dropdownElement) itemsContainer.appendChild(dropdownElement);
       }
+
       // --- BUTTON CASE ---
-      // JSON: { button: { itemKey: { label: ..., color: ..., outline: ... }, ... } }
-      // HTML: colored, rounded button grid
       else if (typeKey === "button") {
-        // console.log(`✅ Creating button items for ${typeKey}:`, Object.keys(items));
         const grid = document.createElement("div");
         grid.className = "ncop-grid";
+
         Object.keys(items).forEach((itemKey) => {
-          // console.log(`🔍 Creating button item: ${itemKey}`, items[itemKey]);
           const buttonElement = this.#createButtonItem(
             categoryKey,
             subcategoryKey,
             itemKey,
             items[itemKey]
           );
-          if (buttonElement) {
-            // console.log(`✅ Created button element:`, buttonElement);
-            grid.appendChild(buttonElement);
-          } else {
-            console.error(`❌ Failed to create button element for ${itemKey}`);
-          }
+          if (buttonElement) grid.appendChild(buttonElement);
         });
+
         itemsContainer.appendChild(grid);
       }
+
       // --- STATIC CASE ---
-      // JSON: { static: { itemKey: { label: ..., image: ... }, ... } }
       else if (typeKey === "static") {
-        // console.log(`✅ Creating static items for ${typeKey}:`, Object.keys(items));
         const grid = document.createElement("div");
         grid.className = "ncop-grid";
+
         Object.keys(items).forEach((itemKey) => {
-          // console.log(`🔍 Creating static item: ${itemKey}`, items[itemKey]);
           const staticElement = this.#createStaticItem(
             categoryKey,
             subcategoryKey,
             itemKey,
             items[itemKey]
           );
-          if (staticElement) {
-            // console.log(`✅ Created static element:`, staticElement);
-            grid.appendChild(staticElement);
-          } else {
-            console.error(`❌ Failed to create static element for ${itemKey}`);
-          }
+          if (staticElement) grid.appendChild(staticElement);
         });
+
         itemsContainer.appendChild(grid);
-      } else if (typeKey === "nested") {
-        // 🆕 NEW: Nested sub-accordions (e.g., "GDACS Alerts", "Regional Alerts")
-        Object.keys(items).forEach((nestedSubKey) => {
-          const nestedSubData = items[nestedSubKey];
-          const nestedElement = this.#createNestedSubSection(
-            categoryKey,
-            subcategoryKey,
-            nestedSubKey,
-            nestedSubData
-          );
-          if (nestedElement) {
-            itemsContainer.appendChild(nestedElement);
-          }
-        });
-        // Handle other item types
-      }
-
-      // --- OTHER CASES ---
-      // If new types are added in map-layers.js, add their logic here.
-      else {
-        console.warn(`⚠️ Unknown item type: ${typeKey}`, items);
       }
     });
 
-    subcategoryHeader.addEventListener("click", function () {
-      const isExpanded = this.classList.contains("expanded");
-      const parentContent = this.closest(".accordion-content");
-      const otherHeaders = parentContent?.querySelectorAll(
-        ".ncop-subcategory-header"
-      );
-
-      otherHeaders?.forEach((header) => {
-        if (header !== this) {
-          header.classList.remove("expanded");
-          header.nextElementSibling?.classList.remove("visible");
-        }
-      });
-
-      if (!isExpanded) {
-        this.classList.add("expanded");
-        itemsContainer.classList.add("visible");
-      } else {
-        this.classList.remove("expanded");
-        itemsContainer.classList.remove("visible");
-      }
-    });
+    // ✅ No click handler here anymore (removes sub-accordion behavior)
 
     subcategoryDiv.appendChild(subcategoryHeader);
     subcategoryDiv.appendChild(itemsContainer);
+
     return subcategoryDiv;
   }
+
+
+
+
   /**
    * 🆕 NEW: Create nested sub-accordion sections
    * Handles sub-accordions within subcategories (e.g., "GDACS Alerts" inside "Hazard Alerts")
@@ -514,12 +630,12 @@ export class SidebarMenu {
     const itemDiv = document.createElement("div");
     itemDiv.className = "ncop-item ncop-item-toggle";
     itemDiv.innerHTML = `
-            <span class="ncop-item-label">${itemData.label}</span>
-            <label class="ncop-toggle">
-                <input type="checkbox" data-item-key="${itemKey}" ${itemKey === "global_boundaries" ? "checked" : ""}>
-                <span class="ncop-toggle-slider"></span>
-            </label>
-        `;
+        <span class="ncop-item-label">${itemData.label}</span>
+        <label class="ncop-toggle">
+          <input type="checkbox" data-item-key="${itemKey}" ${(itemKey === "global_boundaries" || itemKey === "national_boundary") ? "checked" : ""}>
+          <span class="ncop-toggle-slider"></span>
+        </label>
+      `;
 
     // Add event listener for toggle interaction
     const checkbox = itemDiv.querySelector('input[type="checkbox"]');
@@ -1046,7 +1162,7 @@ export class SidebarMenu {
         const savedState = this.#storage.getSetting(`ncop_toggle_${itemKey}`);
 
         // Force Global Boundaries ON by default (always)
-        if (itemKey === "global_boundaries") {
+        if (itemKey === "global_boundaries" || itemKey === "national_boundary") {
           toggle.checked = true;
           this.#storage.saveSetting(`ncop_toggle_${itemKey}`, true);
           toggle.dispatchEvent(new Event("change")); // calls your existing handler
@@ -1213,6 +1329,53 @@ export class SidebarMenu {
     }
   }
 
+  // #clearSearch() {
+  //   const accordionContainer = this.#accordionContainer;
+  //   if (!accordionContainer) return;
+
+  //   accordionContainer
+  //     .querySelectorAll(".accordion-item")
+  //     .forEach((accordion) => {
+  //       accordion.style.display = "block";
+
+  //       const header = accordion.querySelector(".accordion-header");
+  //       const content = accordion.querySelector(".accordion-content");
+  //       const headerTitle = header.querySelector("span");
+
+  //       this.#removeHighlight(headerTitle);
+
+  //       header.classList.remove("active");
+  //       content.classList.remove("expanded");
+
+  //       accordion
+  //         .querySelectorAll(".ncop-subcategory")
+  //         .forEach((subcategory) => {
+  //           subcategory.style.display = "block";
+
+  //           const subHeader = subcategory.querySelector(
+  //             ".ncop-subcategory-header"
+  //           );
+  //           const subHeaderTitle = subHeader?.querySelector("span");
+  //           const itemsContainer = subcategory.querySelector(
+  //             ".ncop-items-container"
+  //           );
+
+  //           this.#removeHighlight(subHeaderTitle);
+
+  //           subHeader?.classList.remove("expanded");
+  //           itemsContainer?.classList.remove("visible");
+
+  //           subcategory.querySelectorAll(".ncop-item").forEach((item) => {
+  //             item.style.display = "flex";
+  //             const label = item.querySelector(".ncop-item-label");
+  //             this.#removeHighlight(label);
+  //           });
+  //         });
+  //     });
+
+  //   this.#removeNoResultsMessage();
+  // }
+
   #clearSearch() {
     const accordionContainer = this.#accordionContainer;
     if (!accordionContainer) return;
@@ -1224,41 +1387,47 @@ export class SidebarMenu {
 
         const header = accordion.querySelector(".accordion-header");
         const content = accordion.querySelector(".accordion-content");
-        const headerTitle = header.querySelector("span");
+        const headerTitle = header?.querySelector("span");
 
         this.#removeHighlight(headerTitle);
 
-        header.classList.remove("active");
-        content.classList.remove("expanded");
+        // ✅ Keep main accordion behavior intact (collapsed by default on clear)
+        header?.classList.remove("active");
+        content?.classList.remove("expanded");
 
         accordion
           .querySelectorAll(".ncop-subcategory")
           .forEach((subcategory) => {
             subcategory.style.display = "block";
 
-            const subHeader = subcategory.querySelector(
-              ".ncop-subcategory-header"
-            );
+            const subHeader = subcategory.querySelector(".ncop-subcategory-header");
             const subHeaderTitle = subHeader?.querySelector("span");
-            const itemsContainer = subcategory.querySelector(
-              ".ncop-items-container"
-            );
+            const itemsContainer = subcategory.querySelector(".ncop-items-container");
 
             this.#removeHighlight(subHeaderTitle);
 
-            subHeader?.classList.remove("expanded");
-            itemsContainer?.classList.remove("visible");
+            // ✅ Subcategories are NOT accordions anymore: always visible
+            subHeader?.classList.add("expanded");
+            itemsContainer?.classList.add("visible");
 
+            // ✅ Reset all items under subcategory (toggle/button/static/temporal)
             subcategory.querySelectorAll(".ncop-item").forEach((item) => {
               item.style.display = "flex";
               const label = item.querySelector(".ncop-item-label");
               this.#removeHighlight(label);
+            });
+
+            // ✅ Ensure grids are shown again
+            subcategory.querySelectorAll(".ncop-grid").forEach((grid) => {
+              grid.style.display = "";
             });
           });
       });
 
     this.#removeNoResultsMessage();
   }
+
+
 
   #highlightText(element, searchTerm) {
     if (!element || !searchTerm) return;

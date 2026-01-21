@@ -4,7 +4,8 @@ class NCOPStorageManager {    constructor() {
         this.currentUser = null;        this.defaultSettings = {
             // Map Settings
             mapCenter: [74.3, 31.5], // Pakistan coordinates
-            mapZoom: 3,
+            mapProjection: "globe",
+            mapZoom: 1,
             mapBearing: 0,
             mapPitch: 0,
             labelsEnabled: true,
@@ -57,7 +58,7 @@ class NCOPStorageManager {    constructor() {
         const settings = this.getAllSettings();
         if (!settings || Object.keys(settings).length === 0) {
             this.saveAllSettings(this.defaultSettings);
-            // console.log('📝 Initialized default settings for user');
+            console.log('📝 Initialized default settings for user:', settings);
         }
     }
     

@@ -41,10 +41,34 @@ function pruneCacheMap(cacheObj, maxSize, destroyCb) {
     if (destroyCb && cacheObj[k]) {
       try {
         destroyCb(cacheObj[k]);
-      } catch (_) {}
+      } catch (_) { }
     }
     delete cacheObj[k];
   }
+}
+
+// Helper function to determine AQI status
+function getAQIStatus(aqi) {
+  const value = parseInt(aqi);
+  if (isNaN(value)) return "Unknown";
+  if (value <= 50) return "Good";
+  if (value <= 100) return "Moderate";
+  if (value <= 150) return "Unhealthy for Sensitive";
+  if (value <= 200) return "Unhealthy";
+  if (value <= 300) return "Very Unhealthy";
+  return "Hazardous";
+}
+
+// Helper to get AQI status color
+function getAQIStatusColor(aqi) {
+  const value = parseInt(aqi);
+  if (isNaN(value)) return "var(--text-secondary, rgba(255, 255, 255, 0.75))";
+  if (value <= 50) return "var(--ndma-green, #2ecc71)";
+  if (value <= 100) return "var(--ndma-blue, #46b2ff)";
+  if (value <= 150) return "#ff9800";
+  if (value <= 200) return "#ff5722";
+  if (value <= 300) return "var(--ndma-red, #ff0000)";
+  return "#8b0000";
 }
 
 async function fetchStationDetail(uid) {
@@ -268,6 +292,9 @@ function setupWaqiPopupEventHandlers() {
   document.addEventListener("click", handleWaqiPopupClick);
 }
 
+// Updated handleWaqiPopupClick function for layer-attribute-popup.js
+// Replace the existing handleWaqiPopupClick function with this version
+
 function handleWaqiPopupClick(e) {
   const toggleBtn = e.target.closest(".aqi-infograph-inline-btn");
   if (toggleBtn) {
@@ -279,9 +306,11 @@ function handleWaqiPopupClick(e) {
     const alreadyLoaded = toggleBtn.getAttribute("data-loaded") === "true";
 
     const metricsRow = document.getElementById(`aqi-inline-metrics-${popupId}`);
-    const chartWrap = document.getElementById(
-      `aqi-inline-chart-wrapper-${popupId}`
-    );
+    const chartWrap = document.getElementById(`aqi-inline-chart-wrapper-${popupId}`);
+
+    // Get the button text span (first span child)
+    const buttonTextSpan = toggleBtn.querySelector("span:first-child");
+    const buttonIconSpan = toggleBtn.querySelector("span:last-child");
 
     if (!expanded) {
       if (!alreadyLoaded) {
@@ -301,16 +330,26 @@ function handleWaqiPopupClick(e) {
         }
       }
 
-      if (metricsRow) metricsRow.style.display = "flex";
+      // Show sections
+      if (metricsRow) metricsRow.style.display = "block";
       if (chartWrap) chartWrap.style.display = "block";
 
-      toggleBtn.textContent = "Hide Station Infograph";
+      // Update button appearance for expanded state
+      if (buttonTextSpan) buttonTextSpan.textContent = "Hide Station Infograph";
+      if (buttonIconSpan) buttonIconSpan.style.transform = "rotate(180deg)";
+      toggleBtn.style.background = "var(--ndma-green-opaque, rgba(9, 106, 11, 0.75))";
+      toggleBtn.style.borderColor = "var(--border-green, rgba(9, 106, 11, 0.35))";
       toggleBtn.setAttribute("data-expanded", "true");
     } else {
+      // Hide sections
       if (metricsRow) metricsRow.style.display = "none";
       if (chartWrap) chartWrap.style.display = "none";
 
-      toggleBtn.textContent = "Show Station Infograph";
+      // Update button appearance for collapsed state
+      if (buttonTextSpan) buttonTextSpan.textContent = "Show Station Infograph";
+      if (buttonIconSpan) buttonIconSpan.style.transform = "rotate(0deg)";
+      toggleBtn.style.background = "var(--btn-blue-bg, rgba(70, 178, 255, 0.75))";
+      toggleBtn.style.borderColor = "var(--border-blue, rgba(70, 178, 255, 0.35))";
       toggleBtn.setAttribute("data-expanded", "false");
     }
   }
@@ -320,6 +359,23 @@ function handleWaqiPopupClick(e) {
     const metricKey = metricBtn.getAttribute("data-metric");
     const popupId = metricBtn.getAttribute("data-popup-id");
     if (!popupId) return;
+
+    // Remove active state from all metric buttons in this popup
+    const allMetricBtns = document.querySelectorAll(
+      `.aqi-inline-metric-btn[data-popup-id="${popupId}"]`
+    );
+    allMetricBtns.forEach((btn) => {
+      btn.style.background = "var(--glass-lighter, rgba(255, 255, 255, 0.15))";
+      btn.style.borderColor = "var(--border-dark, rgba(255, 255, 255, 0.2))";
+      btn.style.color = "var(--text-primary, rgba(255, 255, 255, 0.95))";
+      btn.style.boxShadow = "none";
+    });
+
+    // Set active state on clicked button
+    metricBtn.style.background = "var(--ndma-blue-opaque, rgba(70, 178, 255, 0.75))";
+    metricBtn.style.borderColor = "var(--ndma-blue, #46b2ff)";
+    metricBtn.style.color = "var(--white, #ffffff)";
+    metricBtn.style.boxShadow = "var(--shadow-glow-blue, 0 0 12px 2px rgba(70, 178, 255, 0.25))";
 
     let label;
     switch (metricKey) {
@@ -348,7 +404,6 @@ function handleWaqiPopupClick(e) {
     renderInlineChartForPopup(popupId, metricKey, label);
   }
 }
-
 function buildWaqiPopupContent(props) {
   const popupUID = `waqi-${props.uid}-${Math.random()
     .toString(36)
@@ -356,39 +411,651 @@ function buildWaqiPopupContent(props) {
   let stationDetailsHtml = "";
 
   if (props.uid !== undefined && props.uid !== null && props.uid >= 0) {
-    stationDetailsHtml = `<a href="https://aqicn.org/station/@${props.uid}/" target="_blank" style="font-size:12px;color:#fff;text-decoration:underline;">Station Details</a>`;
+    stationDetailsHtml = `<a href="https://aqicn.org/station/@${props.uid}/" target="_blank" style="font-size:9px;color:var(--ndma-blue,#46b2ff);text-decoration:underline;display:inline-block;margin-bottom:8px;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">View Station Details →</a>`;
   }
 
-  return `<div id="popup-airquality-${popupUID}" style="color:white;font-size:14px;line-height:1.4;max-width:240px;">
-    <div style="font-weight:bold;font-size:14px;">${props.name}</div>
-    <div style="font-size:13px;"><strong>AQI: ${props.aqi}</strong></div>
-    <div style="font-size:11px;">${props.continent || ""}</div>
-    <div style="font-size:11px;">${props.time}</div>
-    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-      <button class="aqi-infograph-inline-btn" data-waqi-uid="${
-        props.uid
-      }" data-popup-id="${popupUID}" data-expanded="false" data-loaded="false" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;font-size:11px;line-height:1.2;cursor:pointer;">Show Station Infograph</button>
+  const time_prop = new Date(props.time);
+  const time_str = time_prop.toLocaleString();
+
+  return `
+  <div style="
+    width: 240px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    background: var(--primary-bg, rgba(0, 0, 0, 0.6));
+    backdrop-filter: blur(10px);
+    border: 1.5px solid var(--border-light, rgba(255, 255, 255, 0.7));
+    border-radius: 8px;
+    padding: 8px;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary, rgba(255, 255, 255, 0.95));
+  ">
+
+    <!-- HEADER SECTION -->
+    <div style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    ">
+      <span style="
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary, rgba(255, 255, 255, 0.95));
+        letter-spacing: 0.2px;
+      ">Air Quality Index</span>
+      <span style="
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ndma-blue, #46b2ff);
+        padding: 1px 8px;
+        background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+        border-radius: 4px;
+        border: 1px solid var(--border-blue, rgba(70, 178, 255, 0.35));
+      ">${props.aqi}</span>
+    </div>
+
+    <!-- INFORMATION TABLE -->
+    <table style="
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 8px;
+      margin-bottom: 8px;
+      border: 2px solid var(--border-dark, rgba(255, 255, 255, 0.5));
+      border-radius: 5px;
+      overflow: hidden;
+      background: var(--glass-medium, rgba(0, 0, 0, 0.4));
+    ">
+      <tbody>
+        <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+          <td style="
+            width: 40%;
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            font-weight: 700;
+            color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+            background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+            border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">Status</td>
+          <td style="
+            width: 60%;
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">
+            <span style="color: ${getAQIStatusColor(props.aqi)}; font-weight: 700;">${getAQIStatus(props.aqi)}</span>
+          </td>
+        </tr>
+        <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+          <td style="
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            font-weight: 700;
+            color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+            background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+            border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">Region</td>
+          <td style="
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">${props.name || "N/A"}</td>
+        </tr>
+        <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+          <td style="
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            font-weight: 700;
+            color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+            background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+            border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">Time</td>
+          <td style="
+            padding: 6px 8px;
+            font-size: 9px;
+            vertical-align: middle;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+            border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          ">${time_str || "N/A"}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- STATION DETAILS (if available) -->
+    <div style="width: 100%; box-sizing: border-box; margin-bottom: 12px;">
       ${stationDetailsHtml}
     </div>
-    <div id="aqi-inline-metrics-${popupUID}" style="display:none;margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
-      <button class="aqi-inline-metric-btn" data-metric="pm25" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM2.5</button>
-      <button class="aqi-inline-metric-btn" data-metric="pm10" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">PM10</button>
-      <button class="aqi-inline-metric-btn" data-metric="co2" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">CO₂</button>
-      <button class="aqi-inline-metric-btn" data-metric="tvoc" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">TVOC</button>
-      <button class="aqi-inline-metric-btn" data-metric="met.t" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">Temp</button>
-      <button class="aqi-inline-metric-btn" data-metric="met.h" data-popup-id="${popupUID}" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;padding:2px 4px;font-size:10px;cursor:pointer;">RH</button>
+
+    <!-- SHOW INFOGRAPH BUTTON -->
+    <button 
+      class="aqi-infograph-inline-btn"
+      data-waqi-uid="${props.uid}"
+      data-popup-id="${popupUID}"
+      data-expanded="false"
+      data-loaded="false"
+      style="
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--btn-blue-bg, rgba(70, 178, 255, 0.75));
+        color: var(--text-primary, rgba(255, 255, 255, 0.95));
+        border: 2px solid var(--border-blue, rgba(70, 178, 255, 0.35));
+        border-radius: 45px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.3s ease;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+      "
+      onmouseover="this.style.background='var(--btn-blue-hover, linear-gradient(to right, rgba(70, 178, 255, 0.9), rgba(30, 144, 255, 0.6)))'; this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-glow-blue, 0 0 12px 2px rgba(70, 178, 255, 0.25))';"
+      onmouseout="this.style.background='var(--btn-blue-bg, rgba(70, 178, 255, 0.75))'; this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+      onmousedown="this.style.transform='translateY(0)';"
+      onmouseup="this.style.transform='translateY(-2px)';"
+    >
+      <span>Show Station Infograph</span>
+      <span style="transition: transform 0.3s ease;">▼</span>
+    </button>
+
+    <!-- METRICS SECTION (expandable) -->
+    <div 
+      id="aqi-inline-metrics-${popupUID}" 
+      style="
+        display: none;
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      "
+    >
+      <div style="
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        box-sizing: border-box;
+      ">
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="pm25" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >PM2.5</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="pm10" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >PM10</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="o3" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >O₃</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="no2" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >NO₂</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="co" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >CO</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="so2" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >SO₂</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="met.t" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >Temp</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="met.h" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >Humidity</button>
+        <button 
+          class="aqi-inline-metric-btn" 
+          data-metric="met.p" 
+          data-popup-id="${popupUID}"
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          "
+          onmouseover="this.style.background='var(--glass-highlight, rgba(255, 255, 255, 0.25))'; this.style.borderColor='var(--border-blue, rgba(70, 178, 255, 0.35))'; this.style.color='var(--ndma-blue, #46b2ff)'; this.style.transform='translateY(-1px)';"
+          onmouseout="this.style.background='var(--glass-lighter, rgba(255, 255, 255, 0.15))'; this.style.borderColor='var(--border-dark, rgba(255, 255, 255, 0.2))'; this.style.color='var(--text-primary, rgba(255, 255, 255, 0.95))'; this.style.transform='translateY(0)';"
+        >Pressure</button>
+      </div>
     </div>
-    <div id="aqi-inline-chart-wrapper-${popupUID}" style="display:none;margin-top:8px;background:#1a1a1a;border:1px solid #444;border-radius:4px;padding:6px;">
-      <div id="aqi-inline-station-name-${popupUID}" style="font-size:11px;font-weight:bold;color:#fff;"></div>
-      <div id="aqi-inline-updated-time-${popupUID}" style="font-size:10px;color:#aaa;line-height:1.2;margin-bottom:4px;"></div>
-      <canvas id="aqiInlineChart-${popupUID}" style="width:220px;height:140px;max-width:100%;"></canvas>
-      <div id="aqi-inline-attrib-${popupUID}" style="font-size:9px;color:#888;margin-top:4px;line-height:1.3;"></div>
+
+    <!-- CHART WRAPPER (expandable) -->
+    <div 
+      id="aqi-inline-chart-wrapper-${popupUID}" 
+      style="
+        display: none;
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--glass-lighter, rgba(255, 255, 255, 0.15));
+        border: 2px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+        border-radius: 10px;
+        padding: 14px;
+        backdrop-filter: blur(10px);
+        overflow: hidden;
+        transition: all 0.3s ease;
+      "
+    >
+      <div style="margin-bottom: 10px;">
+        <div 
+          id="aqi-inline-station-name-${popupUID}" 
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          "
+        ></div>
+        <div 
+          id="aqi-inline-updated-time-${popupUID}" 
+          style="
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 10px;
+            color: var(--text-muted, rgba(255, 255, 255, 0.55));
+          "
+        ></div>
+      </div>
+
+      <canvas 
+        id="aqiInlineChart-${popupUID}" 
+        style="
+          width: 100% !important;
+          height: 180px !important;
+          display: block;
+          border-radius: 6px;
+        "
+      ></canvas>
+
+      <div 
+        id="aqi-inline-attrib-${popupUID}" 
+        style="
+          width: 100%;
+          box-sizing: border-box;
+          font-size: 9px;
+          margin-top: 10px;
+          color: var(--text-muted, rgba(255, 255, 255, 0.55));
+          text-align: justify;
+        "
+      ></div>
     </div>
-  </div>`;
+
+  </div>
+`;
 }
 
 // ========== END WAQI-SPECIFIC CODE ==========
+// ========== SLICK PLUS-SPECIFIC HELPERS ==========
+function buildSlickPlusPopupContent(props) {
+  const popupId = `slick-plus-${props.id || Math.random().toString(36).substr(2, 9)}`;
 
+  // Parse timestamp
+  const slickTime = props.slick_timestamp ? new Date(props.slick_timestamp).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }) : 'N/A';
+
+  // Format numbers with 2 decimal places
+  const formatNumber = (val) => {
+    if (val === null || val === undefined) return 'N/A';
+    const num = parseFloat(val);
+    return isNaN(num) ? 'N/A' : num.toFixed(2);
+  };
+
+  const machineConfidence = formatNumber(props.machine_confidence ? props.machine_confidence * 100 : null);
+  const length = formatNumber(props.length);
+  const area = formatNumber(props.area);
+  const perimeter = formatNumber(props.perimeter);
+
+  return `
+    <div style="
+      width: 280px;
+      max-height: 400px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      background: var(--primary-bg, rgba(0, 0, 0, 0.6));
+      backdrop-filter: blur(10px);
+      border: 1.5px solid var(--border-light, rgba(255, 255, 255, 0.7));
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Inter', sans-serif;
+      color: var(--text-primary, rgba(255, 255, 255, 0.95));
+    ">
+
+      <!-- HEADER SECTION -->
+      <div style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+      ">
+        <span style="
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text-primary, rgba(255, 255, 255, 0.95));
+          letter-spacing: 0.2px;
+        ">Oil Slick Detection</span>
+        <span style="
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--ndma-blue, #46b2ff);
+          padding: 2px 8px;
+          background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+          border-radius: 4px;
+          border: 1px solid var(--border-blue, rgba(70, 178, 255, 0.35));
+        ">ID: ${props.id || 'N/A'}</span>
+      </div>
+
+      <!-- INFORMATION TABLE -->
+      <table style="
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 10px;
+        border: 2px solid var(--border-dark, rgba(255, 255, 255, 0.5));
+        border-radius: 5px;
+        overflow: hidden;
+        background: var(--glass-medium, rgba(0, 0, 0, 0.4));
+      ">
+        <tbody>
+          <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+            <td style="
+              width: 45%;
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              font-weight: 700;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+              background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+              border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">Timestamp</td>
+            <td style="
+              width: 55%;
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">${slickTime}</td>
+          </tr>
+          <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              font-weight: 700;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+              background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+              border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">Confidence</td>
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">${machineConfidence}%</td>
+          </tr>
+          <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              font-weight: 700;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+              background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+              border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">Length (m)</td>
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">${length}</td>
+          </tr>
+          <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              font-weight: 700;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+              background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+              border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">Area (m²)</td>
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">${area}</td>
+          </tr>
+          <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              font-weight: 700;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+              background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+              border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">Perimeter (m)</td>
+            <td style="
+              padding: 6px 8px;
+              font-size: 10px;
+              vertical-align: middle;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+            ">${perimeter}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- VIEW DETAILS LINK -->
+      ${props.slick_url ? `
+      <a href="${props.slick_url}" target="_blank" style="
+        font-size: 10px;
+        color: var(--ndma-blue, #46b2ff);
+        text-decoration: underline;
+        display: inline-block;
+        margin-top: 4px;
+        transition: opacity 0.2s;
+      " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+        View Full Details →
+      </a>
+      ` : ''}
+
+    </div>
+  `;
+}
+// ========== END SLICK PLUS-SPECIFIC CODE ==========
 // ========== FFD-SPECIFIC CONSTANTS & HELPERS ==========
 const ffdChartInstances = {};
 
@@ -398,44 +1065,152 @@ function buildFfdPopupContent(props) {
     .substr(2, 9)}`;
   const inflow = props.inflow_discharge !== "n/a" ? props.inflow_discharge : 0;
 
-  return `<div style="overflow-y:auto;">
-    <div style="background:black;color:white;font-weight:bold;text-align:center;padding:5px;border-radius:5px;">${props.name} - ${props.status}</div>
-    <div class="ffd-info" id="ffd-info-${popupId}">
-      <table style="width:100%;border-collapse:collapse;color:white;">
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow:</td>
-          <td style="padding:4px;">${props.outflow_discharge} cusecs</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Inflow:</td>
-          <td style="padding:4px;">${inflow} cusecs</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow Trend:</td>
-          <td style="padding:4px;">${props.outflow_trend}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Inflow Trend:</td>
-          <td style="padding:4px;">${props.inflow_trend}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Recording Time:</td>
-          <td style="padding:4px;">${props.recording_time}</td>
-        </tr>
-        <tr>
-          <td style="font-weight:bold;padding:4px;">Outflow Time:</td>
-          <td style="padding:4px;">${props.outflow_time}</td>
-        </tr>
-      </table>
-    </div>
-    <button class="show-ffd-graph" data-popup-id="${popupId}" style="background:#0074D9;color:white;border:none;padding:5px 10px;margin-top:5px;border-radius:20px;display:flex;align-items:center;cursor:pointer;font-size:12px;">Show Graph</button>
-    <div class="ffd-chart-container" id="ffd-chart-container-${popupId}" style="display:none;text-align:center;opacity:0;transition:opacity 0.5s ease-in-out;">
-      <canvas id="ffd-chart-canvas-${popupId}" style="width:230px;height:150px;"></canvas>
-      <div class="chart-legend" style="color:white;font-weight:bold;margin-top:5px;font-size:11px;">
-        <span>Outflow: ${props.outflow_discharge} cusecs (${props.outflow_trend})</span> | <span>Inflow: ${inflow} cusecs (${props.inflow_trend})</span>
+  return `
+    <div style="
+      overflow-y:auto;
+      width:100%;
+      max-width:260px;
+      background:#ffffff;
+      border:1px solid #1e88e5;
+      border-radius:8px;
+      padding:8px;
+      box-sizing:border-box;
+      font-size:11px;
+      line-height:1.25;
+    ">
+
+      <!-- HEADER (blue title like image 2) -->
+      <div style="
+        width:100%;
+        box-sizing:border-box;
+        color:#1e88e5;
+        font-weight:700;
+        font-size:12px;
+        margin-bottom:6px;
+      ">
+        ${props.name} ${props.status ? `- ${props.status}` : ""}
       </div>
-    </div>
-  </div>`;
+
+      <!-- INFO TABLE (blue borders, white bg, BLACK text) -->
+      <div class="ffd-info" id="ffd-info-${popupId}" style="width:100%;box-sizing:border-box;">
+        <table style="
+          width:100%;
+          border-collapse:collapse;
+          background:#ffffff;
+          font-size:10.5px;
+          table-layout:fixed;
+        ">
+          <tr>
+            <td style="width:42%;border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Outflow
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${props.outflow_discharge} cusecs
+            </td>
+          </tr>
+
+          <tr>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Inflow
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${inflow} cusecs
+            </td>
+          </tr>
+
+          <tr>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Outflow Trend
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${props.outflow_trend}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Inflow Trend
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${props.inflow_trend}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Recording Time
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${props.recording_time}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;font-weight:700;color:#000000;vertical-align:top;">
+              Outflow Time
+            </td>
+            <td style="border:1px solid #1e88e5;padding:6px 6px;color:#000000;vertical-align:top;word-break:break-word;">
+              ${props.outflow_time}
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- BUTTON (blue pill style like "Open Report/Open Details") -->
+      <button class="show-ffd-graph"
+        data-popup-id="${popupId}"
+        style="
+          width:100%;
+          margin-top:8px;
+          background:#1976d2;
+          color:#ffffff;
+          border:none;
+          padding:8px 16px;
+          border-radius:20px;
+          cursor:pointer;
+          font-size:11px;
+          font-weight:600;
+          box-sizing:border-box;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+        Show Graph
+      </button>
+
+      <!-- CHART WRAPPER (white bg + blue border) -->
+      <div class="ffd-chart-container"
+        id="ffd-chart-container-${popupId}"
+        style="
+          display:none;
+          width:100%;
+          margin-top:8px;
+          text-align:center;
+          opacity:0;
+          transition:opacity 0.5s ease-in-out;
+          background:#ffffff;
+          border:1px solid #1e88e5;
+          border-radius:8px;
+          padding:8px;
+          box-sizing:border-box;
+        ">
+
+        <canvas id="ffd-chart-canvas-${popupId}"
+          style="width:100% !important;height:150px;display:block;">
+        </canvas>
+
+        <div class="chart-legend" style="
+          margin-top:6px;
+          font-size:9.5px;
+          color:#000000;
+          line-height:1.2;
+          word-break:break-word;
+        ">
+          <span style="font-weight:700;">Outflow:</span> ${props.outflow_discharge} cusecs (${props.outflow_trend})
+          <span style="color:#666;"> | </span>
+          <span style="font-weight:700;">Inflow:</span> ${inflow} cusecs (${props.inflow_trend})
+        </div>
+      </div>
+
+    </div>`;
 }
 
 function createFfdChart(
@@ -583,6 +1358,111 @@ function handleFfdPopupClick(e) {
 
 // ========== END FFD-SPECIFIC CODE ==========
 
+// ========== GDACS-SPECIFIC HELPERS ==========
+function formatGdacsDate(val) {
+  if (!val) return "(empty)";
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return String(val);
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function escHtml(v) {
+  // Small escape helper to avoid accidentally injecting HTML into the popup.
+  return String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildGdacsPopupContent(props) {
+  // Safe parse helper (works if value is already an object OR a JSON string)
+  const asObject = (v) => {
+    if (!v) return null;
+    if (typeof v === "object") return v;
+    if (typeof v === "string") {
+      try { return JSON.parse(v); } catch { return null; }
+    }
+    return null;
+  };
+
+  // Only render the subset you asked for.
+  const eventType = props.eventtype ?? "";
+  const name = props.name ?? props.eventname ?? "";
+  const htmlDescription = props.htmldescription ?? props.description ?? "";
+
+  const urlObj = asObject(props.url) || {};
+  const reportUrl = urlObj.report ?? "";
+  const detailsUrl = urlObj.details ?? "";
+
+  const alertLevel = props.alertlevel ?? "";
+  const country = props.country ?? "";
+
+  // ✅ correct key name is fromdate (lowercase)
+  const fromDate = props.fromdate ?? "";
+  const toDate = props.todate ?? "";
+
+  const sevObj = asObject(props.severitydata) || {};
+  const severityText = sevObj.severitytext ?? "";
+  const severityUnit = sevObj.severityunit ?? "";
+
+  // console.log("[GDACS subset]", {
+  //   eventType, name, htmlDescription, alertLevel, country,
+  //   fromDate, toDate, severityText, severityUnit,
+  //   reportUrl, detailsUrl,
+  // });
+
+
+  const row = (k, v, isHtml = false) => {
+    const safeVal = isHtml ? v : escHtml(v);
+    return `
+      <tr>
+        <th scope="row">${escHtml(k)}</th>
+        <td>${safeVal || "(empty)"}</td>
+      </tr>
+    `;
+  };
+
+  const buttons = `
+    <div class="gdacs-actions">
+      <a class="gdacs-btn" href="${escHtml(reportUrl)}" target="_blank" rel="noopener noreferrer" ${reportUrl ? "" : 'aria-disabled="true" tabindex="-1"'
+    }>${reportUrl ? "Open Report" : "Report N/A"}</a>
+      <a class="gdacs-btn gdacs-btn-secondary" href="${escHtml(
+      detailsUrl
+    )}" target="_blank" rel="noopener noreferrer" ${detailsUrl ? "" : 'aria-disabled="true" tabindex="-1"'
+    }>${detailsUrl ? "Open Details" : "Details N/A"}</a>
+    </div>
+  `;
+
+  return `
+    <div class="gdacs-popup">
+      <table class="gdacs-table" role="table">
+        <tbody>
+          ${row("Event Type", eventType)}
+          ${row("Alert Level", alertLevel)}
+          ${row("Country", country)}
+          ${row("From", escHtml(formatGdacsDate(fromDate)), true)}
+          ${row("To", escHtml(formatGdacsDate(toDate)), true)}
+          ${row("Severity", severityText)}
+          ${row("Severity Unit", severityUnit)}
+          ${row("Description", htmlDescription)}
+        </tbody>
+      </table>
+      ${buttons}
+    </div>
+  `;
+}
+
+// ========== END GDACS-SPECIFIC HELPERS ==========
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;
@@ -642,7 +1522,7 @@ export default class LayerAttributePopup {
   #createEl() {
     const el = document.createElement("div");
     el.className = "layer-attribute-popup hidden";
-    el.innerHTML = `<div class="popup-content"><div class="popup-label"></div><div class="popup-attributes-scroll"><table class="popup-attributes"></table></div></div>`;
+    el.innerHTML = `<div class="popup-content"></div>`;
     document.body.appendChild(el);
     return el;
   }
@@ -657,65 +1537,160 @@ export default class LayerAttributePopup {
   }
 
   #setContent({ title, properties }) {
-    const labelEl = this.popupEl.querySelector(".popup-label");
-    const tableEl = this.popupEl.querySelector(".popup-attributes");
-
-    labelEl.textContent = title || "Attributes";
-    tableEl.innerHTML = "";
+    const contentDiv = this.popupEl.querySelector(".popup-content");
+    if (!contentDiv) return;
 
     const props = properties || {};
     const keys = Object.keys(props);
 
     if (keys.length === 0) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="attr-value" colspan="2" style="color: #888; font-style: italic;">No attributes found for this feature</td>`;
-      tableEl.appendChild(tr);
+      contentDiv.innerHTML = `
+        <div style="
+          width: 300px;
+          padding: 16px;
+          background: var(--primary-bg, rgba(0, 0, 0, 0.6));
+          backdrop-filter: blur(15px);
+          border: 2px solid var(--border-light, rgba(255, 255, 255, 0.7));
+          border-radius: 12px;
+          font-family: 'Inter', sans-serif;
+          color: var(--text-muted, rgba(255, 255, 255, 0.55));
+          font-style: italic;
+          text-align: center;
+        ">
+          No attributes found for this feature
+        </div>
+      `;
       return;
     }
 
-    const fragment = document.createDocumentFragment();
-
+    let tableRows = '';
     const addRows = (obj, level = 0) => {
       Object.keys(obj).forEach((key) => {
         if (HIDDEN_KEYS.has(key)) return;
 
         let val = obj[key];
 
-        // Handle null/undefined
         if (val === null || val === undefined) {
           val = "(empty)";
         }
 
-        // Try to parse JSON strings
         if (typeof val === "string") {
           try {
             const parsed = JSON.parse(val);
             if (parsed && typeof parsed === "object") val = parsed;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         const indent = level * 16;
-        const tr = document.createElement("tr");
 
         if (val && typeof val === "object" && !Array.isArray(val)) {
-          tr.innerHTML = `<td class="attr-key" style="padding-left:${indent}px">${prettyAttributeName(
-            key
-          )}</td><td class="attr-value"></td>`;
-          fragment.appendChild(tr);
+          tableRows += `
+            <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+              <td style="
+                width: 40%;
+                padding: 10px 14px;
+                padding-left: ${indent + 14}px;
+                font-size: 12px;
+                vertical-align: middle;
+                font-weight: 700;
+                color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+                background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+                border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+                border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              ">${prettyAttributeName(key)}</td>
+              <td style="
+                width: 60%;
+                padding: 10px 14px;
+                font-size: 12px;
+                vertical-align: middle;
+                color: var(--text-primary, rgba(255, 255, 255, 0.95));
+                background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+                border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              "></td>
+            </tr>
+          `;
           addRows(val, level + 1);
         } else {
           const displayVal = Array.isArray(val) ? val.join(", ") : String(val);
-          tr.innerHTML = `<td class="attr-key" style="padding-left:${indent}px">${prettyAttributeName(
-            key
-          )}</td><td class="attr-value">${displayVal}</td>`;
-          fragment.appendChild(tr);
+          tableRows += `
+            <tr style="transition: background 0.2s ease;" onmouseover="this.style.background='var(--hover-bg, rgba(255, 255, 255, 0.08))'" onmouseout="this.style.background=''">
+              <td style="
+                width: 40%;
+                padding: 10px 14px;
+                padding-left: ${indent + 14}px;
+                font-size: 12px;
+                vertical-align: middle;
+                font-weight: 700;
+                color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+                background: var(--glass-dark, rgba(0, 0, 0, 0.6));
+                border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+                border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+              ">${prettyAttributeName(key)}</td>
+              <td style="
+                width: 60%;
+                padding: 10px 14px;
+                font-size: 12px;
+                vertical-align: middle;
+                color: var(--text-primary, rgba(255, 255, 255, 0.95));
+                background: var(--frost-bg, rgba(255, 255, 255, 0.12));
+                border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+                word-break: break-word;
+              ">${displayVal}</td>
+            </tr>
+          `;
         }
       });
     };
 
     addRows(props);
-    tableEl.appendChild(fragment);
+
+    tableRows = tableRows.replace(/border-bottom: 1px solid[^"]*";(?=[^<]*<\/td>[^<]*<\/tr>\s*$)/, '');
+
+    contentDiv.innerHTML = `
+      <div style="
+        width: 300px;
+        box-sizing: border-box;
+        background: var(--primary-bg, rgba(0, 0, 0, 0.6));
+        backdrop-filter: blur(15px);
+        border: 2px solid var(--border-light, rgba(255, 255, 255, 0.7));
+        border-radius: 12px;
+        padding: 16px;
+        font-family: 'Inter', sans-serif;
+        color: var(--text-primary, rgba(255, 255, 255, 0.95));
+        box-shadow: var(--shadow-soft, 0 8px 16px rgba(0, 0, 0, 0.25));
+      ">
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 14px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+        ">
+          <span style="
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            letter-spacing: 0.3px;
+          ">${title || "Feature Attributes"}</span>
+        </div>
+        <table style="
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+          border: 2px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+          border-radius: 10px;
+          overflow: hidden;
+          background: var(--glass-medium, rgba(0, 0, 0, 0.4));
+        ">
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
+
 
   // Basic indexing from config only; respects popup:true strictly
   #indexPopupEligible() {
@@ -1132,6 +2107,9 @@ export default class LayerAttributePopup {
   #bindEvents() {
     // Enhanced click handler
     this.map.on("click", async (e) => {
+      // Reset any special styling from previous popups
+      this.popupEl.classList.remove("gdacs-light");
+
       this.#refreshDynamicExposureLookups();
 
       const features = this.#queryFeaturesAtPoint(e.point);
@@ -1164,10 +2142,10 @@ export default class LayerAttributePopup {
         const properties = { ...(eligible.properties || {}) };
         const waqiHtml = buildWaqiPopupContent(properties);
 
-        const tableEl = this.popupEl.querySelector(".popup-attributes");
-        const labelEl = this.popupEl.querySelector(".popup-label");
-        labelEl.textContent = properties.name || "WAQI Station";
-        tableEl.innerHTML = waqiHtml;
+        const contentDiv = this.popupEl.querySelector(".popup-content");
+        if (contentDiv) {
+          contentDiv.innerHTML = waqiHtml;
+        }
 
         this.#show();
         this.#updatePosition();
@@ -1181,10 +2159,10 @@ export default class LayerAttributePopup {
         const properties = { ...(eligible.properties || {}) };
         const ffdHtml = buildFfdPopupContent(properties);
 
-        const tableEl = this.popupEl.querySelector(".popup-attributes");
-        const labelEl = this.popupEl.querySelector(".popup-label");
-        labelEl.textContent = properties.name || "FFD Station";
-        tableEl.innerHTML = ffdHtml;
+        const contentDiv = this.popupEl.querySelector(".popup-content");
+        if (contentDiv) {
+          contentDiv.innerHTML = ffdHtml;
+        }
 
         this.#show();
         this.#updatePosition();
@@ -1192,21 +2170,72 @@ export default class LayerAttributePopup {
         setupFfdPopupEventHandlers();
         return;
       }
+      // SPECIAL HANDLING FOR SLICK_PLUS LAYER
+      if (
+        layerId?.includes("slick_plus") ||
+        layerId?.includes("slick-plus") ||
+        sourceId?.includes("slick_plus")
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const slickPlusHtml = buildSlickPlusPopupContent(properties);
+
+        const contentDiv = this.popupEl.querySelector(".popup-content");
+        if (contentDiv) {
+          contentDiv.innerHTML = slickPlusHtml;
+        }
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        return;
+      }
 
       // GDACS SUPPORT
       if (this.#isGDACSLayer(layerId, sourceId)) {
         const properties = { ...(eligible.properties || {}) };
-        const alertType = this.#getGDACSAlertType(layerId, sourceId);
-        const eventName =
-          properties.eventname || properties.name || "GDACS Event";
-        const alertLevel = properties.alertlevel || "Unknown";
 
-        let title = `${alertType}: ${eventName}`;
-        if (alertLevel !== "Unknown") {
-          title += ` (${alertLevel})`;
+        const alertType = this.#getGDACSAlertType(layerId, sourceId);
+        const eventName = properties.Name || properties.eventname || properties.name || "GDACS Event";
+
+        const gdacsHtml = buildGdacsPopupContent(properties);
+
+        const contentDiv = this.popupEl.querySelector(".popup-content");
+        if (contentDiv) {
+          contentDiv.innerHTML = `
+          <div style="
+            width: 250px;
+            box-sizing: border-box;
+            background: var(--primary-bg, rgba(0, 0, 0, 0.6));
+            backdrop-filter: blur(10px);
+            border: 1.5px solid var(--border-light, rgba(255, 255, 255, 0.7));
+            border-radius: 10px;
+            padding: 10px;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            box-shadow: var(--shadow-soft, 0 6px 12px rgba(0, 0, 0, 0.2));
+          ">
+            <div style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 10px;
+              padding-bottom: 8px;
+              border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.2));
+            ">
+              <span style="
+                font-size: 12px;
+                font-weight: 600;
+                color: var(--text-primary, rgba(255, 255, 255, 0.95));
+                letter-spacing: 0.3px;
+              ">${eventName}</span>
+            </div>
+            ${gdacsHtml}
+          </div>
+        `;
         }
 
-        this.#setContent({ title, properties });
+        this.popupEl.classList.remove("gdacs-light");
+
         this.#show();
         this.#updatePosition();
         this.#attachMoveListeners();
