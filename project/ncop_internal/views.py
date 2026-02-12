@@ -658,6 +658,7 @@ class WeatherDataPMDFFDView(View):
         return JsonResponse(geojson)
     
 #WAQI LOCAL PAKISTAN STATION SMOG VIEW
+#WAQI LOCAL PAKISTAN STATION SMOG VIEW WITH REGION FILTERING
 
 class WAQIgeojson(View):
     MAX_WORKERS = 8
@@ -667,70 +668,26 @@ class WAQIgeojson(View):
     AIRNET_TIMEOUT = 5
 
     FORCE_UIDS = [
-        511660,
-        541396,
-        544699,
-        545356,
-        544681,
-        545149,
-        547342,
-        558319,
-        544708,
-        545395,
-        545503,
-        544966,
-        545332,
-        546253,
-        546205,
-        554545,
-        544084,
-        544297,
-        544321,
-        544111,
-        544294,
-        544291,
-        561409,
-        544114,
-        544450,
-        544315,
-        544300,
-        544288,
-        544972,
-        544720,
-        544462,
-        545143,
-        544960,
-        544678,
-        545977,
-        545968,
-        545857,
-        545347,
-        545326,
-        544087,
-        541369,
-        541762,
-        541186,
-        543349,
-        541198,
-        569905,
-        540817,
-        541213,
-        546370,
-        545734,
-        545536,
-        545302,
-        545494,
-        544723,
-        543562,
-        542482,
-        544693,
-        563377,
-        541366,
-        541363,
-        541375,
-        541180,
-        521242,
+        511660, 541396, 544699, 545356, 544681, 545149, 547342, 558319,
+        544708, 545395, 545503, 544966, 545332, 546253, 546205, 554545,
+        544084, 544297, 544321, 544111, 544294, 544291, 561409, 544114,
+        544450, 544315, 544300, 544288, 544972, 544720, 544462, 545143,
+        544960, 544678, 545977, 545968, 545857, 545347, 545326, 544087,
+        541369, 541762, 541186, 543349, 541198, 569905, 540817, 541213,
+        546370, 545734, 545536, 545302, 545494, 544723, 543562, 542482,
+        544693, 563377, 541366, 541363, 541375, 541180, 521242,
     ]
+
+    # Define region boundaries
+    REGION_BOUNDS = {
+        'asia': {'lat1': -10, 'lng1': 60, 'lat2': 55, 'lng2': 150},
+        'europe': {'lat1': 35, 'lng1': -10, 'lat2': 71, 'lng2': 50},
+        'africa': {'lat1': -35, 'lng1': -20, 'lat2': 37, 'lng2': 55},
+        'north_america': {'lat1': 15, 'lng1': -170, 'lat2': 72, 'lng2': -50},
+        'south_america': {'lat1': -56, 'lng1': -82, 'lat2': 13, 'lng2': -34},
+        'oceania': {'lat1': -50, 'lng1': 110, 'lat2': -10, 'lng2': 180},
+        'middle_east': {'lat1': 12, 'lng1': 35, 'lat2': 42, 'lng2': 65},
+    }
 
     # Global tiles covering the entire world
     # Using 15-degree chunks for reasonable API load
@@ -753,8 +710,75 @@ class WAQIgeojson(View):
         
         return tiles
 
+    @staticmethod
+    def generate_region_tiles(region_bounds, lat_step=15, lng_step=15):
+        """Generate tiles for a specific region"""
+        tiles = []
+        lat1 = region_bounds['lat1']
+        lng1 = region_bounds['lng1']
+        lat2 = region_bounds['lat2']
+        lng2 = region_bounds['lng2']
+        
+        # Handle longitude wrapping (e.g., -170 to -50 in North America)
+        lat = lat1
+        while lat < lat2:
+            lng = lng1
+            while True:
+                # Calculate next boundaries
+                next_lat = min(lat + lat_step, lat2)
+                next_lng = lng + lng_step
+                
+                # Wrap longitude if needed
+                if next_lng > 180:
+                    next_lng = next_lng - 360
+                
+                tiles.append({
+                    "lat1": lat,
+                    "lng1": lng,
+                    "lat2": next_lat,
+                    "lng2": min(next_lng, lng2) if lng < lng2 else next_lng
+                })
+                
+                # Move to next longitude chunk
+                lng = next_lng
+                
+                # Break if we've covered the longitude range
+                if lng1 < lng2:
+                    if lng >= lng2:
+                        break
+                else:  # Wrapping case
+                    if lng >= lng2 and lng < lng1:
+                        break
+            
+            lat += lat_step
+        
+        return tiles
+
     def get(self, request, *args, **kwargs):
-        features = self.fetch_waqi_global_data()
+        # Check for region query parameters
+        regions_param = request.GET.get('regions', None)
+        
+        if regions_param:
+            # Parse comma-separated regions
+            requested_regions = [r.strip().lower() for r in regions_param.split(',')]
+            # Validate regions
+            valid_regions = [r for r in requested_regions if r in self.REGION_BOUNDS]
+            
+            if not valid_regions:
+                # If no valid regions, return error
+                return JsonResponse(
+                    {
+                        "error": "Invalid region(s) specified",
+                        "detail": f"Available regions: {', '.join(self.REGION_BOUNDS.keys())}",
+                        "requested": regions_param
+                    },
+                    status=400
+                )
+            
+            features = self.fetch_waqi_regional_data(valid_regions)
+        else:
+            # Default behavior: fetch global data
+            features = self.fetch_waqi_global_data()
 
         if not features:
             logger.error("No WAQI data could be fetched at all.")
@@ -775,6 +799,43 @@ class WAQIgeojson(View):
 
         geojson = {"type": "FeatureCollection", "features": features}
         return JsonResponse(geojson, safe=False)
+
+    def fetch_waqi_regional_data(self, regions):
+        """Fetch WAQI data for specific regions"""
+        api_key = getattr(settings, "WAQI_API_TOKEN", "")
+        if not api_key:
+            logger.error("WAQI_API_TOKEN not configured")
+            return []
+
+        # Generate tiles for requested regions
+        chunks = []
+        for region in regions:
+            region_bounds = self.REGION_BOUNDS[region]
+            region_tiles = self.generate_region_tiles(region_bounds)
+            chunks.extend(region_tiles)
+            logger.info(f"Generated {len(region_tiles)} tiles for region: {region}")
+
+        features = []
+        seen_uids = set()
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = [executor.submit(self.fetch_chunk, api_key, bbox) for bbox in chunks]
+
+            for future in as_completed(futures):
+                try:
+                    for feat in future.result():
+                        uid = feat["properties"]["uid"]
+                        if uid not in seen_uids:
+                            seen_uids.add(uid)
+                            features.append(feat)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch one bbox: {e}")
+
+        if self.DETAIL_PER_STATION and features:
+            features = self.enrich_features(api_key, features)
+
+        logger.info(f"Fetched {len(features)} unique stations for regions: {', '.join(regions)}")
+        return features
 
     def fetch_waqi_global_data(self):
         api_key = getattr(settings, "WAQI_API_TOKEN", "")
@@ -1109,7 +1170,6 @@ class WAQIgeojson(View):
                         forced_out.append(waqi_feat)
 
         return forced_out
-    
 # OIl SLicks 
 class SlickPlusGeojsonApi(View):
     def get(self, request, *args, **kwargs):

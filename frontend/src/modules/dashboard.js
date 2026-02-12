@@ -5,6 +5,7 @@
 // --------------------------------------------------------
 
 import NCOPStorageManager from "./local-storage-manager.js"; // ensure .js extension in Vite
+import { USGSShakemapManager } from "./usgs-shakemap-manager.js";
 
 // Initialize global storage as early as possible
 window.ncop_storage = null;
@@ -85,6 +86,7 @@ class DashboardManager {
   #mapControls;
   #sourceLayerControl;
   #layerAttributePopup;
+  #usgsManager;
   #themeToggler;
 
   init() {
@@ -185,14 +187,29 @@ class DashboardManager {
     // Expose map globally (used by slider & other modules)
     window.ncop_map = this.#map;
   }
+  // Add this new method to the DashboardManager class
+  #setupUSGSLayerListener() {
+    // Listen for USGS layer checkbox changes
+    document.addEventListener("change", (e) => {
+      if (e.target.id === "usgs-earthquake-layer" && e.target.checked) {
+        // Open the modal when layer is toggled on
+        if (this.#usgsManager) {
+          this.#usgsManager.openModal();
+        }
+      }
+    });
+  }
 
   #onMapLoad() {
+    
     if (this.#storage) {
       const savedBearing = this.#storage.getSetting("mapBearing");
       const savedPitch = this.#storage.getSetting("mapPitch");
       const savedProjection = this.#storage.getSetting("mapProjection");
       const savedTerrain = this.#storage.getSetting("terrainEnabled");
       const labelsEnabled = this.#storage.getLabelsState();
+      
+      
 
       if (savedBearing !== null || savedPitch !== null) {
         this.#map.setBearing(savedBearing || 0);
@@ -214,6 +231,12 @@ class DashboardManager {
         setTimeout(() => this.#mapControls.toggleMapLabels(false), 1000);
       }
     }
+    // Initialize USGS Manager
+    this.#usgsManager = new USGSShakemapManager(this.#map);
+    window.usgsManager = this.#usgsManager;
+    
+    // Setup USGS layer toggle listener
+    this.#setupUSGSLayerListener();
   }
 
   #onMapMoveEnd() {
@@ -250,6 +273,7 @@ class DashboardManager {
       }
     }
   }
+  
 }
 
 // THEME CHANGING TOGGLER

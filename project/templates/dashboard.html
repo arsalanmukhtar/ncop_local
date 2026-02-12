@@ -278,6 +278,63 @@
             <div class="news-scroll" id="news-scroll"></div>
         </div>
     </div>
+    <!-- USGS Shakemap Modal -->
+    <div id="usgsShakemapModal" class="usgs-modal">
+        <div class="usgs-modal-content">
+            <div class="usgs-modal-header">
+                <div class="usgs-modal-title">
+                    <i data-lucide="activity"></i>
+                    <span>USGS Earthquake ShakeMaps</span>
+                </div>
+                <button class="usgs-modal-close" id="usgsModalClose" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="usgs-modal-body">
+                <div class="usgs-controls-grid">
+                    <div class="usgs-control-group">
+                        <label class="usgs-control-label" for="usgsEarthquakeSelect">
+                            <i data-lucide="map-pin"></i>
+                            Select Earthquake (Mag ≥ 5)
+                        </label>
+                        <select id="usgsEarthquakeSelect" class="usgs-control-select">
+                            <option selected disabled>Loading earthquakes...</option>
+                        </select>
+                    </div>
+                    <div class="usgs-control-group">
+                        <label class="usgs-control-label" for="usgsShakemapSelect">
+                            <i data-lucide="layers"></i>
+                            Select ShakeMap Content
+                        </label>
+                        <select id="usgsShakemapSelect" class="usgs-control-select" multiple>
+                            <option selected disabled>Select earthquake from left</option>
+                        </select>
+                    </div>
+                </div>
+    
+                <div class="usgs-shakemap-preview" id="usgsShakemapPreview">
+                    <div class="usgs-no-content">
+                        <i data-lucide="map" style="width: 48px; height: 48px; opacity: 0.3;"></i>
+                        <p>Select earthquake and shakemap content to display</p>
+                    </div>
+                    <div class="usgs-legend-container" id="usgsLegendContainer" style="display: none;">
+                        <img id="usgsLegendImage" src="" alt="ShakeMap Legend">
+                    </div>
+                </div>
+    
+                <div class="usgs-action-buttons">
+                    <button class="usgs-btn usgs-btn-primary" id="usgsLoadShakemapBtn" disabled>
+                        <i data-lucide="download"></i>
+                        Load ShakeMap on Map
+                    </button>
+                    <button class="usgs-btn usgs-btn-danger" id="usgsClearShakemapBtn" disabled>
+                        <i data-lucide="trash-2"></i>
+                        Clear ShakeMap
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
