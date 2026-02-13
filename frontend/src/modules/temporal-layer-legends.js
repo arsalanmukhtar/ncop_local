@@ -114,6 +114,23 @@ export const legends = {
     ],
     ["0", "5", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]
   ),
+  relative_humidity_2m_above_ground: gradientLegendBar(
+    [
+      "#FFFFFF",
+      "#0010CC",
+      "#0031FE",
+      "#00B3FE",
+      "#28FDD4",
+      "#90FD6D",
+      "#F6FE05",
+      "#FEA300",
+      "#FE3B00",
+      "#DC0000",
+      "#B10000",
+      "#830000",
+    ],
+    ["0", "5", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]
+  ),
   gdpsSpecificHum: gradientLegendBar(
     ["#001AB4", "#1AA3E3", "#B4FE4B", "#FE7201", "#AD1300"],
     ["Very Low", "Low", "Moderate", "High", "Very High"]
