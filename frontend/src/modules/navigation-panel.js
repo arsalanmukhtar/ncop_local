@@ -8,6 +8,7 @@
 import { MapControls } from "./map-controls.js";
 import MapboxGeocoder from "@mapbox/mapbox-gl-geocoder";
 import "@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css";
+import { SatelliteTracker } from "./satellite-tracker.js";
 
 /**
  * South Asia Geographic Coordinates
@@ -186,6 +187,9 @@ export class NavigationPanel {
 
   // "first touch stops forever" rule
   #spinStoppedByUser = false;
+
+  // Satellite tracker instance
+  #satelliteTracker = null;
   /**
    * @param {mapboxgl.Map} mapInstance
    * @param {MapControls} mapControlsInstance
@@ -227,7 +231,12 @@ export class NavigationPanel {
 
     navWrapper.innerHTML = `
       <div class="custom-nav-control" id="navControlsContainer">
-          
+
+          <!-- COLLAPSE/EXPAND (top — panel opens downward) -->
+          <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
+              <i data-lucide="chevron-up"></i>
+          </button>
+
           <!-- ZOOM CONTROLS -->
           <button id="zoomIn" class="custom-nav-btn" title="Zoom In">
               <i data-lucide="plus"></i>
@@ -236,12 +245,12 @@ export class NavigationPanel {
           <button id="zoomOut" class="custom-nav-btn" title="Zoom Out">
               <i data-lucide="minus"></i>
           </button>
-          
+
           <!-- 3D TOGGLE -->
           <button id="toggle3D" class="custom-nav-btn" title="Switch to 3D View (2D Mode)">
               <span class="nav-text">3D</span>
           </button>
-          
+
           <!-- PROJECTION SWITCH -->
           <button id="projectionSwitch" class="custom-nav-btn" title="Map Projections">
               <i data-lucide="earth"></i>
@@ -251,7 +260,7 @@ export class NavigationPanel {
           <button id="spinGlobe" class="custom-nav-btn" title="Toggle Spinning Globe">
               <i data-lucide="rotate-3d"></i>
           </button>
-          
+
           <!-- LOCAL NEWS TOGGLE -->
           <button id="localNews" class="custom-nav-btn" title="Toggle Local News Panel">
               <i data-lucide="newspaper"></i>
@@ -262,9 +271,9 @@ export class NavigationPanel {
               <i data-lucide="fullscreen"></i>
           </button>
 
-          <!-- COLLAPSE/EXPAND -->
-          <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
-              <i data-lucide="chevron-left"></i>
+          <!-- SATELLITE TRACKER -->
+          <button id="satTrackerBtn" class="custom-nav-btn" title="Satellite Tracker">
+              <i data-lucide="satellite"></i>
           </button>
 
       </div>
@@ -272,7 +281,47 @@ export class NavigationPanel {
 
     mapContainer.appendChild(navWrapper);
     this.#renderGeocoder(mapContainer);
-    
+
+    // Satellite tracker modal
+    const satModal = document.createElement("div");
+    satModal.id = "sat-tracker-modal";
+    satModal.className = "sat-tracker-modal";
+    satModal.innerHTML = `
+      <div class="sat-modal-header">
+        <div class="sat-modal-title">
+          <span class="sat-modal-icon">🛰️</span>
+          <div>
+            <div class="sat-modal-heading">Satellite Tracker</div>
+            <div class="sat-modal-status" id="satTrackerStatus">Ready — click a load button below.</div>
+          </div>
+        </div>
+        <button id="satModalCloseBtn" class="custom-nav-btn" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="sat-modal-body">
+        <div class="sat-modal-row">
+          <button id="satLoadStationsBtn" class="sat-action-btn">
+            <i data-lucide="radio-tower"></i> ISS / Stations
+          </button>
+          <button id="satLoadEOBtn" class="sat-action-btn">
+            <i data-lucide="cloud"></i> EO / Weather
+          </button>
+        </div>
+        <div class="sat-modal-row">
+          <button id="satPauseBtn" class="sat-action-btn" disabled>
+            <i data-lucide="pause"></i> Pause
+          </button>
+          <button id="satClearTrailsBtn" class="sat-action-btn" disabled>
+            <i data-lucide="eraser"></i> Clear Trails
+          </button>
+        </div>
+        <button id="satRemoveBtn" class="sat-action-btn sat-remove-btn" disabled>
+          <i data-lucide="trash-2"></i> Remove Satellites
+        </button>
+      </div>
+    `;
+    mapContainer.appendChild(satModal);
 
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
@@ -428,6 +477,74 @@ export class NavigationPanel {
       this.#spinGlobeTick();
     });
 
+    // ── Satellite Tracker ──────────────────────────────────────────────────
+    this.#satelliteTracker = new SatelliteTracker(this.#map);
+
+    const satBtn         = document.getElementById("satTrackerBtn");
+    const satModal       = document.getElementById("sat-tracker-modal");
+    const satStatus      = document.getElementById("satTrackerStatus");
+    const satLoadStn     = document.getElementById("satLoadStationsBtn");
+    const satLoadEO      = document.getElementById("satLoadEOBtn");
+    const satPause       = document.getElementById("satPauseBtn");
+    const satClear       = document.getElementById("satClearTrailsBtn");
+    const satRemove      = document.getElementById("satRemoveBtn");
+    const satClose       = document.getElementById("satModalCloseBtn");
+
+    // Toggle modal open/close
+    satBtn?.addEventListener("click", () => {
+      if (!satModal) return;
+      const isOpen = satModal.classList.toggle("sat-modal-open");
+      satBtn.classList.toggle("active", isOpen);
+    });
+
+    satClose?.addEventListener("click", () => {
+      satModal?.classList.remove("sat-modal-open");
+      satBtn?.classList.remove("active");
+    });
+
+    const setStatus = (msg) => { if (satStatus) satStatus.textContent = msg; };
+
+    const afterLoad = (ok) => {
+      satPause.disabled  = !ok;
+      satClear.disabled  = !ok;
+      satRemove.disabled = !ok;
+      satLoadStn.disabled = false;
+      satLoadEO.disabled  = false;
+      if (ok) {
+        satPause.innerHTML = `<i data-lucide="pause"></i> Pause`;
+        if (window.lucide?.createIcons) window.lucide.createIcons();
+      }
+    };
+
+    const doLoad = async (group) => {
+      [satLoadStn, satLoadEO, satPause, satClear, satRemove].forEach(b => { if (b) b.disabled = true; });
+      await this.#satelliteTracker.init(group, setStatus);
+      const ok = this.#satelliteTracker.isActive;
+      afterLoad(ok);
+    };
+
+    satLoadStn?.addEventListener("click", () => doLoad("stations"));
+    satLoadEO?.addEventListener("click",  () => doLoad("eo"));
+
+    satPause?.addEventListener("click", () => {
+      const paused = this.#satelliteTracker.togglePause();
+      satPause.innerHTML = paused
+        ? `<i data-lucide="play"></i> Resume`
+        : `<i data-lucide="pause"></i> Pause`;
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    });
+
+    satClear?.addEventListener("click", () => {
+      this.#satelliteTracker.clearTrails();
+    });
+
+    satRemove?.addEventListener("click", () => {
+      this.#satelliteTracker.destroy(setStatus);
+      [satPause, satClear, satRemove].forEach(b => { if (b) b.disabled = true; });
+      satPause.innerHTML = `<i data-lucide="pause"></i> Pause`;
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    });
+
   }
 
   /**
@@ -522,7 +639,7 @@ export class NavigationPanel {
     if (toggleIcon) {
       toggleIcon.setAttribute(
         "data-lucide",
-        isCollapsed ? "chevron-right" : "chevron-left"
+        isCollapsed ? "chevron-down" : "chevron-up"
       );
       lucide.createIcons();
     }
