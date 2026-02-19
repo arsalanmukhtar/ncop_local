@@ -157,9 +157,18 @@ PWA_APP_START_URL = "/"
 PWA_APP_SCOPE = "/"
 PWA_APP_DEBUG = True
 
+# =============================================================================
+# PERFORMANCE OBSERVABILITY (opt-in)
+# =============================================================================
+# Set NCOP_PERF_LOGGING=true in your .env.mobile-dev (or shell) to enable
+# per-request timing logs on heavy API views (WAQI, GDELT, etc.).
+# Leave False in normal use to keep logs clean.
+NCOP_PERF_LOGGING = env.bool("NCOP_PERF_LOGGING", default=False)
+
 print("✅ NCOP Mobile App Development Mode")
 print(f"   Debug: {DEBUG}")
 print(f"   Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"   Vite Dev Mode: {DJANGO_VITE['default']['dev_mode']}")
 print(f"   Static URL: {STATIC_URL}")
+print(f"   Perf Logging: {NCOP_PERF_LOGGING}")
 print("   Auto-login: Disabled")

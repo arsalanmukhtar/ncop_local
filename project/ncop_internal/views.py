@@ -661,7 +661,11 @@ class WeatherDataPMDFFDView(View):
 #WAQI LOCAL PAKISTAN STATION SMOG VIEW WITH REGION FILTERING
 
 class WAQIgeojson(View):
-    MAX_WORKERS = 8
+    # CRASH FIX: reduced from 8 → 4 workers.
+    # 8 workers × multiple concurrent region requests = up to 96 simultaneous HTTPS
+    # connections, exhausting file descriptors and VM memory on the dev machine.
+    # 4 workers still fetches all tiles in parallel but uses half the peak connections.
+    MAX_WORKERS = 4
     REQUEST_TIMEOUT = 5
     DETAIL_PER_STATION = False
     STATION_DETAIL_TIMEOUT = 4
@@ -755,15 +759,26 @@ class WAQIgeojson(View):
         return tiles
 
     def get(self, request, *args, **kwargs):
-        # Check for region query parameters
+        # PERF: Cache WAQI responses to avoid spawning hundreds of upstream API
+        # calls on every request. Each regional fetch fires ~30 concurrent HTTP
+        # requests; caching for 5 min drops that to zero for repeated hits.
         regions_param = request.GET.get('regions', None)
-        
+        _perf = getattr(settings, 'NCOP_PERF_LOGGING', False)
+        _t0 = time.time() if _perf else None
+
+        cache_key = f"waqi_geojson:{regions_param or '__global__'}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            if _perf:
+                logger.info(f"[PERF] WAQIgeojson cache HIT key={cache_key} ({time.time()-_t0:.3f}s)")
+            return JsonResponse(cached, safe=False)
+
         if regions_param:
             # Parse comma-separated regions
             requested_regions = [r.strip().lower() for r in regions_param.split(',')]
             # Validate regions
             valid_regions = [r for r in requested_regions if r in self.REGION_BOUNDS]
-            
+
             if not valid_regions:
                 # If no valid regions, return error
                 return JsonResponse(
@@ -774,7 +789,7 @@ class WAQIgeojson(View):
                     },
                     status=400
                 )
-            
+
             features = self.fetch_waqi_regional_data(valid_regions)
         else:
             # Default behavior: fetch global data
@@ -793,11 +808,40 @@ class WAQIgeojson(View):
             )
 
         api_key = getattr(settings, "WAQI_API_TOKEN", "")
-        forced_features = self.fetch_forced_uids(api_key, features)
+
+        # CRASH FIX: Cache forced UID features independently of region.
+        # FORCE_UIDS are always the same 64 Pakistani stations — they don't
+        # change per region. Before this fix, every uncached region request
+        # (e.g. Europe) triggered 64 individual station HTTP calls on top of
+        # the tile fetches, spiking memory and connections simultaneously.
+        # Now we fetch forced UIDs once and cache them for 10 minutes.
+        forced_cache_key = "waqi_forced_uids"
+        cached_forced = cache.get(forced_cache_key)
+        if cached_forced is None:
+            # First call: fetch and cache all forced UID features (ignoring
+            # regional deduplication here; we deduplicate below when merging).
+            cached_forced = self.fetch_forced_uids(api_key, [])
+            cache.set(forced_cache_key, cached_forced, timeout=600)
+
+        # Deduplicate: skip forced stations already present in the regional data
+        present_uids = {f["properties"]["uid"] for f in features}
+        forced_features = [
+            f for f in cached_forced
+            if f["properties"]["uid"] not in present_uids
+        ]
 
         features.extend(forced_features)
 
         geojson = {"type": "FeatureCollection", "features": features}
+
+        # PERF: Store in cache for 5 minutes (300 s). Key includes region param so
+        # different regions are cached independently without cross-contamination.
+        cache.set(cache_key, geojson, timeout=300)
+        if _perf:
+            logger.info(
+                f"[PERF] WAQIgeojson MISS key={cache_key} features={len(features)} "
+                f"elapsed={time.time()-_t0:.3f}s"
+            )
         return JsonResponse(geojson, safe=False)
 
     def fetch_waqi_regional_data(self, regions):
@@ -1173,6 +1217,13 @@ class WAQIgeojson(View):
 # OIl SLicks 
 class SlickPlusGeojsonApi(View):
     def get(self, request, *args, **kwargs):
+        # PERF: Cache oil-slick data for 30 minutes. The upstream API returns
+        # data for the last 7 days; it changes slowly so a 30-min TTL is safe.
+        cache_key = "slick_plus_data"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
         # Calculate the end date as today's date with time set to 00:00:00
         end_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -1190,6 +1241,8 @@ class SlickPlusGeojsonApi(View):
         # Check if the request was successful
         if response.status_code == 200:
             data = response.json()  # Parse the JSON response
+            # PERF: Cache for 30 minutes — oil slick positions are updated infrequently
+            cache.set(cache_key, data, timeout=1800)
             return JsonResponse(data)  # Return the data as JSON
         else:
             # If the request failed, return an error message
@@ -1443,12 +1496,22 @@ def _try_fetch_geojson(url, timeout=20):
 # ---- Existing list endpoint (unchanged behavior) ----
 class GdacsEventsGeojsonApi(View):
     def get(self, request, event_slug):
+        # PERF: Cache GDACS event lists for 3 minutes. GDACS data updates every
+        # few minutes; a short TTL keeps data fresh while eliminating redundant
+        # upstream fetches when the same layer is loaded repeatedly.
+        cache_key = f"gdacs_events:{event_slug}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
         url = f"{GDACS_BASE}/events/geteventlist/MAP"
         params = {"eventtypes": event_slug}
         response_data = _safe_get_json(url, params) or {
             "type": "FeatureCollection",
             "features": [],
         }
+        # PERF: Cache for 3 minutes (180 s)
+        cache.set(cache_key, response_data, timeout=180)
         return JsonResponse(response_data)
 
 
@@ -1970,15 +2033,38 @@ class SocialMediaFetcher:
         return mastodon_posts
 
 
+# ---------------------------------------------------------------------------
+# PERF: Module-level singletons for GdeltNewsEventsApi
+#
+# Django creates a NEW view instance for every incoming request, so anything
+# placed in __init__ is constructed on EVERY request. GDELTClient opens a
+# requests.Session with custom retry/SSL adapters; SocialMediaFetcher creates
+# another session; RateLimiter holds a threading.Lock. Constructing all three
+# per-request is expensive and leaks thread resources via the old
+# ThreadPoolExecutor(max_workers=4) that was never shut down.
+#
+# By making these module-level (created once per worker process on import),
+# we pay the construction cost exactly once. The objects are stateless between
+# requests (no user-specific data), so sharing them is safe.
+# ---------------------------------------------------------------------------
+_gdelt_rate_limiter = RateLimiter(max_requests_per_minute=60)
+_gdelt_client = GDELTClient()
+_social_media_fetcher = SocialMediaFetcher()
+
+
 class GdeltNewsEventsApi(View):
     """Enhanced Django view with robust error handling and SSL fixes - PAKISTAN FOCUS ENHANCED"""
 
     def __init__(self):
         super().__init__()
-        self.rate_limiter = RateLimiter(max_requests_per_minute=60)
-        self.gdelt_client = GDELTClient()
-        self.social_media_fetcher = SocialMediaFetcher()
-        self.thread_pool = ThreadPoolExecutor(max_workers=4)
+        # PERF: Reference module-level singletons instead of constructing per request.
+        # See comment block above for rationale.
+        self.rate_limiter = _gdelt_rate_limiter
+        self.gdelt_client = _gdelt_client
+        self.social_media_fetcher = _social_media_fetcher
+        # PERF: Removed self.thread_pool = ThreadPoolExecutor(max_workers=4)
+        # That pool was never used here; all threading is done inline below with
+        # context-managed `with ThreadPoolExecutor(...)` blocks that shut down cleanly.
 
         # ENHANCED: Comprehensive Pakistan coordinate mapping
         self.coordinates = {
@@ -2512,6 +2598,24 @@ class GdeltNewsEventsApi(View):
 
     def get(self, request, *args, **kwargs):
         """Main GET endpoint with improved error handling"""
+        _perf = getattr(settings, 'NCOP_PERF_LOGGING', False)
+        _t0 = time.time() if _perf else None
+
+        # PERF: Cache full GDELT/social-media response for 10 minutes.
+        # Building the response involves: one GDELT HTTP call (with retries),
+        # up to 15 Reddit HTTP calls, plus NLP-style processing over 250 articles.
+        # Caching eliminates all of that for repeated requests with the same params.
+        # Cache key is scoped to the full query-string so different filter combos
+        # get independent entries. Max key length kept reasonable by hashing.
+        raw_qs = request.GET.urlencode()
+        qs_hash = hashlib.md5(raw_qs.encode(), usedforsecurity=False).hexdigest()[:16]
+        cache_key = f"gdelt_news:{qs_hash}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            if _perf:
+                logger.info(f"[PERF] GdeltNewsEventsApi cache HIT key={cache_key} ({time.time()-_t0:.3f}s)")
+            return JsonResponse(cached)
+
         try:
             # ENHANCED: Default query - simplified to avoid GDELT "query too long" error
             # Using OR operators only, Pakistan focus through coordinate extraction
@@ -2535,13 +2639,12 @@ class GdeltNewsEventsApi(View):
             start_date_str = start_date.strftime("%Y%m%d%H%M%S")
             end_date_str = end_date.strftime("%Y%m%d%H%M%S")
 
-            print("Starting data fetching with ENHANCED PAKISTAN FOCUS...")
+            logger.debug("Starting data fetching with ENHANCED PAKISTAN FOCUS...")
 
-            # Test GDELT connection first
-            if not include_only_social_media:
-                connection_test = self.gdelt_client.test_connection()
-                if not connection_test:
-                    print("GDELT connection test failed, will try to proceed anyway...")
+            # PERF: Removed test_connection() call that fired an extra HTTP request to
+            # GDELT on every invocation just to verify connectivity. The real fetch
+            # below already has its own retry/error handling, so the pre-flight test
+            # was redundant overhead (≈1 extra round-trip per request).
 
             # Initialize data containers
             gdelt_data = {'articles': []}
@@ -2636,6 +2739,15 @@ class GdeltNewsEventsApi(View):
                 ),
             }
 
+            # PERF: Cache the fully-built response for 10 minutes (600 s).
+            # Only cache successful responses (non-empty feature sets are preferred
+            # but we cache even empty ones to avoid hammering a down upstream).
+            cache.set(cache_key, geojson_data, timeout=600)
+            if _perf:
+                logger.info(
+                    f"[PERF] GdeltNewsEventsApi MISS key={cache_key} "
+                    f"features={len(geojson_data['features'])} elapsed={time.time()-_t0:.3f}s"
+                )
             return JsonResponse(geojson_data)
 
         except ValueError as e:
@@ -2643,7 +2755,7 @@ class GdeltNewsEventsApi(View):
                 {"error": f"Invalid parameter: {str(e)}", "status": "error"}, status=400
             )
         except Exception as e:
-            print(f"Unexpected server error: {e}")
+            logger.error(f"Unexpected server error in GdeltNewsEventsApi: {e}")
             return JsonResponse(
                 {
                     "error": "Internal server error",

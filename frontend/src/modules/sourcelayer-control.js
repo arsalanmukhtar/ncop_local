@@ -10,6 +10,69 @@ import LayerAttributePopup from "./layer-attribute-popup.js"; // <-- ENABLED
  * Manages map layers directly using Mapbox addSource and addLayer functions.
  * Reads layer configuration from map-layers.js and applies it to the map.
  */
+// ---------------------------------------------------------------------------
+// Loading overlay CSS — injected once into the document head.
+// Keeps all overlay styling co-located with its logic.
+// ---------------------------------------------------------------------------
+(function _injectLoadingOverlayCSS() {
+  if (document.getElementById("ncop-overlay-style")) return; // already injected
+  const style = document.createElement("style");
+  style.id = "ncop-overlay-style";
+  style.textContent = `
+    #ncop-layer-loading-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 4000;           /* above Mapbox controls (z-index ~300) */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 14, 20, 0.72);
+      backdrop-filter: blur(3px);
+      pointer-events: all;     /* swallow all clicks / drags / scrolls */
+      cursor: not-allowed;
+      transition: opacity 0.2s ease;
+    }
+    #ncop-layer-loading-overlay.ncop-overlay-hidden {
+      display: none;
+    }
+    .ncop-overlay-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      background: rgba(20, 26, 36, 0.96);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+    .ncop-overlay-spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: ncop-spin 0.8s linear infinite;
+    }
+    @keyframes ncop-spin { to { transform: rotate(360deg); } }
+    .ncop-overlay-title {
+      color: #e8eaf0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .ncop-overlay-sub {
+      color: rgba(200,210,230,0.65);
+      font-size: 12px;
+      text-align: center;
+      max-width: 220px;
+      line-height: 1.5;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
 export class SourceLayerControl {
   constructor(map) {
     this.map = map;
@@ -22,6 +85,9 @@ export class SourceLayerControl {
 
     // Flag to indicate if we're currently restoring layers
     this.isRestoringLayers = false;
+
+    // Counter for concurrent in-flight data loads (keeps overlay up until ALL done)
+    this._loadingCount = 0;
 
     // Listen for style changes to restore layers
     this.setupStyleChangeHandler();
@@ -207,10 +273,34 @@ export class SourceLayerControl {
   }
 
   /**
-   * Preload all sources for all layers (optimized, only once per source)
+   * Preload sources for all layers (optimized, only once per source).
+   *
+   * PERF: We now SKIP geojson sources whose `data` field is an HTTP URL.
+   * When Mapbox adds a geojson source with a URL, it fetches that URL
+   * immediately — even before any layer using that source is made visible.
+   * For sources backed by heavy Django API endpoints (WAQI, GDACS, SlickPlus,
+   * etc.) this caused all those endpoints to be hit on every style.load,
+   * spiking the server's CPU at startup.
+   *
+   * Tile-based sources (vector, raster, raster-dem) are safe to preload because
+   * Mapbox only fetches individual tiles when they enter the viewport.
+   *
+   * Geojson sources with HTTP URLs are added lazily inside addLayerByKey()
+   * the first time the user actually activates that layer.
    */
   preloadAllSources() {
     const sourcesSet = new Set();
+
+    const shouldSkip = (sourceConfig) => {
+      // PERF: skip geojson sources backed by remote URLs — they auto-fetch on addSource.
+      return (
+        sourceConfig.type === "geojson" &&
+        typeof sourceConfig.data === "string" &&
+        (sourceConfig.data.startsWith("http://") ||
+          sourceConfig.data.startsWith("https://") ||
+          sourceConfig.data.startsWith("/"))   // relative API paths also deferred
+      );
+    };
 
     for (const categoryKey in ncop_menu_items) {
       const category = ncop_menu_items[categoryKey];
@@ -238,8 +328,12 @@ export class SourceLayerControl {
                 !sourcesSet.has(config.source.id)
               ) {
                 sourcesSet.add(config.source.id);
-                this.addMapboxSource(config.source);
-                console.debug(`🔧 Preloaded source: ${config.source.id}`);
+                if (!shouldSkip(config.source)) {
+                  this.addMapboxSource(config.source);
+                  console.debug(`🔧 Preloaded source: ${config.source.id}`);
+                } else {
+                  console.debug(`⏳ Deferred (lazy) source: ${config.source.id}`);
+                }
               }
             }
           }
@@ -269,10 +363,16 @@ export class SourceLayerControl {
                     !sourcesSet.has(config.source.id)
                   ) {
                     sourcesSet.add(config.source.id);
-                    this.addMapboxSource(config.source);
-                    console.debug(
-                      `🔧 Preloaded nested source: ${config.source.id} (from ${nestedKey})`
-                    );
+                    if (!shouldSkip(config.source)) {
+                      this.addMapboxSource(config.source);
+                      console.debug(
+                        `🔧 Preloaded nested source: ${config.source.id} (from ${nestedKey})`
+                      );
+                    } else {
+                      console.debug(
+                        `⏳ Deferred (lazy) nested source: ${config.source.id} (from ${nestedKey})`
+                      );
+                    }
                   }
                 }
               }
@@ -282,7 +382,7 @@ export class SourceLayerControl {
       }
     }
 
-    console.debug(`✅ Preloaded ${sourcesSet.size} total sources`);
+    console.debug(`✅ Preloaded ${sourcesSet.size} total sources (API-backed geojson sources deferred to lazy load)`);
   }
 
   /**
@@ -312,7 +412,43 @@ export class SourceLayerControl {
     }
 
     try {
-      // Source is already preloaded, just add layers
+      // PERF: Ensure source is registered before adding layers.
+      // API-backed geojson sources are intentionally skipped in preloadAllSources()
+      // and added here on first use (lazy loading). addMapboxSource() is a no-op if
+      // the source already exists, so it is safe to call unconditionally.
+      const isLazyGeoJSON =
+        config.source.type === "geojson" &&
+        typeof config.source.data === "string" &&
+        (config.source.data.startsWith("http://") ||
+          config.source.data.startsWith("https://") ||
+          config.source.data.startsWith("/"));
+
+      if (!this.map.getSource(config.source.id)) {
+        // Show loading overlay for remote geojson sources — Mapbox will fetch
+        // them immediately after addSource(). Hide once data arrives or after
+        // a 60-second safety timeout to avoid permanently blocking the UI.
+        if (isLazyGeoJSON) {
+          this.showLoadingOverlay(config.label || layerKey);
+
+          const sourceId = config.source.id;
+          const onSourceData = (e) => {
+            if (e.sourceId === sourceId && e.isSourceLoaded) {
+              this.map.off("sourcedata", onSourceData);
+              clearTimeout(safetyTimer);
+              this.hideLoadingOverlay();
+            }
+          };
+          this.map.on("sourcedata", onSourceData);
+
+          // Safety: always release the overlay if sourcedata never fires
+          const safetyTimer = setTimeout(() => {
+            this.map.off("sourcedata", onSourceData);
+            this.hideLoadingOverlay();
+          }, 60_000);
+        }
+
+        this.addMapboxSource(config.source);
+      }
       const layerIds = this.addMapboxLayers(config.layers, config.source.id);
       if (layerIds.length === 0) {
         return false;
@@ -993,5 +1129,86 @@ export class SourceLayerControl {
     el.style.right = "32px";
     el.style.zIndex = "9999";
     el.style.maxWidth = "340px";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Loading Overlay — shown while a remote geojson source is being fetched.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Show the loading overlay and disable map interactions.
+   * Increments an internal counter so multiple concurrent loads are handled
+   * correctly — the overlay stays visible until ALL loads have finished.
+   *
+   * @param {string} [message] — Optional label shown below the spinner
+   */
+  showLoadingOverlay(message = "") {
+    this._loadingCount++;
+
+    // Create the overlay element once; reuse on subsequent calls.
+    let overlay = document.getElementById("ncop-layer-loading-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "ncop-layer-loading-overlay";
+      overlay.innerHTML = `
+        <div class="ncop-overlay-card">
+          <div class="ncop-overlay-spinner"></div>
+          <div class="ncop-overlay-title">Loading Data…</div>
+          <div class="ncop-overlay-sub" id="ncop-overlay-msg"></div>
+        </div>
+      `;
+      // Append inside the map container so absolute positioning works.
+      this.map.getContainer().appendChild(overlay);
+    }
+
+    const msgEl = overlay.querySelector("#ncop-overlay-msg");
+    if (msgEl) msgEl.textContent = message;
+
+    overlay.classList.remove("ncop-overlay-hidden");
+    this._disableMapInteractions();
+  }
+
+  /**
+   * Decrement the loading counter and hide the overlay once it reaches zero.
+   * Re-enables map interactions when the overlay is dismissed.
+   */
+  hideLoadingOverlay() {
+    this._loadingCount = Math.max(0, this._loadingCount - 1);
+    if (this._loadingCount > 0) return; // other layers still loading
+
+    const overlay = document.getElementById("ncop-layer-loading-overlay");
+    if (overlay) overlay.classList.add("ncop-overlay-hidden");
+
+    this._enableMapInteractions();
+  }
+
+  /** Disable all interactive handlers on the map. */
+  _disableMapInteractions() {
+    try {
+      this.map.dragPan.disable();
+      this.map.scrollZoom.disable();
+      this.map.boxZoom.disable();
+      this.map.dragRotate.disable();
+      this.map.keyboard.disable();
+      this.map.doubleClickZoom.disable();
+      this.map.touchZoomRotate.disable();
+    } catch (_) {
+      // Handlers may not exist in all Mapbox versions; safe to ignore.
+    }
+  }
+
+  /** Re-enable all interactive handlers on the map. */
+  _enableMapInteractions() {
+    try {
+      this.map.dragPan.enable();
+      this.map.scrollZoom.enable();
+      this.map.boxZoom.enable();
+      this.map.dragRotate.enable();
+      this.map.keyboard.enable();
+      this.map.doubleClickZoom.enable();
+      this.map.touchZoomRotate.enable();
+    } catch (_) {
+      // Handlers may not exist in all Mapbox versions; safe to ignore.
+    }
   }
 }

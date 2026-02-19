@@ -57,8 +57,10 @@ function getLegendImage(filename) {
   const match = Object.entries(legend_images).find(([path]) => path.includes(filename));
   return match ? match[1].default : null;
 }
-console.log(window.baseUrl);
-fetch(`${window.baseUrl}/stories/?full=1`).then((r) => r.status);
+// PERF: Removed import-time fire-and-forget fetch.
+// The line below was hitting /stories/?full=1 on every page load (loading all
+// story JSON files) but immediately discarding the result (only .status was used).
+// Stories are loaded on-demand by map-controls.js when the Story modal is opened.
 // GloFAS Layers baseURL
 const glofaswmsurl =
   "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE";

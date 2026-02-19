@@ -106,15 +106,18 @@ class DashboardManager {
     // Initialize theme toggler early
     this.#themeToggler = new ThemeToggler();
 
-    // SourceLayerControl (your existing)
+    // PERF: Create SourceLayerControl exactly once. Previously it was instantiated
+    // here AND again two lines below as `this.#sourceLayerControl = new SourceLayerControl(...)`,
+    // which caused preloadAllSources() (called on style.load) to fire twice, doubling
+    // the number of Mapbox addSource() calls and related startup API fetches.
     const slc = new SourceLayerControl(window.ncop_map);
     window.sourceLayerControl = slc;
 
     // MapControls (your existing)
     const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
 
-    // Keep your existing initializations…
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
+    // Keep your existing initializations… (reuse slc, do NOT create a second instance)
+    this.#sourceLayerControl = slc;
     this.#layerAttributePopup =
       this.#sourceLayerControl.layerAttributePopup ||
       new LayerAttributePopup(this.#map);
