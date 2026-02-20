@@ -758,6 +758,7 @@ export const ncop_menu_items = {
           image: getImage("usgs_realtime_earthquake_events.webp"),
           type: "geojson",
           theme: "legend",
+          popup: true,
           source: {
             id: "usgs_realtime_eq_events",
             type: "geojson",

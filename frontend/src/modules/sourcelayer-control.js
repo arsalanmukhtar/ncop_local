@@ -436,6 +436,7 @@ export class SourceLayerControl {
               this.map.off("sourcedata", onSourceData);
               clearTimeout(safetyTimer);
               this.hideLoadingOverlay();
+
             }
           };
           this.map.on("sourcedata", onSourceData);
