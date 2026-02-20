@@ -2617,11 +2617,10 @@ class GdeltNewsEventsApi(View):
             return JsonResponse(cached)
 
         try:
-            # ENHANCED: Default query - simplified to avoid GDELT "query too long" error
-            # Using OR operators only, Pakistan focus through coordinate extraction
+            # Default query — global disaster/hazard coverage, no regional bias
             search_query = request.GET.get(
                 "query",
-                "disaster OR earthquake OR flood OR hurricane OR wildfire OR volcano OR weather OR pollution OR smog OR climate OR monsoon OR landslide OR pakistan",
+                "disaster OR earthquake OR flood OR hurricane OR wildfire OR volcano OR weather OR pollution OR smog OR climate OR monsoon OR landslide",
             )
             days_back = min(int(request.GET.get("days", 7)), 30)  # Max 30 days
             max_records = min(int(request.GET.get("max_records", 250)), 250)  # Increased to 250

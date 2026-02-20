@@ -291,11 +291,17 @@ body {
     background: var(--accent-bg-blue);
 }
 
-.nav-toggle-btn i {
+.nav-toggle-btn i,
+.nav-toggle-btn svg {
     width: 16px;
     height: 16px;
     color: white;
     transition: transform 0.25s ease;
+}
+
+.nav-toggle-btn.is-collapsed i,
+.nav-toggle-btn.is-collapsed svg {
+    transform: rotate(180deg);
 }
 
 /* Home Button Styling - Light Green Background */
@@ -1195,8 +1201,9 @@ button.custom-nav-btn.terrain-active:hover {
 /* Projection Panel */
 .projection-panel {
     position: absolute;
-    bottom: 50px;
-    /* Above navigation controls */
+    top: 100px;
+    /* overridden by JS to align with projection button */
+    bottom: auto;
     right: 10px;
     width: 300px;
     max-height: 450px;
@@ -1205,9 +1212,9 @@ button.custom-nav-btn.terrain-active:hover {
     border-radius: 12px;
     padding: 0;
     backdrop-filter: blur(15px);
-    transform: translateX(100%);
+    transform: translateX(110%);
     opacity: 0;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, opacity 0.3s ease;
     overflow: hidden;
     z-index: 1001;
 }
@@ -3153,9 +3160,10 @@ button.custom-nav-btn.terrain-active:hover {
     /* ⬅ hidden by default */
     align-items: center;
     bottom: 11px;
-    left: 20%;
+    left: 285px;
+    /* 265px sidebar + 20px gap — clears sidebar on all desktop sizes */
     height: 80px;
-    width: 75%;
+    width: calc(100% - 300px);
     border-radius: 8px;
     overflow-x: hidden;
     overflow-y: hidden;
@@ -3860,8 +3868,8 @@ button.custom-nav-btn.terrain-active:hover {
 
     /* News Modal */
     .news-modal {
-        left: 15%;
-        width: 80%;
+        left: 255px;
+        width: calc(100% - 270px);
         height: 70px;
     }
 

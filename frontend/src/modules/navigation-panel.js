@@ -632,12 +632,9 @@ export class NavigationPanel {
       "navControlsContainer"
     );
     const isCollapsed = navControlsContainer.classList.toggle("collapsed");
-    const toggleIcon = document
-      .getElementById("navToggleBtn")
-      ?.querySelector("i");
-
-    if (toggleIcon) {
-      toggleIcon.style.transform = isCollapsed ? "rotate(180deg)" : "rotate(0deg)";
+    const toggleBtn = document.getElementById("navToggleBtn");
+    if (toggleBtn) {
+      toggleBtn.classList.toggle("is-collapsed", isCollapsed);
     }
   }
 
@@ -990,7 +987,7 @@ export class NavigationPanel {
       if (!geojson.features || geojson.features.length === 0) {
         container.innerHTML = `
           <div style="color: white; padding: 20px; text-align: center;">
-              <p>🔍 No news data found for South Asia</p>
+              <p>🔍 No news data available</p>
               <small>Try switching between Social Media and Regular News</small>
           </div>
         `;
