@@ -1019,12 +1019,17 @@ export class SidebarMenu {
 
     const imageElement = itemDiv.querySelector(".ncop-item-image");
     if (imageElement) {
-      // Image click: use existing selection handler and prevent bubbling to itemDiv
+      // Image click: prevent bubbling to itemDiv
       imageElement.addEventListener("click", (e) => {
         e.stopPropagation();
         const wasSelected = imageElement.classList.contains("selected");
-        // Reuse central selection logic
-        this.#handleImageSelection(imageElement);
+        if (categoryKey === "recent_hazard_events") {
+          // Multi-select: each layer toggles independently
+          imageElement.classList.toggle("selected", !wasSelected);
+        } else {
+          // Radio-select: only one active at a time
+          this.#handleImageSelection(imageElement);
+        }
         // keep isActive in sync with visual state
         isActive = !wasSelected;
         // trigger static interaction to keep behavior consistent

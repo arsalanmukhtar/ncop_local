@@ -295,6 +295,7 @@ body {
     width: 16px;
     height: 16px;
     color: white;
+    transition: transform 0.25s ease;
 }
 
 /* Home Button Styling - Light Green Background */
@@ -2192,6 +2193,113 @@ button.custom-nav-btn.terrain-active:hover {
 .layer-attribute-popup .popup-content {
     position: relative;
     /* Minimal reset only - content builds own styles inline */
+}
+
+/* ===========================
+   GDACS / USGS Earthquake Popup Container
+=========================== */
+.gdacs-popup {
+    width: 260px;
+    box-sizing: border-box;
+    padding: 8px;
+    background: var(--primary-bg, rgba(15, 20, 35, 0.92));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1.5px solid var(--border-light, rgba(255, 255, 255, 0.18));
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary, rgba(255, 255, 255, 0.95));
+}
+
+.gdacs-popup .gdacs-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.12));
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--glass-medium, rgba(0, 0, 0, 0.35));
+    margin-bottom: 8px;
+}
+
+.gdacs-popup .gdacs-table th,
+.gdacs-popup .gdacs-table td {
+    padding: 4px 9px;
+    font-size: 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-dark, rgba(255, 255, 255, 0.1));
+    text-align: left;
+    transition: background 0.2s ease;
+}
+
+.gdacs-popup .gdacs-table th {
+    width: 40%;
+    font-weight: 600;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.65));
+    background: var(--glass-dark, rgba(0, 0, 0, 0.5));
+    border-right: 1px solid var(--border-dark, rgba(255, 255, 255, 0.1));
+}
+
+.gdacs-popup .gdacs-table td {
+    width: 60%;
+    color: var(--text-primary, rgba(255, 255, 255, 0.92));
+    background: var(--frost-bg, rgba(255, 255, 255, 0.06));
+    word-break: break-word;
+}
+
+.gdacs-popup .gdacs-table tr:last-child th,
+.gdacs-popup .gdacs-table tr:last-child td {
+    border-bottom: none;
+}
+
+.gdacs-popup .gdacs-table tr:hover th,
+.gdacs-popup .gdacs-table tr:hover td {
+    background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.gdacs-popup .gdacs-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.gdacs-popup .gdacs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    min-height: 26px;
+    white-space: nowrap;
+    color: var(--white, #fff);
+    background: var(--btn-blue-bg, rgba(70, 178, 255, 0.25));
+    border: 1.5px solid var(--border-blue, rgba(70, 178, 255, 0.5));
+    border-radius: 16px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.gdacs-popup .gdacs-btn-secondary {
+    background: rgba(70, 178, 255, 0.15);
+    border-color: var(--border-blue, rgba(70, 178, 255, 0.4));
+}
+
+.gdacs-popup .gdacs-btn:hover {
+    background: var(--btn-blue-hover, rgba(70, 178, 255, 0.45));
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glow-blue, 0 0 8px rgba(70, 178, 255, 0.4));
+}
+
+.gdacs-popup .gdacs-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* Popup arrow/pointer */
@@ -5414,104 +5522,24 @@ button.custom-nav-btn.terrain-active:hover {
     }
 
         /* ===========================
-           GDACS Popup Styles (Ultra-Compact Design)
+           GDACS Popup — Mobile compact overrides
         =========================== */
-    
         .gdacs-popup {
-            width: 90%;
-            max-width: 250px;
-            box-sizing: border-box;
+            width: 88vw;
+            max-width: 240px;
             padding: 6px;
         }
-    
-        .gdacs-popup .gdacs-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            border: 1px solid var(--border-dark);
-            border-radius: 6px;
-            overflow: hidden;
-            background: var(--glass-medium);
-            margin-bottom: 6px;
-        }
-    
+
         .gdacs-popup .gdacs-table th,
         .gdacs-popup .gdacs-table td {
-            padding: 3px 8px;
+            padding: 3px 7px;
             font-size: 9px;
-            vertical-align: middle;
-            border-bottom: 1px solid var(--border-dark);
-            text-align: left;
-            transition: background 0.2s ease;
         }
-    
-        .gdacs-popup .gdacs-table th {
-            width: 40%;
-            font-weight: 600;
-            color: var(--text-secondary);
-            background: var(--glass-dark);
-            border-right: 1px solid var(--border-dark);
-        }
-    
-        .gdacs-popup .gdacs-table td {
-            width: 60%;
-            color: var(--text-primary);
-            background: var(--frost-bg);
-            word-break: break-word;
-        }
-    
-        .gdacs-popup .gdacs-table tr:last-child th,
-        .gdacs-popup .gdacs-table tr:last-child td {
-            border-bottom: none;
-        }
-    
-        .gdacs-popup .gdacs-table tr:hover {
-            background: var(--hover-bg);
-        }
-    
-        .gdacs-popup .gdacs-actions {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-start;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-    
+
         .gdacs-popup .gdacs-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 4px 10px;
+            padding: 3px 9px;
             font-size: 9px;
-            font-weight: 600;
-            min-height: 24px;
-            white-space: nowrap;
-            color: var(--white);
-            background: var(--btn-blue-bg);
-            border: 2px solid var(--border-blue);
-            border-radius: 16px;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-        }
-    
-        .gdacs-popup .gdacs-btn-secondary {
-            background: linear-gradient(to right, rgba(70, 178, 255, 0.6), rgba(30, 144, 255, 0.7));
-            border-color: var(--border-blue);
-        }
-    
-        .gdacs-popup .gdacs-btn:hover {
-            background: var(--btn-blue-hover);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-glow-blue);
-        }
-    
-        .gdacs-popup .gdacs-btn[aria-disabled="true"] {
-            opacity: 0.5;
-            cursor: not-allowed;
-            pointer-events: none;
+            min-height: 22px;
         }
     /* ===========================
        TIME SLIDER - TABLET RESPONSIVE

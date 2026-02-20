@@ -637,11 +637,7 @@ export class NavigationPanel {
       ?.querySelector("i");
 
     if (toggleIcon) {
-      toggleIcon.setAttribute(
-        "data-lucide",
-        isCollapsed ? "chevron-down" : "chevron-up"
-      );
-      lucide.createIcons();
+      toggleIcon.style.transform = isCollapsed ? "rotate(180deg)" : "rotate(0deg)";
     }
   }
 
