@@ -140,11 +140,24 @@ export class ProjectionPanel {
 
     /**
      * Toggles the visibility of the projection panel.
+     * Aligns the panel vertically with the projection switch button.
      */
     togglePanel() {
         if (this.#panel) {
             if (!this.#panel.classList.contains("visible")) {
                 this.updateActiveProjection();
+                // Position panel next to the button that triggered it
+                const btn = document.getElementById("projectionSwitch");
+                const mapEl = document.getElementById("map");
+                if (btn && mapEl) {
+                    const btnRect = btn.getBoundingClientRect();
+                    const mapRect = mapEl.getBoundingClientRect();
+                    const topOffset = btnRect.top - mapRect.top;
+                    // Clamp so panel doesn't overflow bottom of map
+                    const panelH = Math.min(450, mapRect.height - topOffset - 16);
+                    this.#panel.style.top = `${topOffset}px`;
+                    this.#panel.style.maxHeight = `${panelH}px`;
+                }
             }
             this.#panel.classList.toggle("visible");
         }

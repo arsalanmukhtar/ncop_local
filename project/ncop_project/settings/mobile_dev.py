@@ -47,6 +47,14 @@ STATIC_ROOT = BASE_DIR / "static" / "dist"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Serve Vite source assets directly through Django in dev mode.
+# Vite no longer sets server.origin, so imported assets (images, etc.)
+# get path-only URLs like /static/src/assets/images/foo.webp.
+# Django resolves these via STATICFILES_DIRS → frontend/ root.
+_frontend_root = BASE_DIR.parent / "frontend"
+if _frontend_root not in STATICFILES_DIRS:
+    STATICFILES_DIRS.append(_frontend_root)
+
 # =============================================================================
 # VITE FRONTEND CONFIGURATION (DEV MODE)
 # =============================================================================
@@ -157,9 +165,18 @@ PWA_APP_START_URL = "/"
 PWA_APP_SCOPE = "/"
 PWA_APP_DEBUG = True
 
+# =============================================================================
+# PERFORMANCE OBSERVABILITY (opt-in)
+# =============================================================================
+# Set NCOP_PERF_LOGGING=true in your .env.mobile-dev (or shell) to enable
+# per-request timing logs on heavy API views (WAQI, GDELT, etc.).
+# Leave False in normal use to keep logs clean.
+NCOP_PERF_LOGGING = env.bool("NCOP_PERF_LOGGING", default=False)
+
 print("✅ NCOP Mobile App Development Mode")
 print(f"   Debug: {DEBUG}")
 print(f"   Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"   Vite Dev Mode: {DJANGO_VITE['default']['dev_mode']}")
 print(f"   Static URL: {STATIC_URL}")
+print(f"   Perf Logging: {NCOP_PERF_LOGGING}")
 print("   Auto-login: Disabled")

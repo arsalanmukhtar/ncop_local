@@ -1,5 +1,5 @@
 // Time functions for temporal WMS layers
-function getNextNDays(offset = 0, type = "") {
+export function getNextNDays(offset = 0, type = "") {
   const currentDate = new Date();
   const futureDate = new Date(
     currentDate.getTime() + offset * 24 * 60 * 60 * 1000

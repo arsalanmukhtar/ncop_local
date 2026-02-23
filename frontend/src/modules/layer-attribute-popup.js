@@ -1463,6 +1463,101 @@ function buildGdacsPopupContent(props) {
 
 // ========== END GDACS-SPECIFIC HELPERS ==========
 
+// ========== USGS REALTIME EARTHQUAKE POPUP ==========
+function buildUsgsEqPopupContent(props, coords) {
+  const mag      = props.mag      != null ? Number(props.mag).toFixed(1)  : "—";
+  const magType  = props.magType  ?? "";
+  const place    = props.place    ?? "Unknown location";
+  const status   = props.status   ?? "—";
+  const tsunami  = props.tsunami  === 1 ? "⚠ Yes" : "No";
+  const sig      = props.sig      != null ? props.sig      : "—";
+  const nst      = props.nst      != null ? props.nst      : "—";
+  const gap      = props.gap      != null ? `${Number(props.gap).toFixed(0)}°` : "—";
+  const rms      = props.rms      != null ? Number(props.rms).toFixed(3) : "—";
+  const dmin     = props.dmin     != null ? `${Number(props.dmin).toFixed(4)}°` : "—";
+  const net      = props.net      ?? "—";
+  const depthKm  = (coords && coords[2] != null) ? `${Number(coords[2]).toFixed(1)} km` : "—";
+  const eventUrl = props.url      ?? "";
+
+  const fmtTime = (ms) => {
+    if (!ms) return "—";
+    return new Date(ms).toUTCString().replace(" GMT", " UTC");
+  };
+  const timeStr    = fmtTime(props.time);
+  const updatedStr = fmtTime(props.updated);
+
+  // Magnitude colour — same thresholds as the circle paint in map-layers.js
+  const magNum = parseFloat(props.mag);
+  const magColor =
+    magNum < 3    ? "#A8A8A8" :
+    magNum <= 4.5 ? "#75E9E6" :
+    magNum <= 6   ? "#F1E757" :
+    magNum <= 7.4 ? "#F7151F" :
+                    "#000000";
+
+  const row = (k, v) => `
+    <tr>
+      <th scope="row">${escHtml(k)}</th>
+      <td>${escHtml(String(v))}</td>
+    </tr>`;
+
+  return `
+    <div class="gdacs-popup">
+      <div style="
+        display:flex;align-items:center;gap:8px;
+        padding:6px 8px 8px;
+        border-bottom:1px solid var(--border-dark,rgba(255,255,255,.15));
+        margin-bottom:4px;
+      ">
+        <span style="
+          display:inline-flex;align-items:center;justify-content:center;
+          width:36px;height:36px;border-radius:50%;flex-shrink:0;
+          background:${magColor};
+          font-weight:800;font-size:13px;
+          color:${magNum >= 4.6 && magNum <= 7.4 ? '#1a1a1a' : (magNum < 3 ? '#1a1a1a' : '#fff')};
+          border:2px solid rgba(255,255,255,.25);
+        ">M${mag}</span>
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:11px;
+            color:var(--text-primary,#e8eaf0);
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+            max-width:175px;">${escHtml(place)}</div>
+          <div style="font-size:10px;opacity:.6;margin-top:1px;">
+            ${escHtml(magType ? `${magType.toUpperCase()} magnitude` : "USGS Earthquake")}
+          </div>
+        </div>
+      </div>
+
+      <table class="gdacs-table" role="table">
+        <tbody>
+          ${row("Depth",       depthKm)}
+          ${row("Status",      status.charAt(0).toUpperCase() + status.slice(1))}
+          ${row("Tsunami",     tsunami)}
+          ${row("Significance",sig)}
+          ${row("Stations",    nst)}
+          ${row("Gap",         gap)}
+          ${row("RMS",         rms)}
+          ${row("Min. Dist.",  dmin)}
+          ${row("Network",     net.toUpperCase())}
+          ${row("Time (UTC)",  timeStr)}
+          ${row("Updated",     updatedStr)}
+        </tbody>
+      </table>
+
+      <div class="gdacs-actions">
+        <a class="gdacs-btn"
+          href="${escHtml(eventUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          ${eventUrl ? "" : 'aria-disabled="true" tabindex="-1"'}>
+          ${eventUrl ? "USGS Event Page" : "URL N/A"}
+        </a>
+      </div>
+    </div>
+  `;
+}
+// ========== END USGS-SPECIFIC HELPERS ==========
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;
@@ -2183,6 +2278,23 @@ export default class LayerAttributePopup {
         if (contentDiv) {
           contentDiv.innerHTML = slickPlusHtml;
         }
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        return;
+      }
+
+      // ── USGS REALTIME EARTHQUAKES ──────────────────────────────────────────
+      if (
+        layerId?.includes("usgs_realtime_eq") ||
+        sourceId === "usgs_realtime_eq_events"
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const usgsHtml = buildUsgsEqPopupContent(properties, eligible.geometry?.coordinates);
+
+        const contentDiv = this.popupEl.querySelector(".popup-content");
+        if (contentDiv) contentDiv.innerHTML = usgsHtml;
 
         this.#show();
         this.#updatePosition();

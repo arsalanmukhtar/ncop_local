@@ -9,8 +9,6 @@ import tailwindcss from "@tailwindcss/vite";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const HMR_HOST = process.env.VITE_HMR_HOST || "localhost";
-
 export default defineConfig(() => ({
   // IMPORTANT:
   // Leave URL prefixing to Django (STATIC_URL + django-vite).
@@ -40,11 +38,6 @@ export default defineConfig(() => ({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
-    hmr: {
-      host: HMR_HOST,
-      port: 5173,
-    },
-    origin: `http://${HMR_HOST}:5173`,
     watch: {
       usePolling: true,
       interval: 150,

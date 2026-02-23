@@ -1,4 +1,4 @@
-{% load django_vite static %}
+{% load ncop_vite static %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -253,29 +253,86 @@
 
 
     <!--NEWS Modal-->
-    <div id="news-modal" class="news-modal bg-glass">
-        <!-- Left section: Logo + Global News + Time -->
-        <!-- Left: Logo + Title + Time -->
-        <div class="news-header">
-            <!-- <div class="logo-container">
-                <img data-asset="ndmaLogo" alt="NDMA Logo" class="logo-spin" />
-            </div> -->
-            <div class="news-info">
-                <div class="news-title">Global News</div>
-                <hr>
-                <div class="news-time" id="news-time">--:--:--</div>
+    <div id="news-modal" class="news-modal">
+        <!-- Header row: title+subtitle on left, time+buttons on right -->
+        <div class="news-ticker-header">
+            <div class="news-ticker-title-group">
+                <div class="news-ticker-label">Global News</div>
+                <div class="news-ticker-subtitle">Live headlines from Reddit &amp; GDELT</div>
             </div>
-            <div class="news-toggle-buttons">
-                <button id="toggle-social-btn" title="Toggle Social Media News" class="toggle-btn"><img
-                        data-asset="socialMediaIcon" alt="Toggle Social Media News"></button>
-                <button id="fetch-regular-btn" title="Fetch News Only" class="toggle-btn"><img data-asset="newsIcon"
-                        alt="Fetch News Only"></button>
+            <div class="news-ticker-right">
+                <div class="news-ticker-time" id="news-time">--:--:--</div>
+                <div class="news-ticker-toggle-buttons">
+                    <button id="toggle-social-btn" title="Toggle Social Media News" class="ticker-toggle-btn">
+                        <img data-asset="socialMediaIcon" alt="Toggle Social Media News">
+                    </button>
+                    <button id="fetch-regular-btn" title="Fetch News Only" class="ticker-toggle-btn">
+                        <img data-asset="newsIcon" alt="Fetch News Only">
+                    </button>
+                </div>
             </div>
-            <div class="divider-line"></div>
         </div>
-        <!-- Right: Scrolling news -->
-        <div class="news-scroll-wrapper">
-            <div class="news-scroll" id="news-scroll"></div>
+        <div class="news-ticker-divider"></div>
+        <!-- Scrolling rail -->
+        <div class="news-ticker-wrapper">
+            <div class="news-ticker-rail" id="news-scroll"></div>
+        </div>
+    </div>
+    <!-- USGS Shakemap Modal -->
+    <div id="usgsShakemapModal" class="usgs-modal">
+        <div class="usgs-modal-content">
+            <div class="usgs-modal-header">
+                <div class="usgs-modal-title">
+                    <i data-lucide="activity"></i>
+                    <span>USGS Earthquake ShakeMaps</span>
+                </div>
+                <button class="usgs-modal-close" id="usgsModalClose" title="Close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="usgs-modal-body">
+                <div class="usgs-controls-grid">
+                    <div class="usgs-control-group">
+                        <label class="usgs-control-label" for="usgsEarthquakeSelect">
+                            <i data-lucide="map-pin"></i>
+                            Select Earthquake (Mag ≥ 5)
+                        </label>
+                        <select id="usgsEarthquakeSelect" class="usgs-control-select">
+                            <option selected disabled>Loading earthquakes...</option>
+                        </select>
+                    </div>
+                    <div class="usgs-control-group">
+                        <label class="usgs-control-label" for="usgsShakemapSelect">
+                            <i data-lucide="layers"></i>
+                            Select ShakeMap Content
+                        </label>
+                        <select id="usgsShakemapSelect" class="usgs-control-select" multiple>
+                            <option selected disabled>Select earthquake from left</option>
+                        </select>
+                    </div>
+                </div>
+    
+                <div class="usgs-shakemap-preview" id="usgsShakemapPreview">
+                    <div class="usgs-no-content">
+                        <i data-lucide="map" style="width: 48px; height: 48px; opacity: 0.3;"></i>
+                        <p>Select earthquake and shakemap content to display</p>
+                    </div>
+                    <div class="usgs-legend-container" id="usgsLegendContainer" style="display: none;">
+                        <img id="usgsLegendImage" src="" alt="ShakeMap Legend">
+                    </div>
+                </div>
+    
+                <div class="usgs-action-buttons">
+                    <button class="usgs-btn usgs-btn-primary" id="usgsLoadShakemapBtn" disabled>
+                        <i data-lucide="download"></i>
+                        Load ShakeMap on Map
+                    </button>
+                    <button class="usgs-btn usgs-btn-danger" id="usgsClearShakemapBtn" disabled>
+                        <i data-lucide="trash-2"></i>
+                        Clear ShakeMap
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </body>

@@ -22,7 +22,6 @@ from .views import (
 
 urlpatterns = [
     path("", dashboard_view, name="dashboard"),
-
     path("login/", login_view, name="login"),
     path('auto-login/', auto_login_view, name='auto_login'),
     path("signup/", signup_view, name="signup"),

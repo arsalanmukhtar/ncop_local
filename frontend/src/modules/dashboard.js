@@ -5,6 +5,7 @@
 // --------------------------------------------------------
 
 import NCOPStorageManager from "./local-storage-manager.js"; // ensure .js extension in Vite
+import { USGSShakemapManager } from "./usgs-shakemap-manager.js";
 
 // Initialize global storage as early as possible
 window.ncop_storage = null;
@@ -85,6 +86,7 @@ class DashboardManager {
   #mapControls;
   #sourceLayerControl;
   #layerAttributePopup;
+  #usgsManager;
   #themeToggler;
 
   init() {
@@ -104,15 +106,18 @@ class DashboardManager {
     // Initialize theme toggler early
     this.#themeToggler = new ThemeToggler();
 
-    // SourceLayerControl (your existing)
+    // PERF: Create SourceLayerControl exactly once. Previously it was instantiated
+    // here AND again two lines below as `this.#sourceLayerControl = new SourceLayerControl(...)`,
+    // which caused preloadAllSources() (called on style.load) to fire twice, doubling
+    // the number of Mapbox addSource() calls and related startup API fetches.
     const slc = new SourceLayerControl(window.ncop_map);
     window.sourceLayerControl = slc;
 
     // MapControls (your existing)
     const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
 
-    // Keep your existing initializations…
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
+    // Keep your existing initializations… (reuse slc, do NOT create a second instance)
+    this.#sourceLayerControl = slc;
     this.#layerAttributePopup =
       this.#sourceLayerControl.layerAttributePopup ||
       new LayerAttributePopup(this.#map);
@@ -185,14 +190,29 @@ class DashboardManager {
     // Expose map globally (used by slider & other modules)
     window.ncop_map = this.#map;
   }
+  // Add this new method to the DashboardManager class
+  #setupUSGSLayerListener() {
+    // Listen for USGS layer checkbox changes
+    document.addEventListener("change", (e) => {
+      if (e.target.id === "usgs-earthquake-layer" && e.target.checked) {
+        // Open the modal when layer is toggled on
+        if (this.#usgsManager) {
+          this.#usgsManager.openModal();
+        }
+      }
+    });
+  }
 
   #onMapLoad() {
+    
     if (this.#storage) {
       const savedBearing = this.#storage.getSetting("mapBearing");
       const savedPitch = this.#storage.getSetting("mapPitch");
       const savedProjection = this.#storage.getSetting("mapProjection");
       const savedTerrain = this.#storage.getSetting("terrainEnabled");
       const labelsEnabled = this.#storage.getLabelsState();
+      
+      
 
       if (savedBearing !== null || savedPitch !== null) {
         this.#map.setBearing(savedBearing || 0);
@@ -214,6 +234,12 @@ class DashboardManager {
         setTimeout(() => this.#mapControls.toggleMapLabels(false), 1000);
       }
     }
+    // Initialize USGS Manager
+    this.#usgsManager = new USGSShakemapManager(this.#map);
+    window.usgsManager = this.#usgsManager;
+    
+    // Setup USGS layer toggle listener
+    this.#setupUSGSLayerListener();
   }
 
   #onMapMoveEnd() {
@@ -250,6 +276,7 @@ class DashboardManager {
       }
     }
   }
+  
 }
 
 // THEME CHANGING TOGGLER

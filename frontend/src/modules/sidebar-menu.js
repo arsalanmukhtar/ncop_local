@@ -1017,14 +1017,25 @@ export class SidebarMenu {
     // Track layer state locally
     let isActive = false;
 
+    const isMultiSelect = categoryKey === "recent_hazard_events" || categoryKey === "flood";
+
     const imageElement = itemDiv.querySelector(".ncop-item-image");
     if (imageElement) {
-      // Image click: use existing selection handler and prevent bubbling to itemDiv
+      // Mark multi-select items so #handleImageSelection won't clear them
+      if (isMultiSelect) {
+        imageElement.setAttribute("data-multi-select", "true");
+      }
+      // Image click: prevent bubbling to itemDiv
       imageElement.addEventListener("click", (e) => {
         e.stopPropagation();
         const wasSelected = imageElement.classList.contains("selected");
-        // Reuse central selection logic
-        this.#handleImageSelection(imageElement);
+        if (isMultiSelect) {
+          // Multi-select: each layer toggles independently
+          imageElement.classList.toggle("selected", !wasSelected);
+        } else {
+          // Radio-select: only one active at a time
+          this.#handleImageSelection(imageElement);
+        }
         // keep isActive in sync with visual state
         isActive = !wasSelected;
         // trigger static interaction to keep behavior consistent
@@ -1057,9 +1068,11 @@ export class SidebarMenu {
     const isAlreadySelected =
       clickedImageElement.classList.contains("selected");
 
-    // Remove selection from all images
+    // Remove selection only from non-multi-select items (leave multi-select categories untouched)
     document.querySelectorAll(".ncop-item-image.selected").forEach((image) => {
-      image.classList.remove("selected");
+      if (!image.hasAttribute("data-multi-select")) {
+        image.classList.remove("selected");
+      }
     });
 
     // If it wasn't already selected, select it

@@ -8,6 +8,7 @@
 import { MapControls } from "./map-controls.js";
 import MapboxGeocoder from "@mapbox/mapbox-gl-geocoder";
 import "@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css";
+import { SatelliteTracker } from "./satellite-tracker.js";
 
 /**
  * South Asia Geographic Coordinates
@@ -186,6 +187,9 @@ export class NavigationPanel {
 
   // "first touch stops forever" rule
   #spinStoppedByUser = false;
+
+  // Satellite tracker instance
+  #satelliteTracker = null;
   /**
    * @param {mapboxgl.Map} mapInstance
    * @param {MapControls} mapControlsInstance
@@ -227,7 +231,12 @@ export class NavigationPanel {
 
     navWrapper.innerHTML = `
       <div class="custom-nav-control" id="navControlsContainer">
-          
+
+          <!-- COLLAPSE/EXPAND (top — panel opens downward) -->
+          <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
+              <i data-lucide="chevron-up"></i>
+          </button>
+
           <!-- ZOOM CONTROLS -->
           <button id="zoomIn" class="custom-nav-btn" title="Zoom In">
               <i data-lucide="plus"></i>
@@ -236,12 +245,12 @@ export class NavigationPanel {
           <button id="zoomOut" class="custom-nav-btn" title="Zoom Out">
               <i data-lucide="minus"></i>
           </button>
-          
+
           <!-- 3D TOGGLE -->
           <button id="toggle3D" class="custom-nav-btn" title="Switch to 3D View (2D Mode)">
               <span class="nav-text">3D</span>
           </button>
-          
+
           <!-- PROJECTION SWITCH -->
           <button id="projectionSwitch" class="custom-nav-btn" title="Map Projections">
               <i data-lucide="earth"></i>
@@ -251,7 +260,7 @@ export class NavigationPanel {
           <button id="spinGlobe" class="custom-nav-btn" title="Toggle Spinning Globe">
               <i data-lucide="rotate-3d"></i>
           </button>
-          
+
           <!-- LOCAL NEWS TOGGLE -->
           <button id="localNews" class="custom-nav-btn" title="Toggle Local News Panel">
               <i data-lucide="newspaper"></i>
@@ -262,9 +271,9 @@ export class NavigationPanel {
               <i data-lucide="fullscreen"></i>
           </button>
 
-          <!-- COLLAPSE/EXPAND -->
-          <button id="navToggleBtn" class="nav-toggle-btn" title="Toggle Navigation Controls">
-              <i data-lucide="chevron-left"></i>
+          <!-- SATELLITE TRACKER -->
+          <button id="satTrackerBtn" class="custom-nav-btn" title="Satellite Tracker">
+              <i data-lucide="satellite"></i>
           </button>
 
       </div>
@@ -272,7 +281,47 @@ export class NavigationPanel {
 
     mapContainer.appendChild(navWrapper);
     this.#renderGeocoder(mapContainer);
-    
+
+    // Satellite tracker modal
+    const satModal = document.createElement("div");
+    satModal.id = "sat-tracker-modal";
+    satModal.className = "sat-tracker-modal";
+    satModal.innerHTML = `
+      <div class="sat-modal-header">
+        <div class="sat-modal-title">
+          <span class="sat-modal-icon">🛰️</span>
+          <div>
+            <div class="sat-modal-heading">Satellite Tracker</div>
+            <div class="sat-modal-status" id="satTrackerStatus">Ready — click a load button below.</div>
+          </div>
+        </div>
+        <button id="satModalCloseBtn" class="custom-nav-btn" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="sat-modal-body">
+        <div class="sat-modal-row">
+          <button id="satLoadStationsBtn" class="sat-action-btn">
+            <i data-lucide="radio-tower"></i> ISS / Stations
+          </button>
+          <button id="satLoadEOBtn" class="sat-action-btn">
+            <i data-lucide="cloud"></i> EO / Weather
+          </button>
+        </div>
+        <div class="sat-modal-row">
+          <button id="satPauseBtn" class="sat-action-btn" disabled>
+            <i data-lucide="pause"></i> Pause
+          </button>
+          <button id="satClearTrailsBtn" class="sat-action-btn" disabled>
+            <i data-lucide="eraser"></i> Clear Trails
+          </button>
+        </div>
+        <button id="satRemoveBtn" class="sat-action-btn sat-remove-btn" disabled>
+          <i data-lucide="trash-2"></i> Remove Satellites
+        </button>
+      </div>
+    `;
+    mapContainer.appendChild(satModal);
 
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
@@ -428,6 +477,74 @@ export class NavigationPanel {
       this.#spinGlobeTick();
     });
 
+    // ── Satellite Tracker ──────────────────────────────────────────────────
+    this.#satelliteTracker = new SatelliteTracker(this.#map);
+
+    const satBtn         = document.getElementById("satTrackerBtn");
+    const satModal       = document.getElementById("sat-tracker-modal");
+    const satStatus      = document.getElementById("satTrackerStatus");
+    const satLoadStn     = document.getElementById("satLoadStationsBtn");
+    const satLoadEO      = document.getElementById("satLoadEOBtn");
+    const satPause       = document.getElementById("satPauseBtn");
+    const satClear       = document.getElementById("satClearTrailsBtn");
+    const satRemove      = document.getElementById("satRemoveBtn");
+    const satClose       = document.getElementById("satModalCloseBtn");
+
+    // Toggle modal open/close
+    satBtn?.addEventListener("click", () => {
+      if (!satModal) return;
+      const isOpen = satModal.classList.toggle("sat-modal-open");
+      satBtn.classList.toggle("active", isOpen);
+    });
+
+    satClose?.addEventListener("click", () => {
+      satModal?.classList.remove("sat-modal-open");
+      satBtn?.classList.remove("active");
+    });
+
+    const setStatus = (msg) => { if (satStatus) satStatus.textContent = msg; };
+
+    const afterLoad = (ok) => {
+      satPause.disabled  = !ok;
+      satClear.disabled  = !ok;
+      satRemove.disabled = !ok;
+      satLoadStn.disabled = false;
+      satLoadEO.disabled  = false;
+      if (ok) {
+        satPause.innerHTML = `<i data-lucide="pause"></i> Pause`;
+        if (window.lucide?.createIcons) window.lucide.createIcons();
+      }
+    };
+
+    const doLoad = async (group) => {
+      [satLoadStn, satLoadEO, satPause, satClear, satRemove].forEach(b => { if (b) b.disabled = true; });
+      await this.#satelliteTracker.init(group, setStatus);
+      const ok = this.#satelliteTracker.isActive;
+      afterLoad(ok);
+    };
+
+    satLoadStn?.addEventListener("click", () => doLoad("stations"));
+    satLoadEO?.addEventListener("click",  () => doLoad("eo"));
+
+    satPause?.addEventListener("click", () => {
+      const paused = this.#satelliteTracker.togglePause();
+      satPause.innerHTML = paused
+        ? `<i data-lucide="play"></i> Resume`
+        : `<i data-lucide="pause"></i> Pause`;
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    });
+
+    satClear?.addEventListener("click", () => {
+      this.#satelliteTracker.clearTrails();
+    });
+
+    satRemove?.addEventListener("click", () => {
+      this.#satelliteTracker.destroy(setStatus);
+      [satPause, satClear, satRemove].forEach(b => { if (b) b.disabled = true; });
+      satPause.innerHTML = `<i data-lucide="pause"></i> Pause`;
+      if (window.lucide?.createIcons) window.lucide.createIcons();
+    });
+
   }
 
   /**
@@ -515,16 +632,9 @@ export class NavigationPanel {
       "navControlsContainer"
     );
     const isCollapsed = navControlsContainer.classList.toggle("collapsed");
-    const toggleIcon = document
-      .getElementById("navToggleBtn")
-      ?.querySelector("i");
-
-    if (toggleIcon) {
-      toggleIcon.setAttribute(
-        "data-lucide",
-        isCollapsed ? "chevron-right" : "chevron-left"
-      );
-      lucide.createIcons();
+    const toggleBtn = document.getElementById("navToggleBtn");
+    if (toggleBtn) {
+      toggleBtn.classList.toggle("is-collapsed", isCollapsed);
     }
   }
 
@@ -848,6 +958,22 @@ export class NavigationPanel {
    * @param {boolean} includeSM - Include social media or just regular
    */
   async #fetchNews(includeSM = false) {
+    // Show skeleton loader immediately while waiting for the API
+    const newsModal = document.getElementById("news-modal");
+    const container = document.getElementById("news-scroll");
+    if (container) {
+      container.innerHTML = `
+        <div class="ticker-skeleton">
+          <div class="ticker-skeleton-item"></div>
+          <div class="ticker-skeleton-item"></div>
+          <div class="ticker-skeleton-item"></div>
+          <div class="ticker-skeleton-item"></div>
+        </div>
+      `;
+    }
+    newsModal?.classList.remove("news-loaded");
+    newsModal?.classList.add("news-loading");
+
     try {
       const url = includeSM
         ? `${
@@ -864,7 +990,6 @@ export class NavigationPanel {
       }
 
       const geojson = await res.json();
-      const container = document.getElementById("news-scroll");
 
       if (!container) {
         console.error("❌ News scroll container not found");
@@ -875,71 +1000,64 @@ export class NavigationPanel {
 
       // No data case
       if (!geojson.features || geojson.features.length === 0) {
+        newsModal?.classList.remove("news-loading", "news-loaded");
         container.innerHTML = `
-          <div style="color: white; padding: 20px; text-align: center;">
-              <p>🔍 No news data found for South Asia</p>
-              <small>Try switching between Social Media and Regular News</small>
+          <div style="color: white; padding: 8px 16px; font-size:11px; opacity:0.7;">
+              🔍 No news data available — try the other source button
           </div>
         `;
+        newsModal?.classList.add("news-loaded");
         return;
       }
 
-      // populate ticker with boxes
+      // Build items — originals only (no double handler)
+      const items = [];
       geojson.features.forEach((feature, index) => {
         const props = feature.properties;
-        const box = document.createElement("div");
-        box.className = "news-box";
-
-        const fullUrl = props.url || "#";
-        const maxLength = 50;
-        const shortUrl =
-          fullUrl.length > maxLength
-            ? fullUrl.substring(0, maxLength / 2) +
-              "..." +
-              fullUrl.slice(-maxLength / 2)
-            : fullUrl;
-
-        const sourceDisplay = this.#generateSourceDisplay(props);
+        const metaHtml = this.#generateTickerMeta(props);
         const displayDate = this.#formatGdeltDate(props.formatted_date);
+        const headline = this.#sanitizeHTML(props.title || "Untitled");
 
-        box.innerHTML = `
-            ${sourceDisplay}
-            <div class="news-content">
-                <strong class="news-headline">
-                    ${this.#sanitizeHTML(props.title || "Untitled")}
-                </strong>
-                <small class="news-link">
-                    <a href="${fullUrl}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style="color:#cce6ff; text-decoration:underline;">
-                        ${this.#sanitizeHTML(shortUrl)}
-                    </a>
-                </small>
-                <div style="font-size:10px; color:#999; margin-top:4px;">
-                    ${displayDate}
-                </div>
-            </div>
+        const item = document.createElement("div");
+        item.className = "ticker-item";
+        item.dataset.index = index;
+        item.innerHTML = `
+          <div class="ticker-meta">
+            ${metaHtml}
+            <span class="ticker-bullet">•</span>
+            <span class="ticker-date">${displayDate}</span>
+          </div>
+          <div class="ticker-headline">${headline}</div>
         `;
-
-        box.dataset.index = index;
-        box.addEventListener("click", () =>
-          this.#toggleNewsMarker(index, feature)
-        );
-        container.appendChild(box);
+        // Attach click handler ONCE on the original
+        item.addEventListener("click", () => this.#toggleNewsMarker(index, feature));
+        items.push(item);
       });
+
+      // Append originals, then deep-clones for seamless infinite loop
+      items.forEach(item => container.appendChild(item));
+      items.forEach(item => {
+        const clone = item.cloneNode(true);
+        const idx = parseInt(clone.dataset.index);
+        clone.addEventListener("click", () =>
+          this.#toggleNewsMarker(idx, geojson.features[idx])
+        );
+        container.appendChild(clone);
+      });
+
+      // Reveal divider + rail now that content is ready
+      newsModal?.classList.remove("news-loading");
+      newsModal?.classList.add("news-loaded");
 
       window.gdeltNewsFeatures = geojson.features;
     } catch (error) {
       console.error("❌ Error fetching news:", error);
-      const container = document.getElementById("news-scroll");
+      newsModal?.classList.remove("news-loading");
       if (container) {
+        newsModal?.classList.add("news-loaded");
         container.innerHTML = `
-          <div style="color:#ff6b6b; padding:20px;">
-              <strong>Failed to load news</strong>
-              <small style="display:block; margin-top:8px;">
-                  ${this.#sanitizeHTML(error.message)}
-              </small>
+          <div style="color:#ff6b6b; padding:8px 16px; font-size:11px;">
+              ⚠ Failed to load news: ${this.#sanitizeHTML(error.message)}
           </div>
         `;
       }
@@ -947,71 +1065,40 @@ export class NavigationPanel {
   }
 
   /**
-   * Render the "source line" of each news card
+   * Render the meta row (flag + tag + country) for a ticker item.
+   * Returns inner HTML fragments that go inside .ticker-meta
    */
-  #generateSourceDisplay(props) {
+  #generateTickerMeta(props) {
     const flagBase = "https://flagcdn.com/";
 
-    // Reddit source
     if (props.source_platform === "reddit") {
+      const sub = this.#sanitizeHTML(props.reddit_subreddit || "unknown");
       return `
-        <div class="reddit-news-box">
-            <span class="reddit-news-tag">
-                REDDIT
-            </span>
-            <span class="reddit-news-country">
-                r/${this.#sanitizeHTML(props.reddit_subreddit || "unknown")}
-            </span>
-            <span class="reddit-news-stats">
-                👍 ${props.reddit_score || 0} | 💬 ${props.reddit_comments || 0}
-            </span>
-        </div>
+        <span class="ticker-tag tag-reddit">REDDIT</span>
+        <span class="ticker-country">r/${sub}</span>
       `;
     }
 
-    // Mastodon source
     if (props.source_platform === "mastodon") {
+      const author = this.#sanitizeHTML(props.mastodon_author || "unknown");
       return `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="background: #6364ff; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
-                MASTODON
-            </span>
-            <span style="font-size: 11px; color: #ccc;">
-                @${this.#sanitizeHTML(props.mastodon_author || "unknown")}
-            </span>
-            <span style="font-size: 9px; color: #888;">
-                ⭐ ${props.mastodon_favourites || 0} | 🔄 ${
-        props.mastodon_reblogs || 0
-      }
-            </span>
-        </div>
+        <span class="ticker-tag tag-mastodon">MASTODON</span>
+        <span class="ticker-country">@${author}</span>
       `;
     }
 
-    // Traditional news (GDELT)
+    // Traditional GDELT news
     const country = props.sourcecountry || "Unknown";
-    const isoCode = COUNTRY_ISO_MAP[country] || "un";
-
+    const isoCode = (COUNTRY_ISO_MAP[country] || "un").toLowerCase();
     return `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-          <picture style="display: flex; align-items: center;">
-              <source type="image/webp" srcset="${flagBase}16x12/${isoCode.toLowerCase()}.webp">
-              <source type="image/png" srcset="${flagBase}16x12/${isoCode.toLowerCase()}.png">
-              <img 
-                  src="${flagBase}16x12/${isoCode.toLowerCase()}.png" 
-                  width="16" 
-                  height="12" 
-                  alt="${country} flag"
-                  onerror="this.style.display='none'"
-              >
-          </picture>
-          <span class="news-tag">
-              NEWS
-          </span>
-          <span class="news-country">
-              ${this.#sanitizeHTML(country)}
-          </span>
-      </div>
+      <picture class="ticker-flag">
+        <source type="image/webp" srcset="${flagBase}16x12/${isoCode}.webp">
+        <source type="image/png"  srcset="${flagBase}16x12/${isoCode}.png">
+        <img src="${flagBase}16x12/${isoCode}.png" width="16" height="12"
+             alt="${this.#sanitizeHTML(country)} flag" onerror="this.style.display='none'">
+      </picture>
+      <span class="ticker-tag tag-news">NEWS</span>
+      <span class="ticker-country">${this.#sanitizeHTML(country)}</span>
     `;
   }
 
@@ -1122,7 +1209,7 @@ export class NavigationPanel {
    */
   #pauseScroll() {
     if (!this.#scrollPaused) {
-      const scrollElement = document.querySelector(".news-scroll");
+      const scrollElement = document.querySelector(".news-ticker-rail");
       if (scrollElement) {
         scrollElement.style.animationPlayState = "paused";
         this.#scrollPaused = true;
@@ -1135,7 +1222,7 @@ export class NavigationPanel {
    */
   #resumeScroll() {
     if (this.#scrollPaused && Object.keys(this.#newsMarkers).length === 0) {
-      const scrollElement = document.querySelector(".news-scroll");
+      const scrollElement = document.querySelector(".news-ticker-rail");
       if (scrollElement) {
         scrollElement.style.animationPlayState = "running";
         this.#scrollPaused = false;
