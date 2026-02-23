@@ -47,6 +47,14 @@ STATIC_ROOT = BASE_DIR / "static" / "dist"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Serve Vite source assets directly through Django in dev mode.
+# Vite no longer sets server.origin, so imported assets (images, etc.)
+# get path-only URLs like /static/src/assets/images/foo.webp.
+# Django resolves these via STATICFILES_DIRS → frontend/ root.
+_frontend_root = BASE_DIR.parent / "frontend"
+if _frontend_root not in STATICFILES_DIRS:
+    STATICFILES_DIRS.append(_frontend_root)
+
 # =============================================================================
 # VITE FRONTEND CONFIGURATION (DEV MODE)
 # =============================================================================

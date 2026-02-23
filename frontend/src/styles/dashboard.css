@@ -3151,261 +3151,316 @@ button.custom-nav-btn.terrain-active:hover {
 }
 
 /* ========================================================================
-   NEWS SECTION STYLES
+   NEWS TICKER — Glassmorphism redesign
    ======================================================================== */
 
 .news-modal {
     position: absolute;
     display: none;
-    /* ⬅ hidden by default */
-    align-items: center;
+    flex-direction: column;
+    gap: 5px;
     bottom: 11px;
     left: 285px;
-    /* 265px sidebar + 20px gap — clears sidebar on all desktop sizes */
-    height: 80px;
     width: calc(100% - 300px);
-    border-radius: 8px;
-    overflow-x: hidden;
-    overflow-y: hidden;
-    z-index: 999;
-    background-color: var(--primary-bg);
-    backdrop-filter: blur(10px);
-    border: 2px solid var(--glass-lighter);
-    box-shadow: 0 8px 32px var(--shadow-soft);
-    padding: 0 12px;
-}
-
-.news-modal.show {
-    display: flex;
-    align-items: center;
-    flex-direction: row;
-    gap: 12px;
-}
-
-.news-scroll-wrapper {
+    max-height: 100px;
+    border-radius: 10px;
     overflow: hidden;
-    flex: 1;
-    height: 100%;
+    z-index: 999;
+    background: var(--primary-bg, rgba(12, 16, 30, 0.88));
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid var(--border-light, rgba(255, 255, 255, 0.18));
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    padding: 7px 12px 6px;
+    color: var(--text-primary, rgba(255, 255, 255, 0.93));
+    font-family: 'Inter', sans-serif;
+}
+
+/* When JS sets display:flex it becomes visible */
+.news-modal[style*="display: flex"] {
+    display: flex !important;
+}
+
+/* ── Header row ─────────────────────────────── */
+.news-ticker-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
-.news-scroll {
+.news-ticker-title-group {
     display: flex;
-    gap: 12px;
-    animation: scroll-left 520s linear infinite;
-    padding: 10px;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.news-ticker-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary, rgba(255, 255, 255, 0.95));
     white-space: nowrap;
-    height: 90px;
+    letter-spacing: 0.2px;
 }
 
-.news-box {
-    display: inline-block;
-    min-width: max-content;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    padding: 5px 10px;
-    font-size: 10px;
-    cursor: pointer;
-    transition: background 0.3s;
+.news-ticker-subtitle {
+    font-size: 9px;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+    white-space: nowrap;
 }
 
-.news-box:hover {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-.news-box.selected {
-    background: rgba(255, 255, 255, 0.35);
-    color: black;
-    font-weight: bold;
-}
-
-.news-box .news-tag {
-    background: #28a745;
-    color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
-}
-
-.news-box .news-country {
-    font-size: 11px;
-    color: #ccc;
-}
-
-.news-box .news-content {
-    margin-top: 6px;
-}
-
-.news-box .news-headline {
-    display: block;
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.news-box .news-link {
-    font-size: 11px;
-}
-
-.reddit-news-box {
+.news-ticker-right {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 4px;
+    flex-shrink: 0;
 }
 
-.reddit-news-tag {
-    background: #ff4500;
-    color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
+.news-ticker-time {
     font-size: 10px;
-    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+    background: var(--frost-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.12));
+    border-radius: 5px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    font-family: monospace;
 }
 
-.reddit-news-country {
-    font-size: 11px;
-    color: #ccc;
-}
-
-.reddit-news-stats {
-    font-size: 9px;
-    color: #888;
-}
-
-@keyframes scroll-left {
-    0% {
-        transform: translateX(0%);
-    }
-
-    100% {
-        transform: translateX(-100%);
-    }
-}
-
-.news-header {
+.news-ticker-toggle-buttons {
     display: flex;
     align-items: center;
-    gap: 12px;
-    border-right: 1px solid rgba(255, 255, 255, 0.3);
-    padding-right: 12px;
-    flex-shrink: 0;
+    gap: 5px;
 }
 
-.logo-container {
-    width: 38px;
-    height: 38px;
-    flex-shrink: 0;
+.ticker-toggle-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border-dark, rgba(255, 255, 255, 0.15));
+    background: var(--frost-bg, rgba(255, 255, 255, 0.08));
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.rotating-logo {
-    width: 36px;
-    height: 36px;
-    animation: rotate-logo 5s linear infinite;
-}
-
-.news-info {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: white;
-    line-height: 1.2;
-}
-
-.news-info hr {
-    width: 75%;
-    margin: 5px 0;
-    border-color: var(--border-dark);
-}
-
-.news-title {
-    font-weight: 600;
-    font-size: 15px;
-}
-
-.news-time {
-    font-family: monospace;
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-
-.divider-line {
-    width: 1px;
-    background-color: rgba(255, 255, 255, 0.3);
-    height: 80%;
-}
-
-.news-toggle-buttons {
-    display: flex;
-    gap: 6px;
-    margin-left: 12px;
-}
-
-.toggle-btn {
-    background-color: rgba(255, 255, 255, 0.2);
-    border: none;
-    color: white;
-    padding: 4px 8px;
-    font-size: 11px;
+    padding: 0;
     cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.3s ease;
+    transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.toggle-btn:hover {
-    background-color: rgba(255, 255, 255, 0.35);
+.ticker-toggle-btn:hover {
+    background: var(--glass-lighter, rgba(255, 255, 255, 0.18));
+    border-color: var(--border-blue, rgba(70, 178, 255, 0.4));
 }
 
-.toggle-btn.active {
-    background-color: #28a745;
-    color: white;
-    font-weight: bold;
+.ticker-toggle-btn.active {
+    background: var(--btn-blue-bg, rgba(70, 178, 255, 0.28));
+    border-color: var(--border-blue, rgba(70, 178, 255, 0.55));
 }
 
-/* Responsive tweaks */
+.ticker-toggle-btn img {
+    width: 15px;
+    height: 15px;
+    object-fit: contain;
+}
+
+/* ── Divider: hidden until news loads ────────── */
+.news-ticker-divider {
+    height: 1px;
+    background: var(--border-dark, rgba(255, 255, 255, 0.12));
+    flex-shrink: 0;
+    display: none;
+}
+
+.news-modal.news-loaded .news-ticker-divider {
+    display: block;
+}
+
+/* ── Scrolling rail wrapper ──────────────────── */
+.news-ticker-wrapper {
+    overflow: hidden;
+    flex: 1;
+    display: none;
+    /* hidden until news loads */
+    align-items: center;
+    min-height: 0;
+}
+
+.news-modal.news-loading .news-ticker-wrapper,
+.news-modal.news-loaded .news-ticker-wrapper {
+    display: flex;
+}
+
+.news-ticker-rail {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 18px;
+    white-space: nowrap;
+    animation: ticker-scroll 380s linear infinite;
+}
+
+.news-ticker-rail:hover {
+    animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+/* ── Skeleton loader ─────────────────────────── */
+.ticker-skeleton {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 2px 0;
+}
+
+.ticker-skeleton-item {
+    height: 28px;
+    border-radius: 6px;
+    background: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.06) 25%,
+        rgba(255,255,255,0.14) 50%,
+        rgba(255,255,255,0.06) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    flex-shrink: 0;
+}
+
+.ticker-skeleton-item:nth-child(1) { width: 220px; }
+.ticker-skeleton-item:nth-child(2) { width: 180px; }
+.ticker-skeleton-item:nth-child(3) { width: 260px; }
+.ticker-skeleton-item:nth-child(4) { width: 200px; }
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Ticker items ────────────────────────────── */
+.ticker-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 240px;
+    max-width: 360px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--frost-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border-dark, rgba(255, 255, 255, 0.1));
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.ticker-item:hover {
+    background: var(--glass-lighter, rgba(255, 255, 255, 0.14));
+    border-color: var(--border-blue, rgba(70, 178, 255, 0.3));
+}
+
+.ticker-item.active {
+    background: var(--accent-bg-blue, rgba(70, 178, 255, 0.15));
+    border-color: var(--border-blue, rgba(70, 178, 255, 0.5));
+}
+
+.ticker-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.ticker-flag img {
+    display: block;
+    border-radius: 2px;
+}
+
+.ticker-tag {
+    font-weight: 700;
+    font-size: 8px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.06em;
+    color: #fff;
+}
+
+.ticker-tag.tag-news     { background: var(--ndma-green, #2ecc71); }
+.ticker-tag.tag-reddit   { background: #ff4500; }
+.ticker-tag.tag-mastodon { background: #6364ff; }
+
+.ticker-country {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+    text-transform: uppercase;
+}
+
+.ticker-bullet {
+    opacity: 0.45;
+    font-size: 9px;
+}
+
+.ticker-date {
+    font-size: 9px;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.45));
+}
+
+.ticker-headline {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary, rgba(255, 255, 255, 0.92));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 340px;
+}
+
+/* separator between items */
+.ticker-separator {
+    color: var(--border-dark, rgba(255,255,255,0.2));
+    font-size: 16px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+/* ── Responsive ──────────────────────────────── */
+@media (max-width: 1024px) {
+    .news-modal {
+        left: 255px;
+        width: calc(100% - 270px);
+    }
+}
+
 @media (max-width: 768px) {
     .news-modal {
         left: 2%;
         right: 2%;
-        padding: 0 8px;
-        height: auto;
-        flex-wrap: wrap;
-        justify-content: center;
+        width: auto;
+        max-height: 90px;
+        padding: 6px 10px 5px;
     }
+    .news-ticker-subtitle { display: none; }
+}
 
-    .news-header {
-        border-right: none;
-        padding-right: 0;
-        gap: 8px;
-        margin-bottom: 6px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-        width: 100%;
-        justify-content: center;
+@media (max-width: 480px) {
+    .news-modal {
+        left: 2%;
+        right: 2%;
+        width: auto;
+        max-height: 85px;
+        padding: 5px 8px;
     }
-
-    .news-scroll-wrapper {
-        width: 100%;
-    }
-
-    .news-scroll {
-        gap: 10px;
-        padding: 8px;
-    }
-
-    .toggle-btn {
-        font-size: 10px;
-        padding: 3px 6px;
-    }
-
-    .news-box {
-        font-size: 12px;
-        padding: 4px 8px;
-    }
+    .news-ticker-label { font-size: 10px; }
+    .news-ticker-subtitle { display: none; }
+    .ticker-headline { font-size: 10px; max-width: 260px; }
 }
 
 /* ======================================= */
@@ -3864,17 +3919,6 @@ button.custom-nav-btn.terrain-active:hover {
     /* Sidebar Panel - Enhanced Scaling */
     .sidebar-panel {
         width: 240px;
-    }
-
-    /* News Modal */
-    .news-modal {
-        left: 255px;
-        width: calc(100% - 270px);
-        height: 70px;
-    }
-
-    .news-scroll {
-        animation: scroll-left 400s linear infinite;
     }
 
     /* Time Slider */
@@ -4604,44 +4648,6 @@ button.custom-nav-btn.terrain-active:hover {
         height: 13px;
     }
 
-    /* ===========================
-       NEWS MODAL
-    =========================== */
-    .news-modal {
-        left: 5%;
-        width: 90%;
-        height: 65px;
-        bottom: 9px;
-        padding: 0 10px;
-    }
-
-    .news-scroll {
-        animation: scroll-left 300s linear infinite;
-        padding: 8px;
-    }
-
-    .news-box {
-        font-size: 9px;
-        padding: 4px 8px;
-    }
-
-    .rotating-logo {
-        width: 32px;
-        height: 32px;
-    }
-
-    .news-title {
-        font-size: 14px;
-    }
-
-    .news-time {
-        font-size: 11px;
-    }
-
-    .toggle-btn {
-        font-size: 10px;
-        padding: 3px 6px;
-    }
 }
 
 /* ============================================================================
@@ -5687,144 +5693,6 @@ button.custom-nav-btn.terrain-active:hover {
 
 
     /* ===========================
-       NEWS MODAL
-    =========================== */
-    .news-modal {
-        left: 2%;
-        width: 89%;
-        height: auto;
-        min-height: 55px;
-        bottom: 7px;
-        padding: 5px 7px;
-        flex-direction: column;
-        align-items: center;
-        border-width: 1.5px;
-    }
-
-    .news-header {
-        border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-        padding-right: 0;
-        padding-bottom: 5px;
-        gap: 5px;
-        width: 100%;
-        justify-content: center;
-    }
-
-    .logo-container {
-        width: 28px;
-        height: 28px;
-    }
-
-    .rotating-logo {
-        width: 24px;
-        height: 24px;
-    }
-
-    .news-info {
-        text-align: center;
-        flex-direction: row;
-        margin-left: 10px;
-    }
-
-    .news-info hr {
-        width: 55%;
-        margin: auto 10px;
-    }
-
-    .news-title {
-        font-size: 10px;
-        font-weight: 600;
-    }
-
-    .news-time {
-        font-size: 8px;
-    }
-
-    .divider-line {
-        display: none;
-    }
-
-    .news-scroll-wrapper {
-        width: 100%;
-        margin-top: 0;
-    }
-
-    .news-scroll {
-        animation: scroll-left 1000s linear infinite;
-        padding: 2px;
-        height: 50px;
-    }
-
-    .news-box {
-        font-size: 7px;
-        padding: 3px 5px;
-        border-radius: 3px;
-    }
-
-    .news-box .news-tag {
-        font-size: 8px;
-        padding: 1px 3px;
-    }
-
-    .news-box .news-country {
-        font-size: 9px;
-    }
-
-    .news-box .news-content {
-        margin-top: 4px;
-    }
-
-    .news-box .news-headline {
-        font-size: 9px;
-    }
-
-    .news-box .news-link {
-        font-size: 7px;
-    }
-
-    .reddit-news-box {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-    }
-
-    .reddit-news-tag {
-        padding: 1px 3px;
-        font-size: 8px;
-    }
-
-    .reddit-news-country {
-        font-size: 9px;
-    }
-
-    .news-toggle-buttons {
-        gap: 40px;
-        margin-left: 0px;
-        margin-top: 0;
-        width: 100%;
-        justify-content: center;
-    }
-
-    .toggle-btn {
-        font-size: 15px;
-        padding: 2px 4px;
-        border-radius: 3px;
-    }
-
-    #toggle-social-btn,
-    #fetch-regular-btn {
-        padding: 3px 5px;
-    }
-
-    #toggle-social-btn img,
-    #fetch-regular-btn img {
-        width: 20px;
-        height: 20px;
-    }
-
-    /* ===========================
        STORY MODE
     =========================== */
     #story-modal {
@@ -6268,33 +6136,6 @@ button.custom-nav-btn.terrain-active:hover {
         font-size: 8px;
     }
 
-    /* News Modal - Maximum Compression */
-    .news-modal {
-        min-height: 50px;
-    }
-
-    .rotating-logo {
-        width: 22px;
-        height: 22px;
-    }
-
-    .news-title {
-        font-size: 10px;
-    }
-
-    .news-time {
-        font-size: 8px;
-    }
-
-    .news-box {
-        font-size: 6px;
-        padding: 2px 4px;
-    }
-
-    .toggle-btn {
-        font-size: 7px;
-        padding: 2px 3px;
-    }
 }
 
 /* ============================================================================
