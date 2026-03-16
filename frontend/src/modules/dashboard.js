@@ -55,6 +55,7 @@ import { LayerOrderControl } from "./layer-order-control.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import { LayerInfoPanel } from "./layer-info-panel.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
+import { NCOPTourGuide } from "./tour-guide-manager.js";
 
 
 // ---- Mapbox token handling ----
@@ -143,6 +144,7 @@ class DashboardManager {
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
     new SidebarMenu();
     new UtilityManager();
+    window.ncopTourGuide = new NCOPTourGuide(this.#map);
 
     if (this.#storage) {
       this.#storage.updateLastLogin();
