@@ -237,6 +237,11 @@ export class NavigationPanel {
               <i data-lucide="chevron-up"></i>
           </button>
 
+          <!-- TOUR GUIDE -->
+          <button id="tourGuideBtn" class="custom-nav-btn tour-nav-btn" title="Start Guided Tour">
+              <i data-lucide="map"></i>
+          </button>
+
           <!-- ZOOM CONTROLS -->
           <button id="zoomIn" class="custom-nav-btn" title="Zoom In">
               <i data-lucide="plus"></i>
@@ -356,6 +361,10 @@ export class NavigationPanel {
     document
       .getElementById("navToggleBtn")
       ?.addEventListener("click", this.#handleNavToggle.bind(this));
+
+    document.getElementById("tourGuideBtn")?.addEventListener("click", () => {
+      window.ncopTourGuide?.toggle?.();
+    });
 
     // Zoom Controls
     document.getElementById("zoomIn")?.addEventListener("click", () => {

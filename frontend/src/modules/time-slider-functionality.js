@@ -106,6 +106,100 @@ function getMap() {
   return window.ncop_map;
 }
 
+function _extractStatusText(payload) {
+  if (!payload) return "";
+  if (typeof payload === "string") return payload.trim();
+  if (typeof payload !== "object") return "";
+
+  const directKeys = ["message", "detail", "error", "reason", "msg", "statusText"];
+  for (const key of directKeys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (value && typeof value === "object") {
+      if (typeof value.message === "string" && value.message.trim()) return value.message.trim();
+      if (typeof value.detail === "string" && value.detail.trim()) return value.detail.trim();
+    }
+  }
+  return "";
+}
+
+function _ensureTempSliderStatusElement() {
+  let popupEl = document.getElementById("temporalStatusPopup");
+  if (popupEl) return popupEl;
+
+  popupEl = document.createElement("div");
+  popupEl.id = "temporalStatusPopup";
+  popupEl.className = "temporal-status-popup";
+  popupEl.setAttribute("role", "alert");
+  popupEl.setAttribute("aria-live", "assertive");
+
+  popupEl.innerHTML = `
+    <div class="temporal-status-popup-header">
+      <span class="temporal-status-popup-title">Data Status</span>
+      <button type="button" class="temporal-status-popup-close" aria-label="Close status popup">&times;</button>
+    </div>
+    <div class="temporal-status-popup-message"></div>
+  `;
+
+  const closeBtn = popupEl.querySelector(".temporal-status-popup-close");
+  closeBtn?.addEventListener("click", () => {
+    clearTempSliderStatus();
+  });
+
+  document.body.appendChild(popupEl);
+  return popupEl;
+}
+
+function showTempSliderStatus(message, type = "info", textContent = "") {
+  const popupEl = _ensureTempSliderStatusElement();
+  if (!popupEl) return;
+  const messageEl = popupEl.querySelector(".temporal-status-popup-message");
+  if (messageEl) {
+    messageEl.textContent = message || "Unable to load temporal data.";
+  }
+  popupEl.classList.add("active");
+  popupEl.classList.remove("status-info", "status-warning", "status-error");
+  popupEl.classList.add(type === "error" ? "status-error" : type === "warning" ? "status-warning" : "status-info");
+}
+
+function clearTempSliderStatus() {
+  const popupEl = document.getElementById("temporalStatusPopup");
+  if (!popupEl) return;
+  const messageEl = popupEl.querySelector(".temporal-status-popup-message");
+  if (messageEl) messageEl.textContent = "";
+  popupEl.classList.remove("active", "status-info", "status-warning", "status-error");
+}
+
+function _inspectTemporalResponse(layers) {
+  const state = {
+    totalCollections: 0,
+    totalFeatures: 0,
+    errorText: "",
+  };
+  if (!Array.isArray(layers)) return state;
+
+  layers.forEach((entry) => {
+    const sourceDefs = [];
+    if (entry?.source) sourceDefs.push(entry.source);
+    if (Array.isArray(entry?.sources)) sourceDefs.push(...entry.sources);
+
+    sourceDefs.forEach((src) => {
+      const data = src?.data;
+      if (!data || typeof data !== "object") return;
+
+      if (!state.errorText) state.errorText = _extractStatusText(data);
+
+      const features = Array.isArray(data.features) ? data.features : null;
+      if (features) {
+        state.totalCollections += 1;
+        state.totalFeatures += features.length;
+      }
+    });
+  });
+
+  return state;
+}
+
 // ===== POPUP FORMATTING UTILITIES =====
 const PROPERTY_PRIORITY = {
   event: 1,
@@ -615,6 +709,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     hideAllSliderLayers();
     cleanupSliderLayers();
     tempSlider.style.display = "none";
+    clearTempSliderStatus();
     if (legendContainer) legendContainer.style.display = "none";
     currentActiveLayerSet = null;
     _sliderRestore = {
@@ -633,10 +728,23 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
   loadsliderlayertemporalIcons(layers);
 
+  if (!Array.isArray(layers) || layers.length === 0) {
+    showTempSliderStatus("No temporal features returned at the moment.", "warning", textContent);
+    return;
+  }
+
   tempSlider.style.display = "block";
+  clearTempSliderStatus();
   sliderLayers = [];
   currentActiveLayerSet = layerKey;
   _lastStepIndex = null;
+
+  const responseState = _inspectTemporalResponse(layers);
+  if (responseState.errorText) {
+    showTempSliderStatus(responseState.errorText, "error", textContent);
+  } else if (responseState.totalCollections > 0 && responseState.totalFeatures === 0) {
+    showTempSliderStatus("No features returned at the moment.", "warning", textContent);
+  }
 
   layers.forEach((entry, index) => {
     const group = [];
@@ -966,10 +1074,13 @@ async function updateTempSliderAsync(layersPromise, textContent, layerKey) {
     layers = await layersPromise;
   } catch (e) {
     console.error("updateTempSliderAsync: failed to resolve layers:", e);
+    const msg = _extractStatusText(e) || "Unable to load temporal data right now.";
+    showTempSliderStatus(msg, "error", textContent);
     return;
   }
   if (!Array.isArray(layers) || layers.length === 0) {
     console.warn("updateTempSliderAsync: empty layers array");
+    showTempSliderStatus("No temporal features returned at the moment.", "warning", textContent);
     return;
   }
   updateTempSlider(layers, textContent, layerKey);
