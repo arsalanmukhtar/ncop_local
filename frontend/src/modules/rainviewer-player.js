@@ -61,6 +61,32 @@ function rvBuildTileUrl(host, path, type) {
     return `${host}${path}/${size}/{z}/{x}/{y}/${tail}.png`;
 }
 
+function rvResolveSatelliteFrames(data) {
+    const sat = data?.satellite;
+    if (!sat || typeof sat !== "object") return [];
+
+    // Preferred known shape
+    if (Array.isArray(sat.infrared) && sat.infrared.length) return sat.infrared;
+
+    // Backward/alternate shapes observed across API revisions
+    if (Array.isArray(sat.past) && sat.past.length) return sat.past;
+    if (Array.isArray(sat.frames) && sat.frames.length) return sat.frames;
+
+    // Last-resort: find any array of frame-like objects ({time, path})
+    for (const key of Object.keys(sat)) {
+        const v = sat[key];
+        if (
+            Array.isArray(v) &&
+            v.length &&
+            v.some((it) => it && typeof it === "object" && it.time && it.path)
+        ) {
+            return v;
+        }
+    }
+
+    return [];
+}
+
 function rvBuildFrames(data, mode) {
     const frames = [];
 
@@ -81,12 +107,13 @@ function rvBuildFrames(data, mode) {
             if (frames.length >= 6) break;
         }
     } else {
-        const ir = Array.isArray(data?.satellite?.infrared) ? data.satellite.infrared : [];
-        const items = [...ir].sort((a, b) => a.time - b.time);
+        const satFrames = rvResolveSatelliteFrames(data);
+        const items = [...satFrames].sort((a, b) => a.time - b.time);
 
         const stride = Math.max(1, Math.floor(items.length / 6)) || 1;
         for (let i = 0; i < items.length; i += stride) {
             const it = items[i];
+            if (!it?.path || !it?.time) continue;
             frames.push({
                 time: it.time,
                 path: it.path,
@@ -363,12 +390,15 @@ function rvBindDragResize(panelId, dragBtnId, resizeBtnId) {
 }
 
 function rvSetMode(mode) {
-    RV.mode = mode === "satellite" ? "satellite" : "radar";
+    RV.mode = mode === "satellite" || mode === "satellite_infrared" ? "satellite" : "radar";
 
     const modeBtn = document.getElementById("rvModeButton");
     if (modeBtn) modeBtn.textContent = RV.mode === "radar" ? "Radar" : "Satellite";
 
     RV.frames = rvBuildFrames(RV.data, RV.mode);
+    if (!RV.frames.length) {
+        console.warn(`RainViewer: no frames available for mode "${RV.mode}"`);
+    }
     RV.index = 0;
 
     rvPause();
@@ -485,7 +515,11 @@ export function initRainViewerPlayer(map) {
 
     // apply requested/default mode (BUT DON'T ADD LAYERS YET)
     RV.lockedMode = !!window.__rvLockMode;
-    const requested = window.__rvRequestedMode || "radar";
+    const requestedRaw = window.__rvRequestedMode || "radar";
+    const requested =
+        requestedRaw === "satellite" || requestedRaw === "satellite_infrared"
+            ? "satellite"
+            : "radar";
 
     // ✅ IMPORTANT: Only build frames, don't add layers until showRainViewerPlayer is called
     RV.frames = rvBuildFrames(RV.data, requested);

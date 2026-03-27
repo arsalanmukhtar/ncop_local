@@ -18,6 +18,7 @@ from .views import (
     TemporalGEELayerView,
     SlickPlusGeojsonApi,
     GdeltNewsEventsApi,
+    WindOceanParticleDataApi,
 
     
 )
@@ -43,5 +44,6 @@ urlpatterns = [
     path('api/gee/catalog/', GEECatalogView.as_view(), name='gee_catalog'),
     path('api/gee/legend/', GenerateLegendView.as_view(), name='gee_legend'),
     path('api/gee/temporal-layer/', TemporalGEELayerView.as_view(), name='temporal_gee_layer'),
+    path("api/wind-ocean-particles/", WindOceanParticleDataApi.as_view(), name="wind_ocean_particles"),
     path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" )
 ]

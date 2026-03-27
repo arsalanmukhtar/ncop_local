@@ -7,6 +7,10 @@
 // Single source of truth for navigation + news
 
 import { MapControls } from "./map-controls.js";
+import {
+  toggleWindParticleLayer,
+  toggleOceanParticleLayer,
+} from "./wind-ocean-particles.js";
 
 /**
  * South Asia Geographic Coordinates
@@ -239,6 +243,16 @@ export class NavigationPanel {
           <button id="projectionSwitch" class="custom-nav-btn" title="Map Projections">
               <i data-lucide="earth"></i>
           </button>
+
+          <!-- WIND PARTICLES -->
+          <button id="windParticles" class="custom-nav-btn" title="Toggle Wind Animation">
+              <i data-lucide="wind"></i>
+          </button>
+
+          <!-- OCEAN CURRENTS -->
+          <button id="oceanParticles" class="custom-nav-btn" title="Toggle Ocean Currents">
+              <i data-lucide="waves"></i>
+          </button>
           
           <!-- LOCATE USER -->
           <button id="locate" class="custom-nav-btn" title="Find My Location (Islamabad)">
@@ -370,6 +384,20 @@ export class NavigationPanel {
     document
       .getElementById("locate")
       ?.addEventListener("click", this.#handleLocate.bind(this));
+
+    // Wind particles
+    document.getElementById("windParticles")?.addEventListener("click", () => {
+      const isOn = toggleWindParticleLayer();
+      document.getElementById("windParticles")?.classList.toggle("active-wind", isOn);
+    });
+
+    // Ocean particles
+    document.getElementById("oceanParticles")?.addEventListener("click", () => {
+      const isOn = toggleOceanParticleLayer();
+      document
+        .getElementById("oceanParticles")
+        ?.classList.toggle("active-ocean", isOn);
+    });
 
     // Home Extent (South Asia)
     document

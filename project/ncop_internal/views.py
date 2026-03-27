@@ -62,6 +62,7 @@ from ncop_project.settings.base import (
 )
 
 import os
+import math
 import time
 import asyncio
 import httpx
@@ -5305,6 +5306,293 @@ class GdeltNewsEventsApi(View):
                 self.thread_pool.shutdown(wait=False)
         except:
             pass
+
+
+class _WopRateLimiter:
+    def __init__(self, rate_per_sec=8):
+        self.interval = 1.0 / rate_per_sec
+        self.lock = threading.Lock()
+        self.last = 0.0
+
+    def wait(self):
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.last
+            if elapsed < self.interval:
+                time.sleep(self.interval - elapsed)
+            self.last = time.time()
+
+
+_wop_limiter = _WopRateLimiter(rate_per_sec=8)
+
+
+class WindOceanParticleDataApi(LoginRequiredMixin, View):
+    """
+    GET /api/wind-ocean-particles/?sw_lat=&sw_lng=&ne_lat=&ne_lng=
+    Returns:
+    {
+      "bbox": {...},
+      "meta": {...},
+      "wind": [{lat,lon,u,v,spd}, ...],
+      "ocean": [{lat,lon,u,v,spd}, ...]
+    }
+    """
+
+    WIND_URL = "https://api.open-meteo.com/v1/forecast"
+    MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
+
+    GRID_ROWS = 6
+    GRID_COLS = 10
+    CACHE_TTL = 3600
+    REQ_TIMEOUT = 10
+    MAX_WORKERS = 16
+
+    @staticmethod
+    def _normalize_bbox(sw_lat, sw_lng, ne_lat, ne_lng):
+        sw_lat = max(float(sw_lat), -85.0)
+        ne_lat = min(float(ne_lat), 85.0)
+        sw_lng = float(sw_lng)
+        ne_lng = float(ne_lng)
+
+        if sw_lat > ne_lat:
+            sw_lat, ne_lat = ne_lat, sw_lat
+
+        def norm_lon(lon):
+            while lon < -180:
+                lon += 360
+            while lon > 180:
+                lon -= 360
+            return lon
+
+        sw_lng = norm_lon(sw_lng)
+        ne_lng = norm_lon(ne_lng)
+
+        return sw_lat, sw_lng, ne_lat, ne_lng
+
+    @staticmethod
+    def _bbox_span(sw_lat, sw_lng, ne_lat, ne_lng):
+        lat_span = max(0.1, abs(ne_lat - sw_lat))
+        lon_span = abs(ne_lng - sw_lng)
+        if lon_span > 180:
+            lon_span = 360 - lon_span
+        lon_span = max(0.1, lon_span)
+        return lat_span, lon_span
+
+    def _grid_shape(self, sw_lat, sw_lng, ne_lat, ne_lng):
+        lat_span, lon_span = self._bbox_span(sw_lat, sw_lng, ne_lat, ne_lng)
+
+        rows = self.GRID_ROWS
+        cols = self.GRID_COLS
+
+        if lat_span > 20:
+            rows += 1
+        if lat_span > 40:
+            rows += 1
+
+        if lon_span > 25:
+            cols += 2
+        if lon_span > 50:
+            cols += 2
+
+        rows = min(rows, 8)
+        cols = min(cols, 14)
+        return rows, cols
+
+    @staticmethod
+    def _make_grid(sw_lat, sw_lng, ne_lat, ne_lng, rows, cols):
+        if sw_lng <= ne_lng:
+            return [
+                (
+                    round(sw_lat + (ne_lat - sw_lat) * r / max(rows - 1, 1), 3),
+                    round(sw_lng + (ne_lng - sw_lng) * c / max(cols - 1, 1), 3),
+                )
+                for r in range(rows)
+                for c in range(cols)
+            ]
+
+        west_span = 180 - sw_lng
+        east_span = ne_lng + 180
+        total_span = west_span + east_span
+
+        pts = []
+        for r in range(rows):
+            lat = round(sw_lat + (ne_lat - sw_lat) * r / max(rows - 1, 1), 3)
+            for c in range(cols):
+                frac = c / max(cols - 1, 1)
+                offset = frac * total_span
+                if offset <= west_span:
+                    lon = sw_lng + offset
+                else:
+                    lon = -180 + (offset - west_span)
+                pts.append((lat, round(lon, 3)))
+        return pts
+
+    def _fetch_wind(self, lat: float, lon: float) -> Optional[Dict]:
+        _wop_limiter.wait()
+        try:
+            r = requests.get(
+                self.WIND_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "wind_speed_10m,wind_direction_10m",
+                    "wind_speed_unit": "ms",
+                },
+                timeout=self.REQ_TIMEOUT,
+            )
+            r.raise_for_status()
+            d = r.json()
+
+            c = d.get("current", {}) or {}
+            spd = c.get("wind_speed_10m")
+            dirn = c.get("wind_direction_10m")
+
+            if spd is None or dirn is None:
+                h = d.get("hourly", {}) or {}
+                spd_arr = h.get("wind_speed_10m") or []
+                dir_arr = h.get("wind_direction_10m") or []
+                if spd_arr and dir_arr:
+                    spd = spd_arr[0]
+                    dirn = dir_arr[0]
+
+            if spd is None or dirn is None:
+                return None
+
+            spd = float(spd)
+            dirn = float(dirn)
+            rad = math.radians(dirn)
+
+            return {
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "u": round(-math.sin(rad) * spd, 4),
+                "v": round(-math.cos(rad) * spd, 4),
+                "spd": round(spd, 2),
+            }
+        except Exception as e:
+            print(f"[WOP wind] failed at lat={lat}, lon={lon}: {e}")
+            return None
+
+    def _fetch_ocean(self, lat: float, lon: float) -> Optional[Dict]:
+        _wop_limiter.wait()
+        try:
+            r = requests.get(
+                self.MARINE_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "ocean_current_velocity,ocean_current_direction",
+                    "hourly": "ocean_current_velocity,ocean_current_direction",
+                    "cell_selection": "sea",
+                    "length_unit": "metric",
+                },
+                timeout=self.REQ_TIMEOUT,
+            )
+            r.raise_for_status()
+            d = r.json()
+
+            if d.get("error"):
+                return None
+
+            c = d.get("current", {}) or {}
+            spd = c.get("ocean_current_velocity")
+            dirn = c.get("ocean_current_direction")
+
+            if spd is None or dirn is None:
+                h = d.get("hourly", {}) or {}
+                spd_arr = h.get("ocean_current_velocity") or []
+                dir_arr = h.get("ocean_current_direction") or []
+                if spd_arr and dir_arr:
+                    spd = spd_arr[0]
+                    dirn = dir_arr[0]
+
+            if spd is None or dirn is None:
+                return None
+
+            spd = float(spd)
+            dirn = float(dirn)
+
+            if not math.isfinite(spd) or not math.isfinite(dirn):
+                return None
+
+            rad = math.radians(dirn)
+
+            return {
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "u": round(math.sin(rad) * spd, 4),
+                "v": round(math.cos(rad) * spd, 4),
+                "spd": round(spd, 4),
+            }
+        except Exception as e:
+            print(f"[WOP ocean] failed at lat={lat}, lon={lon}: {e}")
+            return None
+
+    def get(self, request, *args, **kwargs):
+        try:
+            sw_lat, sw_lng, ne_lat, ne_lng = self._normalize_bbox(
+                request.GET["sw_lat"],
+                request.GET["sw_lng"],
+                request.GET["ne_lat"],
+                request.GET["ne_lng"],
+            )
+        except (KeyError, TypeError, ValueError):
+            return JsonResponse({"error": "Invalid bbox params"}, status=400)
+
+        rows, cols = self._grid_shape(sw_lat, sw_lng, ne_lat, ne_lng)
+
+        ck = (
+            f"wop|{round(sw_lat, 2)}|{round(sw_lng, 2)}|"
+            f"{round(ne_lat, 2)}|{round(ne_lng, 2)}|{rows}|{cols}"
+        )
+
+        cached = cache.get(ck)
+        if cached:
+            return JsonResponse(cached)
+
+        grid = self._make_grid(sw_lat, sw_lng, ne_lat, ne_lng, rows, cols)
+
+        wind_pts: List[Dict] = []
+        ocean_pts: List[Dict] = []
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as ex:
+            wind_futs = [ex.submit(self._fetch_wind, lat, lon) for lat, lon in grid]
+            ocean_futs = [ex.submit(self._fetch_ocean, lat, lon) for lat, lon in grid]
+
+            for fut in as_completed(wind_futs):
+                try:
+                    res = fut.result()
+                    if res is not None:
+                        wind_pts.append(res)
+                except Exception as e:
+                    print(f"[WOP wind future] {e}")
+
+            for fut in as_completed(ocean_futs):
+                try:
+                    res = fut.result()
+                    if res is not None:
+                        ocean_pts.append(res)
+                except Exception as e:
+                    print(f"[WOP ocean future] {e}")
+
+        payload = {
+            "bbox": {"s": sw_lat, "w": sw_lng, "n": ne_lat, "e": ne_lng},
+            "meta": {
+                "rows": rows,
+                "cols": cols,
+                "grid_count": len(grid),
+                "wind_count": len(wind_pts),
+                "ocean_count": len(ocean_pts),
+                "empty": (len(wind_pts) == 0 and len(ocean_pts) == 0),
+            },
+            "wind": wind_pts,
+            "ocean": ocean_pts,
+        }
+
+        if wind_pts or ocean_pts:
+            cache.set(ck, payload, self.CACHE_TTL)
+
+        return JsonResponse(payload)
 
 
 # ==================== UTILITY FUNCTIONS & TESTING ====================
