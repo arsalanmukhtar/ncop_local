@@ -3124,6 +3124,7 @@ button.custom-nav-btn.active-ocean {
     display: none;
     animation: nrotateMenu 3s;
     backdrop-filter: blur(10px);
+    z-index: 1001;
     touch-action: none;
     /* Prevent default touch behaviors during drag/resize */
 }

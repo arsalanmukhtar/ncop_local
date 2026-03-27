@@ -526,8 +526,10 @@ function _wopCreateCanvases() {
     document.body.appendChild(c);
     return c;
   };
-  _wopOCnv = mk("wop-ocean-canvas", 398);
-  _wopWCnv = mk("wop-wind-canvas", 399);
+  // Keep particle canvases above map imagery/layers but below UI chrome
+  // (sidebar, nav, sliders, dialogs, controls).
+  _wopOCnv = mk("wop-ocean-canvas", 4);
+  _wopWCnv = mk("wop-wind-canvas", 5);
   _wopWCtx = _wopWCnv.getContext("2d", { alpha: true });
   _wopOCtx = _wopOCnv.getContext("2d", { alpha: true });
   _wopSyncCanvasToMap();
