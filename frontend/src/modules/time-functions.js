@@ -2068,21 +2068,21 @@ export function generateMBX_MeteoblueHourlyCloudPrecipLayers(model, metbluT) {
 }
 
 /***********************************************************************
- * 3) Meteoblue “Hourly Temperature” (vector, 8 entries)
- *    (Keeps your hourly URL; takes 'level' explicitly)
+ * 3) Meteoblue “Daily Max Temperature” (vector, 8 entries)
+ *    Kept under the same exported function name for compatibility.
  ***********************************************************************/
 export function generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbluT) {
   const out = [];
 
   Array.from({ length: 8 }, (_, index) => {
     const date = getNextNDays(index, "short");
-    const time = getNextNDaysWithTime(index);
+    const time = getNextDaysMidnight(index);
     const suffix = MBX_DAY_SUFFIXES[index];
     const sourceId = `mbx_temp_hourly_${suffix}`;
 
     const url =
       `https://maps-api.meteoblue.com/v1/map/vector/${model}/${time}` +
-      `/temperatureLayer~11~${level}~hourly~none~contourSteps~-100.0~-8.0~-6.0~-4.0~-2.0~0.0~2.0~4.0~6.0~8.0~10.0~12.0~14.0~16.0~18.0~20.0~46.0/{z}/{x}/{y}` +
+      `/temperatureColortable~11~${level}~daily~max~contourSteps~-100.0~-80.0~-75.0~-70.0~-65.0~-60.0~-55.0~-50.0~-45.0~-40.0~-35.0~-32.0~-30.0~-28.0~-26.0~-24.0~-22.0~-20.0~-18.0~-16.0~-14.0~-12.0~-10.0~-8.0~-6.0~-4.0~-2.0~0.0~2.0~4.0~6.0~8.0~10.0~12.0~14.0~16.0~18.0~20.0~22.0~24.0~26.0~28.0~30.0~32.0~34.0~36.0~38.0~40.0~42.0~44.0~46.0/{z}/{x}/{y}` +
       `?temperatureUnit=C&apikey=${metbluT}`;
 
     out.push({
@@ -2096,7 +2096,7 @@ export function generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbl
           id: `mbx_temp_layer_${suffix}`,
           type: "fill",
           source: sourceId,
-          "source-layer": "temperatureLayer",
+          "source-layer": "temperatureColortable",
           layout: { visibility: "none" },
           paint: {
             "fill-antialias": false,
@@ -2104,23 +2104,22 @@ export function generateMBX_MeteoblueHourlyTemperatureLayers(model, level, metbl
             "fill-opacity-transition": { duration: 500 },
             "fill-color": [
               "interpolate", ["linear"], ["get", "minValue"],
-              -100, "rgba(52,140,237,1.0)",
-              -8, "rgba(68,177,246,1.0)",
-              -6, "rgba(81,203,250,1.0)",
-              -4, "rgba(128,224,247,1.0)",
-              -2, "rgba(160,234,247,1.0)",
-              0, "rgba(0,239,124,1.0)",
-              2, "rgba(0,228,82,1.0)",
-              4, "rgba(0,200,72,1.0)",
-              6, "rgba(16,184,122,1.0)",
-              8, "rgba(41,123,93,1.0)",
-              10, "rgba(0,114,41,1.0)",
-              12, "rgba(60,161,44,1.0)",
-              14, "rgba(121,208,48,1.0)",
-              16, "rgba(181,255,51,1.0)",
-              18, "rgba(216,247,161,1.0)",
-              20, "rgba(255,246,0,1.0)",
-              46, "rgba(243,22,194,1.0)"
+              -100, "rgba(28, 55, 138, 1.0)",
+              -80, "rgba(38, 79, 172, 1.0)",
+              -60, "rgba(52, 140, 237, 1.0)",
+              -40, "rgba(68, 177, 246, 1.0)",
+              -20, "rgba(81, 203, 250, 1.0)",
+              -10, "rgba(128, 224, 247, 1.0)",
+              -2, "rgba(160, 234, 247, 1.0)",
+              0, "rgba(0, 239, 124, 1.0)",
+              6, "rgba(0, 200, 72, 1.0)",
+              12, "rgba(60, 161, 44, 1.0)",
+              18, "rgba(181, 255, 51, 1.0)",
+              24, "rgba(255, 246, 0, 1.0)",
+              30, "rgba(255, 182, 0, 1.0)",
+              36, "rgba(255, 107, 0, 1.0)",
+              42, "rgba(255, 46, 46, 1.0)",
+              46, "rgba(243, 22, 194, 1.0)"
             ],
           },
         },

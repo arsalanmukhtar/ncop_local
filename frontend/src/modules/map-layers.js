@@ -1094,24 +1094,9 @@ export const ncop_menu_items = {
           image: getImage("meteoblue_nems_temperature.webp"),
           type: "raster",
           theme: "slider",
+          title: "Daily Max Temperature (°C)",
           geometry: null,
-          information:"The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
-        },
-        official_weather_warnings_forecast: {
-          label: "Official Weather Warnings (Forecast)",
-          image: getImage("nems_forecast_offical_warnings.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          information:"The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
-        },
-        meteorological_risks_forecast: {
-          label: "Meteorological Risks (Forecast)",
-          image: getImage("nems_forecast_met_warnings.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          information:"The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+          information:"The Temperature (2m Above Ground) layer displays the forecast daily maximum temperature at 2 meters above ground level. This layer is useful for tracking expected daytime heat patterns and temperature extremes.",
         },
       },
     },
@@ -2600,6 +2585,26 @@ export const ncop_menu_items = {
         },
 
         "Meteoblue early warnings": {
+          temporal: {
+            official_weather_warnings_forecast: {
+              label: "Official Weather Warnings (Forecast)",
+              image: getImage("nems_forecast_offical_warnings.webp"),
+              type: "raster",
+              theme: "slider",
+              geometry: null,
+              information:
+                "The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
+            },
+            meteorological_risks_forecast: {
+              label: "Meteorological Risks (Forecast)",
+              image: getImage("nems_forecast_met_warnings.webp"),
+              type: "raster",
+              theme: "slider",
+              geometry: null,
+              information:
+                "The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+            },
+          },
           static: {
             lhasa2_latest: {
               label: "LHASA2 Landslide Probability (Latest)",
