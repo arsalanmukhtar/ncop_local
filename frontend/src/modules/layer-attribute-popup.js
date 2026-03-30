@@ -10,6 +10,11 @@
 import { ncop_menu_items } from "./map-layers.js";
 import Chart from "chart.js/auto";
 
+const ndmaLogoSrc = new URL(
+  "../assets/images/bg_images/ndma-logo.png",
+  import.meta.url
+).href;
+
 function prettyAttributeName(key) {
   return String(key)
     .replace(/_/g, " ")
@@ -755,6 +760,563 @@ function createPmdChart(canvas, props) {
   });
 }
 
+function buildEonetPopupContent(props) {
+  let categories = [];
+  let sources = [];
+
+  try {
+    categories = JSON.parse(props.categories_json || "[]");
+  } catch (_) {}
+  try {
+    sources = JSON.parse(props.sources_json || "[]");
+  } catch (_) {}
+
+  const categoryHtml =
+    categories.length > 0
+      ? categories
+          .map(
+            (category) =>
+              `<span style="display:inline-block;background:#1d4ed8;color:#eff6ff;padding:3px 8px;border-radius:999px;font-size:11px;margin:0 6px 6px 0;">${category.title || category.id || "Category"}</span>`
+          )
+          .join("")
+      : `<span style="color:#94a3b8;">No category metadata</span>`;
+
+  const sourceHtml =
+    sources.length > 0
+      ? sources
+          .map((source) => {
+            const label = source.id || "Source";
+            const url = source.url || "";
+            if (url) {
+              return `<li><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;">${label}</a></li>`;
+            }
+            return `<li>${label}</li>`;
+          })
+          .join("")
+      : `<li>No source links available</li>`;
+
+  const eventLink = props.event_link
+    ? `<a href="${props.event_link}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;">Open EONET Event</a>`
+    : "";
+
+  return `<div style="color:#e5eef7;max-width:320px;line-height:1.45;">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:linear-gradient(135deg,#0f172a,#1e293b);margin-bottom:8px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;line-height:1.25;">${props.title || "NASA EONET Event"}</div>
+        <div style="font-size:11px;color:#cbd5e1;margin-top:4px;">ID: ${props.event_id || "N/A"}</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:white;background:${props.event_status === "Closed" ? "#64748b" : "#16a34a"};padding:4px 8px;border-radius:999px;white-space:nowrap;">${props.event_status || "Open"}</div>
+    </div>
+    <div style="margin-bottom:8px;">
+      ${categoryHtml}
+    </div>
+    <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:10px;padding:8px;font-size:11px;margin-bottom:8px;">
+      <div><strong>Description:</strong> ${props.description || "No description available."}</div>
+      <div style="margin-top:6px;"><strong>Closed:</strong> ${props.closed || "Still open"}</div>
+      <div><strong>Magnitude:</strong> ${props.magnitude_label || "N/A"}</div>
+      ${
+        props.magnitude_description
+          ? `<div><strong>Magnitude Notes:</strong> ${props.magnitude_description}</div>`
+          : ""
+      }
+      ${eventLink ? `<div style="margin-top:6px;">${eventLink}</div>` : ""}
+    </div>
+    <div style="background:#0f172a;border:1px solid rgba(148,163,184,0.22);border-radius:10px;padding:8px;font-size:11px;">
+      <div style="font-weight:700;margin-bottom:6px;">Sources</div>
+      <ul style="padding-left:18px;margin:0;">${sourceHtml}</ul>
+    </div>
+  </div>`;
+}
+
+let activeUsgsShakeMap = null;
+
+function formatUsgsTime(value) {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-GB", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }) + " UTC";
+}
+
+function ensureUsgsLegendPanel() {
+  let panel = document.getElementById("usgs-shakemap-panel");
+  if (panel) return panel;
+
+  if (!document.getElementById("usgs-shakemap-panel-styles")) {
+    const style = document.createElement("style");
+    style.id = "usgs-shakemap-panel-styles";
+    style.textContent = `
+      #usgs-shakemap-panel {
+        position: absolute;
+        right: 52px;
+        bottom: 18px;
+        z-index: 20;
+        width: 548px;
+        max-width: calc(100vw - 24px);
+        max-height: 46vh;
+        overflow: hidden;
+        display: none;
+        color: #e2e8f0;
+        border-radius: 20px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background:
+          linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.96)),
+          radial-gradient(circle at top left, rgba(56, 189, 248, 0.2), transparent 35%);
+        box-shadow:
+          0 22px 50px rgba(2, 6, 23, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(14px);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-shell {
+        padding: 14px;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-header {
+        display: flex;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-logo {
+        width: 58px;
+        height: 58px;
+        border-radius: 18px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.92));
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-logo img {
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+        animation: usgsPanelSpin 16s linear infinite;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-info {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-kicker {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+        margin-bottom: 4px;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-title {
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1.05;
+        color: #f8fafc;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-subtitle {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        color: #cbd5e1;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.54);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-label-wrap {
+        min-width: 0;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-label-caption {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        margin-bottom: 4px;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: #f8fafc;
+        word-break: break-word;
+      }
+
+      #usgs-shakemap-panel .usgs-clear-shakemap {
+        border: none;
+        border-radius: 12px;
+        padding: 9px 14px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #ef4444, #b91c1c);
+        box-shadow: 0 10px 20px rgba(127, 29, 29, 0.35);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+      }
+
+      #usgs-shakemap-panel .usgs-clear-shakemap:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.04);
+        box-shadow: 0 14px 24px rgba(127, 29, 29, 0.45);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-legend {
+        overflow: auto;
+        max-height: calc(46vh - 150px);
+        border-radius: 16px;
+        padding: 12px;
+        background:
+          linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(2, 6, 23, 0.8)),
+          radial-gradient(circle at top right, rgba(14, 165, 233, 0.15), transparent 30%);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-legend-title {
+        margin-bottom: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+      }
+
+      #usgs-shakemap-panel .usgs-panel-legend img {
+        width: 100%;
+        display: block;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.32);
+      }
+
+      #usgs-shakemap-panel .usgs-panel-empty {
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.52);
+        border: 1px dashed rgba(148, 163, 184, 0.22);
+        color: #cbd5e1;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      @keyframes usgsPanelSpin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      @media (max-width: 640px) {
+        #usgs-shakemap-panel {
+          right: 10px;
+          left: 10px;
+          bottom: 10px;
+          width: auto;
+          max-width: none;
+          max-height: 50vh;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  panel = document.createElement("div");
+  panel.id = "usgs-shakemap-panel";
+  document.body.appendChild(panel);
+  return panel;
+}
+
+function clearUsgsShakeMapLayer() {
+  const map = window.ncop_map || window.map;
+  if (map && activeUsgsShakeMap) {
+    if (map.getLayer(activeUsgsShakeMap.layerId)) map.removeLayer(activeUsgsShakeMap.layerId);
+    if (map.getSource(activeUsgsShakeMap.sourceId)) map.removeSource(activeUsgsShakeMap.sourceId);
+  }
+  activeUsgsShakeMap = null;
+  const panel = document.getElementById("usgs-shakemap-panel");
+  if (panel) {
+    panel.style.display = "none";
+    panel.innerHTML = "";
+  }
+}
+
+function collectCoordinates(geometry, bucket = []) {
+  if (!geometry) return bucket;
+  const coords = geometry.coordinates;
+  if (!Array.isArray(coords)) return bucket;
+  if (typeof coords[0] === "number") {
+    bucket.push([coords[0], coords[1]]);
+    return bucket;
+  }
+  coords.forEach((item) => collectCoordinates({ coordinates: item }, bucket));
+  return bucket;
+}
+
+async function animateUsgsShakeMapLayer(contentUrl, legendUrl, label) {
+  const map = window.ncop_map || window.map;
+  if (!map) return;
+
+  clearUsgsShakeMapLayer();
+
+  const response = await fetch(
+    `${window.baseUrl || window.location.origin}/get-usgs-shakemap-content/?url=${encodeURIComponent(contentUrl)}`
+  );
+  if (!response.ok) {
+    throw new Error("Could not load ShakeMap content");
+  }
+  const geojson = await response.json();
+  const features = geojson.features || [];
+  if (!features.length) {
+    throw new Error("ShakeMap has no features");
+  }
+
+  const firstType = features[0]?.geometry?.type || "";
+  let layerType = "line";
+  let paint = {};
+
+  if (firstType.includes("Point")) {
+    layerType = "circle";
+    paint = {
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["coalesce", ["to-number", ["get", "intensity"]], 0],
+        0,
+        5,
+        10,
+        18,
+      ],
+      "circle-color": [
+        "coalesce",
+        ["to-color", ["get", "color"]],
+        "#ef4444",
+      ],
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "#ffffff",
+      "circle-opacity": 0.88,
+    };
+  } else if (firstType.includes("Polygon")) {
+    layerType = "fill";
+    paint = {
+      "fill-color": ["coalesce", ["to-color", ["get", "color"]], "#ef4444"],
+      "fill-opacity": 0.4,
+      "fill-outline-color": "#111827",
+    };
+  } else {
+    layerType = "line";
+    paint = {
+      "line-color": ["coalesce", ["to-color", ["get", "color"]], "#ef4444"],
+      "line-width": [
+        "coalesce",
+        ["to-number", ["get", "weight"]],
+        2,
+      ],
+    };
+  }
+
+  const sourceId = "usgs_shakemap_source";
+  const layerId = "usgs_shakemap_layer";
+  const animatedData = { type: "FeatureCollection", features: [] };
+
+  map.addSource(sourceId, { type: "geojson", data: animatedData });
+  map.addLayer({ id: layerId, type: layerType, source: sourceId, paint });
+  activeUsgsShakeMap = { sourceId, layerId };
+
+  const bounds = features.reduce((acc, feature) => {
+    collectCoordinates(feature.geometry).forEach((coord) => acc.extend(coord));
+    return acc;
+  }, new mapboxgl.LngLatBounds());
+  if (!bounds.isEmpty()) {
+    map.fitBounds(bounds, { padding: 32, duration: 900 });
+  }
+
+  let index = 0;
+  const batchSize = Math.max(1, Math.ceil(features.length / 30));
+  const step = () => {
+    if (!map.getSource(sourceId)) return;
+    for (let i = 0; i < batchSize && index < features.length; i += 1) {
+      animatedData.features.push(features[index]);
+      index += 1;
+    }
+    map.getSource(sourceId).setData(animatedData);
+    if (index < features.length) {
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
+
+  const panel = ensureUsgsLegendPanel();
+  panel.style.display = "block";
+  panel.innerHTML = `
+    <div class="usgs-panel-shell">
+      <div class="usgs-panel-header">
+        <div class="usgs-panel-logo">
+          <img src="${ndmaLogoSrc}" alt="NDMA Logo" />
+        </div>
+        <div class="usgs-panel-info">
+          <div class="usgs-panel-kicker">USGS Monitoring</div>
+          <div class="usgs-panel-title">ShakeMap</div>
+          <div class="usgs-panel-subtitle">Live seismic intensity overlay and supporting legend for the selected earthquake event.</div>
+        </div>
+      </div>
+      <div class="usgs-panel-actions">
+        <div class="usgs-panel-label-wrap">
+          <div class="usgs-panel-label-caption">Active Product</div>
+          <div class="usgs-panel-label">${label}</div>
+        </div>
+        <button type="button" class="usgs-clear-shakemap">Clear</button>
+      </div>
+      <div class="usgs-panel-legend">
+        <div class="usgs-panel-legend-title">Legend Preview</div>
+        ${
+          legendUrl
+            ? `<img src="${legendUrl}" alt="ShakeMap legend" />`
+            : `<div class="usgs-panel-empty">No legend is available for this ShakeMap product, but the selected overlay is still active on the map.</div>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function pickPreferredUsgsShakemapContent(contents) {
+  const preferredKeys = [
+    "download/cont_mmi.json",
+    "download/cont_pga.json",
+    "download/cont_pgv.json",
+    "download/cont_mi.json",
+    "download/stationlist.json",
+  ];
+  for (const key of preferredKeys) {
+    if (contents[key]?.url) {
+      return {
+        url: contents[key].url,
+        label: key.split("/").pop().replace(".json", "").replace("cont_", "").toUpperCase(),
+        legendUrl: contents["download/mmi_legend.png"]?.url || "",
+      };
+    }
+  }
+  return null;
+}
+
+function buildUsgsPopupContent(props) {
+  return `<div style="color:#e5eef7;max-width:320px;line-height:1.45;">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:linear-gradient(135deg,#0f172a,#1e293b);margin-bottom:8px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;line-height:1.25;">${props.title || "USGS Earthquake"}</div>
+        <div style="font-size:11px;color:#cbd5e1;margin-top:4px;">${props.place || "Unknown location"}</div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:white;background:#991b1b;padding:4px 8px;border-radius:999px;white-space:nowrap;">M ${props.mag ?? "N/A"}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:8px;">
+      <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+        <div style="font-size:10px;color:#94a3b8;">Depth</div>
+        <div style="font-size:15px;font-weight:700;">${props.depth_km ?? "N/A"} km</div>
+      </div>
+      <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+        <div style="font-size:10px;color:#94a3b8;">Significance</div>
+        <div style="font-size:15px;font-weight:700;">${props.significance ?? "N/A"}</div>
+      </div>
+      <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+        <div style="font-size:10px;color:#94a3b8;">Status</div>
+        <div style="font-size:15px;font-weight:700;">${props.status || "N/A"}</div>
+      </div>
+      <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+        <div style="font-size:10px;color:#94a3b8;">Tsunami</div>
+        <div style="font-size:15px;font-weight:700;">${props.tsunami ? "Yes" : "No"}</div>
+      </div>
+    </div>
+    <div style="background:#0f172a;border:1px solid rgba(148,163,184,0.22);border-radius:10px;padding:8px;font-size:11px;margin-bottom:8px;">
+      <div><strong>Time:</strong> ${formatUsgsTime(props.time)}</div>
+      <div><strong>Updated:</strong> ${formatUsgsTime(props.updated)}</div>
+      <div><strong>Magnitude Type:</strong> ${props.magType || "N/A"}</div>
+      <div><strong>Alert:</strong> ${props.alert || "None"}</div>
+      <div><strong>Felt Reports:</strong> ${props.felt_reports ?? "N/A"}</div>
+      ${
+        props.usgs_event_url
+          ? `<div style="margin-top:6px;"><a href="${props.usgs_event_url}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:underline;">Open USGS Event Page</a></div>`
+          : ""
+      }
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button type="button" class="usgs-fetch-shakemap" data-event-id="${props.event_id}" style="background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Fetch ShakeMap</button>
+      <button type="button" class="usgs-clear-shakemap" style="background:#334155;color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Clear ShakeMap</button>
+      <span class="usgs-shakemap-status" style="font-size:11px;color:#94a3b8;"></span>
+    </div>
+  </div>`;
+}
+
+function setupUsgsPopupEventHandlers() {
+  document.removeEventListener("click", handleUsgsPopupClick);
+  document.addEventListener("click", handleUsgsPopupClick);
+}
+
+async function handleUsgsPopupClick(e) {
+  const clearBtn = e.target.closest(".usgs-clear-shakemap");
+  if (clearBtn) {
+    clearUsgsShakeMapLayer();
+    return;
+  }
+
+  const fetchBtn = e.target.closest(".usgs-fetch-shakemap");
+  if (!fetchBtn) return;
+
+  const eventId = fetchBtn.getAttribute("data-event-id");
+  const statusEl = fetchBtn.parentElement?.querySelector(".usgs-shakemap-status");
+  if (!eventId) return;
+
+  if (statusEl) statusEl.textContent = "Loading ShakeMap...";
+  fetchBtn.disabled = true;
+
+  try {
+    const response = await fetch(
+      `${window.baseUrl || window.location.origin}/get-usgs-earthquake-detail/${eventId}/`
+    );
+    if (!response.ok) {
+      throw new Error("Could not load earthquake detail");
+    }
+    const detail = await response.json();
+    const products = detail.properties?.products || {};
+    const shakemap = products.shakemap?.[0];
+    const contents = shakemap?.contents || {};
+    const chosen = pickPreferredUsgsShakemapContent(contents);
+
+    if (!chosen) {
+      throw new Error("No ShakeMap product available for this earthquake");
+    }
+
+    await animateUsgsShakeMapLayer(chosen.url, chosen.legendUrl, chosen.label);
+    if (statusEl) statusEl.textContent = `Loaded ${chosen.label}`;
+  } catch (error) {
+    if (statusEl) statusEl.textContent = error.message;
+  } finally {
+    fetchBtn.disabled = false;
+  }
+}
+
 function setupPmdPopupEventHandlers(popupInstance) {
   document.removeEventListener("click", handlePmdPopupClick);
   document.addEventListener("click", handlePmdPopupClick);
@@ -1378,6 +1940,37 @@ export default class LayerAttributePopup {
         this.#updatePosition();
         this.#attachMoveListeners();
         setupFfdPopupEventHandlers();
+        return;
+      }
+
+      if (sourceId?.startsWith("eonet_") || layerId?.includes("eonet_")) {
+        const properties = { ...(eligible.properties || {}) };
+        const eonetHtml = buildEonetPopupContent(properties);
+
+        const tableEl = this.popupEl.querySelector(".popup-attributes");
+        const labelEl = this.popupEl.querySelector(".popup-label");
+        labelEl.textContent = properties.title || "NASA EONET Event";
+        tableEl.innerHTML = eonetHtml;
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        return;
+      }
+
+      if (sourceId?.startsWith("usgs_") || layerId?.includes("usgs_")) {
+        const properties = { ...(eligible.properties || {}) };
+        const usgsHtml = buildUsgsPopupContent(properties);
+
+        const tableEl = this.popupEl.querySelector(".popup-attributes");
+        const labelEl = this.popupEl.querySelector(".popup-label");
+        labelEl.textContent = properties.title || "USGS Earthquake";
+        tableEl.innerHTML = usgsHtml;
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupUsgsPopupEventHandlers();
         return;
       }
 

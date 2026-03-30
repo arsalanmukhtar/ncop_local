@@ -3,6 +3,8 @@
 import { ncop_menu_items } from "./map-layers.js";
 import LayerAttributePopup from "./layer-attribute-popup.js"; // <-- ENABLED
 import { registerPMDWeatherIcons } from "./pmd-weather-icons.js";
+import { registerEonetIcons } from "./eonet-icons.js";
+import { registerUsgsEarthquakeIcons } from "./usgs-earthquake-icons.js";
 // import LayerAttributePopup from './layer-attribute-popup.js';
 
 /**
@@ -487,6 +489,12 @@ export class SourceLayerControl {
           sourceId === "pmd_weather_stations-source" ||
           layerId === "pmd_weather_stations-sun-symbol" ||
           layerId === "pmd_weather_stations-rain-symbol";
+        const isEonetLayer =
+          typeof sourceId === "string" &&
+          sourceId.startsWith("eonet_");
+        const isUsgsEarthquakeLayer =
+          typeof sourceId === "string" &&
+          sourceId.startsWith("usgs_");
 
         if (this.map.getLayer(layerId)) {
           addedLayers.push(layerId);
@@ -511,6 +519,28 @@ export class SourceLayerControl {
           layer.layout &&
           layer.layout["icon-image"]
         ) {
+          if (isUsgsEarthquakeLayer) {
+            registerUsgsEarthquakeIcons(this.map);
+            if (labelLayerId) {
+              this.map.addLayer(layer, labelLayerId);
+            } else {
+              this.map.addLayer(layer);
+            }
+            addedLayers.push(layerId);
+            return;
+          }
+
+          if (isEonetLayer) {
+            registerEonetIcons(this.map);
+            if (labelLayerId) {
+              this.map.addLayer(layer, labelLayerId);
+            } else {
+              this.map.addLayer(layer);
+            }
+            addedLayers.push(layerId);
+            return;
+          }
+
           if (isPMDWeatherLayer) {
             registerPMDWeatherIcons(this.map);
             if (labelLayerId) {

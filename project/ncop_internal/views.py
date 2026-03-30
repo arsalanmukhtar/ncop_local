@@ -1274,6 +1274,8 @@ def normalize_gdacs_impacts(event_type: str, details: Dict[str, Any]) -> Dict[st
 # normalized = normalize_gdacs_impacts(event_type, details_json)
 # print(normalized)
 GDACS_BASE = "https://www.gdacs.org/gdacsapi/api"
+EONET_BASE = "https://eonet.gsfc.nasa.gov/api/v3"
+USGS_BASE = "https://earthquake.usgs.gov/fdsnws/event/1"
 
 
 def _safe_get_json(url, params=None, timeout=15):
@@ -1320,6 +1322,232 @@ class GdacsEventsGeojsonApi(View):
             "features": [],
         }
         return JsonResponse(response_data)
+
+
+def _safe_json_dumps(value):
+    try:
+        return json.dumps(value or [])
+    except Exception:
+        return "[]"
+
+
+def _normalize_eonet_feature(feature):
+    props = feature.get("properties", {}) or {}
+    categories = props.get("categories") or []
+    sources = props.get("sources") or []
+
+    category_titles = ", ".join(
+        [c.get("title", "") for c in categories if isinstance(c, dict) and c.get("title")]
+    )
+    category_ids = ", ".join(
+        [c.get("id", "") for c in categories if isinstance(c, dict) and c.get("id")]
+    )
+    source_titles = ", ".join(
+        [s.get("id", "") for s in sources if isinstance(s, dict) and s.get("id")]
+    )
+    source_urls = ", ".join(
+        [
+            s.get("url", "")
+            for s in sources
+            if isinstance(s, dict) and s.get("url")
+        ]
+    )
+
+    normalized_props = {
+        **props,
+        "event_id": feature.get("id") or props.get("id"),
+        "title": props.get("title") or "NASA EONET Event",
+        "event_link": props.get("link"),
+        "event_status": "Closed" if props.get("closed") else "Open",
+        "category_titles": category_titles,
+        "category_ids": category_ids,
+        "source_titles": source_titles,
+        "source_urls": source_urls,
+        "categories_json": _safe_json_dumps(categories),
+        "sources_json": _safe_json_dumps(sources),
+        "magnitude_label": " ".join(
+            [
+                str(props.get("magnitudeValue", "")).strip(),
+                str(props.get("magnitudeUnit", "")).strip(),
+            ]
+        ).strip(),
+        "magnitude_description": props.get("magnitudeDescription"),
+    }
+
+    return {
+        "type": "Feature",
+        "id": feature.get("id"),
+        "geometry": feature.get("geometry"),
+        "properties": normalized_props,
+    }
+
+
+class NasaEonetEventsGeojsonApi(View):
+    """
+    NASA EONET v3 GeoJSON proxy.
+
+    GET /get-nasa-eonet-events/<category_slug>/
+    category_slug: all | severeStorms | wildfires | volcanoes | earthquakes | seaLakeIce
+
+    Supported passthrough query params from EONET v3:
+      - source
+      - status
+      - limit
+      - days
+      - start
+      - end
+      - magID
+      - magMin
+      - magMax
+      - bbox
+    """
+
+    def get(self, request, category_slug="all"):
+        params = {
+            "status": request.GET.get("status", "open"),
+            "days": request.GET.get("days", "60"),
+            "limit": request.GET.get("limit", "200"),
+        }
+
+        passthrough_keys = [
+            "source",
+            "start",
+            "end",
+            "magID",
+            "magMin",
+            "magMax",
+            "bbox",
+        ]
+        for key in passthrough_keys:
+            value = request.GET.get(key)
+            if value not in (None, ""):
+                params[key] = value
+
+        if category_slug and category_slug != "all":
+            params["category"] = category_slug
+
+        response_data = _safe_get_json(f"{EONET_BASE}/events/geojson", params) or {
+            "type": "FeatureCollection",
+            "features": [],
+        }
+
+        features = response_data.get("features", []) or []
+        normalized = [_normalize_eonet_feature(feature) for feature in features]
+
+        return JsonResponse(
+            {
+                "type": "FeatureCollection",
+                "features": normalized,
+            }
+        )
+
+
+def _usgs_default_starttime(days=2):
+    return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _normalize_usgs_feature(feature):
+    props = feature.get("properties", {}) or {}
+    geometry = feature.get("geometry", {}) or {}
+    coordinates = geometry.get("coordinates", []) or []
+    depth = coordinates[2] if len(coordinates) > 2 else None
+
+    normalized_props = {
+        **props,
+        "event_id": feature.get("id"),
+        "depth_km": depth,
+        "magnitude": props.get("mag"),
+        "event_time_iso": datetime.utcfromtimestamp((props.get("time") or 0) / 1000).strftime("%Y-%m-%d %H:%M UTC") if props.get("time") else None,
+        "updated_time_iso": datetime.utcfromtimestamp((props.get("updated") or 0) / 1000).strftime("%Y-%m-%d %H:%M UTC") if props.get("updated") else None,
+        "usgs_detail_url": props.get("detail"),
+        "usgs_event_url": props.get("url"),
+        "felt_reports": props.get("felt"),
+        "mmi_value": props.get("mmi"),
+        "cdi_value": props.get("cdi"),
+        "significance": props.get("sig"),
+    }
+
+    return {
+        "type": "Feature",
+        "id": feature.get("id"),
+        "geometry": geometry,
+        "properties": normalized_props,
+    }
+
+
+class UsgsEarthquakeAlertsGeojsonApi(View):
+    """
+    USGS realtime earthquake feed proxy with optimized defaults.
+    Defaults to the last 2 days of events ordered by time.
+    """
+
+    def get(self, request):
+        params = {
+            "format": "geojson",
+            "orderby": request.GET.get("orderby", "time"),
+            "starttime": request.GET.get("starttime", _usgs_default_starttime(2)),
+            "endtime": request.GET.get("endtime", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")),
+            "limit": request.GET.get("limit", "400"),
+        }
+
+        passthrough_keys = [
+            "minmagnitude",
+            "maxmagnitude",
+            "minlatitude",
+            "maxlatitude",
+            "minlongitude",
+            "maxlongitude",
+            "latitude",
+            "longitude",
+            "maxradius",
+            "maxradiuskm",
+            "updatedafter",
+        ]
+        for key in passthrough_keys:
+            value = request.GET.get(key)
+            if value not in (None, ""):
+                params[key] = value
+
+        response_data = _safe_get_json(f"{USGS_BASE}/query", params) or {
+            "type": "FeatureCollection",
+            "metadata": {},
+            "features": [],
+        }
+
+        features = response_data.get("features", []) or []
+        normalized = [_normalize_usgs_feature(feature) for feature in features]
+
+        return JsonResponse(
+            {
+                "type": "FeatureCollection",
+                "metadata": response_data.get("metadata", {}),
+                "features": normalized,
+            }
+        )
+
+
+class UsgsEarthquakeDetailApi(View):
+    def get(self, request, event_id):
+        response_data = _safe_get_json(
+            f"{USGS_BASE}/query",
+            {"format": "geojson", "eventid": event_id},
+        ) or {}
+        return JsonResponse(response_data)
+
+
+class UsgsShakemapContentProxyApi(View):
+    def get(self, request):
+        url = request.GET.get("url", "")
+        if not url.startswith("https://earthquake.usgs.gov/"):
+            return JsonResponse({"detail": "Invalid ShakeMap URL"}, status=400)
+
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            payload = response.json()
+            return JsonResponse(payload, safe=isinstance(payload, dict))
+        except Exception as exc:
+            return JsonResponse({"detail": f"Failed to load ShakeMap content: {exc}"}, status=502)
 
 
 # ---- NEW: per-event details + optional impact polygons/media ----
