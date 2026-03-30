@@ -391,6 +391,7 @@ function buildWaqiPopupContent(props) {
 
 // ========== FFD-SPECIFIC CONSTANTS & HELPERS ==========
 const ffdChartInstances = {};
+const pmdChartInstances = {};
 
 function buildFfdPopupContent(props) {
   const popupId = `ffd-${props.name}-${Math.random()
@@ -582,6 +583,193 @@ function handleFfdPopupClick(e) {
 }
 
 // ========== END FFD-SPECIFIC CODE ==========
+
+function formatPMDValue(value, digits = 1) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "N/A";
+  return num.toFixed(digits);
+}
+
+function formatPMDDateTime(date, time) {
+  if (!date && !time) return "N/A";
+  return [date, time].filter(Boolean).join(" ");
+}
+
+function buildPmdPopupContent(props) {
+  const popupId = `pmd-${String(props.name || "station")
+    .replace(/\s+/g, "-")
+    .toLowerCase()}-${Math.random().toString(36).slice(2, 9)}`;
+  const rainfall = Number(props.rainfall || 0);
+  const rainfallState = rainfall > 0 ? "Rain observed" : "Dry conditions";
+  const rainfallColor = rainfall > 0 ? "#2563eb" : "#f59e0b";
+
+  return {
+    popupId,
+    html: `<div style="color:#e5eef7;max-width:300px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:10px;background:linear-gradient(135deg,#0f172a,#1e293b);margin-bottom:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;line-height:1.2;">${props.name || "PMD Station"}</div>
+          <div style="font-size:11px;color:#cbd5e1;margin-top:3px;">Pakistan Meteorological Department</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:6px;">
+          <div style="font-size:11px;font-weight:700;color:white;background:${rainfallColor};padding:4px 8px;border-radius:999px;white-space:nowrap;">${rainfallState}</div>
+          <button class="pmd-popup-close" type="button" style="width:24px;height:24px;border:none;border-radius:999px;background:#334155;color:#fff;font-size:14px;line-height:1;cursor:pointer;">×</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:8px;">
+        <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+          <div style="font-size:10px;color:#94a3b8;">Temperature</div>
+          <div style="font-size:16px;font-weight:700;">${formatPMDValue(props.temperature)} °C</div>
+        </div>
+        <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+          <div style="font-size:10px;color:#94a3b8;">Rainfall</div>
+          <div style="font-size:16px;font-weight:700;">${formatPMDValue(props.rainfall)} mm</div>
+        </div>
+        <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+          <div style="font-size:10px;color:#94a3b8;">Humidity</div>
+          <div style="font-size:16px;font-weight:700;">${formatPMDValue(props.humidity)} %</div>
+        </div>
+        <div style="background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:8px;padding:7px;">
+          <div style="font-size:10px;color:#94a3b8;">Wind</div>
+          <div style="font-size:16px;font-weight:700;">${formatPMDValue(props.windSpeed)} kt</div>
+        </div>
+      </div>
+      <div style="background:#0f172a;border:1px solid rgba(148,163,184,0.22);border-radius:10px;padding:8px;">
+        <div style="font-size:11px;font-weight:700;margin-bottom:6px;color:#f8fafc;">Station Metrics</div>
+        <canvas id="pmd-chart-canvas-${popupId}" style="width:280px;height:190px;max-width:100%;"></canvas>
+      </div>
+      <div style="margin-top:8px;background:#111827;border:1px solid rgba(148,163,184,0.2);border-radius:10px;padding:8px;font-size:11px;line-height:1.45;">
+        <div><strong>Dew Point:</strong> ${formatPMDValue(props.dewPoint)} °C</div>
+        <div><strong>Pressure:</strong> ${formatPMDValue(props.pressure)} hPa</div>
+        <div><strong>Wind Direction:</strong> ${formatPMDValue(props.windDirection, 0)}°</div>
+        <div><strong>Temp Updated:</strong> ${formatPMDDateTime(props.temp_date, props.temp_time)}</div>
+        <div><strong>Wind Updated:</strong> ${formatPMDDateTime(props.wind_date, props.wind_time)}</div>
+        <div><strong>Rain Updated:</strong> ${formatPMDDateTime(props.rainfall_date, props.rainfall_time)}</div>
+      </div>
+    </div>`,
+  };
+}
+
+function createPmdChart(canvas, props) {
+  const ctx = canvas.getContext("2d");
+  const chartId = canvas.id;
+
+  if (pmdChartInstances[chartId]) {
+    pmdChartInstances[chartId].destroy();
+  }
+
+  const labels = [
+    "Temperature",
+    "Dew Point",
+    "Humidity",
+    "Pressure",
+    "Wind Speed",
+    "Rainfall",
+  ];
+  const values = [
+    Number(props.temperature || 0),
+    Number(props.dewPoint || 0),
+    Number(props.humidity || 0),
+    Number(props.pressure || 0),
+    Number(props.windSpeed || 0),
+    Number(props.rainfall || 0),
+  ];
+
+  pruneCacheMap(pmdChartInstances, MAX_FFD_CHARTS, (chart) => {
+    if (chart && typeof chart.destroy === "function") chart.destroy();
+  });
+
+  pmdChartInstances[chartId] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Station value",
+          data: values,
+          backgroundColor: [
+            "#f97316",
+            "#38bdf8",
+            "#14b8a6",
+            "#8b5cf6",
+            "#f43f5e",
+            "#2563eb",
+          ],
+          borderRadius: 6,
+          borderSkipped: false,
+        },
+      ],
+    },
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 900,
+        easing: "easeOutQuart",
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#e2e8f0",
+            font: { size: 10, weight: "bold" },
+            maxRotation: 0,
+            minRotation: 0,
+          },
+          grid: {
+            display: false,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "#94a3b8",
+            font: { size: 10 },
+          },
+          grid: {
+            color: "rgba(148,163,184,0.15)",
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const units = {
+                Temperature: "°C",
+                "Dew Point": "°C",
+                Humidity: "%",
+                Pressure: "hPa",
+                "Wind Speed": "kt",
+                Rainfall: "mm",
+              };
+              const label = context.label;
+              return `${label}: ${context.parsed.y} ${units[label] || ""}`.trim();
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function setupPmdPopupEventHandlers(popupInstance) {
+  document.removeEventListener("click", handlePmdPopupClick);
+  document.addEventListener("click", handlePmdPopupClick);
+  window._ncopPmdPopupInstance = popupInstance;
+}
+
+function handlePmdPopupClick(e) {
+  const closeBtn = e.target.closest(".pmd-popup-close");
+  if (!closeBtn) return;
+
+  const popupInstance = window._ncopPmdPopupInstance;
+  if (popupInstance && typeof popupInstance.hide === "function") {
+    popupInstance.hide();
+  }
+}
 
 export default class LayerAttributePopup {
   constructor(map) {
@@ -1190,6 +1378,32 @@ export default class LayerAttributePopup {
         this.#updatePosition();
         this.#attachMoveListeners();
         setupFfdPopupEventHandlers();
+        return;
+      }
+
+      if (
+        layerId?.includes("pmd_weather_stations") ||
+        sourceId === "pmd_weather_stations-source"
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const { popupId, html } = buildPmdPopupContent(properties);
+
+        const tableEl = this.popupEl.querySelector(".popup-attributes");
+        const labelEl = this.popupEl.querySelector(".popup-label");
+        labelEl.textContent = properties.name || "PMD Weather Station";
+        tableEl.innerHTML = html;
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupPmdPopupEventHandlers(this);
+
+        requestAnimationFrame(() => {
+          const canvas = document.getElementById(`pmd-chart-canvas-${popupId}`);
+          if (canvas) {
+            createPmdChart(canvas, properties);
+          }
+        });
         return;
       }
 

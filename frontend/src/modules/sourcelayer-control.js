@@ -2,6 +2,7 @@
 
 import { ncop_menu_items } from "./map-layers.js";
 import LayerAttributePopup from "./layer-attribute-popup.js"; // <-- ENABLED
+import { registerPMDWeatherIcons } from "./pmd-weather-icons.js";
 // import LayerAttributePopup from './layer-attribute-popup.js';
 
 /**
@@ -482,6 +483,11 @@ export class SourceLayerControl {
 
       layersConfig.forEach((layerConfig) => {
         const layerId = layerConfig.id;
+        const isPMDWeatherLayer =
+          sourceId === "pmd_weather_stations-source" ||
+          layerId === "pmd_weather_stations-sun-symbol" ||
+          layerId === "pmd_weather_stations-rain-symbol";
+
         if (this.map.getLayer(layerId)) {
           addedLayers.push(layerId);
           return;
@@ -505,6 +511,17 @@ export class SourceLayerControl {
           layer.layout &&
           layer.layout["icon-image"]
         ) {
+          if (isPMDWeatherLayer) {
+            registerPMDWeatherIcons(this.map);
+            if (labelLayerId) {
+              this.map.addLayer(layer, labelLayerId);
+            } else {
+              this.map.addLayer(layer);
+            }
+            addedLayers.push(layerId);
+            return;
+          }
+
           const iconImage = layer.layout["icon-image"];
 
           // Check if this is a GDACS layer with conditional expressions or direct icon URL usage

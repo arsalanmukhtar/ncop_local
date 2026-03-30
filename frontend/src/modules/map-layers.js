@@ -1,5 +1,6 @@
 import { Popup } from "mapbox-gl";
 import {map_icons} from "./map-icons.js"
+import { PMD_RAIN_ICON_ID, PMD_SUN_ICON_ID } from "./pmd-weather-icons.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -1039,24 +1040,54 @@ export const ncop_menu_items = {
           },
           layers: [
             {
-              id: "pmd_weather_stations-symbol",
+              id: "pmd_weather_stations-sun-symbol",
               type: "symbol",
               source: "pmd_weather_stations-source",
               layout: {
-                "icon-image": map_icons.weatherStationIcon, // Use custom icon name
-                // Interpolate icon-size based on zoom for smooth scaling
+                "icon-image": PMD_SUN_ICON_ID,
                 "icon-size": [
                   "interpolate",
                   ["linear"],
                   ["zoom"],
                   5,
-                  0.25,
-                  10,
                   0.5,
+                  7,
+                  0.6,
+                  10,
+                  0.76,
                   15,
                   1,
                 ],
                 "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+              },
+            },
+            {
+              id: "pmd_weather_stations-rain-symbol",
+              type: "symbol",
+              source: "pmd_weather_stations-source",
+              filter: [
+                ">",
+                ["to-number", ["coalesce", ["get", "rainfall"], 0]],
+                0,
+              ],
+              layout: {
+                "icon-image": PMD_RAIN_ICON_ID,
+                "icon-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  5,
+                  0.5,
+                  7,
+                  0.6,
+                  10,
+                  0.76,
+                  15,
+                  1,
+                ],
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
               },
             },
           ],
