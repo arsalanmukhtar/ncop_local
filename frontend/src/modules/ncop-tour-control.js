@@ -327,7 +327,7 @@ const TOUR_STEPS = [
     position: "left",
   },
   {
-    target: "#mapbox-gl-geoglows",
+    target: "#geoglowsForecast",
     title: "GeoGLOWS Forecast Tool",
     content:
       "Use GeoGLOWS mode for river forecast context and hydrologic monitoring on the map.",

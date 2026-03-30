@@ -1276,6 +1276,7 @@ def normalize_gdacs_impacts(event_type: str, details: Dict[str, Any]) -> Dict[st
 GDACS_BASE = "https://www.gdacs.org/gdacsapi/api"
 EONET_BASE = "https://eonet.gsfc.nasa.gov/api/v3"
 USGS_BASE = "https://earthquake.usgs.gov/fdsnws/event/1"
+GEOGLOWS_BASE = "https://geoglows.ecmwf.int/api"
 
 
 def _safe_get_json(url, params=None, timeout=15):
@@ -1285,6 +1286,257 @@ def _safe_get_json(url, params=None, timeout=15):
             return r.json()
     except requests.RequestException as e:
         print("GDACS JSON error:", url, e)
+    return None
+
+
+def _safe_geoglows_json(path, params=None, timeout=20):
+    try:
+        response = requests.get(
+            f"{GEOGLOWS_BASE}{path}",
+            params=params,
+            timeout=timeout,
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        return response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("GeoGLOWS JSON error for %s: %s", path, exc)
+        return None
+
+
+def _parse_geoglows_csv(text):
+    stream = io.StringIO(text.strip())
+    reader = csv.DictReader(stream)
+    rows = list(reader)
+    if not rows or not reader.fieldnames:
+        return None
+
+    label_field = next(
+        (
+            field
+            for field in reader.fieldnames
+            if field and field.lower() in {"datetime", "date", "time", "timestamp"}
+        ),
+        reader.fieldnames[0],
+    )
+
+    numeric_fields = []
+    for field in reader.fieldnames:
+        if not field or field == label_field:
+            continue
+        if any(
+            row.get(field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(field))
+            for row in rows
+        ):
+            numeric_fields.append(field)
+
+    if not numeric_fields:
+        return rows
+
+    if len(numeric_fields) == 1:
+        value_field = numeric_fields[0]
+        return [
+            {
+                "date": row.get(label_field),
+                "value": float(row.get(value_field)),
+            }
+            for row in rows
+            if row.get(value_field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(value_field))
+        ]
+
+    grouped = {}
+    for field in numeric_fields:
+        grouped[field] = [
+            {
+                "date": row.get(label_field),
+                "value": float(row.get(field)),
+            }
+            for row in rows
+            if row.get(field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(field))
+        ]
+
+    return grouped
+
+
+def _safe_geoglows_payload(path, params=None, timeout=20):
+    try:
+        response = requests.get(
+            f"{GEOGLOWS_BASE}{path}",
+            params=params,
+            timeout=timeout,
+            headers={"Accept": "application/json,text/csv;q=0.9,*/*;q=0.8"},
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        detail = getattr(getattr(exc, "response", None), "text", "") or str(exc)
+        detail = str(detail).strip().replace("\n", " ")[:280]
+        logger.warning("GeoGLOWS request error for %s: %s", path, detail)
+        return None, detail
+
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    text = response.text or ""
+    trimmed = text.lstrip()
+
+    if "json" in content_type or trimmed.startswith("{") or trimmed.startswith("["):
+        try:
+            return response.json(), None
+        except ValueError as exc:
+            logger.warning("GeoGLOWS JSON parse error for %s: %s", path, exc)
+
+    parsed_csv = _parse_geoglows_csv(text)
+    if parsed_csv is not None:
+        return parsed_csv, None
+
+    detail = trimmed[:280] or "GeoGLOWS returned an empty response"
+    logger.warning("GeoGLOWS unsupported payload for %s: %s", path, detail)
+    return None, detail
+
+
+def _coerce_geoglows_dates(payload):
+    def _normalize_date(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, dict):
+            for nested_value in value.values():
+                normalized = _normalize_date(nested_value)
+                if normalized:
+                    return normalized
+            return None
+
+        text = str(value).strip()
+        digits = "".join(ch for ch in text if ch.isdigit())
+        if len(digits) >= 8:
+            return digits[:8]
+        return None
+
+    if isinstance(payload, dict):
+        for key in ("available_dates", "dates", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                normalized = [_normalize_date(item) for item in value]
+                return [item for item in normalized if item]
+            normalized_single = _normalize_date(value)
+            if normalized_single:
+                return [normalized_single]
+    if isinstance(payload, list):
+        normalized = [_normalize_date(item) for item in payload]
+        return [item for item in normalized if item]
+    return []
+
+
+def _get_recent_geoglows_dates(limit=5):
+    today = timezone.now().date()
+    min_allowed = today - timedelta(days=14)
+    payload, _ = _safe_geoglows_payload("/v2/dates", timeout=15)
+    dates = _coerce_geoglows_dates(payload)
+    if dates:
+        deduped = list(dict.fromkeys(dates))
+        filtered = []
+        for item in deduped:
+            try:
+                parsed = datetime.strptime(item, "%Y%m%d").date()
+            except ValueError:
+                continue
+            if parsed >= min_allowed:
+                filtered.append(item)
+        if filtered:
+            return filtered[-limit:]
+
+    fallback = []
+    for offset in range(1, limit + 1):
+        fallback.append((today - timedelta(days=offset)).strftime("%Y%m%d"))
+    return list(reversed(fallback))
+
+
+def _get_preferred_geoglows_forecast_dates(limit=6):
+    """
+    Prefer very recent forecast runs first, matching the desired behavior:
+    today or yesterday, then only a few earlier days if GeoGLOWS has not
+    published/served the latest run yet.
+    """
+    today = timezone.now().date()
+    preferred = []
+    for offset in range(0, limit):
+        preferred.append((today - timedelta(days=offset)).strftime("%Y%m%d"))
+    return preferred
+
+
+def _fetch_geoglows_with_date_fallback(path, request_params=None, timeout=25):
+    params = dict(request_params or {})
+    explicit_date = params.get("date")
+    if explicit_date:
+        payload, error_detail = _safe_geoglows_payload(path, params=params, timeout=timeout)
+        if payload is not None:
+            return payload, explicit_date, None
+        return None, explicit_date, error_detail
+
+    error_detail = None
+    for forecast_date in _get_preferred_geoglows_forecast_dates(limit=6):
+        retry_params = dict(params)
+        retry_params["date"] = forecast_date
+        payload, retry_error = _safe_geoglows_payload(
+            path,
+            params=retry_params,
+            timeout=timeout,
+        )
+        if payload is not None:
+            return payload, forecast_date, None
+        error_detail = retry_error or error_detail
+
+    # Secondary fallback: try any recent dates advertised by GeoGLOWS,
+    # but keep them constrained to the recent window instead of drifting
+    # to older runs.
+    for forecast_date in reversed(_get_recent_geoglows_dates(limit=6)):
+        retry_params = dict(params)
+        retry_params["date"] = forecast_date
+        payload, retry_error = _safe_geoglows_payload(
+            path,
+            params=retry_params,
+            timeout=timeout,
+        )
+        if payload is not None:
+            return payload, forecast_date, None
+        error_detail = retry_error or error_detail
+
+    return (
+        None,
+        None,
+        error_detail
+        or "No recent GeoGLOWS forecast was available within the last 14 days.",
+    )
+
+
+def _is_numeric(value):
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _extract_geoglows_river_id(payload):
+    if isinstance(payload, (int, float)):
+        return int(payload)
+
+    if isinstance(payload, dict):
+        for key in ("river_id", "reach_id", "comid", "id"):
+            value = payload.get(key)
+            if value not in (None, ""):
+                try:
+                    return int(float(value))
+                except (TypeError, ValueError):
+                    continue
+
+        if len(payload) == 1:
+            only_value = next(iter(payload.values()))
+            return _extract_geoglows_river_id(only_value)
+
+    if isinstance(payload, list) and payload:
+        return _extract_geoglows_river_id(payload[0])
+
     return None
 
 
@@ -1548,6 +1800,173 @@ class UsgsShakemapContentProxyApi(View):
             return JsonResponse(payload, safe=isinstance(payload, dict))
         except Exception as exc:
             return JsonResponse({"detail": f"Failed to load ShakeMap content: {exc}"}, status=502)
+
+
+class GeoGlowsRiverIdApi(View):
+    def get(self, request):
+        lat = request.GET.get("lat")
+        lon = request.GET.get("lon")
+
+        if lat in (None, "") or lon in (None, ""):
+            return JsonResponse({"detail": "lat and lon are required"}, status=400)
+
+        try:
+            lat_value = float(lat)
+            lon_value = float(lon)
+        except (TypeError, ValueError):
+            return JsonResponse({"detail": "lat and lon must be numeric"}, status=400)
+
+        payload = _safe_geoglows_json(
+            "/v2/getriverid",
+            {"lat": lat_value, "lon": lon_value},
+        )
+        if payload is None:
+            return JsonResponse({"detail": "Failed to load GeoGLOWS river ID"}, status=502)
+
+        river_id = _extract_geoglows_river_id(payload)
+        if river_id is None:
+            return JsonResponse(
+                {"detail": "GeoGLOWS did not return a valid river ID", "raw": payload},
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "selected_point": {"lat": lat_value, "lon": lon_value},
+                "raw": payload,
+            }
+        )
+
+
+class GeoGlowsForecastApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        date = request.GET.get("date")
+        if date:
+            params["date"] = date
+
+        payload, resolved_date, error_detail = _fetch_geoglows_with_date_fallback(
+            f"/v2/forecast/{river_id}",
+            request_params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS forecast",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "kind": "forecast",
+                "date": resolved_date or params.get("date"),
+                "raw": payload,
+            },
+            safe=True,
+        )
+
+
+class GeoGlowsForecastStatsApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        date = request.GET.get("date")
+        if date:
+            params["date"] = date
+
+        payload, resolved_date, error_detail = _fetch_geoglows_with_date_fallback(
+            f"/v2/forecaststats/{river_id}",
+            request_params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS forecast statistics",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "kind": "forecaststats",
+                "date": resolved_date or params.get("date"),
+                "raw": payload,
+            },
+            safe=True,
+        )
+
+
+class GeoGlowsDailyAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/dailyaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS daily averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "dailyaverages", "raw": payload},
+            safe=True,
+        )
+
+
+class GeoGlowsMonthlyAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/monthlyaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS monthly averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "monthlyaverages", "raw": payload},
+            safe=True,
+        )
+
+
+class GeoGlowsAnnualAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/annualaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS annual averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "annualaverages", "raw": payload},
+            safe=True,
+        )
 
 
 # ---- NEW: per-event details + optional impact polygons/media ----
