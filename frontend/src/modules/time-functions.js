@@ -28,6 +28,55 @@ function getNextNDays(offset = 0, type = "") {
   }
   return `${year}-${month}-${day}`;
 }
+
+function getCurrentUtcDateCompact(offsetDays = 0) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function extractLatestMeteoblueTimeValue(payload) {
+  const candidates = [];
+
+  (function walk(node) {
+    if (node == null) return;
+
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+
+    if (typeof node === "object") {
+      Object.values(node).forEach(walk);
+      return;
+    }
+
+    const digits = String(node).match(/\d{8,10}/g);
+    if (digits) candidates.push(...digits);
+  })(payload);
+
+  return candidates.length ? candidates[candidates.length - 1] : null;
+}
+
+function getLatestMeteoblueTimeSync(url, fallbackValue) {
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", url, false);
+
+  try {
+    xhr.send(null);
+    if (xhr.status >= 200 && xhr.status < 300) {
+      const payload = JSON.parse(xhr.responseText);
+      return extractLatestMeteoblueTimeValue(payload) || fallbackValue;
+    }
+  } catch (error) {
+    console.warn("Meteoblue latest-time lookup failed:", url, error);
+  }
+
+  return fallbackValue;
+}
 function getNextNDaysWithTime(
   offset = 0,
   hours2 = null,
@@ -2720,6 +2769,47 @@ export function generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT)
   });
 
   return out;
+}
+
+/***********************************************************************
+ * 12) Meteoblue LHASA2 (Latest Daily, static raster+vector)
+ ***********************************************************************/
+export function generateMBX_MeteoblueLHASA2LatestLayer(metbluT) {
+  const fallbackTime = getCurrentUtcDateCompact(-1);
+  const latestTime = getLatestMeteoblueTimeSync(
+    `https://maps-api-cdn.meteoblue.com/v1/time/daily/LHASA2?lang=en&apikey=${metbluT}`,
+    fallbackTime
+  );
+
+  const commonQuery =
+    `temperatureUnit=C&velocityUnit=km%2Fh&lengthUnit=metric&energyUnit=watts&internal=true&apikey=${metbluT}`;
+
+  return {
+    source: {
+      id: "meteoblue_lhasa2_daily_raster_source",
+      type: "raster",
+      tileSize: 512,
+      minzoom: 0,
+      maxzoom: 6,
+      tiles: [
+        `https://maps-api-cdn.meteoblue.com/v1/map/raster/LHASA2/${latestTime}` +
+          `/963~sfc~daily~none~contourSteps~-0.1~rgba(251,251,242,1.0)~5.0~rgba(255,255,224,1.0)~10.0~rgba(236,252,163,1.0)~20.0~rgba(226,244,111,1.0)~30.0~rgba(227,229,67,1.0)~40.0~rgba(237,208,27,1.0)~50.0~rgba(255,179,0,1.0)~60.0~rgba(255,138,11,1.0)~70.0~rgba(253,104,32,1.0)~80.0~rgba(246,80,53,1.0)~90.0~rgba(236,71,76,1.0)~100.0~rgba(223,79,108,1.0)/{z}/{x}/{y}?${commonQuery}`,
+      ],
+    },
+    layers: [
+      {
+        id: "meteoblue_lhasa2_daily_raster",
+        type: "raster",
+        minzoom: 0,
+        maxzoom: 22,
+        paint: {
+          "raster-opacity": 0.75,
+          "raster-fade-duration": 0,
+        },
+      },
+    ],
+    latestTime,
+  };
 }
 /***********************************************************************
  * Meteoblue CAMS - Air Quality Index (AQI) Hourly Forecast

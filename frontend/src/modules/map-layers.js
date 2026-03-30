@@ -43,6 +43,7 @@ import {
   generateMBX_MeteoblueDailyCAPELayers,
   generateMBX_MeteoblueOfficialWeatherWarningsLayers,
   generateMBX_MeteoblueForecastWarningsDailyLayers,
+  generateMBX_MeteoblueLHASA2LatestLayer,
   generateMeteoblueCAMSAirQualityHourlyLayers,
   generateMeteoblueCAMSAirQualityDailyLayers,
   generateMeteoblueCAMSDesertDustHourlyLayers,
@@ -425,6 +426,7 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const mbx_lhasa2_latest     = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
 const cams_aqi_hourly_layers = generateMeteoblueCAMSAirQualityHourlyLayers(metbluT);
 const cams_aqi_daily_layers = generateMeteoblueCAMSAirQualityDailyLayers(metbluT);
 const cams_desert_dust_hourly_layers = generateMeteoblueCAMSDesertDustHourlyLayers(metbluT);
@@ -481,6 +483,7 @@ window.weekly_snowfall_forecast = mbx_snow_daily;
 window.cape_weekly_forecast = mbx_cape_daily;
 window.official_weather_warnings_forecast = mbx_warn_official;
 window.meteorological_risks_forecast = mbx_warn_forecast;
+window.lhasa2_latest = mbx_lhasa2_latest;
 window.cams_air_quality_index_hourly = cams_aqi_hourly_layers;
 window.cams_air_quality_index_daily = cams_aqi_daily_layers;
 window.cams_desert_dust_hourly = cams_desert_dust_hourly_layers;
@@ -2592,6 +2595,21 @@ export const ncop_menu_items = {
               popup: true,
               information:
                 "Displays realtime USGS earthquake events from the last 2 days with pulsing markers sized by magnitude and popup-driven ShakeMap access.",
+            },
+          },
+        },
+
+        "Meteoblue early warnings": {
+          static: {
+            lhasa2_latest: {
+              label: "LHASA2 Landslide Probability (Latest)",
+              image: getImage("nems_forecast_met_warnings.webp"),
+              type: "raster",
+              theme: null,
+              source: mbx_lhasa2_latest.source,
+              layers: mbx_lhasa2_latest.layers,
+              information:
+                "The LHASA2 Landslide Probability (Latest) layer displays the latest Meteoblue landslide probability daily product as a dynamically updating static layer using the most recent daily time returned by Meteoblue.",
             },
           },
         },
