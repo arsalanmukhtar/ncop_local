@@ -1,0 +1,1 @@
+import{n as e,t}from"./dashboard_main-BiPc3t-I.js";export{t as baseUrl,e as ncop_menu_items};
