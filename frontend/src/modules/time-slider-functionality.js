@@ -329,6 +329,25 @@ function setLayerOpacity(id, value) {
   }
 }
 
+function updateActiveYearLabel(stepIndex) {
+  const labelsContainer = document.querySelector("#temp-slider1 .year-labels1");
+  if (!labelsContainer) return;
+
+  const labels = labelsContainer.querySelectorAll("span");
+  if (!labels.length) return;
+
+  const normalized = Math.max(
+    0,
+    Math.min(labels.length - 1, Number(stepIndex) || 0)
+  );
+
+  labels.forEach((label, index) => {
+    const isActive = index === normalized;
+    label.classList.toggle("is-active", isActive);
+    label.setAttribute("aria-current", isActive ? "true" : "false");
+  });
+}
+
 function hideAllSliderLayers() {
   sliderLayers.flat().forEach((id) => {
     const map = getMap();
@@ -439,6 +458,7 @@ function showTimeStepLayers(stepIndex) {
     });
   }
   _lastStepIndex = stepIndex;
+  updateActiveYearLabel(stepIndex);
 }
 
 // Re-apply global opacity to current frame
@@ -656,6 +676,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     });
     yearLabelsDiv.innerHTML = "";
     yearLabelsDiv.appendChild(frag);
+    updateActiveYearLabel(0);
   }
 
   const sliderEl = document.getElementById("slider1");
