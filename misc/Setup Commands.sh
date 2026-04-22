@@ -8,7 +8,7 @@ py -3.11 --version
 py -3.11 -m venv ncopenv311
 ncopenv311/Scripts/activate
 # Deactivate the environment
-deactivatepython manage.py runserver --settings=ncop_project.settings.dev
+deactivate
 
 # Install required python modules
 pip install -r requirements.txt
