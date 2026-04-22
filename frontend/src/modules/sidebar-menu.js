@@ -196,7 +196,8 @@ export class SidebarMenu {
 
     const header = document.createElement("div");
     header.className = "accordion-header";
-    header.innerHTML = `${iconHtml}<span class="accordion-title">${config.title}</span><i data-lucide="chevron-down" class="accordion-chevron"></i>`;
+    header.innerHTML = `${iconHtml}<span class="accordion-title"><span class="accordion-title-text">${config.title}</span></span><i data-lucide="chevron-down" class="accordion-chevron"></i>`;
+    this.#attachMarquee(header.querySelector(".accordion-title"));
 
     const content = document.createElement("div");
     content.className = "accordion-content";
@@ -222,7 +223,8 @@ export class SidebarMenu {
 
     const subcategoryHeader = document.createElement("div");
     subcategoryHeader.className = "ncop-subcategory-header";
-    subcategoryHeader.innerHTML = `<span>${subcategoryKey}</span><i data-lucide="chevron-right" class="subcategory-chevron"></i>`;
+    subcategoryHeader.innerHTML = `<span class="ncop-subcategory-title"><span class="ncop-subcategory-title-text">${subcategoryKey}</span></span><i data-lucide="chevron-right" class="subcategory-chevron"></i>`;
+    this.#attachMarquee(subcategoryHeader.querySelector(".ncop-subcategory-title"));
     const itemsContainer = document.createElement("div");
     itemsContainer.className = "ncop-items-container";
 
@@ -410,7 +412,8 @@ export class SidebarMenu {
 
     const nestedHeader = document.createElement("div");
     nestedHeader.className = "ncop-nested-header";
-    nestedHeader.innerHTML = `<span>${nestedSubKey}</span><i data-lucide="chevron-right" class="nested-chevron"></i>`;
+    nestedHeader.innerHTML = `<span class="ncop-nested-title"><span class="ncop-nested-title-text">${nestedSubKey}</span></span><i data-lucide="chevron-right" class="nested-chevron"></i>`;
+    this.#attachMarquee(nestedHeader.querySelector(".ncop-nested-title"));
 
     const nestedItemsContainer = document.createElement("div");
     nestedItemsContainer.className = "ncop-nested-items-container";
@@ -503,25 +506,135 @@ export class SidebarMenu {
     nestedDiv.appendChild(nestedItemsContainer);
     return nestedDiv;
   }
-  #createToggleItem(categoryKey, subcategoryKey, itemKey, itemData) {
-    // console.log(`🔧 Creating toggle item: ${itemKey}`, itemData);
+  #getLayerGeometry(itemData) {
+    if (!itemData) return null;
+    const g =
+      typeof itemData.geometry === "string"
+        ? itemData.geometry.toLowerCase()
+        : null;
+    if (g === "point" || g === "line" || g === "polygon" || g === "raster")
+      return g;
+    const t =
+      typeof itemData.type === "string" ? itemData.type.toLowerCase() : null;
+    if (t === "raster") return "raster";
+    if (itemData.source?.type === "raster") return "raster";
+    const layers = Array.isArray(itemData.layers) ? itemData.layers : [];
+    let hasFill = false,
+      hasLine = false,
+      hasPoint = false,
+      hasRaster = false;
+    for (const l of layers) {
+      if (!l || typeof l.type !== "string") continue;
+      const lt = l.type.toLowerCase();
+      if (lt === "raster") hasRaster = true;
+      else if (lt === "fill" || lt === "fill-extrusion") hasFill = true;
+      else if (lt === "line") hasLine = true;
+      else if (lt === "symbol" || lt === "circle" || lt === "heatmap")
+        hasPoint = true;
+    }
+    if (hasRaster) return "raster";
+    if (hasFill) return "polygon";
+    if (hasLine) return "line";
+    if (hasPoint) return "point";
+    return null;
+  }
 
+  #buildTypeIndicator(kind) {
+    if (!kind) return "";
+    const labelText =
+      { point: "Point", line: "Line", polygon: "Polygon", raster: "Raster" }[
+        kind
+      ] || "";
+    let svg = "";
+    switch (kind) {
+      case "point":
+        svg = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg>`;
+        break;
+      case "line":
+        svg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13 L14 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+        break;
+      case "polygon":
+        svg = `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75"/></svg>`;
+        break;
+      case "raster":
+        svg = `<svg viewBox="0 0 15 15" aria-hidden="true"><rect x="0" y="0" width="5" height="5" fill="currentColor"/><rect x="10" y="0" width="5" height="5" fill="currentColor"/><rect x="5" y="5" width="5" height="5" fill="currentColor"/><rect x="0" y="10" width="5" height="5" fill="currentColor"/><rect x="10" y="10" width="5" height="5" fill="currentColor"/></svg>`;
+        break;
+    }
+    return `<span class="ncop-item-type" data-geom="${kind}" title="${labelText} layer" aria-label="${labelText} layer">${svg}</span>`;
+  }
+
+  #attachMarquee(wrapper) {
+    if (!wrapper) return;
+    // Generic: the inner animated element is always the first child span.
+    // Works for both .ncop-item-label inside .ncop-item-label-marquee
+    // and .*-title-text inside .*-title (accordion / subcategory / nested).
+    const label = wrapper.firstElementChild;
+    if (!label) return;
+    const update = () => {
+      const overflow = label.scrollWidth - wrapper.clientWidth;
+      if (overflow > 1) {
+        wrapper.classList.add("is-overflowing");
+        wrapper.style.setProperty("--marquee-x", `-${overflow}px`);
+        const duration = Math.max(6, Math.min(16, overflow / 20 + 6));
+        wrapper.style.setProperty("--marquee-duration", `${duration}s`);
+      } else {
+        wrapper.classList.remove("is-overflowing");
+        wrapper.style.removeProperty("--marquee-x");
+        wrapper.style.removeProperty("--marquee-duration");
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(update));
+    if (typeof ResizeObserver !== "undefined") {
+      try {
+        const ro = new ResizeObserver(update);
+        ro.observe(wrapper);
+      } catch {}
+    }
+  }
+
+  #createToggleItem(categoryKey, subcategoryKey, itemKey, itemData) {
     if (!itemData || !itemData.label) {
       console.error(`❌ Invalid toggle item data for ${itemKey}:`, itemData);
       return null;
     }
 
-    const itemDiv = document.createElement("div");
-    itemDiv.className = "ncop-item ncop-item-toggle";
-    itemDiv.innerHTML = `
-            <span class="ncop-item-label">${itemData.label}</span>
-            <label class="ncop-toggle">
-                <input type="checkbox" data-item-key="${itemKey}">
-                <span class="ncop-toggle-slider"></span>
-            </label>
-        `;
+    const hasIcon = !!itemData.image;
+    const geom = this.#getLayerGeometry(itemData);
+    const iconHtml = hasIcon
+      ? `<span class="ncop-item-icon"><img src="${itemData.image}" alt="" /></span>`
+      : "";
+    const typeHtml = this.#buildTypeIndicator(geom);
 
-    // Add event listener for toggle interaction
+    const itemDiv = document.createElement("div");
+
+    // Raster toggle items (not bound to a temporal legend): clickable
+    // multi-select rows. No single-selection — multiple can stay active
+    // together. Click again to deselect.
+    if (geom === "raster") {
+      itemDiv.className =
+        "ncop-item ncop-item-toggle ncop-item-row ncop-item-row--clickable ncop-item-row--multi";
+      itemDiv.title = itemData.label;
+      itemDiv.innerHTML = `${iconHtml}<span class="ncop-item-label-marquee"><span class="ncop-item-label">${itemData.label}</span></span>${typeHtml}`;
+
+      itemDiv.addEventListener("click", () => {
+        const newState = !itemDiv.classList.contains("is-selected");
+        itemDiv.classList.toggle("is-selected", newState);
+        handleToggleInteraction(
+          categoryKey,
+          subcategoryKey,
+          itemKey,
+          newState
+        );
+      });
+
+      this.#attachMarquee(itemDiv.querySelector(".ncop-item-label-marquee"));
+      return itemDiv;
+    }
+
+    // Non-raster (point/line/polygon) toggle items keep the switch.
+    itemDiv.className = "ncop-item ncop-item-toggle ncop-item-row";
+    itemDiv.innerHTML = `${iconHtml}<span class="ncop-item-label-marquee"><span class="ncop-item-label">${itemData.label}</span></span>${typeHtml}<label class="ncop-toggle"><input type="checkbox" data-item-key="${itemKey}"><span class="ncop-toggle-slider"></span></label>`;
+
     const checkbox = itemDiv.querySelector('input[type="checkbox"]');
     checkbox.addEventListener("change", (e) => {
       handleToggleInteraction(
@@ -532,45 +645,68 @@ export class SidebarMenu {
       );
     });
 
-    // console.log(`✅ Toggle item created successfully:`, itemDiv);
+    this.#attachMarquee(itemDiv.querySelector(".ncop-item-label-marquee"));
     return itemDiv;
   }
   #createTemporalItem(categoryKey, subcategoryKey, itemKey, itemData) {
-    // console.log(`🔧 Creating temporal item: ${itemKey}`, itemData);
-
     if (!itemData || !itemData.label) {
       console.error(`❌ Invalid temporal item data for ${itemKey}:`, itemData);
       return null;
     }
 
     const itemDiv = document.createElement("div");
-    itemDiv.className = "ncop-item ncop-item-temporal";
-    itemDiv.innerHTML = `
-            <div class="ncop-item-image">
-                <img src="${
-                  itemData.image || "/static/images/placeholder.png"
-                }" alt="${itemData.label}" />
-            </div>
-            <span class="ncop-item-label">${itemData.label}</span>
-        `;
+    itemDiv.className =
+      "ncop-item ncop-item-temporal ncop-item-row ncop-item-row--clickable";
+    itemDiv.title = itemData.label;
 
-    // Add click handler for image selection and interaction logging
+    const hasIcon = !!itemData.image;
+    const geom = this.#getLayerGeometry(itemData);
+    const iconHtml = hasIcon
+      ? `<span class="ncop-item-icon ncop-item-image"><img src="${itemData.image}" alt="" /></span>`
+      : "";
+    const typeHtml = this.#buildTypeIndicator(geom);
+
+    itemDiv.innerHTML = `${iconHtml}<span class="ncop-item-label-marquee"><span class="ncop-item-label">${itemData.label}</span></span>${typeHtml}`;
+
     const imageElement = itemDiv.querySelector(".ncop-item-image");
-    imageElement.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const wasSelected = imageElement.classList.contains("selected");
-      this.#handleImageSelection(imageElement);
-      const newActive = !wasSelected;
+
+    itemDiv.addEventListener("click", () => {
+      const wasSelected = itemDiv.classList.contains("is-selected");
+      if (wasSelected) {
+        itemDiv.classList.remove("is-selected");
+        if (imageElement) imageElement.classList.remove("selected");
+        handleTemporalInteraction(
+          categoryKey,
+          subcategoryKey,
+          itemKey,
+          false,
+          itemData
+        );
+        return;
+      }
+      // Single-selection is scoped to OTHER temporal items only — static
+      // rasters and raster toggles are independent multi-select and must
+      // keep their selection state here.
+      document
+        .querySelectorAll(".ncop-item-temporal.is-selected")
+        .forEach((other) => {
+          if (other === itemDiv) return;
+          other.classList.remove("is-selected");
+          const otherImg = other.querySelector(".ncop-item-image");
+          if (otherImg) otherImg.classList.remove("selected");
+        });
+      itemDiv.classList.add("is-selected");
+      if (imageElement) imageElement.classList.add("selected");
       handleTemporalInteraction(
         categoryKey,
         subcategoryKey,
         itemKey,
-        newActive,
-        itemData // <-- Use itemData instead of layerConfig
+        true,
+        itemData
       );
     });
 
-    // console.log(`✅ Temporal item created successfully:`, itemDiv);
+    this.#attachMarquee(itemDiv.querySelector(".ncop-item-label-marquee"));
     return itemDiv;
   }
 
@@ -884,55 +1020,33 @@ export class SidebarMenu {
   #createStaticItem(categoryKey, subcategoryKey, itemKey, itemData) {
     if (!itemData || !itemData.label) return null;
 
+    // Static items = non-temporal rasters (no temporal legend).
+    // Multi-select: each one toggles independently; multiple can stay
+    // active at the same time. Click again to deselect.
     const itemDiv = document.createElement("div");
-    itemDiv.className = "ncop-item ncop-item-static";
+    itemDiv.className =
+      "ncop-item ncop-item-static ncop-item-row ncop-item-row--clickable ncop-item-row--multi";
     itemDiv.title = itemData.label;
 
-    itemDiv.innerHTML = `
-      <div class="ncop-item-image">
-        <img 
-          src="${itemData.image}" 
-          alt="${itemData.label}" 
-        />
-      </div>
-      <span class="ncop-item-label">${itemData.label}</span>
-    `;
+    const hasIcon = !!itemData.image;
+    const geom = this.#getLayerGeometry(itemData);
+    const iconHtml = hasIcon
+      ? `<span class="ncop-item-icon ncop-item-image"><img src="${itemData.image}" alt="" /></span>`
+      : "";
+    const typeHtml = this.#buildTypeIndicator(geom);
 
-    // Track layer state locally
-    let isActive = false;
+    itemDiv.innerHTML = `${iconHtml}<span class="ncop-item-label-marquee"><span class="ncop-item-label">${itemData.label}</span></span>${typeHtml}`;
 
     const imageElement = itemDiv.querySelector(".ncop-item-image");
-    if (imageElement) {
-      // Image click: use existing selection handler and prevent bubbling to itemDiv
-      imageElement.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const wasSelected = imageElement.classList.contains("selected");
-        // Reuse central selection logic
-        this.#handleImageSelection(imageElement);
-        // keep isActive in sync with visual state
-        isActive = !wasSelected;
-        // trigger static interaction to keep behavior consistent
-        handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
-      });
-    }
 
-    // Click handler for the static layer (click outside image)
     itemDiv.addEventListener("click", () => {
-      isActive = !isActive;
-
-      // console.log(`🔄 Static layer "${itemKey}" toggling to:`, isActive);
-
-      handleStaticInteraction(categoryKey, subcategoryKey, itemKey, isActive);
-
-      // Toggle selection class on the image element so CSS .ncop-item-image.selected img applies
-      if (imageElement) {
-        imageElement.classList.toggle("selected", isActive);
-      } else {
-        // fallback: toggle on whole item (preserve previous behavior if image not present)
-        itemDiv.classList.toggle("selected", isActive);
-      }
+      const newState = !itemDiv.classList.contains("is-selected");
+      itemDiv.classList.toggle("is-selected", newState);
+      if (imageElement) imageElement.classList.toggle("selected", newState);
+      handleStaticInteraction(categoryKey, subcategoryKey, itemKey, newState);
     });
 
+    this.#attachMarquee(itemDiv.querySelector(".ncop-item-label-marquee"));
     return itemDiv;
   }
 

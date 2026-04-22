@@ -1,9 +1,10 @@
-/* Sidebar Panel */
+/* Sidebar Panel — flex column so the .sidebar-header (search) stays
+   pinned at the top while only the .sidebar-content scrolls. */
 .sidebar-panel {
     position: fixed;
     top: 138px;
     left: 12px;
-    width: 265px;
+    width: 320px;
     height: calc(100vh - 100px - 3rem);
     background: var(--primary-bg);
     border: 2px solid var(--border-light);
@@ -13,12 +14,13 @@
     opacity: 0;
     transition: all 0.2s ease;
     z-index: 999;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 12px 12px 12px 12px;
-    /* Extra bottom padding for last elements */
     box-sizing: border-box;
-    scroll-behavior: smooth;
-    /* Smooth scrolling */
+
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
 .sidebar-panel.visible {
@@ -26,13 +28,14 @@
     opacity: 1;
 }
 
-/* Sidebar Header */
+/* Sidebar Header — pinned top strip, never scrolls. */
 .sidebar-header {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border-dark);
     gap: 12px;
 }
@@ -166,9 +169,16 @@
     height: 14px;
 }
 
-/* Sidebar Content */
+/* Sidebar Content — the only scrollable region. */
 .sidebar-content {
     color: var(--white);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    /* Small right padding so the scrollbar does not sit on top of content */
+    padding-right: 2px;
 }
 
 .sidebar-accordion {
@@ -254,11 +264,15 @@
     margin-left: 5px;
 }
 
-.ncop-subcategory-header span {
+/* Only the title span (first child) gets flex:1. */
+.ncop-subcategory-header > span:first-child {
     flex: 1;
+    min-width: 0;
     font-size: 13px;
     font-weight: 500;
     color: var(--white);
+    overflow: hidden;
+    position: relative;
 }
 
 .ncop-subcategory-header.expanded .subcategory-chevron {
@@ -491,17 +505,21 @@
 
 /* Custom accordion icon for GIS layers */
 .accordion-header .accordion-custom-icon {
-    width: 50px;
-    height: 50px;
-    margin-right: 10px;
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
     object-fit: contain;
+    flex-shrink: 0;
 }
 
 .accordion-header .accordion-title {
     flex: 1;
-    font-size: 16px;
+    min-width: 0;
+    font-size: 14px;
     font-weight: 600;
     color: var(--white);
+    overflow: hidden;
+    position: relative;
 }
 
 .accordion-chevron {
@@ -526,9 +544,11 @@
 }
 
 .accordion-content.expanded {
-    max-height: 600px;
+    /* Large cap so no subcategory is clipped when the accordion is open.
+       The .sidebar-content parent already scrolls if total content exceeds
+       the viewport. */
+    max-height: 4000px;
     padding-bottom: 16px;
-    /* Extra space for last subcategories */
 }
 
 .custom-basemap-btn {
@@ -554,5 +574,226 @@
 .custom-basemap-btn i {
     width: 14px;
     height: 14px;
+}
+
+/* =========================================
+   Unified single-row layer items
+   (icon · marquee name · type · switch)
+   Applied to .ncop-item-toggle, .ncop-item-temporal, .ncop-item-static
+   ========================================= */
+.ncop-item.ncop-item-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    gap: 10px;
+    padding: 6px 10px;
+    margin: 2px 0;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    min-height: 36px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ncop-item.ncop-item-row:hover {
+    background: var(--hover-bg);
+    border-color: var(--border-dark);
+}
+
+/* Stack row items vertically inside grids (overrides 2-column default) */
+.ncop-grid:has(.ncop-item-row) {
+    grid-template-columns: 1fr;
+    gap: 2px;
+}
+
+.ncop-item-row .ncop-item-icon {
+    flex: 0 0 24px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    margin: 0;
+    padding: 0;
+}
+
+.ncop-item-row .ncop-item-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+    transition: transform 0.2s ease;
+}
+
+.ncop-item-row .ncop-item-icon.selected {
+    border-color: var(--ndma-green);
+    box-shadow: 0 0 0 2px var(--ndma-green-glow);
+}
+
+.ncop-item-row .ncop-item-label-marquee {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.ncop-item-row .ncop-item-label {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-primary);
+    margin: 0;
+    flex: initial;
+    text-align: left;
+    will-change: transform;
+}
+
+/* Slide only on hover over an overflowing row.
+   Flip overflow to visible so the text can spill into the marquee's
+   viewport (clipped by the marquee's overflow:hidden), and clear the
+   ellipsis during the animation. */
+.ncop-item-row:hover .ncop-item-label-marquee.is-overflowing .ncop-item-label {
+    overflow: visible;
+    text-overflow: clip;
+    animation: ncop-label-marquee var(--marquee-duration, 10s) ease-in-out infinite;
+}
+
+@keyframes ncop-label-marquee {
+    0%, 12%   { transform: translateX(0); }
+    42%, 58%  { transform: translateX(var(--marquee-x, 0px)); }
+    88%, 100% { transform: translateX(0); }
+}
+
+.ncop-item-row .ncop-item-type {
+    flex: 0 0 16px;
+    flex-shrink: 0;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.ncop-item-row:hover .ncop-item-type {
+    opacity: 1;
+}
+
+.ncop-item-row .ncop-item-type svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.ncop-item-row .ncop-item-type[data-geom="point"]   { color: #3b82f6; }
+.ncop-item-row .ncop-item-type[data-geom="line"]    { color: #10b981; }
+.ncop-item-row .ncop-item-type[data-geom="polygon"] { color: #f59e0b; }
+.ncop-item-row .ncop-item-type[data-geom="raster"]  { color: #a78bfa; }
+
+.ncop-item-row .ncop-toggle {
+    flex: 0 0 36px;
+    flex-shrink: 0;
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* Neutralise legacy temporal/static column-layout rules when row is applied */
+.ncop-item.ncop-item-row.ncop-item-temporal,
+.ncop-item.ncop-item-row.ncop-item-static {
+    flex-direction: row;
+    padding: 6px 10px;
+    min-height: 36px;
+    text-align: left;
+}
+
+.ncop-item-row.ncop-item-temporal .ncop-item-image,
+.ncop-item-row.ncop-item-static .ncop-item-image {
+    margin: 0;
+}
+
+/* Clickable rows: whole row is the click target; no trailing toggle.
+   Single-selection highlight lives on .is-selected. */
+.ncop-item-row--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.ncop-item-row--clickable .ncop-toggle {
+    display: none;
+}
+
+.ncop-item-row.is-selected {
+    background: var(--ndma-green-light);
+    border-color: var(--ndma-green);
+}
+
+.ncop-item-row.is-selected:hover {
+    background: var(--ndma-green-opaque);
+    border-color: var(--ndma-green);
+}
+
+.ncop-item-row.is-selected .ncop-item-label {
+    color: var(--white);
+}
+
+.ncop-item-row.is-selected .ncop-item-type {
+    opacity: 1;
+}
+
+/* =========================================
+   Header title marquee — titles ellipse at
+   rest and slide on hover when overflowing.
+   Mirrors the item-label marquee pattern.
+   ========================================= */
+.accordion-title-text,
+.ncop-subcategory-title-text,
+.ncop-nested-title-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    will-change: transform;
+}
+
+.accordion-header:hover
+    .accordion-title.is-overflowing
+    .accordion-title-text,
+.ncop-subcategory-header:hover
+    .ncop-subcategory-title.is-overflowing
+    .ncop-subcategory-title-text,
+.ncop-nested-header:hover
+    .ncop-nested-title.is-overflowing
+    .ncop-nested-title-text {
+    overflow: visible;
+    text-overflow: clip;
+    animation: ncop-label-marquee var(--marquee-duration, 10s) ease-in-out
+        infinite;
 }
 

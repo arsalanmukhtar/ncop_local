@@ -100,13 +100,16 @@
     opacity: 1;
 }
 
-/* Nested Header Text */
-.ncop-nested-header span {
+/* Nested Header Title — only the first span (title) takes flex:1. */
+.ncop-nested-header > span:first-child {
     flex: 1;
+    min-width: 0;
     font-size: 12px;
     font-weight: 500;
     color: var(--white);
     letter-spacing: 0.2px;
+    overflow: hidden;
+    position: relative;
     transition: color 0.2s ease;
 }
 
@@ -325,8 +328,8 @@
     gap: 6px;
 }
 
-/* Adjust nested header font size to be between subcategory and item */
-.ncop-nested-header span {
+/* Adjust nested header title font size to be between subcategory and item */
+.ncop-nested-header > span:first-child {
     font-size: 12px;
     /* Between subcategory (13px) and items (11px/10px) */
 }
