@@ -526,30 +526,8 @@
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
     }
 
-    .layer-attribute-popup {
-        background: var(--primary-bg) !important;
-        border: 2px solid var(--border-strong) !important;
-        backdrop-filter: blur(25px) saturate(110%) brightness(1.0) !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25),
-            0 4px 12px rgba(0, 0, 0, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
-
-        .popup-label {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2) !important;
-        }
-
-        .attr-key {
-            color: var(--text-primary) !important;
-            font-weight: 900 !important;
-        }
-
-        .attr-value {
-            color: var(--text-secondary) !important;
-            font-weight: 800 !important;
-        }
-    }
+    /* Layer-attribute popup night-mode now handled by _popup.css via
+       --popup-* custom properties remapped under [data-theme="night"]. */
 
     /* ===========================
        TIME SLIDER

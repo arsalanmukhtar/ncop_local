@@ -1,0 +1,784 @@
+/* =============================================================================
+   NCOP Unified Popup System
+   -----------------------------------------------------------------------------
+   One popup look for every vector layer in the application.
+
+   USAGE
+   -----
+   Outer container (custom DOM popups built by layer-attribute-popup.js):
+       <div class="ncop-popup [ncop-popup--compact]">
+         <div class="ncop-popup__tip"></div>
+         <div class="ncop-popup__header">
+           <div class="ncop-popup__title-block">
+             <div class="ncop-popup__title">Title text</div>
+             <div class="ncop-popup__subtitle">Subtitle text</div>
+           </div>
+           <span class="ncop-popup__badge ncop-popup__badge--{variant}">M 5.2</span>
+         </div>
+         <div class="ncop-popup__body"> ...content... </div>
+         <div class="ncop-popup__actions"> ...buttons... </div>
+       </div>
+
+   Inside Mapbox native popups (temporal-controls.js, navigation-panel.js):
+       Use .mapboxgl-popup.ncop-popup-host on the Mapbox popup and put an
+       inner <div class="ncop-popup"> — the nested styling below strips the
+       custom fixed-position and defers to mapbox for placement.
+
+   CONTENT PRIMITIVES
+   ------------------
+   - .ncop-popup__grid  .ncop-popup__card  .ncop-popup__card-label  .ncop-popup__card-value
+   - .ncop-popup__info  .ncop-popup__info-row  (full-width label: value rows)
+   - .ncop-popup__table  (fallback key/value table for unknown layers)
+   - .ncop-popup__section  .ncop-popup__section-title  (divider + heading)
+   - .ncop-popup__chart  (chart canvas wrapper, auto-sized)
+   - .ncop-popup__link  .ncop-popup__button[--primary|--success|--danger|--neutral]
+   - .ncop-popup__pills  .ncop-popup__pill  (pill-shaped metric selectors)
+
+   FEATURE-DRIVEN ACCENT BADGES
+   ----------------------------
+   Magnitude (USGS): --mag-low, --mag-moderate, --mag-strong, --mag-major, --mag-extreme
+   Event status (EONET, GDACS): --status-open, --status-closed, --status-active
+   Rainfall (PMD):  --rain-wet, --rain-dry
+   AQI (WAQI):      --aqi-good, --aqi-moderate, --aqi-usg, --aqi-unhealthy,
+                    --aqi-very-unhealthy, --aqi-hazardous
+   Neutral:         --neutral
+
+   THEMING
+   -------
+   All colors resolve through --popup-* custom properties. The default values
+   target the dark glass theme; [data-theme="night"] remaps them for the
+   light/day-swap theme the dashboard uses. Do not hardcode colors inside
+   popup HTML — assign a modifier class and let CSS pick the accent.
+   ============================================================================= */
+
+/* ----------------------------------------------------------------------------
+   Popup-local design tokens (day / default / dark-glass)
+   ---------------------------------------------------------------------------- */
+:root {
+    --popup-bg: rgba(15, 23, 42, 0.92);
+    --popup-bg-solid: #0f172a;
+    --popup-border: rgba(255, 255, 255, 0.18);
+    --popup-border-strong: rgba(255, 255, 255, 0.35);
+    --popup-text: rgba(229, 238, 247, 0.96);
+    --popup-text-muted: rgba(203, 213, 225, 0.72);
+    --popup-text-accent: var(--ndma-blue);
+    --popup-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25);
+    --popup-card-bg: rgba(17, 24, 39, 0.75);
+    --popup-card-border: rgba(148, 163, 184, 0.22);
+    --popup-divider: rgba(148, 163, 184, 0.18);
+    --popup-header-bg: linear-gradient(135deg, #0f172a, #1e293b);
+    --popup-link: #38bdf8;
+    --popup-link-hover: #7dd3fc;
+    --popup-radius: 12px;
+    /* Single-column architecture: the popup is a standard vertical container.
+       Compact by default (just the header and key summary); when it has more
+       detail the "View More" button reveals the rest in-place — the extra
+       section expands downward with a height transition and scrolls
+       internally if it exceeds the popup's max-height. */
+    --popup-width: 320px;
+    --popup-max-width: var(--popup-width);
+    --popup-min-width: var(--popup-width);
+    /* Viewport-aware ceiling so a tall popup still fits and scrolls inside
+       its extra body rather than clipping or overflowing off-screen. */
+    --popup-max-height: min(520px, calc(100vh - 120px));
+    --popup-tip-size: 10px;
+    --popup-padding-x: 14px;
+    --popup-padding-y: 12px;
+    --popup-expand-transition: 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+
+    /* Severity / feature palettes (stable across themes) */
+    --popup-sev-low: #22c55e;
+    --popup-sev-moderate: #eab308;
+    --popup-sev-strong: #f97316;
+    --popup-sev-major: #dc2626;
+    --popup-sev-extreme: #7f1d1d;
+
+    --popup-status-open: #16a34a;
+    --popup-status-closed: #64748b;
+    --popup-status-active: #2563eb;
+
+    --popup-rain-wet: #2563eb;
+    --popup-rain-dry: #f59e0b;
+
+    --popup-aqi-good: #22c55e;
+    --popup-aqi-moderate: #eab308;
+    --popup-aqi-usg: #f97316;
+    --popup-aqi-unhealthy: #dc2626;
+    --popup-aqi-very-unhealthy: #7c3aed;
+    --popup-aqi-hazardous: #7f1d1d;
+}
+
+/* Night-mode theme: light glass on dark map backdrop */
+[data-theme="night"] {
+    --popup-bg: rgba(240, 245, 250, 0.96);
+    --popup-bg-solid: #f0f5fa;
+    --popup-border: rgba(51, 65, 85, 0.24);
+    --popup-border-strong: rgba(51, 65, 85, 0.55);
+    --popup-text: rgba(15, 23, 42, 0.96);
+    --popup-text-muted: rgba(51, 65, 85, 0.78);
+    --popup-text-accent: #0d4a7a;
+    --popup-shadow: 0 10px 30px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+    --popup-card-bg: rgba(255, 255, 255, 0.65);
+    --popup-card-border: rgba(100, 116, 139, 0.28);
+    --popup-divider: rgba(100, 116, 139, 0.24);
+    --popup-header-bg: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    --popup-link: #0d4a7a;
+    --popup-link-hover: #1e5a8e;
+}
+
+/* ----------------------------------------------------------------------------
+   Base popup container
+   ---------------------------------------------------------------------------- */
+.ncop-popup {
+    position: fixed;
+    z-index: 9999;
+    /* Standard single-column popup. Width is the fixed --popup-width (capped
+       at viewport minus gutter); height is content-driven up to --popup-max-height,
+       at which point the extra section scrolls internally. */
+    width: var(--popup-width);
+    max-width: min(var(--popup-width), calc(100vw - 32px));
+    max-height: var(--popup-max-height);
+    display: flex;
+    flex-direction: column;
+    background: var(--popup-bg);
+    color: var(--popup-text);
+    border: 1px solid var(--popup-border);
+    border-radius: var(--popup-radius);
+    box-shadow: var(--popup-shadow);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    transform: translate(-50%, -100%);
+    transform-origin: 50% 100%;
+    pointer-events: auto;
+    overflow: hidden;
+    transition: opacity 0.15s ease;
+}
+
+.ncop-popup.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* Compact variant — narrower, used by Mapbox-native popups that don't
+   need the View More / extra-body pattern (news, Islamabad, temporal). */
+.ncop-popup--compact {
+    --popup-width: 290px;
+    font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Primary region — always visible, holds the header (and any key summary).
+   -------------------------------------------------------------------------- */
+.ncop-popup__primary {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Universal triangular tip — centered under the popup, always points at
+   the feature anchor. */
+.ncop-popup::after {
+    content: "";
+    position: absolute;
+    bottom: calc(-1 * var(--popup-tip-size));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: var(--popup-tip-size) solid transparent;
+    border-right: var(--popup-tip-size) solid transparent;
+    border-top: var(--popup-tip-size) solid var(--popup-bg-solid);
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+    pointer-events: none;
+}
+.ncop-popup__tip {
+    display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Body region — holds all remaining content after the header. Takes the
+   leftover space inside the popup's max-height and scrolls vertically when
+   content exceeds what fits. No collapse, no View More button.
+   -------------------------------------------------------------------------- */
+.ncop-popup__body-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--popup-padding-y) var(--popup-padding-x);
+    border-top: 1px solid var(--popup-divider);
+}
+
+.ncop-popup__body-scroll:empty {
+    display: none;
+}
+
+.ncop-popup__body-scroll::-webkit-scrollbar { width: 6px; }
+.ncop-popup__body-scroll::-webkit-scrollbar-track { background: transparent; }
+.ncop-popup__body-scroll::-webkit-scrollbar-thumb {
+    background: var(--popup-divider);
+    border-radius: 3px;
+}
+.ncop-popup__body-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--popup-border-strong);
+}
+
+/* Actions strip at the end of the body bleeds to the container edges so it
+   reads as a pinned footer inside the scroll region. */
+.ncop-popup__body-scroll > .ncop-popup__actions {
+    margin: 10px calc(-1 * var(--popup-padding-x)) calc(-1 * var(--popup-padding-y));
+    border-top: 1px solid var(--popup-divider);
+    border-radius: 0;
+}
+
+/* ----------------------------------------------------------------------------
+   Header — fixed (does not scroll)
+   ---------------------------------------------------------------------------- */
+.ncop-popup__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--popup-header-bg);
+    border-bottom: 1px solid var(--popup-divider);
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+}
+
+.ncop-popup__title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ncop-popup__title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--popup-text);
+    line-height: 1.25;
+    margin: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ncop-popup__subtitle {
+    font-size: 11px;
+    color: var(--popup-text-muted);
+    margin-top: 3px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ncop-popup__header-aside {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.ncop-popup__close {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 999px;
+    background: var(--popup-card-bg);
+    color: var(--popup-text);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.ncop-popup__close:hover {
+    background: var(--popup-divider);
+}
+
+/* ----------------------------------------------------------------------------
+   Badges — feature-driven accent colors
+   ---------------------------------------------------------------------------- */
+.ncop-popup__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    background: var(--popup-badge-bg, var(--popup-card-bg));
+    color: var(--popup-badge-text, var(--popup-text));
+    border: 1px solid transparent;
+}
+
+/* Neutral (fallback) */
+.ncop-popup__badge--neutral {
+    --popup-badge-bg: var(--popup-card-bg);
+    --popup-badge-text: var(--popup-text);
+    border-color: var(--popup-card-border);
+}
+
+/* Magnitude (USGS earthquakes) */
+.ncop-popup__badge--mag-low       { --popup-badge-bg: var(--popup-sev-low);      --popup-badge-text: #fff; }
+.ncop-popup__badge--mag-moderate  { --popup-badge-bg: var(--popup-sev-moderate); --popup-badge-text: #1a1a1a; }
+.ncop-popup__badge--mag-strong    { --popup-badge-bg: var(--popup-sev-strong);   --popup-badge-text: #fff; }
+.ncop-popup__badge--mag-major     { --popup-badge-bg: var(--popup-sev-major);    --popup-badge-text: #fff; }
+.ncop-popup__badge--mag-extreme   { --popup-badge-bg: var(--popup-sev-extreme);  --popup-badge-text: #fff; }
+
+/* Event status (EONET, GDACS) */
+.ncop-popup__badge--status-open   { --popup-badge-bg: var(--popup-status-open);   --popup-badge-text: #fff; }
+.ncop-popup__badge--status-closed { --popup-badge-bg: var(--popup-status-closed); --popup-badge-text: #fff; }
+.ncop-popup__badge--status-active { --popup-badge-bg: var(--popup-status-active); --popup-badge-text: #fff; }
+
+/* Rainfall (PMD) */
+.ncop-popup__badge--rain-wet      { --popup-badge-bg: var(--popup-rain-wet);      --popup-badge-text: #fff; }
+.ncop-popup__badge--rain-dry      { --popup-badge-bg: var(--popup-rain-dry);      --popup-badge-text: #1a1a1a; }
+
+/* Air quality index (WAQI) */
+.ncop-popup__badge--aqi-good            { --popup-badge-bg: var(--popup-aqi-good);            --popup-badge-text: #fff; }
+.ncop-popup__badge--aqi-moderate        { --popup-badge-bg: var(--popup-aqi-moderate);        --popup-badge-text: #1a1a1a; }
+.ncop-popup__badge--aqi-usg             { --popup-badge-bg: var(--popup-aqi-usg);             --popup-badge-text: #fff; }
+.ncop-popup__badge--aqi-unhealthy       { --popup-badge-bg: var(--popup-aqi-unhealthy);       --popup-badge-text: #fff; }
+.ncop-popup__badge--aqi-very-unhealthy  { --popup-badge-bg: var(--popup-aqi-very-unhealthy);  --popup-badge-text: #fff; }
+.ncop-popup__badge--aqi-hazardous       { --popup-badge-bg: var(--popup-aqi-hazardous);       --popup-badge-text: #fff; }
+
+/* Category badge (small chip — EONET categories) */
+.ncop-popup__category {
+    display: inline-block;
+    background: var(--popup-status-active);
+    color: #eff6ff;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    margin: 0 6px 6px 0;
+}
+
+/* ----------------------------------------------------------------------------
+   Body — flexible; absorbs overflow. The parent .ncop-popup caps the height
+   via --popup-max-height, so this region scrolls only when content exceeds
+   viewport budget. No hard px max-height here — it was the root cause of
+   content getting clipped on tall popups.
+   ---------------------------------------------------------------------------- */
+.ncop-popup__body {
+    padding: var(--popup-padding-y) var(--popup-padding-x);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.ncop-popup__body::-webkit-scrollbar {
+    width: 6px;
+}
+.ncop-popup__body::-webkit-scrollbar-track {
+    background: transparent;
+}
+.ncop-popup__body::-webkit-scrollbar-thumb {
+    background: var(--popup-divider);
+    border-radius: 3px;
+}
+.ncop-popup__body::-webkit-scrollbar-thumb:hover {
+    background: var(--popup-border-strong);
+}
+
+/* ----------------------------------------------------------------------------
+   Content primitives
+   ---------------------------------------------------------------------------- */
+
+/* Metric card grid (USGS, PMD, etc.) — auto-fits so cards reflow to a
+   single column when the popup is narrow, and 2/3 columns when there's
+   room, instead of spilling content outside the card. */
+.ncop-popup__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.ncop-popup__grid--single {
+    grid-template-columns: 1fr;
+}
+
+.ncop-popup__grid--triple {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+}
+
+.ncop-popup__card {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 8px;
+    padding: 7px 9px;
+    min-width: 0;
+}
+
+.ncop-popup__card-label {
+    font-size: 10px;
+    color: var(--popup-text-muted);
+    margin-bottom: 3px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.ncop-popup__card-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--popup-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Info list — label: value rows inside a bordered card (USGS details, EONET) */
+.ncop-popup__info {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.ncop-popup__info:last-child {
+    margin-bottom: 0;
+}
+
+.ncop-popup__info-row {
+    margin: 0;
+    padding: 1px 0;
+    color: var(--popup-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.ncop-popup__info-row strong {
+    color: var(--popup-text);
+    margin-right: 4px;
+}
+
+.ncop-popup__info-row + .ncop-popup__info-row {
+    border-top: 1px dashed transparent;
+}
+
+/* Section divider with title (Sources, Station Metrics, etc.) */
+.ncop-popup__section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--popup-divider);
+}
+.ncop-popup__section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+.ncop-popup__section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--popup-text-muted);
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+/* Generic attribute table (fallback renderer, legacy layer-attribute-popup) */
+.ncop-popup__table,
+.popup-attributes {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.ncop-popup__table tr,
+.popup-attributes tr {
+    border-bottom: 1px solid var(--popup-divider);
+}
+.ncop-popup__table tr:last-child,
+.popup-attributes tr:last-child {
+    border-bottom: none;
+}
+.ncop-popup__table td,
+.popup-attributes td {
+    padding: 6px 8px 6px 0;
+    vertical-align: top;
+    color: var(--popup-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.ncop-popup__table td:first-child,
+.popup-attributes td.attr-key {
+    color: var(--ndma-green);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    min-width: 90px;
+}
+.popup-attributes td.attr-value {
+    color: var(--popup-text);
+}
+
+/* Scroll wrapper used by the custom layer-attribute-popup */
+.popup-attributes-scroll {
+    max-height: 280px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.popup-attributes-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.popup-attributes-scroll::-webkit-scrollbar-thumb {
+    background: var(--popup-divider);
+    border-radius: 3px;
+}
+
+/* Links */
+.ncop-popup__link,
+.ncop-popup a {
+    color: var(--popup-link);
+    text-decoration: underline;
+    font-weight: 500;
+    word-break: break-word;
+}
+.ncop-popup__link:hover,
+.ncop-popup a:hover {
+    color: var(--popup-link-hover);
+}
+
+/* Sources list (EONET) */
+.ncop-popup__sources {
+    padding-left: 18px;
+    margin: 0;
+    font-size: 11px;
+}
+
+/* Actions row — fixed (does not scroll), wraps when buttons overflow. */
+.ncop-popup__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border-top: 1px solid var(--popup-divider);
+    background: rgba(0, 0, 0, 0.08);
+    flex: 0 0 auto;
+}
+[data-theme="night"] .ncop-popup__actions {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* Buttons */
+.ncop-popup__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    background: var(--popup-card-bg);
+    color: var(--popup-text);
+    transition: filter 0.15s, background 0.15s;
+    font-family: inherit;
+}
+.ncop-popup__button:hover {
+    filter: brightness(1.1);
+}
+.ncop-popup__button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ncop-popup__button--primary {
+    background: linear-gradient(135deg, #2563eb, #0ea5e9);
+    color: #fff;
+}
+.ncop-popup__button--success {
+    background: var(--ndma-green);
+    color: #fff;
+}
+.ncop-popup__button--danger {
+    background: var(--popup-sev-major);
+    color: #fff;
+}
+.ncop-popup__button--neutral {
+    background: #334155;
+    color: #fff;
+}
+[data-theme="night"] .ncop-popup__button--neutral {
+    background: #cbd5e1;
+    color: #1e293b;
+}
+
+/* Pill strip (WAQI metric selectors) */
+.ncop-popup__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 6px 0;
+}
+
+.ncop-popup__pill {
+    background: var(--popup-card-bg);
+    color: var(--popup-text);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+}
+.ncop-popup__pill:hover,
+.ncop-popup__pill.is-active {
+    background: var(--popup-status-active);
+    border-color: var(--popup-status-active);
+    color: #fff;
+}
+
+/* Status note (loading / error text next to action buttons) */
+.ncop-popup__status-note {
+    font-size: 11px;
+    color: var(--popup-text-muted);
+    align-self: center;
+}
+
+/* Chart canvas wrapper — canvases inside a popup must never break out of
+   the container width, regardless of any hard px dimensions the builder
+   sets on the <canvas> element (Chart.js fixed-size mode). */
+.ncop-popup__chart {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 10px;
+    padding: 8px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+.ncop-popup__chart canvas {
+    max-width: 100% !important;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+.ncop-popup__chart-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--popup-text);
+    margin-bottom: 6px;
+}
+.ncop-popup__chart-hidden {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+
+/* ----------------------------------------------------------------------------
+   Legacy-compat: .layer-attribute-popup is always paired with .ncop-popup on
+   the same element, so the unified single-column layout applies. These
+   legacy child selectors remain so any leftover code paths that inject into
+   .popup-label / .popup-attributes-scroll still style correctly.
+   ---------------------------------------------------------------------------- */
+.layer-attribute-popup.hidden {
+    display: none;
+    opacity: 0;
+}
+
+.ncop-popup__primary .popup-label {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--popup-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.popup-attributes-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* ----------------------------------------------------------------------------
+   Mapbox GL JS native popup — used by the compact popups that don't need
+   the View More expand pattern (news markers, Islamabad, temporal feature
+   reader). Mapbox owns positioning and the tip.
+   ---------------------------------------------------------------------------- */
+.mapboxgl-popup.ncop-popup-host .mapboxgl-popup-content {
+    padding: 0;
+    background: var(--popup-bg);
+    color: var(--popup-text);
+    border: 1px solid var(--popup-border);
+    border-radius: var(--popup-radius);
+    box-shadow: var(--popup-shadow);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    overflow: hidden;
+    max-width: min(var(--popup-max-width), calc(100vw - 32px));
+    max-height: var(--popup-max-height);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Flatten nested .ncop-popup when hosted by a mapbox popup — the outer
+   .mapboxgl-popup-content provides the visual container and mapbox owns
+   the tip, so the inner popup drops its own chrome. View More and the
+   extra region are hidden since Mapbox-hosted popups stay compact. */
+.mapboxgl-popup .ncop-popup {
+    position: static;
+    transform: none;
+    max-width: none;
+    width: 100%;
+    max-height: none;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-radius: 0;
+}
+.mapboxgl-popup .ncop-popup::after {
+    display: none;
+}
+.mapboxgl-popup .ncop-popup__body-scroll {
+    border-top: none;
+    overflow: visible;
+    padding: 0;
+}
+
+.mapboxgl-popup.ncop-popup-host .mapboxgl-popup-close-button {
+    color: var(--popup-text);
+    background: transparent;
+    font-size: 18px;
+    padding: 2px 8px;
+    top: 4px;
+    right: 4px;
+    border: none;
+}
+.mapboxgl-popup.ncop-popup-host .mapboxgl-popup-close-button:hover {
+    background: var(--popup-divider);
+    border-radius: 4px;
+}
+
+/* Align mapbox tip color with our container */
+.mapboxgl-popup.ncop-popup-host.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+    border-top-color: var(--popup-bg-solid);
+}
+.mapboxgl-popup.ncop-popup-host.mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+    border-bottom-color: var(--popup-bg-solid);
+}
+.mapboxgl-popup.ncop-popup-host.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+    border-right-color: var(--popup-bg-solid);
+}
+.mapboxgl-popup.ncop-popup-host.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+    border-left-color: var(--popup-bg-solid);
+}

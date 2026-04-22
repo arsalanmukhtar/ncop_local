@@ -18,6 +18,7 @@
    _ncop-content.css          4098 – 4487   NCOP static type + nested sub-accordion
    _story-gee.css             4488 – 5472   Story mode + GEE chatbot + GEE temporal slider
    _rainviewer-misc.css       5473 – 6582   RainViewer slider, news modal, hidden elements, rv polish
+   _popup.css                 (new)         Unified popup system (day/night, feature-driven badges, universal tip)
    ============================================================================= */
 
 @import "tailwindcss";
@@ -33,3 +34,4 @@
 @import "./dashboard/_ncop-content.css";
 @import "./dashboard/_story-gee.css";
 @import "./dashboard/_rainviewer-misc.css";
+@import "./dashboard/_popup.css";

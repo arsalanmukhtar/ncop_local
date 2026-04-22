@@ -596,8 +596,20 @@ export class NavigationPanel {
     new mapboxgl.Marker({ color: "#ff4500" })
       .setLngLat(islamabadCoords)
       .setPopup(
-        new mapboxgl.Popup().setHTML(
-          "<strong>📍 Islamabad</strong><br>Capital of Pakistan<br><small>Your Location Marker</small>"
+        new mapboxgl.Popup({ className: "ncop-popup-host", maxWidth: "320px" }).setHTML(
+          `<div class="ncop-popup ncop-popup--compact">
+            <div class="ncop-popup__header">
+              <div class="ncop-popup__title-block">
+                <div class="ncop-popup__title">📍 Islamabad</div>
+                <div class="ncop-popup__subtitle">Capital of Pakistan</div>
+              </div>
+            </div>
+            <div class="ncop-popup__body">
+              <div class="ncop-popup__info">
+                <p class="ncop-popup__info-row">Your Location Marker</p>
+              </div>
+            </div>
+          </div>`
         )
       )
       .addTo(this.#map);
@@ -2275,53 +2287,47 @@ export class NavigationPanel {
 
     // Create popup on marker click
     marker.getElement().addEventListener("click", () => {
-      let popupContent = `<strong>${this.#sanitizeHTML(
-        props.title
-      )}</strong><br>`;
+      let platformBlock;
+      let badgeVariant = "status-active";
+      let badgeLabel = "News";
 
       if (props.source_platform === "reddit") {
-        popupContent += `
-          <small>
-              📱 <strong>Reddit</strong> • r/${
-                props.reddit_subreddit || "unknown"
-              }<br>
-              👍 ${props.reddit_score || 0} upvotes | 💬 ${
-          props.reddit_comments || 0
-        } comments
-          </small><br>
+        badgeLabel = "Reddit";
+        platformBlock = `
+          <p class="ncop-popup__info-row">📱 <strong>Reddit</strong> · r/${props.reddit_subreddit || "unknown"}</p>
+          <p class="ncop-popup__info-row">👍 ${props.reddit_score || 0} upvotes · 💬 ${props.reddit_comments || 0} comments</p>
         `;
       } else if (props.source_platform === "mastodon") {
-        popupContent += `
-          <small>
-              🐘 <strong>Mastodon</strong> • @${
-                props.mastodon_author || "unknown"
-              }<br>
-              ⭐ ${props.mastodon_favourites || 0} favorites | 🔄 ${
-          props.mastodon_reblogs || 0
-        } reblogs
-          </small><br>
+        badgeLabel = "Mastodon";
+        platformBlock = `
+          <p class="ncop-popup__info-row">🐘 <strong>Mastodon</strong> · @${props.mastodon_author || "unknown"}</p>
+          <p class="ncop-popup__info-row">⭐ ${props.mastodon_favourites || 0} favorites · 🔄 ${props.mastodon_reblogs || 0} reblogs</p>
         `;
       } else {
-        popupContent += `
-          <small>
-              📰 <strong>${this.#sanitizeHTML(
-                props.domain || "News Source"
-              )}</strong><br>
-              🌍 ${this.#sanitizeHTML(props.sourcecountry || "Unknown Country")}
-          </small><br>
+        badgeVariant = "status-open";
+        badgeLabel = this.#sanitizeHTML(props.domain || "News");
+        platformBlock = `
+          <p class="ncop-popup__info-row">📰 <strong>${this.#sanitizeHTML(props.domain || "News Source")}</strong></p>
+          <p class="ncop-popup__info-row">🌍 ${this.#sanitizeHTML(props.sourcecountry || "Unknown Country")}</p>
         `;
       }
 
-      popupContent += `
-        <a href="${props.url}"
-           target="_blank"
-           rel="noopener noreferrer"
-           style="color:#0099ff;">
-            Read More →
-        </a>
-      `;
+      const popupContent = `<div class="ncop-popup ncop-popup--compact">
+        <div class="ncop-popup__header">
+          <div class="ncop-popup__title-block">
+            <div class="ncop-popup__title">${this.#sanitizeHTML(props.title)}</div>
+          </div>
+          <span class="ncop-popup__badge ncop-popup__badge--${badgeVariant}">${badgeLabel}</span>
+        </div>
+        <div class="ncop-popup__body">
+          <div class="ncop-popup__info">${platformBlock}</div>
+        </div>
+        <div class="ncop-popup__actions">
+          <a class="ncop-popup__button ncop-popup__button--primary" href="${props.url}" target="_blank" rel="noopener noreferrer">Read More →</a>
+        </div>
+      </div>`;
 
-      new mapboxgl.Popup()
+      new mapboxgl.Popup({ className: "ncop-popup-host", maxWidth: "360px" })
         .setLngLat(coords)
         .setHTML(popupContent)
         .addTo(this.#map);

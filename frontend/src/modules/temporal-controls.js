@@ -158,44 +158,31 @@ function buildPopupContent(layerId, feature) {
           (PROPERTY_PRIORITY[b.toLowerCase()] || 99) || a.localeCompare(b)
     );
 
-  let rows = `
-    <tr style="border-bottom:1px solid rgba(255,255,255,0.5);">
-      <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;white-space:nowrap;">Layer</td>
-      <td style="padding:8px 0;color:rgba(255,255,255,0.75);font-weight:500;word-break:break-word;">${escapeHtml(
-        layerId
-      )}</td>
+  const layerRow = `
+    <tr>
+      <td>Layer</td>
+      <td>${escapeHtml(layerId)}</td>
     </tr>`;
 
-  if (sorted.length) {
-    rows += sorted
-      .map(([k, v], i) => {
-        const last = i === sorted.length - 1;
-        return `
-        <tr style="border-bottom:1px solid rgba(255,255,255,${
-          last ? "0" : "0.5"
-        });">
-          <td style="padding:8px 0;padding-right:12px;font-weight:600;color:#2ecc71;white-space:nowrap;vertical-align:top;">${escapeHtml(
-            formatPropertyKey(k)
-          )}:</td>
-          <td style="padding:8px 0;color:rgba(255,255,255,0.75);word-break:break-word;max-width:250px;">${formatPropertyValue(
-            v
-          )}</td>
-        </tr>`;
-      })
-      .join("");
-  } else {
-    rows += `
-      <tr>
-        <td colspan="2" style="padding:8px 0;color:rgba(255,255,255,0.75);font-size:12px;font-style:italic;text-align:center;">No properties available</td>
-      </tr>`;
-  }
+  const propertyRows = sorted.length
+    ? sorted
+        .map(
+          ([k, v]) => `
+        <tr>
+          <td>${escapeHtml(formatPropertyKey(k))}</td>
+          <td>${formatPropertyValue(v)}</td>
+        </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="2" class="ncop-popup__status-note" style="display:block;text-align:center;font-style:italic;">No properties available</td></tr>`;
 
-  return `
-    <div style="position:fixed;z-index:9999;background:var(--primary-bg,#ffffff);box-shadow:0 8px 32px var(--shadow-soft,rgba(0,0,0,0.1));border-radius:8px;padding:10px 15px;font-size:13px;border:1px solid var(--border-dark,rgba(0,0,0,0.1));backdrop-filter:blur(15px) saturate(180%);-webkit-backdrop-filter:blur(15px) saturate(180%);transition:opacity .2s;opacity:1;display:flex;flex-direction:column;transform:translate(-50%,-100%);min-width:280px;height:25rem;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.4;overflow-y:auto;">
-      <table style="width:100%;border-collapse:collapse;margin:0;padding:0;">
-        <tbody>${rows}</tbody>
+  return `<div class="ncop-popup ncop-popup--compact">
+    <div class="ncop-popup__body">
+      <table class="ncop-popup__table">
+        <tbody>${layerRow}${propertyRows}</tbody>
       </table>
-    </div>`;
+    </div>
+  </div>`;
 }
 
 // ===== DRAG AND RESIZE FUNCTIONS =====
@@ -392,10 +379,10 @@ function addClickListeners() {
         clickPopup = new mapboxgl.Popup({
           closeButton: true,
           closeOnClick: true,
-          maxWidth: "400px",
+          maxWidth: "420px",
           offset: [0, -10],
           anchor: "bottom",
-          className: "temporal-layer-popup",
+          className: "ncop-popup-host temporal-layer-popup",
         });
       }
       const html = buildPopupContent(layerId, feature);
