@@ -6,7 +6,7 @@ import {
   showRainViewerPlayer,
   hideRainViewerPlayer,
   initRainViewerPlayer,
-} from "./rainviewer-player.js";
+} from "./temporal-controls.js";
 
 
 

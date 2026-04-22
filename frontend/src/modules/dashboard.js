@@ -34,8 +34,8 @@ import {
   generateCH4300Layers,
 } from "./time-functions.js";
 import "./map-layers.js"; // Exposes window.dwd_satellite_infrared
-import "./time-slider-functionality.js"; // Exposes global functions
-import { initRainViewerPlayer } from "./rainviewer-player.js";
+import "./temporal-controls.js"; // Exposes global time-slider functions
+import { initRainViewerPlayer } from "./temporal-controls.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 // ===================================================
 
@@ -45,17 +45,14 @@ import {
   startStoryBySlug,
 } from "./map-controls.js";
 import { NavigationPanel } from "./navigation-panel.js";
-import { ProjectionPanel } from "./projection-panel.js";
-import { BasemapPanel } from "./basemap-panel.js";
+import { ProjectionPanel, BasemapPanel } from "./map-display-panels.js";
 import { SidebarMenu } from "./sidebar-menu.js";
 import { UtilityManager } from "./utility-manager.js";
-import { UserControl } from "./user-control.js";
+import { UserControl, NCOPTourControl } from "./nav-controls.js";
 import { SourceLayerControl } from "./sourcelayer-control.js";
-import { LayerOrderControl } from "./layer-order-control.js";
+import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
-import { LayerInfoPanel } from "./layer-info-panel.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
-import { NCOPTourControl } from "./ncop-tour-control.js";
 
 
 // ---- Mapbox token handling ----

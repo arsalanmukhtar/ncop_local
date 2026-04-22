@@ -1,11 +1,12 @@
 // sourcelayer-control.js - Direct Mapbox layer management using map-layers.js configuration
 
 import { ncop_menu_items } from "./map-layers.js";
-import LayerAttributePopup from "./layer-attribute-popup.js"; // <-- ENABLED
-import { registerPMDWeatherIcons } from "./pmd-weather-icons.js";
-import { registerEonetIcons } from "./eonet-icons.js";
-import { registerUsgsEarthquakeIcons } from "./usgs-earthquake-icons.js";
-// import LayerAttributePopup from './layer-attribute-popup.js';
+import LayerAttributePopup from "./layer-attribute-popup.js";
+import {
+  registerPMDWeatherIcons,
+  registerEonetIcons,
+  registerUsgsEarthquakeIcons,
+} from "./map-icons.js";
 
 /**
  * SourceLayerControl Class

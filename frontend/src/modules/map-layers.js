@@ -1,8 +1,11 @@
 import { Popup } from "mapbox-gl";
-import {map_icons} from "./map-icons.js"
-import { PMD_RAIN_ICON_ID, PMD_SUN_ICON_ID } from "./pmd-weather-icons.js";
-import { EONET_ICON_IDS } from "./eonet-icons.js";
-import { USGS_ICON_IDS } from "./usgs-earthquake-icons.js";
+import {
+  map_icons,
+  PMD_RAIN_ICON_ID,
+  PMD_SUN_ICON_ID,
+  EONET_ICON_IDS,
+  USGS_ICON_IDS,
+} from "./map-icons.js";
 
 import {
   generateDWDSatelliteLayers,
