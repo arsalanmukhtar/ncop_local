@@ -1,0 +1,219 @@
+/* Navigation Controls Wrapper */
+.nav-controls-wrapper {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+/* Custom Navigation Controls Container */
+.custom-nav-control {
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    transform-origin: bottom right;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Hide navigation buttons when collapsed */
+.custom-nav-control.collapsed .custom-nav-btn:not(.nav-toggle-btn) {
+    transform: translateX(100%);
+    opacity: 0;
+    visibility: hidden;
+    margin-bottom: 0;
+    height: 0;
+    padding: 0;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.custom-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease, height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    color: var(--white);
+}
+
+.custom-nav-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-nav-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.custom-nav-btn .nav-icon {
+    font-size: 14px;
+    line-height: 1;
+    display: block;
+}
+
+/* Style for text labels in buttons */
+.custom-nav-btn .nav-text {
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0.5px;
+}
+
+/* Navigation Toggle Button */
+.nav-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary-bg);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-light);
+    margin-bottom: 0;
+    color: var(--text-primary);
+}
+
+.nav-toggle-btn:hover {
+    background: var(--accent-bg-blue);
+}
+
+.nav-toggle-btn i {
+    width: 16px;
+    height: 16px;
+    color: white;
+}
+
+/* Home Button Styling - Light Green Background */
+button#homeExtent.custom-nav-btn {
+    background: var(--ndma-green) !important;
+    /* Light green (green-500 with opacity) */
+    color: var(--text-primary) !important;
+    border-color: var(--border-strong) !important;
+}
+
+button#homeExtent.custom-nav-btn:hover {
+    background: var(--ndma-green-opaque) !important;
+    /* Darker green on hover */
+    color: var(--text-primary) !important;
+}
+
+/* 3D Toggle Button Active State */
+button.custom-nav-btn.terrain-active {
+    background: var(--ndma-blue) !important;
+    color: white !important;
+    border-color: var(--ndma-blue-gradient) !important;
+}
+
+button.custom-nav-btn.terrain-active:hover {
+    background: var(--ndma-blue) !important;
+}
+
+button.custom-nav-btn.active-wind {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    box-shadow: 0 0 12px var(--ndma-blue-glow) !important;
+    color: #fff !important;
+}
+
+button.custom-nav-btn.active-ocean {
+    background: var(--ndma-green) !important;
+    border-color: var(--ndma-green) !important;
+    box-shadow: 0 0 12px var(--ndma-green-glow) !important;
+    color: #fff !important;
+}
+
+/* Custom User Control */
+.custom-user-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+.custom-user-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-user-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-user-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Custom Basemap Control */
+.custom-basemap-control {
+    z-index: 1000;
+    transition: all 0.3s ease;
+    color: var(--white);
+}
+
+/* Custom Menu Control */
+.custom-menu-control {
+    position: absolute;
+    top: 140px;
+    /* Below NCOP panel with proper margin */
+    left: 13px;
+    /* Aligned with NCOP panel */
+    z-index: 1000;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.custom-menu-control.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.custom-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-menu-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-menu-btn i {
+    width: 14px;
+    height: 14px;
+}
+

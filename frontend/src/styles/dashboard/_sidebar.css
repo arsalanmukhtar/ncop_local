@@ -1,0 +1,558 @@
+/* Sidebar Panel */
+.sidebar-panel {
+    position: fixed;
+    top: 138px;
+    left: 12px;
+    width: 265px;
+    height: calc(100vh - 100px - 3rem);
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 16px;
+    backdrop-filter: blur(15px);
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 999;
+    overflow-y: auto;
+    padding: 12px 12px 12px 12px;
+    /* Extra bottom padding for last elements */
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+    /* Smooth scrolling */
+}
+
+.sidebar-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 12px;
+}
+
+.sidebar-title {
+    color: var(--white);
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.sidebar-search-container {
+    flex: 1;
+    max-width: none;
+}
+
+/* Search Functionality */
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    color: var(--text-primary);
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 6px 28px 6px 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-input:focus {
+    outline: none;
+    background: transparent;
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-icon {
+    width: 8px;
+    height: 8px;
+    color: transparent;
+    visibility: hidden;
+}
+
+/* Hide elements that don't match search */
+.search-hidden {
+    display: none !important;
+}
+
+/* No results message */
+.no-results-message {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #000000;
+    background: var(--tertiary-bg);
+    border-radius: 8px;
+    margin: 1rem 0;
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+}
+
+.no-results-message p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.no-results-message small {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 2px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.sidebar-close-btn:hover {
+    color: var(--white);
+    background: var(--ndma-red-opaque);
+}
+
+.sidebar-close-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Sidebar Content */
+.sidebar-content {
+    color: var(--white);
+}
+
+.sidebar-accordion {
+    margin-bottom: 15px;
+}
+
+.accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px;
+    background: var(--tertiary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-dark);
+    margin-bottom: 4px;
+}
+
+.accordion-header:hover {
+    background: var(--accent-bg-blue);
+}
+
+.accordion-header.active {
+    background: var(--ndma-blue-gradient);
+    border-color: var(--ndma-blue);
+}
+
+.accordion-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--white);
+    flex: 1;
+}
+
+.accordion-icon {
+    width: 12px;
+    height: 12px;
+    color: var(--white);
+    font-weight: bold;
+    transition: transform 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.accordion-body {
+    padding: 15px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--glass-lighter);
+}
+
+/* NCOP Sidebar Specific Styles */
+.ncop-subcategory {
+    margin: 4px 0;
+}
+
+.ncop-subcategory-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.ncop-subcategory-header:hover {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header.expanded {
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header .subcategory-chevron {
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    margin-left: 5px;
+}
+
+.ncop-subcategory-header span {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--white);
+}
+
+.ncop-subcategory-header.expanded .subcategory-chevron {
+    transform: rotate(90deg);
+}
+
+.ncop-items-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    margin-top: 4px;
+}
+
+.ncop-items-container.visible {
+    max-height: 400px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    scroll-padding-bottom: 10px;
+}
+
+.ncop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+/* Single column grid for button items */
+.ncop-grid:has(.ncop-item-button) {
+    grid-template-columns: 1fr;
+    gap: 0px;
+}
+
+.ncop-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 4px 0;
+    padding: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+/* Toggle items - horizontal layout with label and control */
+.ncop-item-toggle {
+    justify-content: space-between;
+}
+
+/* Temporal items - vertical layout centered */
+.ncop-item-temporal,
+.ncop-item-static {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    padding: 12px 8px;
+    min-height: 120px;
+}
+
+
+/* Button with checked toggle - full color background */
+.ncop-item-button .ncop-toggle input:checked+.ncop-toggle-slider {
+    background-color: var(--button-color, #6366f1) !important;
+}
+
+.ncop-item-image {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    border-radius: 15px;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+    border: 3px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.ncop-item-image.selected img {
+    border: 3px solid var(--ndma-green);
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+.ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Button content with image - left aligned with proper spacing */
+.ncop-item-button .ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-right: 8px;
+}
+
+.ncop-item-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--white);
+    line-height: 1.2;
+    text-align: center;
+}
+
+/* Toggle item labels */
+.ncop-item-toggle .ncop-item-label {
+    flex: 1;
+    margin-right: 8px;
+    text-align: left;
+}
+
+/* Temporal item labels - centered below image */
+.ncop-item-temporal .ncop-item-label,
+.ncop-item-static .ncop-item-label {
+    margin-top: 8px;
+    font-size: 10px;
+}
+
+/* Remove right margin from images in temporal items */
+.ncop-item-temporal .ncop-item-image,
+.ncop-item-static .ncop-item-image {
+    margin-right: 0;
+}
+
+/* Button labels - left aligned */
+.ncop-item-button .ncop-item-label {
+    text-align: left;
+    flex: 1;
+    margin-right: 8px;
+}
+
+/* Dropdown labels - centered */
+.ncop-item-dropdown .ncop-item-label {
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-control {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* NCOP Toggle Styles */
+.ncop-toggle {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.ncop-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ncop-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--tertiary-bg);
+    transition: 0.3s;
+    border-radius: 20px;
+    border: 1px solid var(--border-dark);
+}
+
+.ncop-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--white);
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px var(--shadow-soft);
+}
+
+.ncop-toggle input:checked+.ncop-toggle-slider {
+    background-color: var(--ndma-green);
+    border-color: var(--border-dark);
+}
+
+.ncop-toggle input:checked+.ncop-toggle-slider:before {
+    transform: translateX(16px);
+}
+
+/* NCOP Dropdown Styles */
+.ncop-dropdown {
+    background: var(--ndma-blue-light);
+    border: 1px solid var(--ndma-blue-light);
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 10px;
+    padding: 7px 2px;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown:focus {
+    outline: none;
+    border-color: var(--ndma-blue);
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown option {
+    background: var(--primary-bg);
+    color: var (--white);
+    padding: 4px;
+}
+
+/* Custom accordion icon for GIS layers */
+.accordion-header .accordion-custom-icon {
+    width: 50px;
+    height: 50px;
+    margin-right: 10px;
+    object-fit: contain;
+}
+
+.accordion-header .accordion-title {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+}
+
+.accordion-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+}
+
+.accordion-header.active .accordion-chevron {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: transparent;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.accordion-content.expanded {
+    max-height: 600px;
+    padding-bottom: 16px;
+    /* Extra space for last subcategories */
+}
+
+.custom-basemap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+}
+
+.custom-basemap-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-basemap-btn i {
+    width: 14px;
+    height: 14px;
+}
+

@@ -1,0 +1,1004 @@
+/* ===========================
+   RESPONSIVE ADJUSTMENTS
+=========================== */
+@media (max-width: 768px) {
+    .map-controls-wrapper {
+        top: 42px;
+        right: 8px;
+        width: auto;
+    }
+
+    .layer-order-panel,
+    .layer-info-panel {
+        width: 220px;
+        max-height: 300px;
+        right: 42px;
+    }
+}
+
+/* ========================================================================
+   Time-Slider for Temporal Data Style Along with its  Control Styles
+   ======================================================================== */
+#temp-slider1 {
+    position: absolute;
+    top: 13px;
+    left: 16%;
+    width: 80%;
+    height: 7.35rem;
+    background-color: var(--primary-bg);
+    border-radius: 5px;
+    border: solid 2px var(--glass-lighter);
+    display: none;
+    animation: nrotateMenu 3s;
+    backdrop-filter: blur(10px);
+    z-index: 1001;
+    touch-action: none;
+    /* Prevent default touch behaviors during drag/resize */
+}
+
+/* _____ Drag and Resize Controls _____ */
+#tempslider-dragresizecontrol {
+    position: absolute;
+    top: 53px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    z-index: 10;
+}
+
+.dragresizecontrol-btn {
+    cursor: grab;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    color: var(--white);
+}
+
+.dragresizecontrol-btn:hover {
+    background-color: var(--border-light);
+    transform: scale(1.1);
+}
+
+.dragresizecontrol-btn:active {
+    cursor: grabbing;
+}
+
+.dragresizecontrol-btn i {
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    color: var(--white) !important;
+}
+
+#resizeControlButton {
+    cursor: nwse-resize;
+}
+
+#resizeControlButton:active {
+    cursor: nwse-resize;
+}
+
+#tempslider-controls {
+    position: relative;
+
+    /* Switch to grid */
+    display: grid;
+    grid-auto-flow: column;
+    /* fill rows first, then add a new column */
+    grid-template-rows: repeat(2, max-content);
+    /* exactly 2 rows per column */
+    grid-auto-columns: 30px;
+    /* each column is 40px wide to match your buttons */
+
+    align-items: center;
+    /* vertical align within each grid cell */
+    justify-items: center;
+    /* horizontal align within each grid cell */
+
+    gap: 7px 5px;
+    /* row-gap 7px, column-gap 8px */
+    margin-top: 3.5rem;
+    width: max-content;
+    /* allow columns to expand as needed */
+}
+
+/* Shared button styling */
+#tempslider-controls button {
+    cursor: pointer;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--white);
+}
+
+#tempslider-controls button i,
+#tempslider-controls .speed-btn {
+    font-size: 10px !important;
+    font-weight: 400;
+    color: var(--white);
+    margin: 0 auto;
+    text-align: center;
+}
+
+#tempslider-controls .speed-btn {
+    width: 30px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--white);
+}
+
+.legend-container1 {
+    position: absolute;
+    top: 72%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
+    height: auto;
+    z-index: 2;
+}
+
+.legend-container1 p {
+    font-size: 14px;
+    color: var(--white);
+    text-align: center;
+    margin: 3px auto;
+    font-weight: 400;
+}
+
+#legend-container-slider1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 95%;
+    /* Ensure it fills the parent width */
+    min-width: 0;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+#slider1 {
+    position: absolute;
+    top: 13%;
+    left: 2%;
+    width: 96%;
+    background: var(--border-light);
+}
+
+/* Base slider track */
+.slider1 {
+    -webkit-appearance: none;
+    width: 96%;
+    height: 2px;
+}
+
+/* Track on focus */
+.slider1:focus {
+    background-color: #167000;
+    outline: solid 1px white;
+}
+
+/* Chrome & Edge Thumb */
+.slider1::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    background: white;
+    border: 2px solid #000;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 3s, transform 2s;
+}
+
+.slider1::-webkit-slider-thumb:hover {
+    background: #e0e0e0;
+    transform: scale(1.5);
+}
+
+#temp-slider1 .year-labels1 {
+    position: absolute;
+    top: 24%;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 10px;
+    left: 5px;
+    gap: 2px;
+}
+
+#temp-slider1 .year-labels1 span {
+    font-size: 12px;
+    color: var(--white);
+    font-weight: 500;
+    padding: 1px 4px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    opacity: 0.68;
+    transition: all 0.2s ease;
+}
+
+#temp-slider1 .year-labels1 span.is-active {
+    opacity: 1;
+    color: var(--white);
+    background: rgba(70, 178, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 10px rgba(70, 178, 255, 0.35);
+    transform: translateY(-1px);
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span {
+    color: var(--text-secondary);
+    opacity: 0.78;
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span.is-active {
+    color: var(--text-primary);
+    background: rgba(13, 74, 122, 0.26);
+    border-color: rgba(60, 60, 60, 0.9);
+    box-shadow: 0 0 8px rgba(13, 74, 122, 0.35);
+}
+
+/* ===== Opacity Control (additive) ===== */
+#opacityControlButton {
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+}
+
+#opacityControlButton i {
+    font-size: 12px !important;
+    color: var(--white) !important;
+}
+
+/* Popover container sits inside #temp-slider1 so it moves with drag/resize */
+#opacityControlPopover {
+    /* position: absolute; */
+    /* absolutely positioned within the panel */
+    display: none;
+    /* toggled by JS */
+    padding: 8px 10px;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    z-index: 9999;
+    /* min-width: 170px; */
+    width: 100%;
+    margin-top: 11px;
+    pointer-events: auto;
+}
+
+#opacityControlPopover .opacity-popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#opacityControlPopover .opacity-popover-label {
+    font-size: 13px;
+    color: var(--white);
+    white-space: nowrap;
+}
+
+#opacityControlPopover #opacityRange {
+    flex: 1;
+    accent-color: #2ecc71;
+    /* matches your green highlights */
+}
+
+#opacityControlPopover .opacity-popover-value {
+    font-size: 13px;
+    color: var(--white);
+    width: 32px;
+    text-align: right;
+}
+
+/* ========================================================================
+   TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
+   ======================================================================== */
+
+/* ========================================================================
+   MAIN CONTAINER FOR DROPDOWN GROUP
+   ======================================================================== */
+
+.ncop-item-dropdown-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0;
+}
+
+/* ========================================================================
+   DROPDOWN WRAPPER - TABLE STRUCTURE
+   ======================================================================== */
+
+.ncop-dropdown-wrapper {
+    background: var(--secondary-bg);
+    /* border: 2px solid var(--border-dark); */
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================================================
+   DROPDOWN HEADER - COLLAPSIBLE TOGGLE
+   ======================================================================== */
+
+.ncop-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    /* background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%); */
+    border: 1px solid var(--ndma-green);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    color: var(--white);
+    border-radius: 4px;
+}
+
+.ncop-dropdown-header:hover {
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown-header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.ncop-dropdown-label {
+    font-size: 13px;
+    font-weight: 200;
+    color: var(--white);
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+.ncop-dropdown-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    background: transparent;
+    color: var(--ndma-green);
+    /* border-radius: 12px; */
+    font-size: 12px;
+    font-weight: 300;
+    padding: 0 10px;
+}
+
+.ncop-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: var(--white);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-inverse);
+    font-size: 12px;
+}
+
+.ncop-dropdown-header:hover .ncop-dropdown-toggle {
+    background: #e0e0e0;
+    border-color: #bbb;
+}
+
+.ncop-dropdown-toggle.expanded {
+    background: var(--ndma-green);
+    border-color: var(--ndma-green-glow);
+    color: var(--white);
+    transform: rotate(180deg);
+}
+
+.ncop-dropdown-toggle::after {
+    content: '▼';
+    display: inline-block;
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* ========================================================================
+   TABLE CONTENT - SCROLLABLE AREA
+   ======================================================================== */
+
+.ncop-dropdown-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+}
+
+.ncop-dropdown-content.expanded {
+    max-height: 400px;
+    overflow-y: auto;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* Scrollbar styling for dropdown content */
+.ncop-dropdown-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 3px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb {
+    background: #bdbdbd;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb:hover {
+    background: #9e9e9e;
+}
+
+/* Firefox scrollbar */
+.ncop-dropdown-content {
+    scrollbar-width: thin;
+    scrollbar-color: #bdbdbd #f5f5f5;
+}
+
+/* ========================================================================
+   TABLE STYLING
+   ======================================================================== */
+
+.ncop-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.ncop-data-table thead {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+}
+
+.ncop-data-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #37474f;
+    border-bottom: 2px solid #e0e0e0;
+    white-space: nowrap;
+    background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
+}
+
+.ncop-data-table tbody tr {
+    border-bottom: 1px solid #f0f0f0;
+    transition: all 0.15s ease;
+}
+
+.ncop-data-table tbody tr:hover {
+    background: #f9f9f9;
+}
+
+.ncop-data-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.ncop-data-table td {
+    padding: 11px 12px;
+    color: #546e7a;
+    vertical-align: middle;
+}
+
+/* ========================================================================
+   CHECKBOX STYLING IN TABLE
+   ======================================================================== */
+
+.ncop-checkbox-cell {
+    width: 40px;
+    padding: 11px 8px !important;
+    text-align: center;
+}
+
+.ncop-row-checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.ncop-row-checkbox:checked {
+    accent-color: var(--ndma-blue);
+}
+
+/* ========================================================================
+   KEY CELL STYLING
+   ======================================================================== */
+
+.ncop-key-cell {
+    font-weight: 600;
+    color: #0288d1;
+    min-width: 60px;
+    max-width: 100px;
+    word-break: break-word;
+}
+
+/* ========================================================================
+   ATTRIBUTE/VALUE CELL STYLING
+   ======================================================================== */
+
+.ncop-attribute-cell {
+    color: #546e7a;
+    flex: 1;
+    word-break: break-word;
+    max-width: 300px;
+}
+
+/* ========================================================================
+   EMPTY STATE
+   ======================================================================== */
+
+.ncop-empty-state {
+    padding: 24px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+.ncop-empty-state-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.ncop-empty-state-text {
+    color: #999;
+}
+
+/* ========================================================================
+   LOADING STATE
+   ======================================================================== */
+
+.ncop-loading-state {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+}
+
+.ncop-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #0288d1;
+    border-radius: 50%;
+    animation: ncop-spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+@keyframes ncop-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================================================
+   ERROR STATE
+   ======================================================================== */
+
+.ncop-error-state {
+    padding: 16px;
+    background: #ffebee;
+    border-left: 3px solid #f44336;
+    color: #c62828;
+    font-size: 13px;
+    border-radius: 0 4px 4px 0;
+}
+
+.ncop-error-icon {
+    margin-right: 6px;
+}
+
+/* ========================================================================
+   NO ITEMS STATE (Empty table)
+   ======================================================================== */
+
+.ncop-table-empty-row {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+/* ========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================================================== */
+
+@media (max-width: 768px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 6px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 12px 14px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 13px;
+    }
+
+    .ncop-data-table {
+        font-size: 12px;
+    }
+
+    .ncop-data-table th {
+        padding: 8px 10px;
+    }
+
+    .ncop-data-table td {
+        padding: 9px 10px;
+    }
+
+    .ncop-key-cell {
+        max-width: 80px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 4px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 10px 12px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 12px;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 22px;
+        height: 22px;
+        font-size: 11px;
+    }
+
+    .ncop-data-table {
+        font-size: 11px;
+    }
+
+    .ncop-data-table th,
+    .ncop-data-table td {
+        padding: 8px 8px;
+    }
+
+    .ncop-key-cell {
+        max-width: 60px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 150px;
+    }
+}
+
+/* ========================================================================
+   ACCESSIBILITY
+   ======================================================================== */
+
+.ncop-dropdown-header:focus-within {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+/* .ncop-row-checkbox:focus {
+    outline: 2px solid var(--ndma-blue);
+} */
+
+/* ========================================================================
+   ANIMATION FOR SMOOTH TRANSITIONS
+   ======================================================================== */
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ncop-data-table tbody tr {
+    animation: slideDown 0.2s ease forwards;
+}
+
+.ncop-data-table tbody tr:nth-child(1) {
+    animation-delay: 0ms;
+}
+
+.ncop-data-table tbody tr:nth-child(2) {
+    animation-delay: 20ms;
+}
+
+.ncop-data-table tbody tr:nth-child(3) {
+    animation-delay: 40ms;
+}
+
+.ncop-data-table tbody tr:nth-child(n+4) {
+    animation-delay: 60ms;
+}
+
+/* ========================================================================
+   PRINT STYLES
+   ======================================================================== */
+
+@media print {
+    .ncop-dropdown-wrapper {
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+
+    .ncop-dropdown-content {
+        max-height: none !important;
+    }
+
+    .ncop-row-checkbox {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+}
+
+/* ========================================================================
+   NEWS SECTION STYLES
+   ======================================================================== */
+
+.news-modal {
+    position: absolute;
+    display: none;
+    /* ⬅ hidden by default */
+    align-items: center;
+    bottom: 11px;
+    left: 20%;
+    height: 80px;
+    width: 75%;
+    border-radius: 8px;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    z-index: 999;
+    background-color: var(--primary-bg);
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--glass-lighter);
+    box-shadow: 0 8px 32px var(--shadow-soft);
+    padding: 0 12px;
+}
+
+.news-modal.show {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
+}
+
+.news-scroll-wrapper {
+    overflow: hidden;
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.news-scroll {
+    display: flex;
+    gap: 12px;
+    animation: scroll-left 520s linear infinite;
+    padding: 10px;
+    white-space: nowrap;
+    height: 90px;
+}
+
+.news-box {
+    display: inline-block;
+    min-width: max-content;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    padding: 5px 10px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.news-box:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.news-box.selected {
+    background: rgba(255, 255, 255, 0.35);
+    color: black;
+    font-weight: bold;
+}
+
+@keyframes scroll-left {
+    0% {
+        transform: translateX(0%);
+    }
+
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+.news-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.logo-container {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rotating-logo {
+    width: 36px;
+    height: 36px;
+    animation: rotate-logo 5s linear infinite;
+}
+
+.news-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+    line-height: 1.2;
+}
+
+.news-info hr {
+    width: 75%;
+    margin: 5px 0;
+    border-color: var(--border-dark);
+}
+
+.news-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.news-time {
+    font-family: monospace;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.divider-line {
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.3);
+    height: 80%;
+}
+
+.news-toggle-buttons {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.toggle-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.35);
+}
+
+.toggle-btn.active {
+    background-color: #28a745;
+    color: white;
+    font-weight: bold;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .news-modal {
+        left: 2%;
+        right: 2%;
+        padding: 0 8px;
+        height: auto;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .news-header {
+        border-right: none;
+        padding-right: 0;
+        gap: 8px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        width: 100%;
+        justify-content: center;
+    }
+
+    .news-scroll-wrapper {
+        width: 100%;
+    }
+
+    .news-scroll {
+        gap: 10px;
+        padding: 8px;
+    }
+
+    .toggle-btn {
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    .news-box {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+}
+
