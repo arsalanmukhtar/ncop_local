@@ -1,18 +1,21 @@
 /* Sidebar Panel — flex column so the .sidebar-header (search) stays
-   pinned at the top while only the .sidebar-content scrolls. */
+   pinned at the top while only the .sidebar-content scrolls.
+   Height is shrink-to-fit; the calc() acts as the ceiling. Below the
+   ceiling, the panel hugs its content so there's no empty tail. */
 .sidebar-panel {
     position: fixed;
     top: 138px;
     left: 12px;
     width: 320px;
-    height: calc(100vh - 100px - 3rem);
+    height: auto;
+    max-height: calc(100vh - 100px - 3rem);
     background: var(--primary-bg);
     border: 2px solid var(--border-light);
     border-radius: 16px;
     backdrop-filter: blur(15px);
     transform: translateX(-100%);
     opacity: 0;
-    transition: all 0.2s ease;
+    transition: transform 0.2s ease, opacity 0.2s ease, max-height 0.2s ease;
     z-index: 999;
     overflow: hidden;
     padding: 12px 12px 12px 12px;

@@ -1,28 +1,20 @@
-// Utility to generate standardized linear gradient legend bars with labels aligned to color stops
+// Utility to generate standardized linear gradient legend bars.
+// Reference layout: gradient bar on top, value labels positioned below at matching percentages.
 function gradientLegendBar(colors, values) {
   // colors: array of color stops (hex/rgb)
   // values: array of tick labels (numbers/strings)
   const gradient = `linear-gradient(to right, ${colors.join(", ")})`;
   const n = values.length;
-  let html = `<div style="position: relative; width: 100%; height: 30px; margin-bottom: 2px;">`;
-  html += `<div style="background: ${gradient}; width: 100%; height: 100%; border-radius: 4px; position: relative;">`;
-  // Place each label absolutely at the correct percentage, centered vertically and horizontally
+  let html = `<div class="ts-legend-stack">`;
+  html += `<div class="ts-legend-bar" style="background: ${gradient};"></div>`;
+  html += `<div class="ts-legend-values">`;
   values.forEach((val, i) => {
     const leftPercent = (n === 1) ? 0 : (i / (n - 1)) * 100;
-    let style =
-      "position: absolute; " +
-      "top: 50%; transform: translateY(-50%); " +
-      "font-size: 13px; font-weight: 400; color: #fff; white-space: nowrap; " +
-      "text-shadow: 0 0 4px #000, 0 0 2px #000; " +
-      "padding: 0 6px; "; // horizontal padding
-    if (i === 0) {
-      style += "left: 0; min-width: 32px; text-align: left; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
-    } else if (i === n - 1) {
-      style += "right: 0; min-width: 32px; text-align: right; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
-    } else {
-      style += `left: calc(${leftPercent}% - 24px); min-width: 48px; text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis;`;
-    }
-    html += `<span style="${style}">${val}</span>`;
+    let translate;
+    if (i === 0) translate = "translateX(0%)";
+    else if (i === n - 1) translate = "translateX(-100%)";
+    else translate = "translateX(-50%)";
+    html += `<span style="left: ${leftPercent}%; transform: ${translate};">${val}</span>`;
   });
   html += `</div></div>`;
   return html;

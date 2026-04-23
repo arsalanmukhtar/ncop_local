@@ -37,17 +37,12 @@ let _sliderRestore = {
 };
 let _styleLoadHandlerBound = false;
 
-// Drag and Resize variables
+// Drag variables
 let isDragging = false;
-let isResizing = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragStartLeft = 0;
 let dragStartTop = 0;
-let resizeStartX = 0;
-let resizeStartY = 0;
-let resizeStartWidth = 0;
-let resizeStartHeight = 0;
 
 // === GLOBAL OPACITY FACTOR FOR TEMPORAL LAYERS (NEW) ===
 let _opacityFactor = 1; // 1 = 100% (default). Controlled by UI popover.
@@ -185,12 +180,11 @@ function buildPopupContent(layerId, feature) {
   </div>`;
 }
 
-// ===== DRAG AND RESIZE FUNCTIONS =====
+// ===== DRAG FUNCTION =====
 function initDragResize() {
   const tempSlider = document.getElementById("temp-slider1");
   const dragBtn = document.getElementById("dragControlButton");
-  const resizeBtn = document.getElementById("resizeControlButton");
-  if (!tempSlider || !dragBtn || !resizeBtn) return;
+  if (!tempSlider || !dragBtn) return;
 
   dragBtn.addEventListener("mousedown", (e) => {
     e.preventDefault();
@@ -199,6 +193,10 @@ function initDragResize() {
     dragStartY = e.clientY;
     dragStartLeft = parseInt(window.getComputedStyle(tempSlider).left) || 0;
     dragStartTop = parseInt(window.getComputedStyle(tempSlider).top) || 0;
+    // Pin current width and drop the `right` constraint so changing `left`
+    // during drag only moves the slider and does not resize it.
+    tempSlider.style.width = tempSlider.offsetWidth + "px";
+    tempSlider.style.right = "auto";
     document.addEventListener("mousemove", onDragMove);
     document.addEventListener("mouseup", onDragEnd);
   });
@@ -217,37 +215,6 @@ function initDragResize() {
     isDragging = false;
     document.removeEventListener("mousemove", onDragMove);
     document.removeEventListener("mouseup", onDragEnd);
-  }
-
-  resizeBtn.addEventListener("mousedown", (e) => {
-    e.preventDefault();
-    isResizing = true;
-    resizeStartX = e.clientX;
-    resizeStartY = e.clientY;
-    resizeStartWidth = tempSlider.offsetWidth;
-    resizeStartHeight = tempSlider.offsetHeight;
-    document.addEventListener("mousemove", onResizeMove);
-    document.addEventListener("mouseup", onResizeEnd);
-  });
-
-  function onResizeMove(e) {
-    if (!isResizing) return;
-    const dx = e.clientX - resizeStartX;
-    const dy = e.clientY - resizeStartY;
-    const newW = Math.max(100, resizeStartWidth + dx);
-    const newH = Math.max(50, resizeStartHeight + dy);
-    tempSlider.style.width = newW + "px";
-    tempSlider.style.height = newH + "px";
-    const legendContainer = document.querySelector(".legend-container1");
-    if (legendContainer) legendContainer.style.width = newW * 0.95 + "px";
-    if (typeof window.__ts_positionOpacityPopover === "function") {
-      window.__ts_positionOpacityPopover();
-    }
-  }
-  function onResizeEnd() {
-    isResizing = false;
-    document.removeEventListener("mousemove", onResizeMove);
-    document.removeEventListener("mouseup", onResizeEnd);
   }
 }
 
@@ -655,10 +622,12 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
   if (yearLabelsDiv) {
     const frag = document.createDocumentFragment();
-    layers.forEach((l) => {
+    const n = layers.length;
+    layers.forEach((l, i) => {
       const span = document.createElement("span");
       span.textContent = l.date;
-      span.style.marginRight = "10px";
+      const pct = n <= 1 ? 0 : (i / (n - 1)) * 100;
+      span.style.left = `${pct}%`;
       frag.appendChild(span);
     });
     yearLabelsDiv.innerHTML = "";
@@ -806,13 +775,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function positionPopover() {
-    if (!root || !controls || !pop) return;
-    const controlsRect = controls.getBoundingClientRect();
+    if (!root || !btn || !pop) return;
+    const btnRect = btn.getBoundingClientRect();
     const rootRect = root.getBoundingClientRect();
-    const left = controlsRect.right - rootRect.left + 8; // 8px gap
-    const top = controlsRect.top - rootRect.top + 4;
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
+    // Anchor popover directly under the opacity button, right-aligned with it.
+    const rightOffset = rootRect.right - btnRect.right;
+    pop.style.right = `${rightOffset}px`;
+    pop.style.left = "auto";
+    pop.style.top = `${btnRect.bottom - rootRect.top + 8}px`;
   }
 
   // expose for drag/resize to keep it pinned

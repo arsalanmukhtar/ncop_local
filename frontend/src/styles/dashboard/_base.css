@@ -102,9 +102,9 @@ body {
 
 .ncop-container {
     background-color: var(--primary-bg);
-    width: 265px;
+    width: 320px;
+    box-sizing: border-box;
     backdrop-filter: blur(15px);
     border-color: var(--border-light);
-
 }
 

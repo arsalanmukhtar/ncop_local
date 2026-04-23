@@ -17,284 +17,436 @@
 }
 
 /* ========================================================================
-   Time-Slider for Temporal Data Style Along with its  Control Styles
+   Time-Slider for Temporal Data — reference-aligned 2-row / 3-panel layout
+     Row 1 : Transport  |  Timeline (dates + slider)  |  Drag
+     Row 2 : Variable   |  Legend (gradient + values) |  Opacity
+   Themed via CSS variables; [data-theme="night"] overrides at bottom.
    ======================================================================== */
 #temp-slider1 {
     position: absolute;
     top: 13px;
-    left: 16%;
-    width: 80%;
-    height: 7.35rem;
+    left: 405px;
+    right: 80px;
+    width: auto;
+    padding: 0;
     background-color: var(--primary-bg);
-    border-radius: 5px;
-    border: solid 2px var(--glass-lighter);
+    border: 1px solid var(--glass-lighter);
+    border-radius: 14px;
     display: none;
     animation: nrotateMenu 3s;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-soft);
     z-index: 1001;
     touch-action: none;
-    /* Prevent default touch behaviors during drag/resize */
+    box-sizing: border-box;
 }
 
-/* _____ Drag and Resize Controls _____ */
-#tempslider-dragresizecontrol {
-    position: absolute;
-    top: 53px;
-    right: 8px;
+/* Inner clip wrapper — rounds corners over the row panels without trapping the popover. */
+#temp-slider1 > .tempslider-layout {
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 9px;
-    z-index: 10;
+    width: 100%;
+    border-radius: inherit;
+    overflow: hidden;
 }
 
-.dragresizecontrol-btn {
-    cursor: grab;
-    width: 24px;
-    height: 24px;
+/* ---- Shared row / panel skeleton ---- */
+.ts-row {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 72px;
+    box-sizing: border-box;
+}
+
+.ts-row--timeline {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.ts-panel {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ---- Row 1 :: Transport panel (play / pause / speed) ---- */
+#tempslider-controls.ts-panel--transport {
+    flex-shrink: 0;
+    gap: 10px;
+    padding: 0 18px;
+    background: var(--overlay-bg);
+    border-right: 1px solid var(--border-dark);
+    /* neutralize legacy grid rules */
+    position: static;
+    margin: 0;
+    width: auto;
+    grid-auto-flow: initial;
+    grid-template-rows: initial;
+    grid-auto-columns: initial;
+}
+
+#tempslider-controls button {
+    cursor: pointer;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--tertiary-bg);
-    border: 1px solid var(--border-dark);
-    border-radius: 3px;
+    color: var(--white);
     transition: all 0.2s ease;
-    color: var(--white);
 }
 
-.dragresizecontrol-btn:hover {
-    background-color: var(--border-light);
-    transform: scale(1.1);
+#playPauseButton1,
+#playPauseButton2 {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--ndma-blue-opaque);
+    border: 1px solid var(--ndma-blue-light);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.dragresizecontrol-btn:active {
-    cursor: grabbing;
+#playPauseButton1:hover,
+#playPauseButton2:hover {
+    background: var(--ndma-blue);
 }
 
-.dragresizecontrol-btn i {
-    font-size: 12px !important;
-    font-weight: 400 !important;
+#playPauseButton1 i {
+    margin-left: 2px;
+    /* visual centering for play glyph */
+}
+
+#tempslider-controls button i {
+    font-size: 16px !important;
     color: var(--white) !important;
-}
-
-#resizeControlButton {
-    cursor: nwse-resize;
-}
-
-#resizeControlButton:active {
-    cursor: nwse-resize;
-}
-
-#tempslider-controls {
-    position: relative;
-
-    /* Switch to grid */
-    display: grid;
-    grid-auto-flow: column;
-    /* fill rows first, then add a new column */
-    grid-template-rows: repeat(2, max-content);
-    /* exactly 2 rows per column */
-    grid-auto-columns: 30px;
-    /* each column is 40px wide to match your buttons */
-
-    align-items: center;
-    /* vertical align within each grid cell */
-    justify-items: center;
-    /* horizontal align within each grid cell */
-
-    gap: 7px 5px;
-    /* row-gap 7px, column-gap 8px */
-    margin-top: 3.5rem;
-    width: max-content;
-    /* allow columns to expand as needed */
-}
-
-/* Shared button styling */
-#tempslider-controls button {
-    cursor: pointer;
-    width: 25px;
-    height: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    font-size: 10px;
-    font-weight: 400;
-    color: var(--white);
-}
-
-#tempslider-controls button i,
-#tempslider-controls .speed-btn {
-    font-size: 10px !important;
-    font-weight: 400;
-    color: var(--white);
-    margin: 0 auto;
-    text-align: center;
+    margin: 0;
 }
 
 #tempslider-controls .speed-btn {
-    width: 30px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    background: var(--tertiary-bg);
+    width: auto;
+    min-width: 40px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 4px;
+    background: var(--overlay-bg);
     border: 1px solid var(--border-dark);
     font-size: 12px;
-    font-weight: 400;
+    font-weight: 500;
+    letter-spacing: 0.025em;
     color: var(--white);
 }
 
-.legend-container1 {
-    position: absolute;
-    top: 72%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 90%;
-    height: auto;
-    z-index: 2;
+#tempslider-controls .speed-btn:hover {
+    background: var(--hover-bg);
 }
 
-.legend-container1 p {
-    font-size: 14px;
-    color: var(--white);
-    text-align: center;
-    margin: 3px auto;
-    font-weight: 400;
-}
-
-#legend-container-slider1 {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 95%;
-    /* Ensure it fills the parent width */
+/* ---- Row 1 :: Timeline panel (dates row + slider track) ---- */
+/* Horizontal padding must be >= half the widest date pill so the first/last
+   labels (whose centers sit at 0% / 100% of the content box) stay inside the
+   panel. ~40px gives a safe margin for labels like "30-Apr". */
+.ts-panel--timeline {
+    flex: 1 1 auto;
     min-width: 0;
-    margin: 0 auto;
-    box-sizing: border-box;
-}
-
-#slider1 {
-    position: absolute;
-    top: 13%;
-    left: 2%;
-    width: 96%;
-    background: var(--border-light);
-}
-
-/* Base slider track */
-.slider1 {
-    -webkit-appearance: none;
-    width: 96%;
-    height: 2px;
-}
-
-/* Track on focus */
-.slider1:focus {
-    background-color: #167000;
-    outline: solid 1px white;
-}
-
-/* Chrome & Edge Thumb */
-.slider1::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 15px;
-    height: 15px;
-    background: white;
-    border: 2px solid #000;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 3s, transform 2s;
-}
-
-.slider1::-webkit-slider-thumb:hover {
-    background: #e0e0e0;
-    transform: scale(1.5);
-}
-
-#temp-slider1 .year-labels1 {
-    position: absolute;
-    top: 24%;
-    width: 100%;
-    display: flex;
+    padding: 10px 40px;
+    background: var(--frost-bg);
+    flex-direction: column;
     justify-content: space-between;
-    padding: 0 10px;
-    left: 5px;
-    gap: 2px;
+    gap: 6px;
+}
+
+/* Date labels use absolute positioning so each tick aligns exactly with the
+   slider thumb position at step i (thumb center lands at i/(n-1)*100% of track). */
+#temp-slider1 .year-labels1 {
+    position: relative;
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    margin-bottom: 14px;
+    /* reserves space for the tick line below each pill */
 }
 
 #temp-slider1 .year-labels1 span {
+    position: absolute;
+    top: 0;
+    margin: 0 !important;
+    padding: 2px 8px;
     font-size: 12px;
-    color: var(--white);
     font-weight: 500;
-    padding: 1px 4px;
-    border-radius: 4px;
+    color: var(--text-secondary);
+    background: transparent;
     border: 1px solid transparent;
-    opacity: 0.68;
+    border-radius: 4px;
+    line-height: 1.4;
+    white-space: nowrap;
+    transform: translateX(-50%);
     transition: all 0.2s ease;
 }
 
-#temp-slider1 .year-labels1 span.is-active {
-    opacity: 1;
-    color: var(--white);
-    background: rgba(70, 178, 255, 0.35);
-    border-color: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 0 10px rgba(70, 178, 255, 0.35);
-    transform: translateY(-1px);
+/* Tick line below each pill — thick and prominent.
+   All pills (first, middle, last) share the same centering transform so the
+   tick/dot always lands directly under the label text. */
+#temp-slider1 .year-labels1 span::after {
+    content: "";
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--border-light);
+    transition: all 0.2s ease;
 }
 
-[data-theme="night"] #temp-slider1 .year-labels1 span {
-    color: var(--text-secondary);
-    opacity: 0.78;
-}
-
-[data-theme="night"] #temp-slider1 .year-labels1 span.is-active {
+#temp-slider1 .year-labels1 span:hover {
     color: var(--text-primary);
-    background: rgba(13, 74, 122, 0.26);
-    border-color: rgba(60, 60, 60, 0.9);
-    box-shadow: 0 0 8px rgba(13, 74, 122, 0.35);
 }
 
-/* ===== Opacity Control (additive) ===== */
-#opacityControlButton {
-    width: 25px;
-    height: 25px;
+#temp-slider1 .year-labels1 span.is-active {
+    color: var(--ndma-blue);
+    background: var(--ndma-blue-glow);
+    border-color: var(--ndma-blue-light);
+}
+
+/* Active date: tick becomes a glowing dot centered under the label. */
+#temp-slider1 .year-labels1 span.is-active::after {
+    top: calc(100% + 4px);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2.5px solid var(--ndma-blue);
+    box-shadow: 0 0 10px rgba(70, 178, 255, 0.7);
+    transform: translateX(-50%);
+}
+
+/* Slider track */
+.ts-slider-track {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    display: flex;
+    align-items: center;
+}
+
+#slider1 {
+    position: static;
+    top: auto;
+    left: auto;
+    margin: 0;
+}
+
+.slider1 {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--border-dark);
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+}
+
+.slider1:focus {
+    outline: none;
+}
+
+/* Thumb hidden — the glowing dot on the active date's tick is the visual indicator.
+   Track remains clickable/draggable for interaction. */
+.slider1::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.slider1::-webkit-slider-thumb:hover {
+    transform: none;
+}
+
+.slider1::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+/* ---- Row 1 :: Drag panel ---- */
+#dragControlButton.ts-panel--drag {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    cursor: move;
+    padding: 0;
+}
+
+#dragControlButton.ts-panel--drag:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+#dragControlButton.ts-panel--drag i {
+    font-size: 20px !important;
+    color: currentColor !important;
+}
+
+/* ---- Row 2 :: Variable panel (icon box + name) ---- */
+.ts-panel--variable {
+    flex-shrink: 0;
+    min-width: 220px;
+    gap: 14px;
+    padding: 0 18px;
+    background: var(--frost-bg);
+    border-right: 1px solid var(--border-dark);
+}
+
+.ts-variable-icon {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 3px;
-    background: var(--tertiary-bg);
-    border: 1px solid var(--border-dark);
+    background: transparent;
+    border: none;
+    color: var(--ndma-blue);
 }
 
-#opacityControlButton i {
-    font-size: 12px !important;
-    color: var(--white) !important;
+.ts-variable-icon i {
+    font-size: 22px !important;
+    color: var(--ndma-blue) !important;
 }
 
-/* Popover container sits inside #temp-slider1 so it moves with drag/resize */
+.ts-variable {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ts-variable p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    line-height: 1.3;
+    color: var(--text-primary);
+    text-align: left;
+    text-transform: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Row 2 :: Legend panel (gradient bar + values) ---- */
+.ts-panel--legend {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 24px;
+    justify-content: stretch;
+}
+
+#legend-container-slider1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.ts-legend-stack {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ts-legend-bar {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--glass-lighter);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.ts-legend-values {
+    position: relative;
+    width: 100%;
+    height: 14px;
+}
+
+.ts-legend-values span {
+    position: absolute;
+    top: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    line-height: 1;
+}
+
+/* ---- Row 2 :: Opacity panel ---- */
+#opacityControlButton.ts-panel--opacity {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+}
+
+#opacityControlButton.ts-panel--opacity:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+#opacityControlButton.ts-panel--opacity[aria-expanded="true"] {
+    color: var(--ndma-blue);
+    background: var(--info-bg);
+}
+
+#opacityControlButton.ts-panel--opacity i {
+    font-size: 20px !important;
+    color: currentColor !important;
+}
+
+/* Legacy wrapper no longer used by new HTML — hide if it appears. */
+#tempslider-dragresizecontrol {
+    display: none !important;
+}
+
+/* ===== Opacity popover (unchanged mechanics; restyled lightly) ===== */
 #opacityControlPopover {
-    /* position: absolute; */
-    /* absolutely positioned within the panel */
     display: none;
-    /* toggled by JS */
+    position: absolute;
     padding: 8px 10px;
     background: var(--primary-bg);
     border: 1px solid var(--border-dark);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    border-radius: 6px;
+    box-shadow: var(--shadow-soft);
     z-index: 9999;
-    /* min-width: 170px; */
-    width: 100%;
-    margin-top: 11px;
+    min-width: 220px;
     pointer-events: auto;
+    box-sizing: border-box;
+    backdrop-filter: blur(10px);
 }
 
 #opacityControlPopover .opacity-popover-row {
@@ -304,22 +456,39 @@
 }
 
 #opacityControlPopover .opacity-popover-label {
-    font-size: 13px;
-    color: var(--white);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
     white-space: nowrap;
 }
 
 #opacityControlPopover #opacityRange {
     flex: 1;
-    accent-color: #2ecc71;
-    /* matches your green highlights */
+    accent-color: var(--ndma-blue);
 }
 
 #opacityControlPopover .opacity-popover-value {
-    font-size: 13px;
-    color: var(--white);
-    width: 32px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 36px;
     text-align: right;
+}
+
+/* ===== Night-mode overrides ===== */
+[data-theme="night"] #temp-slider1 .year-labels1 span {
+    color: var(--text-secondary);
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span.is-active {
+    color: var(--text-primary);
+    background: rgba(13, 74, 122, 0.26);
+    border-color: rgba(60, 60, 60, 0.9);
+    box-shadow: 0 0 8px rgba(13, 74, 122, 0.35);
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span.is-active::after {
+    background: var(--ndma-blue);
 }
 
 /* ========================================================================
