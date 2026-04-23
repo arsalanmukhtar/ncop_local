@@ -38,12 +38,12 @@ export class SourceLayerControl {
 
     this._setupFeatureClickHandler();
 
-    // Preload sources on every style.load so they're ready when a layer
-    // is added. addLayerByKey also lazily adds the source as a safety net
-    // (needed for cases where handleStyleLoad replay races the preload).
-    this.map.on("style.load", () => {
-      this.preloadAllSources();
-    });
+    // NOTE: preloadAllSources() is intentionally NOT called on boot /
+    // style.load. Mapbox's addSource for `type: "geojson"` eagerly fetches
+    // the `data` URL, which was triggering dozens of Django API calls
+    // (GDACS, EONET, USGS, WAQI, FFD...) on every refresh for layers the
+    // user never toggled. Sources are now added lazily in addLayerByKey
+    // only when the user actually activates a layer.
   }
 
   /**
@@ -897,21 +897,14 @@ export class SourceLayerControl {
   }
 
   /**
-   * Setup style change handler to restore layers after basemap changes
+   * Setup style change handler to restore layers after basemap changes.
+   * Only listen on `style.load` — `styledata` was a backup that fires several
+   * times during style loading and caused duplicate restores (2x layer adds
+   * on every basemap switch).
    */
   setupStyleChangeHandler() {
     this.map.on("style.load", () => {
       this.handleStyleLoad();
-    });
-
-    // Also listen for styledata as a backup
-    this.map.on("styledata", () => {
-      if (this.map.isStyleLoaded() && !this.isRestoringLayers) {
-        // Small delay to ensure style is fully loaded
-        setTimeout(() => {
-          this.handleStyleLoad();
-        }, 100);
-      }
     });
   }
 
@@ -931,29 +924,27 @@ export class SourceLayerControl {
 
     this.isRestoringLayers = true;
 
-    // Save current layer state
-    const layersToRestore = new Map(this.activeLayers);
+    // Save order, clear tracking (setStyle already wiped the map's layers),
+    // then re-add immediately. `style.load` fires when the style is ready
+    // to accept sources and layers — the previous code's 300ms + 100ms*N
+    // delays were a superstitious safety net that sometimes let a layer
+    // slip through (user had to re-toggle it). Microtask boundary via
+    // Promise.resolve() gives the map one tick to finish any synchronous
+    // post-style-load housekeeping.
     const orderToRestore = [...this.layerOrder];
-
-    // Clear current tracking (but don't remove from map since style change already did that)
     this.activeLayers.clear();
     this.layerOrder = [];
 
-    // Restore layers in the same order with a delay to ensure style is ready
-    setTimeout(() => {
-      orderToRestore.forEach((layerKey, index) => {
-        setTimeout(() => {
+    Promise.resolve().then(() => {
+      for (const layerKey of orderToRestore) {
+        try {
           this.addLayerByKey(layerKey, false);
-
-          // Reset flag when all layers are processed
-          if (index === orderToRestore.length - 1) {
-            setTimeout(() => {
-              this.isRestoringLayers = false;
-            }, 100);
-          }
-        }, index * 100); // 100ms delay between each layer for better stability
-      });
-    }, 300); // Increased delay to ensure style is fully loaded
+        } catch (e) {
+          console.warn(`Failed to restore layer '${layerKey}':`, e);
+        }
+      }
+      this.isRestoringLayers = false;
+    });
   }
 
   /**

@@ -164,6 +164,46 @@ class DashboardManager {
     } catch (e) {
       console.warn("RainViewer Player failed to init:", e);
     }
+
+    // Default-enabled layers. Provincial is added before National so the
+    // later-added National stacks above Provincial on the map. The sidebar
+    // checkboxes are ticked asynchronously once the sidebar DOM has been
+    // built (SidebarMenu populates items after an async import).
+    this.#applyDefaultLayers();
+  }
+
+  #applyDefaultLayers() {
+    const slc = this.#sourceLayerControl;
+    if (!slc) return;
+    const defaults = ["provincial_boundary", "national_boundary"];
+
+    (async () => {
+      for (const key of defaults) {
+        try {
+          await slc.addLayerByKey(key, false);
+        } catch (e) {
+          console.warn(`Default layer '${key}' failed to load:`, e);
+        }
+      }
+    })();
+
+    // Tick the sidebar checkboxes once they exist. Poll briefly — the
+    // sidebar builds asynchronously.
+    const tickCheckboxes = (attempts = 0) => {
+      const foundAll = defaults.every((key) =>
+        document.querySelector(`input[data-item-key="${key}"]`)
+      );
+      if (foundAll) {
+        defaults.forEach((key) => {
+          const cb = document.querySelector(`input[data-item-key="${key}"]`);
+          if (cb) cb.checked = true;
+        });
+        return;
+      }
+      if (attempts >= 60) return;
+      setTimeout(() => tickCheckboxes(attempts + 1), 100);
+    };
+    tickCheckboxes();
   }
 
   #handleMapError(e) {

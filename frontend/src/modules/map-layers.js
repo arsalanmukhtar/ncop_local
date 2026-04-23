@@ -162,8 +162,6 @@ function createUsgsEarthquakeLayers(sourceId) {
     },
   ];
 }
-console.log(window.baseUrl);
-fetch(`${window.baseUrl}/stories/?full=1`).then((r) => r.status);
 // GloFAS Layers baseURL
 const glofaswmsurl =
   "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE";

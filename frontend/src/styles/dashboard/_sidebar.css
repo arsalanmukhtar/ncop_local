@@ -317,6 +317,53 @@
     padding: 8px;
     transition: all 0.2s ease;
     cursor: pointer;
+    position: relative;
+}
+
+/* Loading indicator — a bright segment that travels around the row's
+   border perimeter like a train on a rectangular track. Implemented as a
+   conic-gradient painted on a ::before pseudo-element, masked to the
+   border band via mask-composite. The animation is on the conic
+   gradient's `from` angle (via @property), NOT on the element's
+   transform — so the border rectangle stays pinned to the row and only
+   the bright segment moves around the perimeter. */
+@property --ncop-loading-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+
+.ncop-item.is-loading {
+    /* Faint static backing ring so the track is visible even during the
+       "dark" portion of the cycle. */
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.ncop-item.is-loading::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+        from var(--ncop-loading-angle),
+        transparent 0deg,
+        transparent 300deg,
+        var(--ndma-blue, #3b82f6) 340deg,
+        transparent 360deg
+    );
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: ncop-loading-angle-spin 1.4s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+@keyframes ncop-loading-angle-spin {
+    to { --ncop-loading-angle: 360deg; }
 }
 
 /* Toggle items - horizontal layout with label and control */

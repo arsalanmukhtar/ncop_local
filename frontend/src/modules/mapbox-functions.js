@@ -73,31 +73,55 @@ export function initializeSourceLayerControl(sourceLayerControlInstance) {
 
 
 /**
+ * Toggle a spinner on a sidebar item while its source is loading.
+ * We listen for the first `sourcedata` event that reports the source as
+ * loaded, then remove the loading class. Safety timeout of 20s in case the
+ * event never fires (e.g. source errors out).
+ */
+function showLayerLoading(itemKey, sourceId) {
+    const row = document.querySelector(
+        `.ncop-item[data-item-key="${itemKey}"], input[data-item-key="${itemKey}"]`
+    );
+    const itemEl = row?.closest?.(".ncop-item") || row;
+    if (!itemEl) return;
+    itemEl.classList.add("is-loading");
+
+    const map = window.ncop_map || window.map;
+    if (!map || !sourceId) {
+        setTimeout(() => itemEl.classList.remove("is-loading"), 600);
+        return;
+    }
+
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+        itemEl.classList.remove("is-loading");
+        map.off("sourcedata", onData);
+        clearTimeout(bailout);
+    };
+    const onData = (e) => {
+        if (e.sourceId === sourceId && e.isSourceLoaded) finish();
+    };
+    map.on("sourcedata", onData);
+    // Safety net: never leave the spinner spinning forever.
+    const bailout = setTimeout(finish, 20000);
+}
+
+/**
  * Handle toggle item interactions (checkboxes)
  */
 export function handleToggleInteraction(categoryKey, subcategoryKey, itemKey, isChecked) {
     const stateKey = initializeItemState(categoryKey, subcategoryKey, itemKey);
     const itemData = getItemData(categoryKey, subcategoryKey, itemKey, 'toggle');
-    
-    // Update state
+
     layerStates.set(stateKey, { active: isChecked });
-    
-    // Log the interaction with full item data
-    // console.log('🔄 TOGGLE INTERACTION:', {
-    //     category: categoryKey,
-    //     subcategory: subcategoryKey,
-    //     itemKey: itemKey,
-    //     itemData: itemData,
-    //     active: isChecked,
-    //     stateKey: stateKey
-    // });
-      // Handle layer management using SourceLayerControl
+
     if (sourceLayerControl && itemData && itemData.source && itemData.layers) {
         if (isChecked) {
-            // Add layer to map
+            showLayerLoading(itemKey, itemData.source.id);
             sourceLayerControl.addLayerByKey(itemKey);
         } else {
-            // Remove layer from map
             sourceLayerControl.removeLayerByKey(itemKey);
         }
     }
