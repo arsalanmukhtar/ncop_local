@@ -38,10 +38,9 @@ export class SourceLayerControl {
 
     this._setupFeatureClickHandler();
 
-    // Preload sources only after style is loaded
-    this.map.on("style.load", () => {
-      this.preloadAllSources();
-    });
+    // Note: sources are no longer preloaded on every style.load. They're now
+    // added lazily from addLayerByKey only when a layer actually needs them.
+    // This saves dozens of TileJSON fetches per page load / basemap change.
   }
 
   /**
@@ -316,7 +315,12 @@ export class SourceLayerControl {
     }
 
     try {
-      // Source is already preloaded, just add layers
+      // Lazily add the source if it isn't already on the map. Cheaper than
+      // the old preload-everything-on-style.load approach.
+      if (!this.map.getSource(config.source.id)) {
+        this.addMapboxSource(config.source);
+      }
+
       const layerIds = this.addMapboxLayers(config.layers, config.source.id);
       if (layerIds.length === 0) {
         return false;
@@ -331,6 +335,8 @@ export class SourceLayerControl {
 
       // Track order
       this.layerOrder.push(layerKey);
+
+      this._persistActiveLayers();
 
       return true;
     } catch (error) {
@@ -366,6 +372,8 @@ export class SourceLayerControl {
       if (orderIndex > -1) {
         this.layerOrder.splice(orderIndex, 1);
       }
+
+      this._persistActiveLayers();
 
       return true;
     } catch (error) {
@@ -847,6 +855,26 @@ export class SourceLayerControl {
    */
   getActiveLayerKeys() {
     return Array.from(this.activeLayers.keys());
+  }
+
+  /**
+   * Persist active layer keys to browser storage.
+   * Skipped during internal basemap-change restore (isRestoringLayers).
+   */
+  _persistActiveLayers() {
+    if (this.isRestoringLayers) return;
+    const storage = window.ncop_storage;
+    if (!storage) {
+      console.warn("[NCOP persist] window.ncop_storage unavailable");
+      return;
+    }
+    try {
+      const keys = this.getActiveLayerKeys();
+      storage.saveSetting("activeLayerKeys", keys);
+      console.info("[NCOP persist] activeLayerKeys ->", keys);
+    } catch (e) {
+      console.warn("[NCOP persist] failed to save activeLayerKeys", e);
+    }
   }
 
   /**

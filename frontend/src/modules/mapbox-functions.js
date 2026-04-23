@@ -200,6 +200,20 @@ export function handleTemporalInteraction(
   isActive,
   layerConfig
 ) {
+  // Persist the active temporal selection so a refresh can restore it.
+  try {
+    const _storage = window.ncop_storage;
+    if (_storage) {
+      const next = isActive ? itemKey : null;
+      _storage.saveSetting("activeTemporalKey", next);
+      console.info("[NCOP persist] activeTemporalKey ->", next);
+    } else {
+      console.warn("[NCOP persist] activeTemporalKey: no storage");
+    }
+  } catch (e) {
+    console.warn("[NCOP persist] failed to save activeTemporalKey", e);
+  }
+
   // ✅ Special-case RainViewer temporal items WITHOUT changing sidebar core logic
   const isRainViewer =
     itemKey === "realtime_radar" || itemKey === "satellite_infrared";

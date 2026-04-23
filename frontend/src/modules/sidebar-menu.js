@@ -614,6 +614,7 @@ export class SidebarMenu {
       itemDiv.className =
         "ncop-item ncop-item-toggle ncop-item-row ncop-item-row--clickable ncop-item-row--multi";
       itemDiv.title = itemData.label;
+      itemDiv.dataset.itemKey = itemKey;
       itemDiv.innerHTML = `${iconHtml}<span class="ncop-item-label-marquee"><span class="ncop-item-label">${itemData.label}</span></span>${typeHtml}`;
 
       itemDiv.addEventListener("click", () => {
@@ -658,6 +659,7 @@ export class SidebarMenu {
     itemDiv.className =
       "ncop-item ncop-item-temporal ncop-item-row ncop-item-row--clickable";
     itemDiv.title = itemData.label;
+    itemDiv.dataset.itemKey = itemKey;
 
     const hasIcon = !!itemData.image;
     const geom = this.#getLayerGeometry(itemData);

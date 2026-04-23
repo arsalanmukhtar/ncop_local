@@ -45,7 +45,7 @@ import {
   startStoryBySlug,
 } from "./map-controls.js";
 import { NavigationPanel } from "./navigation-panel.js";
-import { ProjectionPanel, BasemapPanel } from "./map-display-panels.js";
+import { ProjectionPanel, BasemapPanel, resolveBasemapUrl } from "./map-display-panels.js";
 import { SidebarMenu } from "./sidebar-menu.js";
 import { UtilityManager } from "./utility-manager.js";
 import { UserControl, NCOPTourControl } from "./nav-controls.js";
@@ -85,6 +85,11 @@ class DashboardManager {
   #sourceLayerControl;
   #layerAttributePopup;
   #themeToggler;
+  // Flips true after the first `load` event. Runtime errors fired after
+  // this point (missing tile/sprite/image/etc.) must NOT trigger the
+  // streets-v12 fallback — doing so would wipe the user's chosen basemap
+  // and all the layers they just restored.
+  #initialLoadComplete = false;
 
   init() {
     if (!window.mapboxgl?.accessToken) {
@@ -103,15 +108,15 @@ class DashboardManager {
     // Initialize theme toggler early
     this.#themeToggler = new ThemeToggler();
 
-    // SourceLayerControl (your existing)
-    const slc = new SourceLayerControl(window.ncop_map);
-    window.sourceLayerControl = slc;
+    // Single SourceLayerControl instance — previously two were created and
+    // each registered its own map.on("style.load") listener, doubling every
+    // preload / restore step.
+    this.#sourceLayerControl = new SourceLayerControl(this.#map);
+    window.sourceLayerControl = this.#sourceLayerControl;
 
     // MapControls (your existing)
     const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
 
-    // Keep your existing initializations…
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
     this.#layerAttributePopup =
       this.#sourceLayerControl.layerAttributePopup ||
       new LayerAttributePopup(this.#map);
@@ -173,9 +178,17 @@ class DashboardManager {
       ? this.#storage.getSetting("mapProjection")
       : "mercator";
 
+    // Boot the map on the user's last basemap directly — avoids a second
+    // setStyle after load which triggers Mapbox's slow "style diff
+    // unimplemented, rebuilding from scratch" path.
+    const savedBasemap = this.#storage
+      ? this.#storage.getSetting("basemapStyle")
+      : null;
+    const initialStyle = resolveBasemapUrl(savedBasemap || "streets-v12");
+
     this.#map = new mapboxgl.Map({
       container: "map",
-      style: "mapbox://styles/mapbox/streets-v12", // default
+      style: initialStyle,
       center: savedCenter,
       zoom: savedZoom,
       projection: savedProjection || "mercator",
@@ -184,10 +197,10 @@ class DashboardManager {
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
-    // console.log("✅ Map exposed as window.ncop_map");
   }
 
   #onMapLoad() {
+    this.#initialLoadComplete = true;
     if (this.#storage) {
       const savedBearing = this.#storage.getSetting("mapBearing");
       const savedPitch = this.#storage.getSetting("mapPitch");
@@ -226,6 +239,113 @@ class DashboardManager {
     } catch (e) {
       console.warn("RainViewer Player failed to init:", e);
     }
+
+    // Restore user state (basemap selection, active layers, active temporal).
+    this.#restoreUserState();
+  }
+
+  /**
+   * Restore the user's layers and temporal selection from browser storage.
+   * The basemap was already applied in `#initializeMap` via resolveBasemapUrl
+   * (the map boots directly on the saved style), so this only handles:
+   *   1. Active layers  — replay via sourceLayerControl.addLayerByKey for
+   *      each saved key, then sync the sidebar UI (checkbox / .is-selected).
+   *      isRestoringLayers suppresses the persist hook during replay.
+   *   2. Active temporal layer — click the matching `.ncop-item-temporal`
+   *      div so handleTemporalInteraction runs end-to-end.
+   * Waits for the sidebar to actually populate before acting — SidebarMenu
+   * builds the DOM asynchronously after an `await import('./map-layers.js')`.
+   */
+  #restoreUserState() {
+    if (!this.#storage || !this.#sourceLayerControl) {
+      console.warn("[NCOP restore] storage or sourceLayerControl missing");
+      return;
+    }
+    const storage = this.#storage;
+    const slc = this.#sourceLayerControl;
+    const savedLayers = storage.getSetting("activeLayerKeys") || [];
+    const savedTemporal = storage.getSetting("activeTemporalKey");
+    console.info("[NCOP restore] reading saved state:", {
+      layers: savedLayers,
+      temporal: savedTemporal,
+    });
+
+    // Poll until a selector appears, then resolve. Returns the element or null.
+    const waitForEl = (selector, maxAttempts = 60, interval = 100) =>
+      new Promise((resolve) => {
+        const tick = (n) => {
+          const el = document.querySelector(selector);
+          if (el) return resolve(el);
+          if (n >= maxAttempts) return resolve(null);
+          setTimeout(() => tick(n + 1), interval);
+        };
+        tick(0);
+      });
+
+    // Signal that SidebarMenu.loadSidebarConfig() finished its async populate.
+    const waitForSidebarReady = () =>
+      waitForEl(
+        ".sidebar-content .ncop-item[data-item-key], .sidebar-content input[data-item-key]"
+      );
+
+    const applyLayers = async () => {
+      if (!Array.isArray(savedLayers) || !savedLayers.length) return;
+      // Add layers to the map FIRST — addLayerByKey reads `ncop_menu_items`
+      // from memory and doesn't need the sidebar DOM. Sidebar checkbox /
+      // is-selected sync happens afterwards (see below) once the async
+      // sidebar populate finishes.
+      slc.isRestoringLayers = true;
+      const added = [];
+      try {
+        for (const key of savedLayers) {
+          let ok = false;
+          try {
+            ok = await slc.addLayerByKey(key, false);
+          } catch (e) {
+            console.warn(`[NCOP restore] addLayerByKey('${key}') threw`, e);
+          }
+          console.info(`[NCOP restore] addLayerByKey('${key}') ->`, ok);
+          if (ok) added.push(key);
+        }
+      } finally {
+        slc.isRestoringLayers = false;
+      }
+      // Sync sidebar UI in the background. If the sidebar never finishes
+      // rendering we still have the layers on the map.
+      waitForSidebarReady().then(() => {
+        for (const key of added) {
+          const cb = document.querySelector(`input[data-item-key="${key}"]`);
+          if (cb) {
+            cb.checked = true;
+            continue;
+          }
+          const div = document.querySelector(
+            `.ncop-item[data-item-key="${key}"]`
+          );
+          if (div) div.classList.add("is-selected");
+        }
+      });
+    };
+
+    const applyTemporal = async () => {
+      if (!savedTemporal) return;
+      const el = await waitForEl(
+        `.ncop-item-temporal[data-item-key="${savedTemporal}"]`
+      );
+      if (el) {
+        console.info(`[NCOP restore] clicking temporal '${savedTemporal}'`);
+        el.click();
+      } else {
+        console.warn(
+          `[NCOP restore] temporal item not found: ${savedTemporal}`
+        );
+      }
+    };
+
+    (async () => {
+      await applyLayers();
+      await applyTemporal();
+    })();
   }
 
   #onMapMoveEnd() {
@@ -236,14 +356,23 @@ class DashboardManager {
 
   #handleMapError(e) {
     console.error("Map error:", e);
+    // Only auto-fallback if the INITIAL style never finished loading.
+    // Once the map has fired its first `load` event we keep the user's
+    // chosen basemap (and the layers we just restored) intact; runtime
+    // errors after that are almost always about individual tiles /
+    // sprites / icons and must not wipe the map.
+    if (this.#initialLoadComplete) {
+      return;
+    }
     if (
       e?.error &&
       (e.error.message?.includes("404") ||
         e.error.message?.includes("Not Found") ||
-        e.error.message?.includes("style") ||
         e.error.status === 404)
     ) {
-      console.warn("Style loading error detected, falling back to streets-v12");
+      console.warn(
+        "[NCOP] Initial style failed to load, falling back to streets-v12"
+      );
       try {
         this.#map.setStyle("mapbox://styles/mapbox/streets-v12");
         setTimeout(() => {

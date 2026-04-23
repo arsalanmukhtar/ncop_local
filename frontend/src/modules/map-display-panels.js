@@ -10,32 +10,49 @@ import lightLogo from "@assets/images/basemap_images/light.webp";
 import darkLogo from "@assets/images/basemap_images/dark.webp";
 
 /**
+ * Module-level basemap registry. Exported so `dashboard.js` can resolve the
+ * persisted basemap id to a URL at map-construction time — which avoids the
+ * expensive setStyle rebuild that happens when we boot on one style and then
+ * switch to another.
+ */
+export const BASEMAP_STYLES = [
+    { id: "streets-v12", name: "Streets", image: streetsLogo },
+    { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
+    { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
+    { id: "carto/positron", name: "CARTO Positron", image: lightLogo, url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
+    { id: "carto/voyager", name: "CARTO Voyager", image: streetsLogo, url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
+    { id: "carto/dark-matter", name: "CARTO Dark Matter", image: darkLogo, url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
+    { id: "openfreemap/liberty", name: "OpenFreeMap Liberty", image: streetsLogo, url: "https://tiles.openfreemap.org/styles/liberty" },
+    { id: "openfreemap/bright", name: "OpenFreeMap Bright", image: osmLogo, url: "https://tiles.openfreemap.org/styles/bright" },
+    { id: "openfreemap/positron", name: "OpenFreeMap Positron", image: lightLogo, url: "https://tiles.openfreemap.org/styles/positron" },
+    { id: "stadia/alidade_smooth", name: "Alidade Smooth", image: lightLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth.json" },
+    { id: "stadia/alidade_smooth_dark", name: "Alidade Smooth Dark", image: darkLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json" },
+    { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
+    { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
+    { id: "navigation-day-v1", name: "Day", image: lightLogo },
+    { id: "navigation-night-v1", name: "Night", image: darkLogo },
+];
+
+/**
+ * Resolve a persisted basemap id (e.g. "navigation-day-v1", "carto/positron")
+ * to a style URL usable by `mapboxgl.Map({ style })` or `map.setStyle(...)`.
+ * Unknown / missing ids fall back to the Mapbox streets-v12 default.
+ */
+export function resolveBasemapUrl(id) {
+    const found = BASEMAP_STYLES.find((s) => s.id === id);
+    if (found?.url) return found.url;
+    if (found) return `mapbox://styles/mapbox/${found.id}`;
+    return "mapbox://styles/mapbox/streets-v12";
+}
+
+/**
  * Handles the top-right basemap/style and labels control.
- * Note: Basemap selections are not persisted to storage - always defaults to streets-v12 on load.
  */
 export class BasemapPanel {
     #map;
     #storage = window.ncop_storage;
     #mapControls;
-    #basemapStyles = [
-        { id: "streets-v12", name: "Streets", image: streetsLogo },
-        { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
-        { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
-        { id: "carto/positron", name: "CARTO Positron", image: lightLogo, url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
-        { id: "carto/voyager", name: "CARTO Voyager", image: streetsLogo, url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
-        { id: "carto/dark-matter", name: "CARTO Dark Matter", image: darkLogo, url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
-        { id: "openfreemap/liberty", name: "OpenFreeMap Liberty", image: streetsLogo, url: "https://tiles.openfreemap.org/styles/liberty" },
-        { id: "openfreemap/bright", name: "OpenFreeMap Bright", image: osmLogo, url: "https://tiles.openfreemap.org/styles/bright" },
-        { id: "openfreemap/positron", name: "OpenFreeMap Positron", image: lightLogo, url: "https://tiles.openfreemap.org/styles/positron" },
-        { id: "stadia/alidade_smooth", name: "Alidade Smooth", image: lightLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth.json" },
-        { id: "stadia/alidade_smooth_dark", name: "Alidade Smooth Dark", image: darkLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json" },
-        { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
-        { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
-        { id: "navigation-day-v1", name: "Day", image: lightLogo },
-        { id: "navigation-night-v1", name: "Night", image: darkLogo },
-        // { id: "light-v11", name: "Light", image: "/static/images/basemap_images/day.webp" },
-        // { id: "dark-v11", name: "Dark", image: "/static/images/basemap_images/night.webp" },
-    ];
+    #basemapStyles = BASEMAP_STYLES;
     #currentStyle;
     #labelsEnabled;
 
@@ -45,8 +62,11 @@ export class BasemapPanel {
      */    constructor(mapInstance, mapControlsInstance) {
         this.#map = mapInstance;
         this.#mapControls = mapControlsInstance;
-        // Always default to streets-v12, no storage for basemap
-        this.#currentStyle = "streets-v12";
+        // Restore basemap from storage (falls back to streets-v12 if none saved
+        // or if the saved id is no longer in the list).
+        const saved = this.#storage ? this.#storage.getSetting("basemapStyle") : null;
+        const isKnown = saved && this.#basemapStyles.some((s) => s.id === saved);
+        this.#currentStyle = isKnown ? saved : "streets-v12";
         this.#labelsEnabled = this.#storage ? this.#storage.getLabelsState() : true;
         this.render();
         this.addEventListeners();
@@ -156,8 +176,10 @@ export class BasemapPanel {
                 try {
                     this.#map.setStyle('mapbox://styles/mapbox/streets-v12');
                     this.#currentStyle = 'streets-v12';
-                    
-                    // Note: Basemap fallback is not saved to storage
+
+                    if (this.#storage) {
+                        this.#storage.saveSetting("basemapStyle", "streets-v12");
+                    }
                 } catch (fallbackError) {
                     console.error('Critical error: Cannot load fallback basemap', fallbackError);
                 }
@@ -212,11 +234,17 @@ export class BasemapPanel {
                 
                 // Set the style
                 this.#map.setStyle(styleUrl);
-                
+
                 // Update current style immediately (optimistic)
                 this.#currentStyle = newStyle;
 
-                // Note: Basemap selection is not saved to storage
+                // Persist to storage so next page load restores the same basemap.
+                if (this.#storage) {
+                    this.#storage.saveSetting("basemapStyle", newStyle);
+                    console.info("[NCOP persist] basemapStyle ->", newStyle);
+                } else {
+                    console.warn("[NCOP persist] basemapStyle: no storage");
+                }
                 
             } catch (error) {
                 fallbackToStreets(`Synchronous error setting basemap style: ${newStyle}`);
