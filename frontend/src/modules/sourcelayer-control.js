@@ -339,8 +339,6 @@ export class SourceLayerControl {
       // Track order
       this.layerOrder.push(layerKey);
 
-      this._persistActiveLayers();
-
       return true;
     } catch (error) {
       console.error(`❌ Error adding layer "${layerKey}":`, error);
@@ -375,8 +373,6 @@ export class SourceLayerControl {
       if (orderIndex > -1) {
         this.layerOrder.splice(orderIndex, 1);
       }
-
-      this._persistActiveLayers();
 
       return true;
     } catch (error) {
@@ -874,26 +870,6 @@ export class SourceLayerControl {
     const beforeId = this.computeBeforeId(layer.type);
     if (beforeId) this.map.addLayer(layer, beforeId);
     else this.map.addLayer(layer);
-  }
-
-  /**
-   * Persist active layer keys to browser storage.
-   * Skipped during internal basemap-change restore (isRestoringLayers).
-   */
-  _persistActiveLayers() {
-    if (this.isRestoringLayers) return;
-    const storage = window.ncop_storage;
-    if (!storage) {
-      console.warn("[NCOP persist] window.ncop_storage unavailable");
-      return;
-    }
-    try {
-      const keys = this.getActiveLayerKeys();
-      storage.saveSetting("activeLayerKeys", keys);
-      console.info("[NCOP persist] activeLayerKeys ->", keys);
-    } catch (e) {
-      console.warn("[NCOP persist] failed to save activeLayerKeys", e);
-    }
   }
 
   /**

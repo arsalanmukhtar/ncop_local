@@ -50,11 +50,10 @@ export function resolveBasemapUrl(id) {
  */
 export class BasemapPanel {
     #map;
-    #storage = window.ncop_storage;
     #mapControls;
     #basemapStyles = BASEMAP_STYLES;
-    #currentStyle;
-    #labelsEnabled;
+    #currentStyle = "streets-v12";
+    #labelsEnabled = true;
 
     /**
      * @param {mapboxgl.Map} mapInstance
@@ -62,12 +61,6 @@ export class BasemapPanel {
      */    constructor(mapInstance, mapControlsInstance) {
         this.#map = mapInstance;
         this.#mapControls = mapControlsInstance;
-        // Restore basemap from storage (falls back to streets-v12 if none saved
-        // or if the saved id is no longer in the list).
-        const saved = this.#storage ? this.#storage.getSetting("basemapStyle") : null;
-        const isKnown = saved && this.#basemapStyles.some((s) => s.id === saved);
-        this.#currentStyle = isKnown ? saved : "streets-v12";
-        this.#labelsEnabled = this.#storage ? this.#storage.getLabelsState() : true;
         this.render();
         this.addEventListeners();
     }
@@ -148,10 +141,6 @@ export class BasemapPanel {
         const labelsToggle = document.getElementById("labelsToggle");
         labelsToggle.classList.toggle("active", this.#labelsEnabled);
 
-        if (this.#storage) {
-            this.#storage.saveLabelsState(this.#labelsEnabled);
-        }
-
         this.#mapControls.toggleMapLabels(this.#labelsEnabled);
     }    #handleBasemapSelection(event) {
         const basemapItem = event.target.closest(".basemap-item");        if (basemapItem) {
@@ -176,10 +165,6 @@ export class BasemapPanel {
                 try {
                     this.#map.setStyle('mapbox://styles/mapbox/streets-v12');
                     this.#currentStyle = 'streets-v12';
-
-                    if (this.#storage) {
-                        this.#storage.saveSetting("basemapStyle", "streets-v12");
-                    }
                 } catch (fallbackError) {
                     console.error('Critical error: Cannot load fallback basemap', fallbackError);
                 }
@@ -238,14 +223,6 @@ export class BasemapPanel {
                 // Update current style immediately (optimistic)
                 this.#currentStyle = newStyle;
 
-                // Persist to storage so next page load restores the same basemap.
-                if (this.#storage) {
-                    this.#storage.saveSetting("basemapStyle", newStyle);
-                    console.info("[NCOP persist] basemapStyle ->", newStyle);
-                } else {
-                    console.warn("[NCOP persist] basemapStyle: no storage");
-                }
-                
             } catch (error) {
                 fallbackToStreets(`Synchronous error setting basemap style: ${newStyle}`);
             }
@@ -299,7 +276,6 @@ export class ProjectionPanel {
     #map;
     #mapControls;
     #panel;
-    #storage = window.ncop_storage;
 
     /**
      * @param {mapboxgl.Map} mapInstance
@@ -317,9 +293,7 @@ export class ProjectionPanel {
      */
     render() {
         const mapContainer = document.getElementById("map");
-        const savedProjection = this.#storage
-            ? this.#storage.getSetting("mapProjection")
-            : "mercator";
+        const savedProjection = "mercator";
 
         const projections = [
             {
@@ -417,9 +391,7 @@ export class ProjectionPanel {
     }
 
     updateActiveProjection() {
-        const currentProjection = this.#storage
-            ? this.#storage.getSetting("mapProjection") || "mercator"
-            : "mercator";
+        const currentProjection = "mercator";
 
         this.#panel.querySelectorAll(".projection-item").forEach((item) => {
             item.classList.remove("active");

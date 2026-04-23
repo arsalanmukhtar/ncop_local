@@ -393,7 +393,6 @@ export class LayerInfoPanel {
 export class LayerOrderControl {
     #map;
     #sourceLayerControl;
-    #storage = window.ncop_storage;
     #isVisible = false;
 
     constructor(map, sourceLayerControl) {

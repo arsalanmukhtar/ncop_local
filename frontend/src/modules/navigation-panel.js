@@ -228,10 +228,8 @@ export class NavigationPanel {
     // keep the live clock running
     setInterval(() => this.#updateNewsClock(), 1000);
 
-    // Restore terrain state
-    this.restoreToggle3DState(
-      window.ncop_storage?.getSetting("terrainEnabled") || false
-    );
+    // Sync toggle with current map terrain state
+    this.restoreToggle3DState(!!this.#map?.getTerrain?.());
   }
 
   /**
@@ -566,8 +564,7 @@ export class NavigationPanel {
    * Handle 3D toggle
    */
   #handleToggle3D() {
-    const currentTerrain =
-      window.ncop_storage?.getSetting("terrainEnabled") || false;
+    const currentTerrain = !!this.#map?.getTerrain?.();
     const newTerrainState = !currentTerrain;
 
     if (newTerrainState) {

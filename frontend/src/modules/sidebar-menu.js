@@ -23,7 +23,6 @@ export class SidebarMenu {
   #sidebarPanel;
   #menuControlDiv;
   #accordionContainer;
-  #storage = window.ncop_storage;
   constructor() {
     // console.log("🚀 SidebarMenu constructor called");
 
@@ -133,11 +132,6 @@ export class SidebarMenu {
     lucide.createIcons();
     this.#initializeAccordionHandlers();
     this.#initializeSearchFunctionality();
-
-    // Restore NCOP control states after UI is ready
-    setTimeout(() => {
-      this.#restoreNCOPStates();
-    }, 100);
   }
 
   // --- Sidebar UI Generation ---
@@ -1117,63 +1111,15 @@ export class SidebarMenu {
   }
 
   #handleNCOPToggle(endpoint, itemKey, isEnabled) {
-    // console.log(`🔄 NCOP Toggle - ${itemKey}:`, {
-    //     endpoint: endpoint,
-    //     enabled: isEnabled,
-    // });
-
-    if (this.#storage) {
-      this.#storage.saveSetting(`ncop_toggle_${itemKey}`, isEnabled);
-    }
-
-    const message = isEnabled ? "enabled" : "disabled";
-    // console.log(`📡 ${itemKey} has been ${message}`);
-
     // Placeholder for API/Map Layer logic
   }
 
   #handleNCOPDropdown(endpoint, itemKey, selectedValue) {
-    // console.log(`📋 NCOP Dropdown - ${itemKey}:`, {
-    //     endpoint: endpoint,
-    //     value: selectedValue,
-    // });
-
-    if (this.#storage) {
-      this.#storage.saveSetting(`ncop_dropdown_${itemKey}`, selectedValue);
-    }
-
     if (selectedValue === "") {
-      // console.log(`📋 ${itemKey} selection cleared`);
       return;
     }
 
-    // console.log(`📊 ${itemKey} set to: ${selectedValue}`);
-
     // Placeholder for API/Map Layer logic
-  }
-
-  #restoreNCOPStates() {
-    if (!this.#storage) return;
-
-    document
-      .querySelectorAll('.ncop-toggle input[type="checkbox"]')
-      .forEach((toggle) => {
-        const itemKey = toggle.dataset.itemKey;
-        const savedState = this.#storage.getSetting(`ncop_toggle_${itemKey}`);
-        if (savedState !== null) {
-          toggle.checked = savedState;
-        }
-      });
-
-    document.querySelectorAll(".ncop-dropdown").forEach((dropdown) => {
-      const itemKey = dropdown.dataset.itemKey;
-      const savedState = this.#storage.getSetting(`ncop_dropdown_${itemKey}`);
-      if (savedState !== null) {
-        dropdown.value = savedState;
-      }
-    });
-
-    // console.log("🔄 NCOP control states restored from localStorage");
   }
 
   #initializeSearchFunctionality() {
