@@ -143,13 +143,16 @@
 }
 
 /* ---- Row 1 :: Timeline panel (dates row + slider track) ---- */
-/* Horizontal padding must be >= half the widest date pill so the first/last
-   labels (whose centers sit at 0% / 100% of the content box) stay inside the
-   panel. ~40px gives a safe margin for labels like "30-Apr". */
+/* Horizontal padding is driven by --date-inset (set by JS to the widest date
+   label's half-width + buffer) so the dates row and slider track both inset
+   by the same amount, keeping tick ↔ thumb alignment while preventing
+   first/last pills (centered at 0% / 100% of the content box) from spilling
+   into the adjacent transport / drag cells. */
 .ts-panel--timeline {
+    --date-inset: 40px;
     flex: 1 1 auto;
     min-width: 0;
-    padding: 10px 40px;
+    padding: 10px var(--date-inset);
     background: var(--frost-bg);
     flex-direction: column;
     justify-content: space-between;
@@ -186,8 +189,10 @@
 }
 
 /* Tick line below each pill — thick and prominent.
-   All pills (first, middle, last) share the same centering transform so the
-   tick/dot always lands directly under the label text. */
+   All pills (first, middle, last) share the same centering transform so every
+   label sits directly above its tick. The timeline panel's horizontal padding
+   (--date-inset, set dynamically in JS from the widest label's half-width)
+   keeps first/last pills from overflowing into the transport / drag cells. */
 #temp-slider1 .year-labels1 span::after {
     content: "";
     position: absolute;

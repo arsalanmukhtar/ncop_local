@@ -640,6 +640,23 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     yearLabelsDiv.innerHTML = "";
     yearLabelsDiv.appendChild(frag);
     updateActiveYearLabel(0);
+
+    // Dynamically inset the timeline panel's horizontal padding to fit the
+    // widest label. First/last pills are centered at 0% / 100% of the content
+    // box, so padding >= widest_label_width/2 keeps them from overflowing.
+    requestAnimationFrame(() => {
+      const panel = yearLabelsDiv.closest(".ts-panel--timeline");
+      if (!panel) return;
+      let maxWidth = 0;
+      yearLabelsDiv.querySelectorAll("span").forEach((s) => {
+        const w = s.getBoundingClientRect().width;
+        if (w > maxWidth) maxWidth = w;
+      });
+      if (maxWidth > 0) {
+        const inset = Math.ceil(maxWidth / 2) + 6;
+        panel.style.setProperty("--date-inset", `${inset}px`);
+      }
+    });
   }
 
   const sliderEl = document.getElementById("slider1");
