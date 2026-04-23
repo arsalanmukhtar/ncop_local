@@ -327,11 +327,25 @@
     background: transparent;
     border: none;
     color: var(--ndma-blue);
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ts-variable-icon:hover {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.ts-variable-icon:hover i {
+    color: #dc2626 !important;
 }
 
 .ts-variable-icon i {
     font-size: 22px !important;
     color: var(--ndma-blue) !important;
+    transition: color 0.15s ease;
 }
 
 .ts-variable {

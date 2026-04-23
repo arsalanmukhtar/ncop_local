@@ -816,6 +816,18 @@
     padding: 0;
 }
 
+/* Temporal popup: the compact body now hosts an in-content close button
+   (see buildPopupContent in temporal-controls.js). Reserve space at the top
+   and right so the × sits clearly off the key/value table. */
+.mapboxgl-popup.temporal-layer-popup .ncop-popup--compact .ncop-popup__close {
+    top: 10px;
+    right: 10px;
+}
+.mapboxgl-popup.temporal-layer-popup .ncop-popup--compact .ncop-popup__body {
+    padding-top: 26px;
+    padding-right: 32px;
+}
+
 .mapboxgl-popup.ncop-popup-host .mapboxgl-popup-close-button {
     color: var(--popup-text);
     background: transparent;

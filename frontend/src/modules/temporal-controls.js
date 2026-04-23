@@ -75,6 +75,43 @@ function _ncopAddLayerInOrder(map, layerCfg) {
   } catch {}
 }
 
+// Recompute the timeline panel's dynamic horizontal padding so first/last
+// date pills never spill past the edge. Runs after labels are first inserted
+// (via `updateTempSlider`) and again on every window resize so the slider
+// stays readable when the dev console opens / closes or the viewport changes.
+function _recomputeDateInset() {
+  const yearLabelsDiv = document.querySelector("#temp-slider1 .year-labels1");
+  if (!yearLabelsDiv) return;
+  const panel = yearLabelsDiv.closest(".ts-panel--timeline");
+  if (!panel) return;
+  const spans = yearLabelsDiv.querySelectorAll("span");
+  if (!spans.length) return;
+  let maxWidth = 0;
+  spans.forEach((s) => {
+    const w = s.getBoundingClientRect().width;
+    if (w > maxWidth) maxWidth = w;
+  });
+  if (maxWidth > 0) {
+    const inset = Math.ceil(maxWidth / 2) + 6;
+    panel.style.setProperty("--date-inset", `${inset}px`);
+  }
+}
+
+// When the viewport changes, recompute the inset AND clear any pinned
+// width left by a previous drag, so the slider flexes with the new viewport
+// width instead of staying locked to its drag-time size.
+if (typeof window !== "undefined" && !window.__ts_resizeBound) {
+  window.addEventListener("resize", () => {
+    const slider = document.getElementById("temp-slider1");
+    if (slider && !isDragging) {
+      slider.style.width = "";
+      slider.style.right = "";
+    }
+    requestAnimationFrame(_recomputeDateInset);
+  });
+  window.__ts_resizeBound = true;
+}
+
 // Helper to get the map instance from DashboardManager
 function getMap() {
   if (!window.ncop_map) {
@@ -200,6 +237,7 @@ function buildPopupContent(layerId, feature) {
     : `<tr><td colspan="2" class="ncop-popup__status-note" style="display:block;text-align:center;font-style:italic;">No properties available</td></tr>`;
 
   return `<div class="ncop-popup ncop-popup--compact">
+    <button type="button" class="ncop-popup__close" aria-label="Close popup" title="Close">&times;</button>
     <div class="ncop-popup__body">
       <table class="ncop-popup__table">
         <tbody>${layerRow}${propertyRows}</tbody>
@@ -377,7 +415,7 @@ function addClickListeners() {
       } catch {}
       if (!clickPopup) {
         clickPopup = new mapboxgl.Popup({
-          closeButton: true,
+          closeButton: false,
           closeOnClick: true,
           maxWidth: "420px",
           offset: [0, -10],
@@ -390,6 +428,19 @@ function addClickListeners() {
       }
       const html = buildPopupContent(layerId, feature);
       clickPopup.setLngLat(coordinates).setHTML(html).addTo(map);
+      // Wire up the custom close button inside the popup content. The native
+      // Mapbox close button was unreliable for vector temporal fills (meteoblue)
+      // — clicks on the × occasionally re-triggered the layer-specific click
+      // handler and re-opened the popup. An in-content button we bind
+      // ourselves is fully deterministic.
+      const popupEl = clickPopup.getElement?.();
+      const closeEl = popupEl?.querySelector?.(".ncop-popup__close");
+      if (closeEl) {
+        closeEl.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          clickPopup.remove();
+        });
+      }
     });
     _boundClickLayers.add(layerId);
   });
@@ -680,19 +731,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
     // Dynamically inset the timeline panel's horizontal padding to fit the
     // widest label. First/last pills are centered at 0% / 100% of the content
     // box, so padding >= widest_label_width/2 keeps them from overflowing.
-    requestAnimationFrame(() => {
-      const panel = yearLabelsDiv.closest(".ts-panel--timeline");
-      if (!panel) return;
-      let maxWidth = 0;
-      yearLabelsDiv.querySelectorAll("span").forEach((s) => {
-        const w = s.getBoundingClientRect().width;
-        if (w > maxWidth) maxWidth = w;
-      });
-      if (maxWidth > 0) {
-        const inset = Math.ceil(maxWidth / 2) + 6;
-        panel.style.setProperty("--date-inset", `${inset}px`);
-      }
-    });
+    requestAnimationFrame(_recomputeDateInset);
   }
 
   const sliderEl = document.getElementById("slider1");
@@ -817,6 +856,25 @@ document.addEventListener("DOMContentLoaded", function () {
       if (isPlaying) {
         clearInterval(interval);
         playAnimation();
+      }
+    });
+  }
+
+  // ===== Remove button: deactivate the current temporal layer =====
+  // Clicking the trash icon in the variable panel mimics clicking the
+  // currently-selected temporal item in the sidebar, so storage, sidebar
+  // state, the map layers, and this slider all unwind through the same path
+  // as user-initiated deselection.
+  const removeBtn = document.getElementById("tempsliderRemoveButton");
+  if (removeBtn) {
+    removeBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (!currentActiveLayerSet) return;
+      const sidebarItem = document.querySelector(
+        `.ncop-item-temporal[data-item-key="${currentActiveLayerSet}"]`
+      );
+      if (sidebarItem) {
+        sidebarItem.click();
       }
     });
   }
