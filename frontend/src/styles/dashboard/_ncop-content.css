@@ -149,100 +149,23 @@
 
 /* ---------------------------------------------------------------------
    Grid Layout Inside Nested Containers
-   --------------------------------------------------------------------- */
+   ---------------------------------------------------------------------
+   Nested grids now inherit the same unified single-row ("icon · label ·
+   type · toggle") layout used at the top level. When the grid contains
+   `.ncop-item-row` children (all of our current items do), force a
+   single column with a tight gap — matching the non-nested sidebar
+   grids. The legacy 2-column + 80×80 image layout has been dropped; it
+   produced the stretched thumbnails visible in the GDACS alerts. */
 .ncop-nested-items-container .ncop-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    /* Matches existing grid gap */
+    grid-template-columns: 1fr;
+    gap: 2px;
     align-items: start;
 }
 
-/* Single column grid for button items inside nested sections */
 .ncop-nested-items-container .ncop-grid:has(.ncop-item-button) {
     grid-template-columns: 1fr;
-    gap: 0px;
-}
-
-/* Responsive grid for smaller screens */
-@media (max-width: 768px) {
-    .ncop-nested-items-container .ncop-grid {
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
-}
-
-/* ---------------------------------------------------------------------
-   Static Items Inside Nested Sections (GDACS Layers)
-   --------------------------------------------------------------------- */
-/* Override base styles for nested static items to match theme */
-.ncop-nested-subsection .ncop-item-static {
-    /* Inherits from base .ncop-item-static but with consistent styling */
-    background: transparent;
-    border: none;
-    padding: 12px 8px;
-}
-
-/* Image styling inside nested sections matches existing pattern */
-.ncop-nested-subsection .ncop-item-static .ncop-item-image {
-    /* Inherits existing .ncop-item-image styles */
-    width: 80px;
-    height: 80px;
-    border-radius: 15px;
-}
-
-.ncop-nested-subsection .ncop-item-static .ncop-item-image img {
-    /* Inherits existing image styles */
-    border: 3px solid transparent;
-}
-
-/* Selected state uses NDMA green (matches existing theme) */
-.ncop-nested-subsection .ncop-item-static .ncop-item-image.selected img {
-    border: 3px solid var(--ndma-green);
-    box-shadow: 0 0 8px var(--ndma-green-glow);
-}
-
-/* Label styling for nested static items */
-.ncop-nested-subsection .ncop-item-static .ncop-item-label {
-    margin-top: 8px;
-    font-size: 10px;
-    color: var(--white);
-}
-
-/* ---------------------------------------------------------------------
-   Toggle Items Inside Nested Sections
-   --------------------------------------------------------------------- */
-.ncop-nested-subsection .ncop-item-toggle {
-    /* Inherits base toggle styles */
-    background: transparent;
-    border: none;
-    padding: 8px;
-}
-
-.ncop-nested-subsection .ncop-item-toggle .ncop-item-label {
-    color: var(--white);
-    font-size: 11px;
-}
-
-/* ---------------------------------------------------------------------
-   Button Items Inside Nested Sections
-   --------------------------------------------------------------------- */
-.ncop-nested-subsection .ncop-item-button {
-    /* Inherits base button styles */
-    margin: 2px 0;
-}
-
-/* ---------------------------------------------------------------------
-   Temporal Items Inside Nested Sections
-   --------------------------------------------------------------------- */
-.ncop-nested-subsection .ncop-item-temporal {
-    /* Inherits base temporal styles */
-    background: transparent;
-}
-
-.ncop-nested-subsection .ncop-item-temporal .ncop-item-image.selected img {
-    border: 3px solid var(--ndma-green);
-    box-shadow: 0 0 8px var(--ndma-green-glow);
+    gap: 0;
 }
 
 /* ---------------------------------------------------------------------
@@ -323,10 +246,7 @@
     margin-left: 4px;
 }
 
-/* Reduce grid gap slightly for nested items to save space */
-.ncop-nested-items-container .ncop-grid {
-    gap: 6px;
-}
+/* Gap handled by the single-row grid rule above. */
 
 /* Adjust nested header title font size to be between subcategory and item */
 .ncop-nested-header > span:first-child {
