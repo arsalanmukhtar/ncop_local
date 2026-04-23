@@ -108,15 +108,15 @@ class DashboardManager {
     // Initialize theme toggler early
     this.#themeToggler = new ThemeToggler();
 
-    // Single SourceLayerControl instance — previously two were created and
-    // each registered its own map.on("style.load") listener, doubling every
-    // preload / restore step.
-    this.#sourceLayerControl = new SourceLayerControl(this.#map);
-    window.sourceLayerControl = this.#sourceLayerControl;
+    // SourceLayerControl (your existing)
+    const slc = new SourceLayerControl(window.ncop_map);
+    window.sourceLayerControl = slc;
 
     // MapControls (your existing)
     const mapControls = new MapControls(window.ncop_map, window.ncop_storage);
 
+    // Keep your existing initializations…
+    this.#sourceLayerControl = new SourceLayerControl(this.#map);
     this.#layerAttributePopup =
       this.#sourceLayerControl.layerAttributePopup ||
       new LayerAttributePopup(this.#map);
@@ -180,11 +180,21 @@ class DashboardManager {
 
     // Boot the map on the user's last basemap directly — avoids a second
     // setStyle after load which triggers Mapbox's slow "style diff
-    // unimplemented, rebuilding from scratch" path.
-    const savedBasemap = this.#storage
-      ? this.#storage.getSetting("basemapStyle")
-      : null;
-    const initialStyle = resolveBasemapUrl(savedBasemap || "streets-v12");
+    // unimplemented, rebuilding from scratch" path. Guarded so a bad saved
+    // value or a module load hiccup can never prevent the map from creating.
+    let initialStyle = "mapbox://styles/mapbox/streets-v12";
+    try {
+      const savedBasemap = this.#storage
+        ? this.#storage.getSetting("basemapStyle")
+        : null;
+      const resolved = resolveBasemapUrl(savedBasemap || "streets-v12");
+      if (typeof resolved === "string" && resolved) initialStyle = resolved;
+    } catch (e) {
+      console.warn(
+        "[NCOP init] resolveBasemapUrl failed, using streets-v12:",
+        e
+      );
+    }
 
     this.#map = new mapboxgl.Map({
       container: "map",

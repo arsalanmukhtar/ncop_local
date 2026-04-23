@@ -38,9 +38,12 @@ export class SourceLayerControl {
 
     this._setupFeatureClickHandler();
 
-    // Note: sources are no longer preloaded on every style.load. They're now
-    // added lazily from addLayerByKey only when a layer actually needs them.
-    // This saves dozens of TileJSON fetches per page load / basemap change.
+    // Preload sources on every style.load so they're ready when a layer
+    // is added. addLayerByKey also lazily adds the source as a safety net
+    // (needed for cases where handleStyleLoad replay races the preload).
+    this.map.on("style.load", () => {
+      this.preloadAllSources();
+    });
   }
 
   /**
@@ -476,22 +479,6 @@ export class SourceLayerControl {
   addMapboxLayers(layersConfig, sourceId) {
     const addedLayers = [];
     try {
-      // Find the first label layer (symbol with text-field)
-      const style = this.map.getStyle();
-      let labelLayerId = null;
-      if (style && style.layers) {
-        for (const layer of style.layers) {
-          if (
-            layer.type === "symbol" &&
-            layer.layout &&
-            layer.layout["text-field"]
-          ) {
-            labelLayerId = layer.id;
-            break;
-          }
-        }
-      }
-
       layersConfig.forEach((layerConfig) => {
         const layerId = layerConfig.id;
         const isPMDWeatherLayer =
@@ -499,11 +486,9 @@ export class SourceLayerControl {
           layerId === "pmd_weather_stations-sun-symbol" ||
           layerId === "pmd_weather_stations-rain-symbol";
         const isEonetLayer =
-          typeof sourceId === "string" &&
-          sourceId.startsWith("eonet_");
+          typeof sourceId === "string" && sourceId.startsWith("eonet_");
         const isUsgsEarthquakeLayer =
-          typeof sourceId === "string" &&
-          sourceId.startsWith("usgs_");
+          typeof sourceId === "string" && sourceId.startsWith("usgs_");
 
         if (this.map.getLayer(layerId)) {
           addedLayers.push(layerId);
@@ -530,33 +515,21 @@ export class SourceLayerControl {
         ) {
           if (isUsgsEarthquakeLayer) {
             registerUsgsEarthquakeIcons(this.map);
-            if (labelLayerId) {
-              this.map.addLayer(layer, labelLayerId);
-            } else {
-              this.map.addLayer(layer);
-            }
+            this._addLayerAtCorrectOrder(layer);
             addedLayers.push(layerId);
             return;
           }
 
           if (isEonetLayer) {
             registerEonetIcons(this.map);
-            if (labelLayerId) {
-              this.map.addLayer(layer, labelLayerId);
-            } else {
-              this.map.addLayer(layer);
-            }
+            this._addLayerAtCorrectOrder(layer);
             addedLayers.push(layerId);
             return;
           }
 
           if (isPMDWeatherLayer) {
             registerPMDWeatherIcons(this.map);
-            if (labelLayerId) {
-              this.map.addLayer(layer, labelLayerId);
-            } else {
-              this.map.addLayer(layer);
-            }
+            this._addLayerAtCorrectOrder(layer);
             addedLayers.push(layerId);
             return;
           }
@@ -576,32 +549,20 @@ export class SourceLayerControl {
             iconImage[1][1] === "icon";
 
           if (isGDACSLayer && (isComplexExpression || isDirectIconExpression)) {
-            // For GDACS layers, set up the layer with direct icon URL support
             console.debug(
               `Setting up GDACS layer with dynamic icons: ${layerId}`
             );
-
-            // Simplify to direct icon URL from properties
             layer.layout["icon-image"] = [
               "case",
               ["has", "icon"],
               ["get", "icon"],
               "red-dot",
             ];
-            layer.layout["icon-size"] = layer.layout["icon-size"] || 0.6; // Smaller for GDACS icons
-
-            // Add layer immediately and handle icon loading asynchronously
-            if (labelLayerId) {
-              this.map.addLayer(layer, labelLayerId);
-            } else {
-              this.map.addLayer(layer);
-            }
+            layer.layout["icon-size"] = layer.layout["icon-size"] || 0.6;
+            this._addLayerAtCorrectOrder(layer);
             addedLayers.push(layerId);
-
-            // Set up dynamic icon handling for this GDACS source
             this.setupGDACSIconHandling(sourceId, layerId);
           } else if (typeof iconImage === "string") {
-            // Handle regular string icon paths (non-GDACS)
             let iconPath = iconImage;
             if (
               !iconImage.includes("/") &&
@@ -613,14 +574,9 @@ export class SourceLayerControl {
             }
 
             this.ensureSymbolIconLoaded(iconImage, iconPath, () => {
-              // Wait for source to be available before adding layer
               const tryAddLayer = () => {
                 if (this.map.getSource(sourceId)) {
-                  if (labelLayerId) {
-                    this.map.addLayer(layer, labelLayerId);
-                  } else {
-                    this.map.addLayer(layer);
-                  }
+                  this._addLayerAtCorrectOrder(layer);
                   addedLayers.push(layerId);
                 } else {
                   setTimeout(tryAddLayer, 100);
@@ -629,21 +585,12 @@ export class SourceLayerControl {
               tryAddLayer();
             });
           } else {
-            // Handle other complex expressions (non-GDACS)
-            if (labelLayerId) {
-              this.map.addLayer(layer, labelLayerId);
-            } else {
-              this.map.addLayer(layer);
-            }
+            this._addLayerAtCorrectOrder(layer);
             addedLayers.push(layerId);
           }
         } else {
-          // Non-symbol layers or symbol layers without icons
-          if (labelLayerId) {
-            this.map.addLayer(layer, labelLayerId);
-          } else {
-            this.map.addLayer(layer);
-          }
+          // Non-symbol layers and symbol layers without icons.
+          this._addLayerAtCorrectOrder(layer);
           addedLayers.push(layerId);
         }
       });
@@ -855,6 +802,78 @@ export class SourceLayerControl {
    */
   getActiveLayerKeys() {
     return Array.from(this.activeLayers.keys());
+  }
+
+  /**
+   * Compute the correct `beforeId` for stacking a new layer so the global
+   * z-order is always:
+   *     top:    labels (symbol + text-field)   — stay on top
+   *             NCOP vector layers              (fill / line / circle / symbol)
+   *             NCOP raster layers              (raster / raster-dem)
+   *     bottom: basemap
+   * Returns undefined when the layer should go at the top of the style
+   * (e.g. the style has no label layer yet).
+   *
+   * Rule: vectors insert just below the first label. Rasters insert just
+   * below the first NCOP vector (so vectors always cover rasters); if no
+   * NCOP vector is on the map yet, the raster goes just below the label.
+   *
+   * Manual user re-ordering via the Layer Order panel bypasses this because
+   * applyLayerOrder() calls map.addLayer() without a beforeId.
+   */
+  computeBeforeId(layerType) {
+    const style = this.map.getStyle?.();
+    if (!style || !Array.isArray(style.layers)) return undefined;
+
+    let firstLabel;
+    for (const l of style.layers) {
+      if (l.type === "symbol" && l.layout?.["text-field"]) {
+        firstLabel = l.id;
+        break;
+      }
+    }
+
+    const isRaster = layerType === "raster" || layerType === "raster-dem";
+    if (!isRaster) return firstLabel; // vector → below labels
+
+    // Raster → below the first NCOP vector (if any), else below labels.
+    const ourVectorIds = this._collectOurVectorLayerIds(style.layers);
+    for (const l of style.layers) {
+      if (ourVectorIds.has(l.id)) return l.id;
+    }
+    return firstLabel;
+  }
+
+  _collectOurVectorLayerIds(styleLayers) {
+    const vectorTypes = new Set(["fill", "line", "circle", "symbol"]);
+    const ownIds = new Set();
+
+    // Our static layers
+    for (const [, info] of this.activeLayers) {
+      info?.layerIds?.forEach((id) => ownIds.add(id));
+    }
+    // Module-level registry other NCOP modules (temporal, RainViewer)
+    // populate when they add layers.
+    if (window.__ncop_layer_registry instanceof Set) {
+      for (const id of window.__ncop_layer_registry) ownIds.add(id);
+    }
+
+    const result = new Set();
+    for (const l of styleLayers) {
+      if (ownIds.has(l.id) && vectorTypes.has(l.type)) result.add(l.id);
+    }
+    return result;
+  }
+
+  /**
+   * Add a configured layer at the correct z-order position, deferring to
+   * computeBeforeId(). Centralizes all the "labelLayerId ? .. : .." branches
+   * that used to live throughout addMapboxLayers.
+   */
+  _addLayerAtCorrectOrder(layer) {
+    const beforeId = this.computeBeforeId(layer.type);
+    if (beforeId) this.map.addLayer(layer, beforeId);
+    else this.map.addLayer(layer);
   }
 
   /**

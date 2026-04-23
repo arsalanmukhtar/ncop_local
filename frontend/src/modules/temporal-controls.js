@@ -47,6 +47,34 @@ let dragStartTop = 0;
 // === GLOBAL OPACITY FACTOR FOR TEMPORAL LAYERS (NEW) ===
 let _opacityFactor = 1; // 1 = 100% (default). Controlled by UI popover.
 
+// Module-level registry of NCOP-owned layer IDs so SourceLayerControl can
+// treat temporal / RainViewer layers like its own when computing beforeId.
+if (typeof window !== "undefined" && !(window.__ncop_layer_registry instanceof Set)) {
+  window.__ncop_layer_registry = new Set();
+}
+
+/**
+ * Add a layer to the map while enforcing the NCOP z-order rule
+ *   vectors above rasters above basemap, labels stay on top
+ * by deferring to SourceLayerControl.computeBeforeId(). Also records the
+ * layer ID in the shared registry so future computeBeforeId() calls can see
+ * it as "ours".
+ */
+function _ncopAddLayerInOrder(map, layerCfg) {
+  const slc = window.sourceLayerControl;
+  let beforeId;
+  if (slc && typeof slc.computeBeforeId === "function") {
+    try {
+      beforeId = slc.computeBeforeId(layerCfg.type);
+    } catch {}
+  }
+  if (beforeId) map.addLayer(layerCfg, beforeId);
+  else map.addLayer(layerCfg);
+  try {
+    window.__ncop_layer_registry?.add(layerCfg.id);
+  } catch {}
+}
+
 // Helper to get the map instance from DashboardManager
 function getMap() {
   if (!window.ncop_map) {
@@ -342,6 +370,11 @@ function addClickListeners() {
       if (!e.features?.length) return;
       const feature = e.features[0];
       const coordinates = e.lngLat;
+      // Close the shared LayerAttributePopup first so we never end up with
+      // two popups when overlapping layers fire click events together.
+      try {
+        window.layerAttributePopup?.hide?.();
+      } catch {}
       if (!clickPopup) {
         clickPopup = new mapboxgl.Popup({
           closeButton: true,
@@ -351,6 +384,9 @@ function addClickListeners() {
           anchor: "bottom",
           className: "ncop-popup-host temporal-layer-popup",
         });
+        // Expose so other modules (LayerAttributePopup) can dismiss it when
+        // they open their own popup on the same click.
+        try { window.__ts_clickPopup = clickPopup; } catch {}
       }
       const html = buildPopupContent(layerId, feature);
       clickPopup.setLngLat(coordinates).setHTML(html).addTo(map);
@@ -481,7 +517,7 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
       }
 
       if (!map.getLayer(layerDef.id)) {
-        map.addLayer(cfg);
+        _ncopAddLayerInOrder(map, cfg);
         if (initialOpacity > 0) setLayerOpacity(layerDef.id, initialOpacity);
       } else {
         map.setLayoutProperty(layerDef.id, "visibility", "visible");
@@ -607,7 +643,7 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
         if (layerDef.type === "symbol") {
           cfg.paint = { ...cfg.paint, "text-opacity": initialOpacity };
         }
-        map.addLayer(cfg);
+        _ncopAddLayerInOrder(map, cfg);
         if (initialOpacity > 0) setLayerOpacity(layerDef.id, initialOpacity);
       } else {
         map.setLayoutProperty(layerDef.id, "visibility", "visible");
@@ -1059,7 +1095,7 @@ function rvEnsureMapLayers() {
             maxzoom: MAXZ,
         });
 
-        map.addLayer({
+        _ncopAddLayerInOrder(map, {
             id: lid,
             type: "raster",
             source: sid,

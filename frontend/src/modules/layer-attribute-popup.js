@@ -1412,6 +1412,7 @@ export default class LayerAttributePopup {
   #createEl() {
     // Standard single-column popup:
     //   ┌──────────────────────────┐
+    //   │ × close (top-right)      │
     //   │ primary (header, fixed)  │
     //   ├──────────────────────────┤
     //   │ body-scroll              │ takes remaining height,
@@ -1421,12 +1422,20 @@ export default class LayerAttributePopup {
     const el = document.createElement("div");
     el.className = "layer-attribute-popup ncop-popup hidden";
     el.innerHTML = `
+      <button type="button" class="ncop-popup__close" aria-label="Close popup" title="Close">&times;</button>
       <div class="ncop-popup__primary">
         <div class="ncop-popup__primary-content"></div>
       </div>
       <div class="ncop-popup__body-scroll"></div>
     `;
     document.body.appendChild(el);
+    const closeBtn = el.querySelector(".ncop-popup__close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this.hide();
+      });
+    }
     return el;
   }
 
@@ -1930,6 +1939,22 @@ export default class LayerAttributePopup {
         return this.hide();
       }
 
+      // If any feature at this click belongs to a temporal / RainViewer layer
+      // (tracked in window.__ncop_layer_registry), let the temporal module's
+      // layer-specific click handler render the popup instead. This prevents
+      // the double-popup problem when a temporal layer overlaps a vector with
+      // popup eligibility (e.g. National Boundary).
+      try {
+        const registry = window.__ncop_layer_registry;
+        if (registry instanceof Set && registry.size) {
+          for (const f of features) {
+            if (f?.layer?.id && registry.has(f.layer.id)) {
+              return this.hide();
+            }
+          }
+        }
+      } catch {}
+
       let eligible = null;
       for (const feature of features) {
         if (this.#isPopupEligible(feature)) {
@@ -2166,6 +2191,17 @@ export default class LayerAttributePopup {
   }
 
   #show() {
+    // Close the temporal-layer popup (if any) so both popups can't appear
+    // simultaneously when the user clicks a spot where multiple layers
+    // overlap.
+    try {
+      if (window.__ts_clickPopup?.remove) {
+        window.__ts_clickPopup.remove();
+      }
+      document
+        .querySelectorAll(".mapboxgl-popup.temporal-layer-popup")
+        .forEach((n) => n.remove());
+    } catch {}
     this.popupEl.classList.remove("hidden");
     window.ncop_popup_active = true;
   }

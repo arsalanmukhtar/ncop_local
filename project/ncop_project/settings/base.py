@@ -45,7 +45,7 @@ if os.path.isfile(_geos_candidate):
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="noob")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost", "172.18.0.5"])
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost", "172.18.0.5", "172.18.1.5"])
 
 ROOT_URLCONF = "ncop_project.urls"
 WSGI_APPLICATION = "ncop_project.wsgi.application"
