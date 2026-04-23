@@ -628,6 +628,13 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
       span.textContent = l.date;
       const pct = n <= 1 ? 0 : (i / (n - 1)) * 100;
       span.style.left = `${pct}%`;
+      span.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const sliderEl = document.getElementById("slider1");
+        if (!sliderEl) return;
+        sliderEl.value = String(i);
+        sliderEl.dispatchEvent(new Event("input", { bubbles: true }));
+      });
       frag.appendChild(span);
     });
     yearLabelsDiv.innerHTML = "";

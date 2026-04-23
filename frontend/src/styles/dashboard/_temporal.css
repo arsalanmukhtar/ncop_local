@@ -180,6 +180,7 @@
     border-radius: 4px;
     line-height: 1.4;
     white-space: nowrap;
+    cursor: pointer;
     transform: translateX(-50%);
     transition: all 0.2s ease;
 }
@@ -205,9 +206,10 @@
 }
 
 #temp-slider1 .year-labels1 span.is-active {
-    color: var(--ndma-blue);
-    background: var(--ndma-blue-glow);
-    border-color: var(--ndma-blue-light);
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
 /* Active date: tick becomes a glowing dot centered under the label. */
@@ -481,10 +483,10 @@
 }
 
 [data-theme="night"] #temp-slider1 .year-labels1 span.is-active {
-    color: var(--text-primary);
-    background: rgba(13, 74, 122, 0.26);
-    border-color: rgba(60, 60, 60, 0.9);
-    box-shadow: 0 0 8px rgba(13, 74, 122, 0.35);
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 8px rgba(70, 178, 255, 0.5);
 }
 
 [data-theme="night"] #temp-slider1 .year-labels1 span.is-active::after {
