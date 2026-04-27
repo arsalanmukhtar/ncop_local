@@ -646,6 +646,104 @@ function setupRailFloatingPanelAnchoring() {
   });
 }
 
+/* ============================================================================
+ * STRICT RAIL-PANEL MUTUAL EXCLUSION
+ * ============================================================================
+ * Hard guarantee: at most ONE right-rail panel is visible at any time.
+ *
+ * Each individual control module (geocoder, layer-order, basemap, …) has
+ * its own ad-hoc "close others" list that gets out of sync as new panels
+ * are added (geocoder didn't know about layer-style; basemap doesn't know
+ * about layer-style or geocoder; etc.).  Those lists stay in place — they
+ * fire first, before the panel becomes visible — but they're no longer the
+ * source of truth.
+ *
+ * This central manager observes every panel's visibility (class for
+ * .right-rail-panel members, inline `display` for the three float panels)
+ * and the moment ANY panel transitions to visible, it forcibly closes
+ * everything else.  This catches:
+ *   • Any newly added panel module that forgets to update peer lists.
+ *   • Any panel toggled programmatically (deep links, menu actions) that
+ *     bypasses the click-handler "close others" logic.
+ *   • Float panels (gee-chat / geoglows / story) overlapping rail panels
+ *     and vice-versa.
+ * ========================================================================= */
+const RAIL_PANEL_REGISTRY = [
+  // Class-driven panels
+  { id: "userPanel",            kind: "class",   cls: "user-panel-visible" },
+  { id: "geocoderPanel",        kind: "class",   cls: "visible",
+    btn: { id: "geocoderToggle",   activeCls: "active-geocoder"    } },
+  { id: "basemapPanel",         kind: "class",   cls: "visible" },
+  { id: "projectionPanel",      kind: "class",   cls: "visible" },
+  { id: "layerOrderPanel",      kind: "class",   cls: "visible" },
+  { id: "layerStylePanel",      kind: "class",   cls: "visible",
+    btn: { id: "layerStyleToggle", activeCls: "active-layer-style" } },
+  { id: "layerInfoPanel",       kind: "class",   cls: "visible" },
+  { id: "ncopTourPanel",        kind: "class",   cls: "visible" },
+  // Display-driven float panels
+  { id: "gee-chat-modal",          kind: "display",
+    btn: { id: "geeChat",          activeCls: "active-gee"       } },
+  { id: "geoglows-forecast-panel", kind: "display",
+    btn: { id: "geoglowsForecast", activeCls: "active-geoglows"  } },
+  { id: "story-modal",             kind: "display" },
+];
+
+function setupStrictRailMutualExclusion() {
+  const isVisible = (entry) => {
+    const el = document.getElementById(entry.id);
+    if (!el) return false;
+    if (entry.kind === "class") return el.classList.contains(entry.cls);
+    // display: anything other than "" / "none" is visible
+    const d = el.style.display;
+    return !!(d && d !== "none");
+  };
+
+  const closeEntry = (entry) => {
+    const el = document.getElementById(entry.id);
+    if (!el) return;
+    if (entry.kind === "class") {
+      el.classList.remove(entry.cls);
+    } else {
+      el.style.display = "none";
+    }
+    if (entry.btn) {
+      document.getElementById(entry.btn.id)
+        ?.classList.remove(entry.btn.activeCls);
+    }
+  };
+
+  // Re-entrancy guard — when we close other panels, their observers also
+  // fire (class/style mutated).  We skip processing during that cascade
+  // so we don't loop or accidentally close the panel that just opened.
+  let suppressing = false;
+
+  const closeOthers = (activeId) => {
+    if (suppressing) return;
+    suppressing = true;
+    try {
+      RAIL_PANEL_REGISTRY.forEach((entry) => {
+        if (entry.id === activeId) return;
+        if (isVisible(entry)) closeEntry(entry);
+      });
+    } finally {
+      suppressing = false;
+    }
+  };
+
+  RAIL_PANEL_REGISTRY.forEach((entry) => {
+    const el = document.getElementById(entry.id);
+    if (!el) return;
+    const obs = new MutationObserver(() => {
+      if (suppressing) return;
+      if (isVisible(entry)) closeOthers(entry.id);
+    });
+    obs.observe(el, {
+      attributes: true,
+      attributeFilter: entry.kind === "class" ? ["class"] : ["style"],
+    });
+  });
+}
+
 // Global Initialization
 document.addEventListener("DOMContentLoaded", function () {
   // lucide shim provided by entry
@@ -659,4 +757,5 @@ document.addEventListener("DOMContentLoaded", function () {
   buildUnifiedRightRail();
   setupRailPanelAnchoring();
   setupRailFloatingPanelAnchoring();
+  setupStrictRailMutualExclusion();
 });
