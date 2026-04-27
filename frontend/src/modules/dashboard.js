@@ -393,6 +393,153 @@ if (document.readyState === "loading") {
   setupMapControlsExclusivePanels();
 }
 
+/* ============================================================================
+ * UNIFIED RIGHT-RAIL CONTROL ARCHITECTURE
+ * ============================================================================
+ * Merges the three previously separate right-side wrapper groups
+ *   .custom-user-control          (user button at top)
+ *   .map-controls-wrapper         (layer / info / basemap / tour rail)
+ *   .nav-controls-wrapper         (zoom / 3D / wind / ocean / news / chat …)
+ * into ONE outer container `.map-right-rail` so every right-side icon
+ * lives in a single visual wrapper.
+ *
+ * Every attached panel (basemap, projection, layer-order, layer-info,
+ * tour, user) is moved to be a direct child of #map and given the
+ * `.right-rail-panel` class; CSS in _map-panels.css drives a unified
+ * slide-from-right animation.  This function below sets each panel's
+ * `top` to align with its trigger button and `right` to sit just left
+ * of the rail — uniform spacing, uniform timing.
+ * ========================================================================= */
+const RAIL_PANEL_BUTTON_MAP = {
+  userPanel:       { btnId: "userToggle",       visibleClass: "user-panel-visible" },
+  basemapPanel:    { btnId: "basemapToggle",    visibleClass: "visible" },
+  projectionPanel: { btnId: "projectionSwitch", visibleClass: "visible" },
+  layerOrderPanel: { btnId: "layerOrderToggle", visibleClass: "visible" },
+  layerInfoPanel:  { btnId: "layerInfoToggle",  visibleClass: "visible" },
+  ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
+};
+
+function buildUnifiedRightRail() {
+  const map = document.getElementById("map");
+  if (!map) return;
+
+  let rail = document.querySelector(".map-right-rail");
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.className = "map-right-rail";
+    map.appendChild(rail);
+  }
+
+  // FLATTEN: pull every button out of its legacy wrapper and append it
+  // directly to the rail in this vertical order:
+  //   1. nav-toggle (chevron) — pinned to the TOP so collapse hides
+  //      every other icon while the toggler stays accessible.
+  //   2. user button
+  //   3. .map-controls-wrapper buttons (layer-order / info / basemap /
+  //      tour) in their original render order.
+  //   4. all .custom-nav-btn buttons except the toggler, in their
+  //      original DOM order (zoom +/- → compass → 3D → projection →
+  //      wind → ocean → sensor → locate → news → chat → osm → home →
+  //      story → geoglows → ...).
+  // Buttons keep their original IDs and class names so every existing
+  // event handler attached during render() continues to fire.
+  const buttonOrder = [];
+  const seen = new Set();
+  const push = (el) => {
+    if (el && !seen.has(el)) {
+      seen.add(el);
+      buttonOrder.push(el);
+    }
+  };
+
+  push(document.querySelector(".nav-toggle-btn"));
+  push(document.querySelector(".custom-user-btn"));
+
+  const mapWrapper = document.querySelector(".map-controls-wrapper");
+  if (mapWrapper) {
+    mapWrapper
+      .querySelectorAll(
+        ".custom-layer-btn, .custom-layer-info-btn, .custom-basemap-btn, .custom-tour-btn"
+      )
+      .forEach(push);
+  }
+
+  document
+    .querySelectorAll(".custom-nav-control .custom-nav-btn:not(.nav-toggle-btn)")
+    .forEach(push);
+
+  buttonOrder.forEach((b) => {
+    rail.appendChild(b);
+    b.classList.add("rail-btn");
+  });
+
+  // The legacy wrappers are now empty husks of nested divs — hide them
+  // outright so they don't claim layout space anywhere on the map.
+  [
+    ".custom-user-control",
+    ".map-controls-wrapper",
+    ".nav-controls-wrapper",
+  ].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.style.display = "none";
+  });
+
+  // Lift attached panels out of their button containers into #map so
+  // they share the unified anchoring + slide-from-right animation.
+  Object.keys(RAIL_PANEL_BUTTON_MAP).forEach((panelId) => {
+    const p = document.getElementById(panelId);
+    if (!p) return;
+    if (p.parentElement !== map) map.appendChild(p);
+    p.classList.add("right-rail-panel");
+  });
+
+  // Wire the chevron toggler.  The original #handleNavToggle in
+  // navigation-panel.js still fires (it flips the chevron icon and
+  // toggles `.collapsed` on the now-hidden #navControlsContainer); we
+  // ALSO toggle `.collapsed` on the rail so the visible UI actually
+  // collapses every icon except the toggler itself.
+  const toggle = rail.querySelector(".nav-toggle-btn");
+  if (toggle && !toggle.dataset.railToggleWired) {
+    toggle.dataset.railToggleWired = "true";
+    toggle.addEventListener("click", () => {
+      rail.classList.toggle("collapsed");
+    });
+  }
+}
+
+function anchorRailPanelsToButtons() {
+  const map = document.getElementById("map");
+  const rail = document.querySelector(".map-right-rail");
+  if (!map || !rail) return;
+
+  const mapRect = map.getBoundingClientRect();
+  const railRect = rail.getBoundingClientRect();
+  // 8 px of breathing room between the panel and the rail.
+  const rightOffset = mapRect.right - railRect.left + 8;
+
+  Object.entries(RAIL_PANEL_BUTTON_MAP).forEach(([panelId, { btnId }]) => {
+    const panel = document.getElementById(panelId);
+    const btn = document.getElementById(btnId);
+    if (!panel || !btn) return;
+
+    const btnRect = btn.getBoundingClientRect();
+    panel.style.top = `${btnRect.top - mapRect.top}px`;
+    panel.style.right = `${rightOffset}px`;
+  });
+}
+
+function setupRailPanelAnchoring() {
+  const rail = document.querySelector(".map-right-rail");
+  if (rail) {
+    // Capture phase so anchoring runs BEFORE the button's own click
+    // handler toggles `.visible` — otherwise the panel briefly animates
+    // from its stale position.
+    rail.addEventListener("click", anchorRailPanelsToButtons, true);
+  }
+  window.addEventListener("resize", anchorRailPanelsToButtons);
+  requestAnimationFrame(anchorRailPanelsToButtons);
+}
+
 // Global Initialization
 document.addEventListener("DOMContentLoaded", function () {
   // lucide shim provided by entry
@@ -400,4 +547,9 @@ document.addEventListener("DOMContentLoaded", function () {
     window.lucide.createIcons();
   }
   new DashboardManager().init();
+
+  // Right-side controls: merge into one rail and unify panel anchoring.
+  // Must run AFTER DashboardManager.init() so all wrapper groups exist.
+  buildUnifiedRightRail();
+  setupRailPanelAnchoring();
 });

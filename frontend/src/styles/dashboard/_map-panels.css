@@ -365,3 +365,54 @@
     }
 }
 
+/* ==========================================================================
+   UNIFIED RIGHT-RAIL PANELS
+   ==========================================================================
+   When dashboard.js#buildUnifiedRightRail moves panels out to be siblings
+   of #map, it stamps them with `.right-rail-panel`.  These rules then
+   take over: every panel uses the same slide-from-right animation, the
+   same transition timing, and is anchored to its trigger button via
+   inline `top` / `right` set by anchorRailPanelsToButtons().
+
+   Per-panel positioning rules above (e.g. basemap-panel right: 42px,
+   projection-panel bottom: 50px, ncop-tour-panel right: calc(100% + 12px))
+   are overridden here with !important so the unified anchoring wins.
+   ========================================================================== */
+.right-rail-panel {
+    position: absolute !important;
+    bottom: auto !important;
+    left: auto !important;
+    /* top + right are set inline by anchorRailPanelsToButtons() */
+    transform: translateX(20px) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    transition:
+        transform 0.28s cubic-bezier(0.32, 0.72, 0.34, 1),
+        opacity 0.22s ease,
+        visibility 0s linear 0.28s !important;
+    z-index: 1001 !important;
+}
+
+/* Tour panel uses display:block/none in its own stylesheet — force it
+   to render so the transform/opacity transition can take effect. */
+#ncopTourPanel.right-rail-panel {
+    display: block !important;
+}
+
+/* Each panel reveals via its own visibility class:
+     userPanel    → .user-panel-visible
+     all others   → .visible
+   Same outcome: full opacity, translateX(0), interactive. */
+#userPanel.right-rail-panel.user-panel-visible,
+.right-rail-panel.visible {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+    transition:
+        transform 0.28s cubic-bezier(0.32, 0.72, 0.34, 1),
+        opacity 0.22s ease,
+        visibility 0s linear 0s !important;
+}
+
