@@ -471,6 +471,9 @@ button.custom-nav-btn.active-ocean {
     width: 320px !important;
     height: 480px !important;
     max-width: calc(100vw - 80px) !important;
+    /* Override the legacy 20 px outer radius so the input footer's
+       rounded bottom corners (set below to 12 px) match exactly. */
+    border-radius: 12px !important;
 }
 
 #geoglows-forecast-panel.right-rail-float-panel {
@@ -480,7 +483,378 @@ button.custom-nav-btn.active-ocean {
 }
 
 #story-modal.right-rail-float-panel {
-    width: 320px !important;
+    /* 320 px clipped the trailing pencil/edit button; widen to fit
+       "Select story…" dropdown + 28 px button + container padding. */
+    width: 360px !important;
     max-width: calc(100vw - 80px) !important;
     max-height: calc(100vh - 40px) !important;
+}
+
+/* ======================================================================
+   FLOATING PANEL — INTERNAL CONTENT SCALING
+   ======================================================================
+   Outer container placement and overall panel size are NOT touched;
+   only descendants of the three rail-anchored panels are restyled so
+   the content reads tight and professional at the panel's compact
+   width.  Each panel becomes a strict header/body/footer flex column
+   so the body region is the only thing that scrolls when content
+   overflows; the chrome (header / footer) stays anchored.
+   ====================================================================== */
+
+/* IMPORTANT: gate the flex layout on the panel NOT being hidden via
+   inline `style.display: none` — otherwise `display: flex !important`
+   would beat the handlers' `style.display = "none"` and the panels
+   would all stay visible on page load.  The :not() attribute selectors
+   match every visible state (block / flex / "" / unset) and skip only
+   the closed state. */
+#gee-chat-modal.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]),
+#geoglows-forecast-panel.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]),
+#story-modal.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]) {
+    /* Switch the panels themselves to flex columns and clip their own
+       overflow so the inner body region owns the scrollbar. */
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+/* ---- 1. GeoGLOWS panel internals -----------------------------------
+   Keep the shell's original opaque dark background, border, radius
+   and shadow — stripping them earlier left the panel transparent and
+   the map showed through.  Only the layout is forced here: the shell
+   becomes the active flex column so the body region can own the
+   scroll. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-shell {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 12px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-header {
+    flex-shrink: 0 !important;
+    gap: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-logo {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    border-radius: 8px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-logo img {
+    width: 26px !important;
+    height: 26px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-info {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-kicker {
+    font-size: 9px !important;
+    letter-spacing: 0.06em !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    margin-top: 1px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-subtitle {
+    font-size: 10.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 4px !important;
+}
+
+/* The action row was "Mode pill | three buttons" on a single line —
+   too tight at 380 px.  Stack the mode pill above the button row so
+   the buttons get full width to share. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-actions {
+    flex-shrink: 0 !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label-wrap {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label-caption {
+    font-size: 9px !important;
+    letter-spacing: 0.06em !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label {
+    min-height: 24px !important;
+    padding: 4px 10px !important;
+    font-size: 10.5px !important;
+    border-radius: 999px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-button-row {
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-view-btn,
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-unit-btn,
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-clear-btn {
+    flex: 1 1 0 !important;
+    padding: 6px 8px !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    min-height: 28px !important;
+    white-space: nowrap !important;
+}
+
+/* The body region is the only scrollable area inside the panel. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    gap: 8px !important;
+    padding-right: 4px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-state {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-title {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-copy {
+    font-size: 10.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 4px !important;
+}
+
+/* ---- 2. GEE Chat modal internals ----------------------------------- */
+#gee-chat-modal.right-rail-float-panel .gee-chat-header {
+    flex-shrink: 0 !important;
+    padding: 8px 10px !important;
+    /* Match the panel's outer 12 px radius on the top corners so the
+       header doesn't visually under-round the panel rim. */
+    border-radius: 12px 12px 0 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-title {
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    /* Single-line so "Earth Engine Data Assistant" doesn't wrap. */
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-title svg,
+#gee-chat-modal.right-rail-float-panel .gee-chat-title i {
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatClose {
+    width: 22px !important;
+    height: 22px !important;
+    flex-shrink: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatClose svg,
+#gee-chat-modal.right-rail-float-panel #geeChatClose i {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+/* Messages list = the scrollable body */
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
+    gap: 8px !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-message {
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+    border-radius: 10px !important;
+    max-width: 92% !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-input-wrapper {
+    flex-shrink: 0 !important;
+    padding: 8px !important;
+    gap: 6px !important;
+    /* Match the panel's outer 12 px radius so the bottom rim aligns. */
+    border-radius: 0 0 12px 12px !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatInput {
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    border-radius: 7px !important;
+    min-width: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatSend {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 7px !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatSend svg,
+#gee-chat-modal.right-rail-float-panel #geeChatSend i {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* ---- 3. Story modal internals -------------------------------------- */
+/* The story modal markup uses inline-styled wrapper divs (no class
+   names), so we have to address them positionally.  First child div =
+   header row; #story-root = body. */
+#story-modal.right-rail-float-panel > div:first-child {
+    flex-shrink: 0 !important;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+}
+
+#story-modal.right-rail-float-panel > div:first-child > div:first-child > div:first-of-type {
+    /* "Story" title */
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+}
+
+#story-modal.right-rail-float-panel > div:first-child > div:first-child > div:nth-of-type(2) {
+    /* "Create, pick and play interactive chapters" subtitle */
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+    margin-top: 1px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
+    font-size: 11.5px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select-container {
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    padding: 5px 8px !important;
+    font-size: 11.5px !important;
+    border-radius: 7px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-meta {
+    font-size: 10.5px !important;
+    margin-bottom: 4px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-chapters {
+    gap: 6px !important;
+    max-height: 40vh !important;
+}
+
+/* The pencil "edit" button next to the dropdown — shrink to match the
+   compact dropdown height. */
+#story-modal.right-rail-float-panel #story-root .story-select-container button {
+    width: 24px !important;
+    height: 24px !important;
+    padding: 0 !important;
+    flex-shrink: 0 !important;
+    border-radius: 6px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select-container button svg,
+#story-modal.right-rail-float-panel #story-root .story-select-container button i {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+/* Story modal close (X) button — overrides the legacy `.custom-nav-btn`
+   32 px geometry so the chrome stays compact. */
+#story-modal.right-rail-float-panel #storyCloseBtn {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 6px !important;
+    border: 1px solid var(--border-dark) !important;
+    flex-shrink: 0 !important;
+}
+
+#story-modal.right-rail-float-panel #storyCloseBtn svg,
+#story-modal.right-rail-float-panel #storyCloseBtn i {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+/* ----------------------------------------------------------------------
+   HOME button — strip the legacy green default so it matches the rest
+   of the rail.  Selectors `.map-right-rail #homeExtent.rail-btn` and
+   `.map-right-rail button#homeExtent.custom-nav-btn.rail-btn` carry
+   higher specificity than the legacy `button#homeExtent.custom-nav-btn`
+   green rule (extra `.map-right-rail` ancestor class).
+   -------------------------------------------------------------------- */
+.map-right-rail button#homeExtent.rail-btn,
+.map-right-rail #homeExtent.custom-nav-btn.rail-btn {
+    background: transparent !important;
+    border-color: var(--rail-border) !important;
+    color: var(--white) !important;
+}
+
+.map-right-rail button#homeExtent.rail-btn:hover,
+.map-right-rail #homeExtent.custom-nav-btn.rail-btn:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: var(--rail-border) !important;
+    color: var(--white) !important;
+}
+
+/* ---- Slim themed scrollbars for the three body regions ------------- */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar {
+    width: 4px;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar-thumb,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar-thumb,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar-thumb {
+    background: var(--rail-border);
+    border-radius: 2px;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar-track,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar-track,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar-track {
+    background: transparent;
 }
