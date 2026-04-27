@@ -2090,8 +2090,7 @@ export class NavigationPanel {
         <div class="news-loading" role="status" aria-live="polite">
           <span class="news-loading-label">Loading news…</span>
           <div class="news-loading-track" aria-hidden="true">
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
           </div>
         </div>
       `;

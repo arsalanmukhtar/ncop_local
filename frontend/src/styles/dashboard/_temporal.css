@@ -1153,10 +1153,16 @@
 }
 
 .toggle-btn.active {
-    background: var(--ndma-blue-glow);
-    border-color: var(--ndma-blue-light);
-    color: var(--ndma-blue);
-    box-shadow: 0 0 8px rgba(70, 178, 255, 0.3);
+    background: var(--ndma-green);
+    border-color: var(--ndma-green);
+    color: #fff;
+    box-shadow: 0 0 10px var(--ndma-green-glow);
+}
+
+.toggle-btn.active img {
+    /* White-icon assets read cleanly on the bright green fill in
+       both day and night themes. */
+    filter: none;
 }
 
 [data-theme="night"] .toggle-btn.active img {
@@ -1441,12 +1447,10 @@
 }
 
 .news-loading-track span:nth-child(1) { animation-delay: 0s;    }
-.news-loading-track span:nth-child(2) { animation-delay: 0.15s; }
-.news-loading-track span:nth-child(3) { animation-delay: 0.30s; }
-.news-loading-track span:nth-child(4) { animation-delay: 0.45s; }
-.news-loading-track span:nth-child(5) { animation-delay: 0.60s; }
-.news-loading-track span:nth-child(6) { animation-delay: 0.75s; }
-.news-loading-track span:nth-child(7) { animation-delay: 0.90s; }
+.news-loading-track span:nth-child(2) { animation-delay: 0.21s; }
+.news-loading-track span:nth-child(3) { animation-delay: 0.42s; }
+.news-loading-track span:nth-child(4) { animation-delay: 0.63s; }
+.news-loading-track span:nth-child(5) { animation-delay: 0.84s; }
 
 @keyframes news-loading-float {
     0%   { left: 0;                 opacity: 0; transform: scale(0.6); }
