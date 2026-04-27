@@ -2079,6 +2079,24 @@ export class NavigationPanel {
    * @param {boolean} includeSM - Include social media or just regular
    */
   async #fetchNews(includeSM = false) {
+    // Render the loading animation immediately so the user gets feedback
+    // the moment they click a toggle.  Using `.is-loading` neutralizes
+    // the marquee animation so the dots stay centered instead of being
+    // dragged off-screen by the scroll-left keyframes.
+    const preContainer = document.getElementById("news-scroll");
+    if (preContainer) {
+      preContainer.classList.add("is-loading");
+      preContainer.innerHTML = `
+        <div class="news-loading" role="status" aria-live="polite">
+          <span class="news-loading-label">Loading news…</span>
+          <div class="news-loading-track" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+    }
+
     try {
       const url = includeSM
         ? `${
@@ -2102,6 +2120,7 @@ export class NavigationPanel {
         return;
       }
 
+      container.classList.remove("is-loading");
       container.innerHTML = "";
 
       // No data case
@@ -2194,6 +2213,7 @@ export class NavigationPanel {
       console.error("❌ Error fetching news:", error);
       const container = document.getElementById("news-scroll");
       if (container) {
+        container.classList.remove("is-loading");
         container.innerHTML = `
           <div class="news-error">
               <strong>Failed to load news</strong>

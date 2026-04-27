@@ -1391,6 +1391,89 @@
     line-height: 1.2;
 }
 
+/* ---- loading state ----------------------------------------------
+   Adapted from three-dots' `.dot-floating` recipe — a wave of dots
+   floating left → right.  Original uses 3 dots (host + ::before +
+   ::after); we use 7 real <span> children inside `.news-loading-track`
+   for a denser, more confident "fetching…" feel.  The marquee
+   `scroll-left` animation is suppressed via `.is-loading` so the
+   dots stay centered instead of being dragged off-screen. */
+.news-scroll.is-loading {
+    animation: none !important;
+    width: 100%;
+    justify-content: center;
+}
+
+.news-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 16px;
+}
+
+.news-loading-label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.news-loading-track {
+    position: relative;
+    width: 220px;
+    height: 10px;
+}
+
+.news-loading-track span {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--ndma-blue);
+    box-shadow: 0 0 6px var(--ndma-blue-glow);
+    opacity: 0;
+    animation: news-loading-float 2.1s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.news-loading-track span:nth-child(1) { animation-delay: 0s;    }
+.news-loading-track span:nth-child(2) { animation-delay: 0.15s; }
+.news-loading-track span:nth-child(3) { animation-delay: 0.30s; }
+.news-loading-track span:nth-child(4) { animation-delay: 0.45s; }
+.news-loading-track span:nth-child(5) { animation-delay: 0.60s; }
+.news-loading-track span:nth-child(6) { animation-delay: 0.75s; }
+.news-loading-track span:nth-child(7) { animation-delay: 0.90s; }
+
+@keyframes news-loading-float {
+    0%   { left: 0;                 opacity: 0; transform: scale(0.6); }
+    18%  { opacity: 1;              transform: scale(1);   }
+    82%  { opacity: 1;              transform: scale(1);   }
+    100% { left: calc(100% - 8px);  opacity: 0; transform: scale(0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .news-loading-track span {
+        animation: news-loading-pulse 1.6s infinite ease-in-out;
+        left: auto;
+        position: relative;
+        display: inline-block;
+        margin-right: 4px;
+    }
+    .news-loading-track {
+        display: flex;
+        gap: 4px;
+        width: auto;
+    }
+    @keyframes news-loading-pulse {
+        0%, 100% { opacity: 0.25; }
+        50%      { opacity: 1;    }
+    }
+}
+
 /* ---- empty + error states ---------------------------------------- */
 .news-empty,
 .news-error {
