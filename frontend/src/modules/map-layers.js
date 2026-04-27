@@ -1868,7 +1868,7 @@ export const ncop_menu_items = {
         cams_air_quality_index_hourly: {
           label: "Air Quality Index (AQI) Hourly",
           image: getImage("meteoblue_cams_aqi_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AQI",
           information: "The CAMS Air Quality Index (AQI) Hourly layer displays hourly forecasts of overall air quality. The index ranges from good (green) to hazardous (purple), providing an easy-to-understand measure of air pollution levels.",
@@ -1876,7 +1876,7 @@ export const ncop_menu_items = {
         cams_air_quality_index_daily: {
           label: "Air Quality Index (AQI) Daily",
           image: getImage("meteoblue_cams_aqi_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AQI",
           information: "The CAMS Air Quality Index (AQI) Daily layer displays daily average forecasts of overall air quality. This layer helps in understanding air quality trends over multiple days.",
@@ -1884,7 +1884,7 @@ export const ncop_menu_items = {
         cams_desert_dust_hourly: {
           label: "Desert Dust Hourly Forecast",
           image: getImage("meteoblue_cams_desert_dust_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "Desert Dust (µg/m³)",
           information: "The Desert Dust Hourly Forecast layer displays hourly predictions of desert dust concentrations. This is particularly important for monitoring dust storms and their impact on air quality and visibility.",
@@ -1892,7 +1892,7 @@ export const ncop_menu_items = {
         cams_desert_dust_daily: {
           label: "Desert Dust Daily Forecast",
           image: getImage("meteoblue_cams_desert_dust_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "Desert Dust (µg/m³)",
           information: "The Desert Dust Daily Forecast layer displays daily average predictions of desert dust concentrations, useful for medium-term air quality planning.",
@@ -1900,7 +1900,7 @@ export const ncop_menu_items = {
         cams_aerosol_optical_depth_hourly: {
           label: "Aerosol Optical Depth (AOD) Hourly",
           image: getImage("meteoblue_cams_aod_hourly.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AOD",
           information: "The Aerosol Optical Depth (AOD) Hourly layer measures the extinction of solar radiation by aerosols in the atmosphere. Higher AOD values indicate more aerosols and reduced visibility.",
@@ -1908,7 +1908,7 @@ export const ncop_menu_items = {
         cams_aerosol_optical_depth_daily: {
           label: "Aerosol Optical Depth (AOD) Daily",
           image: getImage("meteoblue_cams_aod_hourly.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AOD",
           information: "The Aerosol Optical Depth (AOD) Daily layer provides daily average forecasts of atmospheric aerosol levels, useful for air quality monitoring and climate studies.",
@@ -1916,7 +1916,7 @@ export const ncop_menu_items = {
         cams_nitrogen_dioxide_daily: {
           label: "Nitrogen Dioxide (NO₂) Daily Forecast",
           image: getImage("meteoblue_cams_no2_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "NO₂ (µg/m³)",
           information: "The Nitrogen Dioxide (NO₂) Daily Forecast layer displays daily predictions of NO₂ concentrations. NO₂ is a major air pollutant primarily from combustion processes and vehicle emissions.",
@@ -1924,7 +1924,7 @@ export const ncop_menu_items = {
         cams_carbon_monoxide_daily: {
           label: "Carbon Monoxide (CO) Daily Forecast",
           image: getImage("meteoblue_cams_co_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "CO (µg/m³)",
           information: "The Carbon Monoxide (CO) Daily Forecast layer displays daily predictions of CO concentrations. CO is a colorless, odorless gas produced by incomplete combustion and is harmful to human health.",
@@ -1932,7 +1932,7 @@ export const ncop_menu_items = {
         cams_sulphur_dioxide_daily: {
           label: "Sulphur Dioxide (SO₂) Daily Forecast",
           image: getImage("meteoblue_cams_so2_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "SO₂ (µg/m³)",
           information: "The Sulphur Dioxide (SO₂) Daily Forecast layer displays daily predictions of SO₂ concentrations. SO₂ is a major air pollutant from industrial processes and fossil fuel combustion.",
@@ -2621,65 +2621,65 @@ export const ncop_menu_items = {
         },
       },
     },
-    "DEW Parameters": {
-      button: {
-        tech_ew: {
-          label: "Tech EW",
-          color: "#FF5733", // Bright Orange-Red (Existing)
-          outline: "#C70039", // Dark Red (Existing)
-        },
-        nidm: {
-          label: "NIDM",
-          color: "#3366FF", // Royal Blue (Formal/Professional)
-          outline: "#0033CC",
-        },
-        mobile_app: {
-          label: "Mobile App",
-          color: "#00CC99", // Teal (Modern/Digital)
-          outline: "#008066",
-        },
-        media_comm: {
-          label: "Media Comm",
-          color: "#FFC300", // Gold/Amber (Communication/Alerts)
-          outline: "#CC9900",
-        },
-        drr: {
-          label: "DRR",
-          color: "#339933", // Forest Green (Safety/Environment)
-          outline: "#1E661E",
-        },
-        infra_development: {
-          label: "Infra Development",
-          color: "#607D8B", // Slate Blue-Gray (Structure/Construction)
-          outline: "#455A64",
-        },
-        operations: {
-          label: "Operations",
-          color: "#CC0066", // Deep Magenta (Action/Management)
-          outline: "#99004C",
-        },
-        plans: {
-          label: "Plans",
-          color: "#663399", // Deep Purple (Strategy/Planning)
-          outline: "#4C2673",
-        },
-        intl_colaboration: {
-          label: "Intl Collaboration",
-          color: "#33CCFF", // Bright Sky Blue (Global/Partnership)
-          outline: "#0099CC",
-        },
-        rm_and_m: {
-          label: "RM & M",
-          color: "#996633", // Earthy Brown (Resource Management)
-          outline: "#664422",
-        },
-        cdrf: {
-          label: "CDRF",
-          color: "#00BFA5", // Mint Teal (Finance/Sustainability)
-          outline: "#00897B",
-        },
-      },
-    },
+    // "DEW Parameters": {
+    //   button: {
+    //     tech_ew: {
+    //       label: "Tech EW",
+    //       color: "#FF5733", // Bright Orange-Red (Existing)
+    //       outline: "#C70039", // Dark Red (Existing)
+    //     },
+    //     nidm: {
+    //       label: "NIDM",
+    //       color: "#3366FF", // Royal Blue (Formal/Professional)
+    //       outline: "#0033CC",
+    //     },
+    //     mobile_app: {
+    //       label: "Mobile App",
+    //       color: "#00CC99", // Teal (Modern/Digital)
+    //       outline: "#008066",
+    //     },
+    //     media_comm: {
+    //       label: "Media Comm",
+    //       color: "#FFC300", // Gold/Amber (Communication/Alerts)
+    //       outline: "#CC9900",
+    //     },
+    //     drr: {
+    //       label: "DRR",
+    //       color: "#339933", // Forest Green (Safety/Environment)
+    //       outline: "#1E661E",
+    //     },
+    //     infra_development: {
+    //       label: "Infra Development",
+    //       color: "#607D8B", // Slate Blue-Gray (Structure/Construction)
+    //       outline: "#455A64",
+    //     },
+    //     operations: {
+    //       label: "Operations",
+    //       color: "#CC0066", // Deep Magenta (Action/Management)
+    //       outline: "#99004C",
+    //     },
+    //     plans: {
+    //       label: "Plans",
+    //       color: "#663399", // Deep Purple (Strategy/Planning)
+    //       outline: "#4C2673",
+    //     },
+    //     intl_colaboration: {
+    //       label: "Intl Collaboration",
+    //       color: "#33CCFF", // Bright Sky Blue (Global/Partnership)
+    //       outline: "#0099CC",
+    //     },
+    //     rm_and_m: {
+    //       label: "RM & M",
+    //       color: "#996633", // Earthy Brown (Resource Management)
+    //       outline: "#664422",
+    //     },
+    //     cdrf: {
+    //       label: "CDRF",
+    //       color: "#00BFA5", // Mint Teal (Finance/Sustainability)
+    //       outline: "#00897B",
+    //     },
+    //   },
+    // },
   },
 };
 window.ncop_menu_items = ncop_menu_items;
