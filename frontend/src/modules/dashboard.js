@@ -29,6 +29,7 @@ import { ProjectionPanel, BasemapPanel } from "./map-display-panels.js";
 import { SidebarMenu } from "./sidebar-menu.js";
 import { UserControl, NCOPTourControl } from "./nav-controls.js";
 import { GeocoderControl } from "./geocoder-control.js";
+import { LayerStyleConfig } from "./layer-style-config.js";
 import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
@@ -117,6 +118,7 @@ class DashboardManager {
     new GeocoderControl(this.#map);
     new BasemapPanel(this.#map, this.#mapControls);
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
+    new LayerStyleConfig(this.#map, this.#sourceLayerControl);
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
     new NCOPTourControl();
     new SidebarMenu();
@@ -421,6 +423,7 @@ const RAIL_PANEL_BUTTON_MAP = {
   basemapPanel:    { btnId: "basemapToggle",    visibleClass: "visible" },
   projectionPanel: { btnId: "projectionSwitch", visibleClass: "visible" },
   layerOrderPanel: { btnId: "layerOrderToggle", visibleClass: "visible" },
+  layerStylePanel: { btnId: "layerStyleToggle", visibleClass: "visible" },
   layerInfoPanel:  { btnId: "layerInfoToggle",  visibleClass: "visible" },
   ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
 };
@@ -467,11 +470,14 @@ function buildUnifiedRightRail() {
 
   const mapWrapper = document.querySelector(".map-controls-wrapper");
   if (mapWrapper) {
-    mapWrapper
-      .querySelectorAll(
-        ".custom-layer-btn, .custom-layer-info-btn, .custom-basemap-btn, .custom-tour-btn"
-      )
-      .forEach(push);
+    // Pushed individually so the layer-style button (palette) can be
+    // injected between layer-order and layer-info — matching the spot
+    // marked between the two arrow icons in the design.
+    push(mapWrapper.querySelector(".custom-layer-btn"));
+    push(document.querySelector(".custom-layer-style-btn"));
+    push(mapWrapper.querySelector(".custom-layer-info-btn"));
+    push(mapWrapper.querySelector(".custom-basemap-btn"));
+    push(mapWrapper.querySelector(".custom-tour-btn"));
   }
 
   // Nav buttons EXCEPT the zoom triplet (zoomIn / zoomOut / resetBearing)

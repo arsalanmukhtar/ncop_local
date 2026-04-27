@@ -52,6 +52,11 @@ export class LayerInfoPanel {
       this.togglePanel();
       // Hide layer order panel
       document.getElementById("layerOrderPanel")?.classList.remove("visible");
+      // Hide layer style panel
+      document.getElementById("layerStylePanel")?.classList.remove("visible");
+      document
+        .getElementById("layerStyleToggle")
+        ?.classList.remove("active-layer-style");
       // Hide basemap panel
       document.getElementById("basemapPanel")?.classList.remove("visible");
     });
@@ -457,6 +462,13 @@ export class LayerOrderControl {
           document
             .getElementById("layerInfoPanel")
             ?.classList.remove("visible");
+          // Hide layer style panel
+          document
+            .getElementById("layerStylePanel")
+            ?.classList.remove("visible");
+          document
+            .getElementById("layerStyleToggle")
+            ?.classList.remove("active-layer-style");
           // Hide basemap panel
           document.getElementById("basemapPanel")?.classList.remove("visible");
         });

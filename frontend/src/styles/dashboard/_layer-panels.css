@@ -747,3 +747,643 @@
     display: none;
 }
 
+/* ==========================================================================
+   LAYER STYLE CONFIG  —  rail button (#layerStyleToggle, palette icon) and
+   attached panel (#layerStylePanel).  Ported visually from
+   misc/style-config.html with day/night theme tokens substituting for
+   the reference's Tailwind utility colors.  The rail button follows the
+   exact same bg + backdrop-filter consistency rules used by the geocoder
+   button so it tile-matches the rest of the rail.
+   ========================================================================== */
+
+/* Wrapper is empty after buildUnifiedRightRail moves the button onto the
+   rail — keep it visually absent. */
+.custom-layer-style-control {
+    display: none !important;
+}
+
+/* Rail-button visual parity with neighbors */
+.map-right-rail > .custom-layer-style-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.map-right-rail > .custom-layer-style-btn:hover {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-layer-style-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-layer-style-btn:hover {
+    background: var(--glass-highlight) !important;
+}
+
+.map-right-rail > .custom-layer-style-btn.active-layer-style {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ----- Panel shell ------------------------------------------------------- */
+#layerStylePanel.layer-style-panel {
+    width: 360px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: 80vh !important;
+    background: var(--primary-bg) !important;
+    border: 2px solid var(--border-light) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text-primary);
+}
+
+/* Avoid flash before buildUnifiedRightRail anchors the panel */
+#layerStylePanel.layer-style-panel:not(.visible):not([style*="display: none"]):not([style*="display:none"]) {
+    /* right-rail-panel base rule already hides; this is a noop guard */
+}
+
+/* ----- Header ------------------------------------------------------------ */
+.layer-style-panel .lsp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--overlay-bg);
+    flex: none;
+}
+
+.layer-style-panel .lsp-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.layer-style-panel .lsp-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-subtitle {
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.layer-style-panel .lsp-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-close i,
+.layer-style-panel .lsp-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ----- Body (scrollable) ------------------------------------------------- */
+.layer-style-panel .lsp-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-top: 6px;
+    padding-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.layer-style-panel .lsp-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.layer-style-panel .lsp-body::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+    border-radius: 3px;
+}
+
+/* ----- Generic row ------------------------------------------------------- */
+.layer-style-panel .lsp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 32px;
+    padding: 6px 16px;
+}
+
+.layer-style-panel .lsp-row-label {
+    flex: none;
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+.layer-style-panel .lsp-row:hover .lsp-row-label {
+    color: var(--text-secondary);
+}
+
+.layer-style-panel .lsp-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ----- Native <select> wrapped to draw our own caret -------------------- */
+.layer-style-panel .lsp-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 120px;
+}
+
+.layer-style-panel .lsp-native-select {
+    /* color-scheme: dark forces Chromium / Firefox to render the native
+       option-list popup with dark UA chrome (dark bg, light text) instead
+       of switching to light mode and clashing with our overrides.  This
+       is the root fix for the dark-on-dark "id / inflow_*" illegibility. */
+    color-scheme: dark;
+    flex: 1;
+    width: 100%;
+    padding: 6px 26px 6px 10px;
+    /* Opaque-ish bg so the closed select reads cleanly against the
+       blurred panel — translucent rgba was letting the body show through
+       and dragging contrast below readability. */
+    background: rgba(20, 23, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    outline: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.2;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.15s ease, background 0.15s ease,
+        box-shadow 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.layer-style-panel .lsp-native-select:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(30, 34, 38, 0.95);
+}
+
+.layer-style-panel .lsp-native-select:focus-visible {
+    border-color: var(--ndma-blue);
+    box-shadow: 0 0 0 2px var(--ndma-blue-glow);
+}
+
+.layer-style-panel .lsp-native-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* Native option list — Chromium / Firefox / Edge respect background-color
+   and color on <option>.  We force solid dark bg + bright white text so
+   neither the OS dark-mode chrome nor our translucent panel can drag the
+   contrast down. */
+.layer-style-panel .lsp-native-select option {
+    background-color: #14171a;
+    color: #ffffff;
+    padding: 6px 8px;
+    font-weight: 400;
+}
+
+.layer-style-panel .lsp-native-select option:checked {
+    background: var(--ndma-blue) linear-gradient(0deg, var(--ndma-blue), var(--ndma-blue));
+    color: #ffffff;
+    font-weight: 500;
+}
+
+/* Night theme — slightly elevated tone for the closed select and a
+   navy-tinted option popup so it sits comfortably in the night palette. */
+[data-theme="night"] .layer-style-panel .lsp-native-select {
+    background: rgba(31, 38, 48, 0.95);
+    border-color: rgba(255, 255, 255, 0.20);
+    /* --text-primary flips to near-black in night theme so the day-mode
+       inheritance would render the closed-state value as dark-on-dark.
+       Force light explicitly. */
+    color: #ffffff;
+}
+
+[data-theme="night"] .layer-style-panel .lsp-native-select:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(42, 50, 62, 0.97);
+}
+
+[data-theme="night"] .layer-style-panel .lsp-native-select option {
+    background-color: #1f2630;
+    color: #ffffff;
+}
+
+.layer-style-panel .lsp-select-caret {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.layer-style-panel .lsp-select-caret svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ----- Empty state ------------------------------------------------------- */
+.layer-style-panel .lsp-empty-state {
+    margin: 16px;
+    padding: 14px;
+    background: var(--overlay-bg);
+    border: 1px dashed var(--border-dark);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* ----- Section header (STYLE / LABELS) ----------------------------------- */
+.layer-style-panel .lsp-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border-dark);
+    border-bottom: 1px solid var(--border-dark);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.layer-style-panel .lsp-section-header:first-of-type {
+    margin-top: 8px;
+}
+
+.layer-style-panel .lsp-section-titlewrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: default;
+}
+
+.layer-style-panel .lsp-collapse-btn {
+    cursor: pointer;
+}
+
+.layer-style-panel .lsp-section-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-collapse-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.layer-style-panel .lsp-collapse-chevron svg {
+    width: 14px;
+    height: 14px;
+}
+
+.layer-style-panel .lsp-labels-header[data-collapsed="true"] .lsp-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+/* ----- Geometry pill (Line / Point / Polygon) ---------------------------- */
+.layer-style-panel .lsp-geometry-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 7px;
+    border: 1px solid var(--ndma-blue-light);
+    border-radius: 999px;
+    background: var(--ndma-blue-glow);
+    color: var(--ndma-blue);
+    /* Pin to the icon's box height so both children share the exact
+       same flex cross-axis size — eliminates the optical-vs-box-center
+       drift that kicks in when the text's line-box differs from the
+       icon's. */
+    line-height: 12px;
+}
+
+.layer-style-panel .lsp-geometry-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    color: var(--ndma-blue);
+}
+
+.layer-style-panel .lsp-geometry-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+.layer-style-panel .lsp-geometry-label {
+    display: inline-flex;
+    align-items: center;
+    height: 12px;
+    font-size: 11px;
+    line-height: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ndma-blue);
+}
+
+/* ----- Controls group (Width / Color / Opacity / …) ---------------------- */
+.layer-style-panel .lsp-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+/* ----- Slider control ---------------------------------------------------- */
+.layer-style-panel .lsp-control--slider {
+    width: 140px;
+    flex: 0 0 140px;
+    gap: 12px;
+}
+
+.layer-style-panel .lsp-slider {
+    position: relative;
+    flex: 1;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.layer-style-panel .lsp-slider-track {
+    position: relative;
+    width: 100%;
+    height: 3px;
+    background: var(--overlay-bg);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.layer-style-panel .lsp-slider-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--ndma-blue);
+    border-radius: 999px;
+}
+
+.layer-style-panel .lsp-slider-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    background: #fff;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.layer-style-panel .lsp-value {
+    flex: none;
+    min-width: 38px;
+    padding: 2px 6px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: right;
+    color: var(--text-muted);
+}
+
+/* ----- Color swatch (label wraps a hidden native color input) ----------- */
+.layer-style-panel .lsp-swatch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 4px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: border-color 0.15s ease;
+}
+
+.layer-style-panel .lsp-swatch:hover {
+    border-color: var(--border-light);
+}
+
+.layer-style-panel .lsp-swatch-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.layer-style-panel .lsp-swatch-chip {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.layer-style-panel .lsp-swatch-hex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+/* ----- Segmented control ------------------------------------------------- */
+.layer-style-panel .lsp-segmented {
+    display: flex;
+    flex: 1;
+    padding: 2px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.layer-style-panel .lsp-seg {
+    flex: 1;
+    padding: 4px 4px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.layer-style-panel .lsp-seg:hover:not(.active) {
+    color: var(--text-secondary);
+}
+
+.layer-style-panel .lsp-seg.active {
+    background: var(--frost-bg);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="night"] .layer-style-panel .lsp-seg.active {
+    background: var(--glass-highlight);
+}
+
+/* ----- Toggle switch (master labels on/off) ------------------------------ */
+.layer-style-panel .lsp-toggle {
+    width: 32px;
+    height: 18px;
+    padding: 2px;
+    border: 1px solid var(--border-dark);
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.layer-style-panel .lsp-toggle.on {
+    background: var(--ndma-blue);
+    border-color: var(--ndma-blue);
+}
+
+.layer-style-panel .lsp-toggle-thumb {
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease;
+}
+
+.layer-style-panel .lsp-toggle.on .lsp-toggle-thumb {
+    transform: translateX(12px);
+}
+
+/* ----- Footer ------------------------------------------------------------ */
+.layer-style-panel .lsp-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-dark);
+    background: var(--overlay-bg);
+    flex: none;
+}
+
+.layer-style-panel .lsp-btn {
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.layer-style-panel .lsp-btn--ghost {
+    padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-btn--ghost:hover {
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-btn--primary {
+    padding: 6px 16px;
+    background: var(--ndma-blue);
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.layer-style-panel .lsp-btn--primary:hover {
+    filter: brightness(1.08);
+}
+

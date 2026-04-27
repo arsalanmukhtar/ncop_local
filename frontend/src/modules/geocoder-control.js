@@ -112,6 +112,7 @@ export class GeocoderControl {
       ["basemapPanel", "visible"],
       ["projectionPanel", "visible"],
       ["layerOrderPanel", "visible"],
+      ["layerStylePanel", "visible"],
       ["layerInfoPanel", "visible"],
       ["ncopTourPanel", "visible"],
     ];
