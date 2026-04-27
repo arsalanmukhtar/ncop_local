@@ -333,7 +333,7 @@ export class NavigationPanel {
       <div class="gee-chat-input-wrapper">
         <input type="text" 
               id="geeChatInput" 
-              placeholder="Ask for data: 'Show snow cover in Swat Valley'"
+              placeholder="Ask for data…"
               autocomplete="off"
               data-lpignore="true"
               data-form-type="other"

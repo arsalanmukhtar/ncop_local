@@ -596,6 +596,10 @@ const RAIL_FLOAT_PANEL_BUTTON_MAP = {
   "story-modal":             "storyBtn",
 };
 
+// Margin (in px) preserved between the panel and the map's top/bottom
+// edges so panels never butt up against the viewport edge.
+const FLOAT_PANEL_VIEWPORT_MARGIN = 12;
+
 function anchorFloatingPanelToButton(panel, btnId) {
   const map = document.getElementById("map");
   const rail = document.querySelector(".map-right-rail");
@@ -606,11 +610,67 @@ function anchorFloatingPanelToButton(panel, btnId) {
   const railRect = rail.getBoundingClientRect();
   const btnRect = btn.getBoundingClientRect();
 
-  panel.style.top = `${btnRect.top - mapRect.top}px`;
-  panel.style.right = `${mapRect.right - railRect.left + 8}px`;
+  const right = mapRect.right - railRect.left + 8;
+  const m = FLOAT_PANEL_VIEWPORT_MARGIN;
+
+  // Effective bottom limit (relative to the map's top) — normally the
+  // map's bottom, but if the news ticker bar is visible we lift it
+  // above the ticker so the side panel never overlaps it.
+  let effectiveBottom = mapRect.height;
+  const news = document.getElementById("news-modal");
+  if (news) {
+    const d = news.style.display;
+    const isShown = d && d !== "none";
+    if (isShown) {
+      const newsRect = news.getBoundingClientRect();
+      const newsTopFromMap = newsRect.top - mapRect.top;
+      // Only treat the ticker as an obstacle if it's actually below
+      // the map's top — defensive guard for off-screen edge cases.
+      if (newsTopFromMap > 0 && newsTopFromMap < effectiveBottom) {
+        effectiveBottom = newsTopFromMap - 8; // 8 px breathing room
+      }
+    }
+  }
+
+  // First-pass placement so we can measure the panel's actual height
+  // (offsetHeight requires it to be in the layout flow already).
+  panel.style.position = "absolute";
   panel.style.left = "auto";
   panel.style.bottom = "auto";
-  panel.style.position = "absolute";
+  panel.style.right = `${right}px`;
+
+  // Clear any prior max-height override so we measure intrinsic height.
+  panel.style.maxHeight = "";
+  // Initial top: align to the trigger button's top.
+  let top = btnRect.top - mapRect.top;
+  panel.style.top = `${top}px`;
+
+  // Force a reflow to get an accurate measurement.
+  const panelHeight = panel.offsetHeight;
+  const availableHeight = effectiveBottom - 2 * m;
+
+  if (panelHeight > availableHeight) {
+    // Panel intrinsically taller than the available area — clamp its
+    // height and pin it `m` from the map's top.
+    panel.style.maxHeight = `${availableHeight}px`;
+    top = m;
+  } else if (top + panelHeight + m > effectiveBottom) {
+    // Bottom would overflow either the viewport or the news ticker —
+    // slide the panel up so its bottom lands `m` above effectiveBottom.
+    top = effectiveBottom - panelHeight - m;
+  }
+  if (top < m) top = m;
+
+  panel.style.top = `${top}px`;
+}
+
+function reanchorAllVisibleFloatPanels() {
+  Object.entries(RAIL_FLOAT_PANEL_BUTTON_MAP).forEach(([panelId, btnId]) => {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const d = panel.style.display;
+    if (d && d !== "none") anchorFloatingPanelToButton(panel, btnId);
+  });
 }
 
 function setupRailFloatingPanelAnchoring() {
@@ -620,11 +680,22 @@ function setupRailFloatingPanelAnchoring() {
 
     panel.classList.add("right-rail-float-panel");
 
-    // Observe inline `style` changes — panels toggle display:block / flex
-    // / none.  Re-anchor every time visibility flips on.
+    // Track visibility transitions explicitly.  The anchor function
+    // mutates several inline style props (top, right, max-height, …)
+    // and those mutations re-fire this observer — without the
+    // hidden→visible gate we'd recurse infinitely and hang the tab.
+    let wasVisible =
+      panel.style.display && panel.style.display !== "none";
+
     const observer = new MutationObserver(() => {
       const d = panel.style.display;
-      if (d && d !== "none") anchorFloatingPanelToButton(panel, btnId);
+      const isVisible = !!(d && d !== "none");
+      if (isVisible && !wasVisible) {
+        wasVisible = true;
+        anchorFloatingPanelToButton(panel, btnId);
+      } else if (!isVisible && wasVisible) {
+        wasVisible = false;
+      }
     });
     observer.observe(panel, {
       attributes: true,
@@ -644,6 +715,17 @@ function setupRailFloatingPanelAnchoring() {
       anchorFloatingPanelToButton(panel, btnId);
     }
   });
+
+  // Re-anchor any open side panels whenever the news ticker bar flips
+  // visibility — the ticker occupies the bottom strip and the side
+  // panel's bottom limit shifts up while it's shown.
+  const news = document.getElementById("news-modal");
+  if (news) {
+    new MutationObserver(reanchorAllVisibleFloatPanels).observe(news, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+  }
 }
 
 /* ============================================================================
@@ -686,6 +768,10 @@ const RAIL_PANEL_REGISTRY = [
   { id: "geoglows-forecast-panel", kind: "display",
     btn: { id: "geoglowsForecast", activeCls: "active-geoglows"  } },
   { id: "story-modal",             kind: "display" },
+  // Note: #news-modal is intentionally NOT in this registry — it's a
+  // bottom-anchored ticker bar (not a side panel) and is designed to
+  // coexist with side panels.  The float-panel anchor logic treats its
+  // visible footprint as a bottom obstacle instead.
 ];
 
 function setupStrictRailMutualExclusion() {
