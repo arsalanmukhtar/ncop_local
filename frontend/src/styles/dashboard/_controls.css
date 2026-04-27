@@ -894,3 +894,69 @@ button.custom-nav-btn.active-ocean {
 #story-modal.right-rail-float-panel #story-root::-webkit-scrollbar-track {
     background: transparent;
 }
+
+/* ======================================================================
+   SIDEBAR MENU BUTTON (#menuToggle / .custom-menu-btn)
+   ======================================================================
+   The hamburger button that opens the left sidebar lives outside the
+   right rail but should read as part of the same icon family.
+   `.custom-menu-control .custom-menu-btn` (specificity 0,2,0) wins
+   against the legacy day-mode `.custom-menu-btn` rule (0,1,0) and the
+   theme-night.css `[data-theme="night"] .custom-menu-btn` rule (0,1,1).
+   ====================================================================== */
+.custom-menu-control .custom-menu-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--rail-border) !important;
+    border-radius: 8px !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+    color: #cbd5e1 !important;
+    font-weight: normal !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.custom-menu-control .custom-menu-btn:hover {
+    background: var(--primary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: #cbd5e1 !important;
+}
+
+/* Icon inside the menu button — match the rail's compact 13 px scale. */
+.custom-menu-control .custom-menu-btn i,
+.custom-menu-control .custom-menu-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    stroke-width: 2 !important;
+    color: inherit !important;
+    stroke: currentColor !important;
+    flex-shrink: 0 !important;
+}
+
+/* Night-mode parity with the rail icons:
+     - Lighter `--tertiary-bg` matches the rest of the night-mode chrome
+     - Medium-gray icon (`#6b7280`) matches the rail's night-mode tone */
+[data-theme="night"] .custom-menu-control .custom-menu-btn {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: #6b7280 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+    font-weight: normal !important;
+}
+
+[data-theme="night"] .custom-menu-control .custom-menu-btn:hover {
+    background: var(--glass-highlight) !important;
+    border-color: var(--rail-border) !important;
+    color: #6b7280 !important;
+}
