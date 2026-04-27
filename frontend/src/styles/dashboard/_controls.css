@@ -385,12 +385,23 @@ button.custom-nav-btn.active-ocean {
    Each legacy class (.custom-user-btn, .custom-nav-btn, .custom-layer-btn,
    …) inherited a slightly different `color` value from its module
    stylesheet, which in turn tinted its <svg stroke="currentColor">
-   icon.  Inside the unified rail, force every icon to the same white
-   tone so the column reads as one visual set. */
+   icon.  Inside the unified rail, force every icon to the same tone
+   so the column reads as one visual set:
+     - Day mode (default): white
+     - Night mode: medium gray (icons should not be pure white against
+       the lighter backdrop) */
 .map-right-rail > .rail-btn,
 .map-right-rail > .rail-btn i,
 .map-right-rail > .rail-btn svg {
-    color: var(--white) !important;
+    /* Soft slate tint instead of pure white — sits more comfortably
+       against the rail's translucent dark wrapper. */
+    color: #cbd5e1 !important;
+}
+
+[data-theme="night"] .map-right-rail > .rail-btn,
+[data-theme="night"] .map-right-rail > .rail-btn i,
+[data-theme="night"] .map-right-rail > .rail-btn svg {
+    color: #494949 !important;
 }
 
 .map-right-rail > .rail-btn svg {
@@ -785,17 +796,25 @@ button.custom-nav-btn.active-ocean {
 /* The pencil "edit" button next to the dropdown — shrink to match the
    compact dropdown height. */
 #story-modal.right-rail-float-panel #story-root .story-select-container button {
-    width: 24px !important;
-    height: 24px !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
     padding: 0 !important;
+    margin: 0 !important;
     flex-shrink: 0 !important;
-    border-radius: 6px !important;
+    border-radius: 5px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 #story-modal.right-rail-float-panel #story-root .story-select-container button svg,
 #story-modal.right-rail-float-panel #story-root .story-select-container button i {
-    width: 12px !important;
-    height: 12px !important;
+    width: 10px !important;
+    height: 10px !important;
+    stroke-width: 2 !important;
+    flex-shrink: 0 !important;
 }
 
 /* Story modal close (X) button — overrides the legacy `.custom-nav-btn`
@@ -827,16 +846,33 @@ button.custom-nav-btn.active-ocean {
    -------------------------------------------------------------------- */
 .map-right-rail button#homeExtent.rail-btn,
 .map-right-rail #homeExtent.custom-nav-btn.rail-btn {
-    background: transparent !important;
+    /* Day mode: match the surrounding rail buttons' --secondary-bg. */
+    background: var(--secondary-bg) !important;
     border-color: var(--rail-border) !important;
     color: var(--white) !important;
 }
 
 .map-right-rail button#homeExtent.rail-btn:hover,
 .map-right-rail #homeExtent.custom-nav-btn.rail-btn:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+    background: var(--primary-bg) !important;
     border-color: var(--rail-border) !important;
     color: var(--white) !important;
+}
+
+/* Night mode: _theme-night.css forces every other nav button to
+   `var(--tertiary-bg)` (a lighter glass).  Home was still showing
+   `--secondary-bg` because of the rule above, producing a visibly
+   darker tile.  Match the rest of the column. */
+[data-theme="night"] .map-right-rail button#homeExtent.rail-btn,
+[data-theme="night"] .map-right-rail #homeExtent.custom-nav-btn.rail-btn {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--rail-border) !important;
+}
+
+[data-theme="night"] .map-right-rail button#homeExtent.rail-btn:hover,
+[data-theme="night"] .map-right-rail #homeExtent.custom-nav-btn.rail-btn:hover {
+    background: var(--glass-highlight) !important;
+    border-color: var(--rail-border) !important;
 }
 
 /* ---- Slim themed scrollbars for the three body regions ------------- */
