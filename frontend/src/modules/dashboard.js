@@ -464,9 +464,27 @@ function buildUnifiedRightRail() {
       .forEach(push);
   }
 
+  // Nav buttons EXCEPT the zoom triplet (zoomIn / zoomOut / resetBearing)
+  // and `#osmData` which is non-functional and being removed entirely.
+  // The zoom triplet is appended last so it sits at the BOTTOM of the rail.
+  const NAV_TAIL_IDS = new Set(["zoomIn", "zoomOut", "resetBearing"]);
+  const SKIP_IDS = new Set(["osmData"]);
+
   document
     .querySelectorAll(".custom-nav-control .custom-nav-btn:not(.nav-toggle-btn)")
-    .forEach(push);
+    .forEach((btn) => {
+      if (SKIP_IDS.has(btn.id) || NAV_TAIL_IDS.has(btn.id)) return;
+      push(btn);
+    });
+
+  // Append the zoom triplet at the very bottom in canonical order.
+  ["zoomIn", "zoomOut", "resetBearing"].forEach((id) => {
+    push(document.getElementById(id));
+  });
+
+  // Hard-remove the non-functional #osmData button so it can't reappear.
+  const osm = document.getElementById("osmData");
+  if (osm) osm.remove();
 
   buttonOrder.forEach((b) => {
     rail.appendChild(b);
@@ -540,6 +558,78 @@ function setupRailPanelAnchoring() {
   requestAnimationFrame(anchorRailPanelsToButtons);
 }
 
+/* ----------------------------------------------------------------------
+ * Floating panels — gee-chat-modal, geoglows-forecast-panel, story-modal
+ * ----------------------------------------------------------------------
+ * These three panels open via inline `style.display = "block/flex"`
+ * (not a class toggle), so they fall outside the `.right-rail-panel`
+ * system above.  Their original CSS pinned them at fixed map-corner
+ * positions (e.g. bottom:13px right:50px), so they no longer line up
+ * with their trigger button now that all rail icons are stacked at the
+ * top-right.
+ *
+ * Solution: watch each panel's `style` attribute with a MutationObserver
+ * — whenever the panel becomes visible, recompute and apply
+ * `top` / `right` to anchor the panel beside its rail button.  CSS
+ * also shrinks the panels to compact, consistent sizes so they fit
+ * the column gap cleanly.
+ * -------------------------------------------------------------------- */
+const RAIL_FLOAT_PANEL_BUTTON_MAP = {
+  "gee-chat-modal":          "geeChat",
+  "geoglows-forecast-panel": "geoglowsForecast",
+  "story-modal":             "storyBtn",
+};
+
+function anchorFloatingPanelToButton(panel, btnId) {
+  const map = document.getElementById("map");
+  const rail = document.querySelector(".map-right-rail");
+  const btn = document.getElementById(btnId);
+  if (!map || !rail || !btn) return;
+
+  const mapRect = map.getBoundingClientRect();
+  const railRect = rail.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+
+  panel.style.top = `${btnRect.top - mapRect.top}px`;
+  panel.style.right = `${mapRect.right - railRect.left + 8}px`;
+  panel.style.left = "auto";
+  panel.style.bottom = "auto";
+  panel.style.position = "absolute";
+}
+
+function setupRailFloatingPanelAnchoring() {
+  Object.entries(RAIL_FLOAT_PANEL_BUTTON_MAP).forEach(([panelId, btnId]) => {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    panel.classList.add("right-rail-float-panel");
+
+    // Observe inline `style` changes — panels toggle display:block / flex
+    // / none.  Re-anchor every time visibility flips on.
+    const observer = new MutationObserver(() => {
+      const d = panel.style.display;
+      if (d && d !== "none") anchorFloatingPanelToButton(panel, btnId);
+    });
+    observer.observe(panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    // Anchor on viewport resize too (rail.left moves when window width
+    // changes).
+    window.addEventListener("resize", () => {
+      const d = panel.style.display;
+      if (d && d !== "none") anchorFloatingPanelToButton(panel, btnId);
+    });
+
+    // If the panel happens to be visible already when we wire this up.
+    const initialDisplay = panel.style.display;
+    if (initialDisplay && initialDisplay !== "none") {
+      anchorFloatingPanelToButton(panel, btnId);
+    }
+  });
+}
+
 // Global Initialization
 document.addEventListener("DOMContentLoaded", function () {
   // lucide shim provided by entry
@@ -552,4 +642,5 @@ document.addEventListener("DOMContentLoaded", function () {
   // Must run AFTER DashboardManager.init() so all wrapper groups exist.
   buildUnifiedRightRail();
   setupRailPanelAnchoring();
+  setupRailFloatingPanelAnchoring();
 });

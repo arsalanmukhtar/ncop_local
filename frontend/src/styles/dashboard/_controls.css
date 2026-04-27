@@ -300,6 +300,10 @@ button.custom-nav-btn.active-ocean {
     padding: 0 !important;
     margin: 0 !important;
     border-radius: 8px !important;
+    /* Uniform 1 px border so neutral and active buttons share the same
+       outer geometry — the legacy 2 px border made active states (which
+       only swap border-color) appear to bulge against the rail. */
+    border: 1px solid var(--rail-border) !important;
     box-sizing: border-box !important;
     flex-shrink: 0 !important;
     align-self: center !important;
@@ -316,6 +320,28 @@ button.custom-nav-btn.active-ocean {
         border 0.2s ease,
         background 0.2s ease,
         visibility 0s linear 0s;
+}
+
+/* Force the lone <i>/<svg> child of every rail button to sit dead-center
+   regardless of any margin/positioning the legacy module CSS applied. */
+.map-right-rail > .rail-btn > * {
+    margin: 0 auto !important;
+    flex-shrink: 0;
+    line-height: 1 !important;
+}
+
+/* Normalize the active-state outer halo so colored buttons don't visually
+   poke out of the rail compared to neutral buttons.  Original rules
+   used `box-shadow: 0 0 12px <glow>` which extended ~12 px beyond the
+   button rim — replace with a tight 4 px glow that stays inside the
+   rail's padding. */
+.map-right-rail > .rail-btn.active-wind,
+.map-right-rail > .rail-btn.active-ocean,
+.map-right-rail > .rail-btn.active-news,
+.map-right-rail > .rail-btn.active-gee,
+.map-right-rail > .rail-btn.active-geoglows,
+.map-right-rail > .rail-btn.terrain-active {
+    box-shadow: 0 0 4px rgba(70, 178, 255, 0.45) !important;
 }
 
 /* Toggler at the TOP — clicking it collapses every other icon, leaving
@@ -371,6 +397,29 @@ button.custom-nav-btn.active-ocean {
     stroke: currentColor !important;
 }
 
+/* ---- Uniform icon scale ----------------------------------------------
+   Some legacy classes (.custom-layer-btn, .custom-layer-info-btn,
+   .custom-tour-btn) didn't set `i { width/height }`, so their SVGs
+   rendered at lucide's default 24 px and visually overpowered the
+   adjacent 14 px nav icons.  Force every rail icon to the same compact
+   13 px so the column reads as one tight, professionally scaled set. */
+.map-right-rail > .rail-btn i,
+.map-right-rail > .rail-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    /* lucide sets stroke-width:2 by default; thin it slightly to keep
+       the icon legible at the smaller size. */
+    stroke-width: 2 !important;
+    flex-shrink: 0 !important;
+}
+
+/* The "3D" toggle button uses a text label instead of an icon — keep
+   its sizing on the text node, not the (absent) svg. */
+.map-right-rail > .rail-btn .nav-text {
+    font-size: 9px !important;
+    line-height: 1 !important;
+}
+
 /* Keep the existing active-state colors (e.g. #homeExtent green,
    .terrain-active blue) by NOT overriding them — those rules use
    higher-specificity selectors like `button#homeExtent.custom-nav-btn`
@@ -390,4 +439,48 @@ button.custom-nav-btn.active-ocean {
 .map-right-rail.collapsed .nav-toggle-btn i,
 .map-right-rail.collapsed .nav-toggle-btn svg {
     transform: rotate(180deg);
+}
+
+/* ----------------------------------------------------------------------
+   FLOATING RAIL PANELS — gee-chat-modal, geoglows-forecast-panel,
+   story-modal.
+   ----------------------------------------------------------------------
+   These panels use inline `style.display` for visibility (not a class
+   toggle), so they're outside the `.right-rail-panel.visible` system.
+   dashboard.js#setupRailFloatingPanelAnchoring() observes their inline
+   style and recomputes `top` + `right` to anchor each panel beside
+   its rail button.  This block shrinks them to consistent compact
+   sizes that fit the column gap and overrides their legacy fixed
+   bottom-right positioning so the JS-set inline `top`/`right` win.
+   -------------------------------------------------------------------- */
+#gee-chat-modal.right-rail-float-panel,
+#geoglows-forecast-panel.right-rail-float-panel,
+#story-modal.right-rail-float-panel {
+    position: absolute !important;
+    bottom: auto !important;
+    left: auto !important;
+    /* width / height intentionally not in shorthand !important here so
+       per-panel rules below can specialize. */
+    max-height: calc(100vh - 40px) !important;
+    z-index: 1001 !important;
+    overflow: auto !important;
+    box-sizing: border-box;
+}
+
+#gee-chat-modal.right-rail-float-panel {
+    width: 320px !important;
+    height: 480px !important;
+    max-width: calc(100vw - 80px) !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel {
+    width: 380px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: calc(100vh - 40px) !important;
+}
+
+#story-modal.right-rail-float-panel {
+    width: 320px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: calc(100vh - 40px) !important;
 }
