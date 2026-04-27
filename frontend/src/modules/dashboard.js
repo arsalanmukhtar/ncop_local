@@ -28,6 +28,7 @@ import { NavigationPanel } from "./navigation-panel.js";
 import { ProjectionPanel, BasemapPanel } from "./map-display-panels.js";
 import { SidebarMenu } from "./sidebar-menu.js";
 import { UserControl, NCOPTourControl } from "./nav-controls.js";
+import { GeocoderControl } from "./geocoder-control.js";
 import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
@@ -110,6 +111,10 @@ class DashboardManager {
     new NavigationPanel(this.#map, this.#mapControls, projectionPanel);
 
     new UserControl();
+    // Geocoder search bar — sits between the NCOP card and the menu
+    // button.  Mounts after the map is ready (we're already inside
+    // init()) and self-positions via CSS.
+    new GeocoderControl(this.#map);
     new BasemapPanel(this.#map, this.#mapControls);
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
@@ -412,6 +417,7 @@ if (document.readyState === "loading") {
  * ========================================================================= */
 const RAIL_PANEL_BUTTON_MAP = {
   userPanel:       { btnId: "userToggle",       visibleClass: "user-panel-visible" },
+  geocoderPanel:   { btnId: "geocoderToggle",   visibleClass: "visible" },
   basemapPanel:    { btnId: "basemapToggle",    visibleClass: "visible" },
   projectionPanel: { btnId: "projectionSwitch", visibleClass: "visible" },
   layerOrderPanel: { btnId: "layerOrderToggle", visibleClass: "visible" },
@@ -454,6 +460,10 @@ function buildUnifiedRightRail() {
 
   push(document.querySelector(".nav-toggle-btn"));
   push(document.querySelector(".custom-user-btn"));
+  // Geocoder (map-pin-search) sits directly below the user button —
+  // matches the position the user marked between the user icon and
+  // the layer-order icon in the rail.
+  push(document.querySelector(".custom-geocoder-btn"));
 
   const mapWrapper = document.querySelector(".map-controls-wrapper");
   if (mapWrapper) {
