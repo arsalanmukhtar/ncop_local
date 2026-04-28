@@ -769,7 +769,12 @@
     -webkit-backdrop-filter: blur(10px) !important;
 }
 
-.map-right-rail > .custom-layer-style-btn:hover {
+/* Hover only applies when the button is NOT active.  Without the
+   `:not(.active-layer-style)` gate, the night-theme hover rule's
+   specificity (with `[data-theme="night"]` as an extra class) was
+   beating the active rule's specificity and the panel-open blue
+   bg got repainted to grey on hover. */
+.map-right-rail > .custom-layer-style-btn:hover:not(.active-layer-style) {
     background: var(--primary-bg) !important;
 }
 
@@ -782,7 +787,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
 }
 
-[data-theme="night"] .map-right-rail > .custom-layer-style-btn:hover {
+[data-theme="night"] .map-right-rail > .custom-layer-style-btn:hover:not(.active-layer-style) {
     background: var(--glass-highlight) !important;
 }
 

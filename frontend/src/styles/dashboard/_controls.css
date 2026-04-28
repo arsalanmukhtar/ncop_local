@@ -113,7 +113,12 @@ button#homeExtent.custom-nav-btn:hover {
 button.custom-nav-btn.terrain-active {
     background: var(--ndma-blue) !important;
     color: white !important;
-    border-color: var(--ndma-blue-gradient) !important;
+    /* Was `var(--ndma-blue-gradient)` — gradients are invalid for
+       `border-color` so the property dropped and the button fell back
+       to its default light border, producing a visible outline the
+       other active states didn't have.  Solid color blends with the
+       fill for an outline-free look in both day and night themes. */
+    border-color: var(--ndma-blue) !important;
 }
 
 button.custom-nav-btn.terrain-active:hover {
@@ -131,6 +136,18 @@ button.custom-nav-btn.active-ocean {
     background: var(--ndma-green) !important;
     border-color: var(--ndma-green) !important;
     box-shadow: 0 0 12px var(--ndma-green-glow) !important;
+    color: #fff !important;
+}
+
+/* News button — was referenced in the shared box-shadow rule below
+   but had no bg/border rule of its own, so the rail button stayed
+   gray while the news ticker was open.  Match the active-wind /
+   active-geoglows blue pattern so it lights up while the ticker is
+   visible and resets when the user toggles it off. */
+button.custom-nav-btn.active-news {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    box-shadow: 0 0 12px var(--ndma-blue-glow) !important;
     color: #fff !important;
 }
 
@@ -328,6 +345,30 @@ button.custom-nav-btn.active-ocean {
     margin: 0 auto !important;
     flex-shrink: 0;
     line-height: 1 !important;
+}
+
+/* ------------------------------------------------------------------
+   UNIFIED HOVER — every rail button gets the same subtle bg shift on
+   hover in BOTH day and night themes, but only when the button is
+   NOT in any of its "active" / "selected" states (active panel
+   trigger, active layer toggle, etc.).  Without the `:not(...)`
+   chain, hovering an active button would repaint over its colored
+   active fill — particularly visible in night theme where the
+   `[data-theme="night"]` selector adds an extra class to specificity
+   and lets hover beat several active rules.
+
+   Specificity: with 8 negation classes inside `:not()`, the rule
+   reaches ~0,11,0 — well above any per-button hover rule, so it
+   forms a consistent baseline across legacy class names
+   (.custom-nav-btn, .custom-user-btn, .custom-menu-btn,
+   .custom-basemap-btn, .custom-layer-btn, .custom-layer-info-btn,
+   .custom-tour-btn, .custom-geocoder-btn, .custom-layer-style-btn). */
+.map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style) {
+    background: var(--glass-highlight) !important;
 }
 
 /* Normalize the active-state outer halo so colored buttons don't visually
@@ -995,7 +1036,7 @@ button.custom-nav-btn.active-ocean {
     -webkit-backdrop-filter: blur(10px) !important;
 }
 
-.map-right-rail > .custom-geocoder-btn:hover {
+.map-right-rail > .custom-geocoder-btn:hover:not(.active-geocoder) {
     background: var(--primary-bg) !important;
 }
 
@@ -1008,7 +1049,7 @@ button.custom-nav-btn.active-ocean {
         inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
 }
 
-[data-theme="night"] .map-right-rail > .custom-geocoder-btn:hover {
+[data-theme="night"] .map-right-rail > .custom-geocoder-btn:hover:not(.active-geocoder) {
     background: var(--glass-highlight) !important;
 }
 
