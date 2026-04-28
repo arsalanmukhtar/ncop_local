@@ -172,6 +172,12 @@ class DashboardManager {
   #onMapLoad() {
     this.#initialLoadComplete = true;
 
+    const skeleton = document.getElementById("app-skeleton");
+    if (skeleton) {
+      skeleton.classList.add("app-skeleton-hide");
+      setTimeout(() => skeleton.remove(), 500);
+    }
+
     // Default-enabled layers. Provincial is added before National so the
     // later-added National stacks above Provincial on the map. The sidebar
     // checkboxes are ticked asynchronously once the sidebar DOM has been
