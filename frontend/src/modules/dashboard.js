@@ -156,6 +156,18 @@ class DashboardManager {
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
+
+    // Bottom-right scale bar — minimalist black tick + label.  The
+    // styling lives in _map-panels.css (`.mapboxgl-ctrl-scale`).
+    // 200 px max width gives the bar enough room for round-number
+    // values (50 km / 100 km / 500 km) at typical zoom levels.
+    this.#map.addControl(
+      new mapboxgl.ScaleControl({
+        maxWidth: 200,
+        unit: "metric",
+      }),
+      "bottom-right"
+    );
   }
 
   #onMapLoad() {
