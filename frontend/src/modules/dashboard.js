@@ -15,7 +15,6 @@ import {
 } from "./time-functions.js";
 import "./map-layers.js"; // Exposes window.dwd_satellite_infrared
 import "./temporal-controls.js"; // Exposes global time-slider functions
-import { initRainViewerPlayer } from "./temporal-controls.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 // ===================================================
 
@@ -172,17 +171,6 @@ class DashboardManager {
 
   #onMapLoad() {
     this.#initialLoadComplete = true;
-    // ------------------------------
-    // RainViewer Player init (standalone)
-    // ------------------------------
-    try {
-      if (!window.__rvInited) {
-        initRainViewerPlayer(this.#map);
-        window.__rvInited = true;
-      }
-    } catch (e) {
-      console.warn("RainViewer Player failed to init:", e);
-    }
 
     // Default-enabled layers. Provincial is added before National so the
     // later-added National stacks above Provincial on the map. The sidebar

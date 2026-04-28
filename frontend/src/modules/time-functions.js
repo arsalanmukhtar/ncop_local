@@ -3563,3 +3563,182 @@ export function generateMBX_IMERGPrecipRateLayers() {
 
   return out;
 }
+
+// ============================================================================
+// RainViewer — radar precipitation + satellite infrared
+// ----------------------------------------------------------------------------
+// Both data products are exposed as async frame-builders that return the
+// standard temporal-layer shape ([{ source, layers, date }, ...]) so the
+// regular #temp-slider1 controller can drive them just like DWD / IMERG /
+// ECMWF / etc. The descriptor JSON (`weather-maps.json`) rotates every ~10
+// min upstream so a short in-module cache keeps a re-toggle cheap without
+// going stale.
+// ============================================================================
+
+const RAINVIEWER_DESCRIPTOR_URL =
+  "https://api.rainviewer.com/public/weather-maps.json";
+const RAINVIEWER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const RAINVIEWER_FETCH_TIMEOUT_MS = 8000;
+
+// Hard caps tuned for the RainViewer free tier:
+//   * Tile fetches scale ~linearly with frame count because every frame is
+//     its own raster source. The previous engine capped at 6 to stay under
+//     the per-IP rate limit (~20 req/sec); newer descriptors return up to
+//     13 past frames which trips 429s instantly. Re-imposing the same cap.
+//   * The free tile endpoint stops serving above z≈8; passing maxzoom into
+//     both the source AND each layer tells Mapbox to overzoom z=8 tiles
+//     instead of requesting ones that would 404 / 429.
+const RAINVIEWER_MAX_FRAMES = 6;
+const RAINVIEWER_MAXZOOM = 8;
+
+// Pick `n` indices evenly across [0..arr.length-1], always including the
+// first and last entry so the slider's start / end labels match the
+// requested range exactly.
+function evenSampleArray(arr, n) {
+  if (!Array.isArray(arr) || arr.length === 0) return [];
+  if (arr.length <= n) return arr.slice();
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    const idx = Math.round((i * (arr.length - 1)) / (n - 1));
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    out.push(arr[idx]);
+  }
+  return out;
+}
+
+let _rvDescriptorCache = null; // { ts, data }
+let _rvInflight = null;        // Promise<data>
+
+async function fetchRainViewerDescriptor() {
+  const now = Date.now();
+  if (_rvDescriptorCache && now - _rvDescriptorCache.ts < RAINVIEWER_CACHE_TTL_MS) {
+    return _rvDescriptorCache.data;
+  }
+  if (_rvInflight) return _rvInflight;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RAINVIEWER_FETCH_TIMEOUT_MS);
+  _rvInflight = fetch(RAINVIEWER_DESCRIPTOR_URL, { signal: ctrl.signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`RainViewer HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((data) => {
+      _rvDescriptorCache = { ts: Date.now(), data };
+      _rvInflight = null;
+      return data;
+    })
+    .catch((err) => {
+      _rvInflight = null;
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+  return _rvInflight;
+}
+
+function rvFormatPKTLabel(unixSeconds) {
+  const pktTime = new Date(unixSeconds * 1000 + 5 * 60 * 60 * 1000);
+  const day = String(pktTime.getUTCDate()).padStart(2, "0");
+  const MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const mon = MONTHS[pktTime.getUTCMonth()];
+  const h = pktTime.getUTCHours();
+  const m = pktTime.getUTCMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${mon} ${day} - ${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function rvCollectFrames(node, key) {
+  // Support both newer ({ past, nowcast }) and older ({ infrared, past, frames })
+  // descriptor shapes. Returns an array of {time, path} sorted by time.
+  if (!node || typeof node !== "object") return [];
+  const pools = [];
+  if (key === "radar") {
+    if (Array.isArray(node.past)) pools.push(node.past);
+    if (Array.isArray(node.nowcast)) pools.push(node.nowcast);
+  } else if (key === "satellite") {
+    if (Array.isArray(node.infrared)) pools.push(node.infrared);
+    if (Array.isArray(node.past) && pools.length === 0) pools.push(node.past);
+    if (Array.isArray(node.frames) && pools.length === 0) pools.push(node.frames);
+  }
+  if (pools.length === 0) {
+    // Last-resort: any array of {time, path} on the node
+    for (const v of Object.values(node)) {
+      if (
+        Array.isArray(v) &&
+        v.length &&
+        v.some((it) => it && typeof it === "object" && it.time && it.path)
+      ) {
+        pools.push(v);
+        break;
+      }
+    }
+  }
+  const flat = pools.flat().filter(
+    (f) => f && typeof f.time === "number" && typeof f.path === "string"
+  );
+  flat.sort((a, b) => a.time - b.time);
+  return flat;
+}
+
+function rvBuildEntry(host, frame, kind) {
+  // kind: "radar" -> color scheme 2, options 1_1 (smooth + snow)
+  //       "satellite" -> color scheme 0, options 0_0 (default IR ramp)
+  const tail = kind === "radar" ? "2/1_1" : "0/0_0";
+  const tile = `${host}${frame.path}/256/{z}/{x}/{y}/${tail}.png`;
+  const id = `rv_${kind}_${frame.time}`;
+  return {
+    source: {
+      id,
+      type: "raster",
+      tileSize: 256,
+      tiles: [tile],
+      // Cap source overzoom so Mapbox uses z=8 tiles for higher zooms instead
+      // of requesting tiles the free tier won't serve.
+      maxzoom: RAINVIEWER_MAXZOOM,
+    },
+    layers: [
+      {
+        id,
+        type: "raster",
+        source: id,
+        layout: { visibility: "visible" },
+        paint: {
+          "raster-opacity": 0,
+          "raster-fade-duration": 200,
+        },
+        maxzoom: RAINVIEWER_MAXZOOM,
+      },
+    ],
+    date: rvFormatPKTLabel(frame.time),
+  };
+}
+
+export async function generateRainViewerRadarLayers() {
+  const data = await fetchRainViewerDescriptor();
+  const host = data?.host;
+  if (!host) throw new Error("RainViewer descriptor missing host");
+  const allFrames = rvCollectFrames(data.radar, "radar");
+  // Empty (rare for radar) → return [] so the slider stays closed silently
+  // instead of surfacing a hard error.
+  if (!allFrames.length) return [];
+  const frames = evenSampleArray(allFrames, RAINVIEWER_MAX_FRAMES);
+  return frames.map((f) => rvBuildEntry(host, f, "radar"));
+}
+
+export async function generateRainViewerSatelliteIRLayers() {
+  const data = await fetchRainViewerDescriptor();
+  const host = data?.host;
+  if (!host) throw new Error("RainViewer descriptor missing host");
+  const allFrames = rvCollectFrames(data.satellite, "satellite");
+  // Upstream's `satellite.infrared` array is sometimes briefly empty.
+  // Treat as a graceful no-op rather than a thrown error.
+  if (!allFrames.length) return [];
+  const frames = evenSampleArray(allFrames, RAINVIEWER_MAX_FRAMES);
+  return frames.map((f) => rvBuildEntry(host, f, "satellite"));
+}

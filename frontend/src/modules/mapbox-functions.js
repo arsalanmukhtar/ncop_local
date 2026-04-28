@@ -2,11 +2,6 @@
 
 // Import the menu configuration to access item data
 import { ncop_menu_items } from './map-layers.js';
-import {
-  showRainViewerPlayer,
-  hideRainViewerPlayer,
-  initRainViewerPlayer,
-} from "./temporal-controls.js";
 
 
 
@@ -224,91 +219,49 @@ export function handleTemporalInteraction(
   isActive,
   layerConfig
 ) {
-  // ✅ Special-case RainViewer temporal items WITHOUT changing sidebar core logic
-  const isRainViewer =
-    itemKey === "realtime_radar" || itemKey === "satellite_infrared";
+  // Unified temporal flow. Each temporal item exposes its layer set on
+  // `window[itemKey]`, which can be one of:
+  //   * Array<entry>            — pre-baked frames (DWD, IMERG, ECMWF, ...)
+  //   * Promise<Array<entry>>   — descriptor-driven, already in-flight
+  //   * () => Array | Promise   — descriptor-driven, lazily resolved on click
+  //                                (e.g. RainViewer radar / satellite-IR)
+  //
+  // Either form goes through the standard #temp-slider1 controller, so its
+  // `currentActiveLayerSet` enforces single-select replacement across every
+  // temporal layer in the app — toggling a new one tears down whichever was
+  // previously active, regardless of which group it came from.
+  if (isActive) {
+    let layerSrc = window[itemKey];
 
-  if (isRainViewer) {
-    const map = window.ncop_map || window.map;
-
-    if (!map) {
-      console.error("❌ RainViewer: map not found on window.ncop_map/window.map");
-      return;
-    }
-
-    // Helper: check if the other RainViewer toggle is still ON
-    const otherKey =
-      itemKey === "realtime_radar" ? "satellite_infrared" : "realtime_radar";
-
-    const otherChecked =
-      document.querySelector(`input[data-item-key="${otherKey}"]`)?.checked ===
-      true;
-
-    // Ensure init once (safe-guarded)
-    const ensureInit = () => {
-      if (!window.__rvPlayerInited) {
-        try {
-          initRainViewerPlayer(map);
-          window.__rvPlayerInited = true;
-        } catch (e) {
-          console.warn("RainViewer init failed:", e);
-        }
-      }
-    };
-
-    if (isActive) {
-      ensureInit();
-
-      // Radar vs Satellite mode based on itemKey
-      const mode = itemKey === "satellite_infrared" ? "satellite" : "radar";
-
-      // Show RainViewer slider + lock mode (two separate toggles behavior)
-      // (If your showRainViewerPlayer supports 2nd arg lockMode, keep it true)
+    if (typeof layerSrc === "function") {
       try {
-        showRainViewerPlayer(mode, true);
-      } catch {
-        // fallback if your function signature is showRainViewerPlayer(mode)
-        showRainViewerPlayer(mode);
-      }
-
-      return; // IMPORTANT: do not run normal temp-slider logic
-    } else {
-      // Turning OFF one toggle:
-      // If the other is still ON, keep RainViewer visible in the other mode.
-      if (otherChecked) {
-        ensureInit();
-        const mode = otherKey === "satellite_infrared" ? "satellite" : "radar";
-        try {
-          showRainViewerPlayer(mode, true);
-        } catch {
-          showRainViewerPlayer(mode);
-        }
+        layerSrc = layerSrc();
+      } catch (err) {
+        console.error(`❌ Layer builder threw for ${itemKey}:`, err);
         return;
       }
-
-      // Otherwise, hide RainViewer slider + remove its layers/sources
-      hideRainViewerPlayer(map);
-      return;
     }
-  }
 
-  // ---------------------------
-  // Existing behavior for other temporal layers (UNCHANGED)
-  // ---------------------------
-  if (isActive) {
-    const layerArray = window[itemKey];
-
-    if (!layerArray) {
+    if (!layerSrc) {
       console.error(`❌ Layer array not found: ${itemKey}`);
       return;
     }
 
     const title = layerConfig?.title || subcategoryKey;
+    const isAsync = typeof layerSrc?.then === "function";
 
-    if (typeof window.updateTempSlider === "function") {
-      window.updateTempSlider(layerArray, title, itemKey, null);
+    if (isAsync) {
+      if (typeof window.updateTempSliderAsync === "function") {
+        window.updateTempSliderAsync(layerSrc, title, itemKey);
+      } else {
+        console.error("❌ updateTempSliderAsync function not found");
+      }
     } else {
-      console.error("❌ updateTempSlider function not found");
+      if (typeof window.updateTempSlider === "function") {
+        window.updateTempSlider(layerSrc, title, itemKey, null);
+      } else {
+        console.error("❌ updateTempSlider function not found");
+      }
     }
   } else {
     const tempSlider = document.getElementById("temp-slider1");

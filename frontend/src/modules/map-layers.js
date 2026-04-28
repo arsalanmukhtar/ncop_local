@@ -63,6 +63,11 @@ import {
   generateThunderstormProbability3HourlyLayers,
   generateLiquidFogProbability3HourlyLayers,
   generateConvectivePrecipitationWeeklyLayers,
+  // RainViewer builders are temporarily disabled for production. Re-import
+  // alongside re-enabling the menu entries when the rate-limit + frame-pacing
+  // tuning is finalised.
+  // generateRainViewerRadarLayers,
+  // generateRainViewerSatelliteIRLayers,
 } from "./time-functions.js";
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
@@ -501,6 +506,14 @@ window.snowfall_hourly_forecast = snowfall_hourly_layers;
 window.thunderstorm_probability_3hourly_forecast = thunderstorm_prob_3hourly_layers;
 window.liquid_fog_probability_3hourly_forecast = liquid_fog_prob_3hourly_layers;
 window.convective_precipitation_weekly_forecast = convective_precip_weekly_layers;
+
+// RainViewer is descriptor-driven (frame list comes from a runtime API call),
+// so we expose *functions* instead of static arrays. The temporal dispatcher
+// calls these and feeds the resolved Promise<layers> to updateTempSliderAsync.
+// Temporarily disabled for production along with the menu entries; re-enable
+// the imports + these registrations when the layers are restored.
+// window.realtime_radar = generateRainViewerRadarLayers;
+// window.satellite_infrared = generateRainViewerSatelliteIRLayers;
 // console.log(
 //   "✅ DWD layers created:",
 //   window.dwd_satellite_infrared.length,
@@ -876,6 +889,11 @@ export const ncop_menu_items = {
     "Radar Layers": {
       temporal: {
         realtime_radar: {
+          // Temporarily hidden from the sidebar — RainViewer integration
+          // through the unified slider works for radar but is being held
+          // back until the rate-limit + frame-pacing tuning is finalised.
+          // Flip `hidden` to false (or delete it) to restore.
+          hidden: true,
           label: "Realtime Radar",
           image: getImage("rainViewer_radar_precip.webp"),
           type: "raster",
@@ -885,6 +903,10 @@ export const ncop_menu_items = {
             "The Realtime Radar layer provides up-to-the-minute radar imagery, allowing users to monitor precipitation patterns and intensity in real-time. This layer is crucial for tracking weather events such as storms, rainfall, and severe weather conditions.",
         },
         satellite_infrared: {
+          // Temporarily hidden — upstream RainViewer satellite IR descriptor
+          // is intermittently empty; will re-enable once the fallback /
+          // retry path is in place.
+          hidden: true,
           label: "Satellite Infrared",
           image: getImage("rainViewer_satellite.webp"),
           type: "raster",

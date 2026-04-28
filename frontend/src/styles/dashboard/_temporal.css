@@ -175,7 +175,11 @@
     top: 0;
     margin: 0 !important;
     padding: 2px 8px;
-    font-size: 12px;
+    /* JS sets --ts-label-font-size in updateLegendBarWidths/_recomputeDateInset
+       to fit the labels in the available width without overlap. The fallback
+       (12px) keeps existing layouts looking exactly the same when there's
+       enough room. */
+    font-size: var(--ts-label-font-size, 12px);
     font-weight: 500;
     color: var(--text-secondary);
     background: transparent;

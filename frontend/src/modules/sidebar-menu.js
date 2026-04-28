@@ -258,6 +258,7 @@ export class SidebarMenu {
         const grid = document.createElement("div");
         grid.className = "ncop-grid";
         Object.keys(items).forEach((itemKey) => {
+          if (items[itemKey]?.hidden === true) return;
           // console.log(`🔍 Creating temporal item: ${itemKey}`, items[itemKey]);
           const temporalElement = this.#createTemporalItem(
             categoryKey,
@@ -443,6 +444,7 @@ export class SidebarMenu {
         const grid = document.createElement("div");
         grid.className = "ncop-grid";
         Object.keys(items).forEach((itemKey) => {
+          if (items[itemKey]?.hidden === true) return;
           const temporalElement = this.#createTemporalItem(
             categoryKey,
             parentSubcategoryKey,
@@ -648,6 +650,12 @@ export class SidebarMenu {
       console.error(`❌ Invalid temporal item data for ${itemKey}:`, itemData);
       return null;
     }
+    // Allow individual menu entries to opt out of being rendered without
+    // having to delete or comment out the whole config block. Used right
+    // now to hide the RainViewer radar / satellite-IR items while their
+    // unified-slider integration is being tuned. Returning null here drops
+    // the row cleanly (the iteration site already skips null returns).
+    if (itemData.hidden === true) return null;
 
     const itemDiv = document.createElement("div");
     itemDiv.className =

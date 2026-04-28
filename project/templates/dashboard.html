@@ -199,86 +199,8 @@
             </div>
         </div>
     </div>
-    <!-- RainViewer Slider Container - Enhanced Professional Version -->
-    <div id="rv-slider1" style="display:none;">
-        <!-- Header Section -->
-        <div class="rv-header">
-            <div class="rv-header-left">
-                <div class="rv-title">
-                    <div class="rv-icon-wrapper">
-                        <i data-lucide="cloud-rain" class="rv-title-icon"></i>
-                    </div>
-                    <div class="rv-title-text">
-                        <div class="rv-title-top">RainViewer</div>
-                        <div class="rv-title-sub" id="rv_time_label">—</div>
-                    </div>
-                </div>
-            </div>
-    
-            <div class="rv-header-right">
-                <div class="rv-actions">
-                    <!-- Play/Pause Controls -->
-                    <div class="rv-control-group">
-                        <button id="rvPlayButton" class="rv-icon-btn rv-play-btn" title="Play animation" aria-label="Play">
-                            <i data-lucide="play"></i>
-                        </button>
-                        <button id="rvPauseButton" class="rv-icon-btn rv-pause-btn" title="Pause animation"
-                            aria-label="Pause" style="display:none;">
-                            <i data-lucide="pause"></i>
-                        </button>
-                    </div>
-    
-                    <!-- Speed Control -->
-                    <button id="rvSpeedButton" class="rv-pill-btn rv-speed-btn" title="Playback speed">
-                        <i data-lucide="gauge" class="rv-speed-icon"></i>
-                        <span class="rv-speed-text">1x</span>
-                    </button>
-    
-                    <!-- Drag / Resize Controls -->
-                    <div class="rv-control-group rv-panel-controls">
-                        <button id="rvDragControlButton" class="dragresizecontrol-btn rv-icon-btn rv-dr-btn"
-                            title="Move panel" aria-label="Drag panel">
-                            <i data-lucide="move"></i>
-                        </button>
-                        <button id="rvResizeControlButton" class="dragresizecontrol-btn rv-icon-btn rv-dr-btn"
-                            title="Resize panel" aria-label="Resize panel">
-                            <i data-lucide="expand"></i>
-                        </button>
-                    </div>
-    
-                    <!-- Hidden mode button for JS compatibility -->
-                    <button id="rvModeButton" class="rv-hidden" type="button">Radar</button>
-                </div>
-            </div>
-        </div>
-    
-        <!-- Main Content Area -->
-        <div class="rv-content">
-            <!-- Slider Section -->
-            <div class="rv-slider-section">
-                <div class="rv-slider-wrap">
-                    <input type="range" min="0" step="1" value="0" class="slider1 rv-slider-input" id="rvSlider1"
-                        title="Drag to change frame" aria-label="Animation timeline" />
-                    <div class="year-labels1 rv-slider-labels" id="rvLabels1"></div>
-                </div>
-            </div>
-    
-            <!-- Legends Section -->
-            <div class="rv-legends-section" id="rv-legends">
-            </div>
-        </div>
-    
-        <!-- Footer Section -->
-        <div class="rv-footer">
-            <div class="rv-footer-content">
-                <i data-lucide="info" class="rv-footer-icon"></i>
-                <span class="rv-footnote">Dragging the map pauses playback</span>
-            </div>
-            <div class="rv-footer-badge">
-                <span class="rv-data-source">Data: RainViewer</span>
-            </div>
-        </div>
-    </div>
+    <!-- RainViewer slider markup removed: realtime_radar and satellite_infrared
+         now flow through #temp-slider1 via the unified temporal dispatcher. -->
     <!--NEWS Modal-->
     <div id="news-modal" class="news-modal bg-glass">
         <!-- Left section: Logo + Global News + Time -->

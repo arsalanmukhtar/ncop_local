@@ -69,11 +69,15 @@ export const legends = {
       "40",
     ]
   ),
-  rainviewerSatInfra: gradientLegendBar(
+  // RainViewer satellite IR — cloud-top brightness ramp (low contrast → high).
+  // Key matches the layer key so #temp-slider1's `legends[layerKey]` lookup
+  // resolves directly without aliases.
+  satellite_infrared: gradientLegendBar(
     ["#565B54", "#7B7C7B", "#A3A3A3", "#C8C8C8", "#EAEAEA", "#F5F5F5"],
     ["Low", "Med-Low", "Medium", "Med-High", "High", "Very High"]
   ),
-  rainviewerRadar: gradientLegendBar(
+  // RainViewer radar precipitation rate (mm/h).
+  realtime_radar: gradientLegendBar(
     [
       "#63eb63",
       "#3dc63d",
