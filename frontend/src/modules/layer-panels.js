@@ -675,6 +675,22 @@ export class LayerOrderControl {
     }
 
     applyLayerOrder(newOrder) {
+        // Snapshot the live paint/layout of every layer BEFORE we remove
+        // anything. LayerStyleConfig writes user customizations straight
+        // to the map via setPaintProperty/setLayoutProperty and never
+        // mirrors them back to layerInfo.config.layers[]; if we re-added
+        // from the original config those customizations would be lost on
+        // every reorder. Reading from map.getStyle() captures the current
+        // live state (config defaults + any user overrides) so we can
+        // replay it exactly when re-adding.
+        const liveLayerById = new Map();
+        try {
+            const style = this.#map.getStyle();
+            (style?.layers || []).forEach((l) => liveLayerById.set(l.id, l));
+        } catch (e) {
+            console.warn("[LayerOrder] getStyle() failed; falling back to config paint/layout:", e);
+        }
+
         // Remove all layers first
         const activeLayers = [...this.#sourceLayerControl.activeLayers.keys()];
         activeLayers.forEach((key) => {
@@ -693,6 +709,9 @@ export class LayerOrderControl {
             if (layerInfo) {
                 // Re-add layers to map
                 layerInfo.config.layers.forEach((layerConfig) => {
+                    const live = liveLayerById.get(layerConfig.id);
+                    const paint  = live?.paint  ?? layerConfig.paint;
+                    const layout = live?.layout ?? layerConfig.layout;
                     const layer = {
                         id: layerConfig.id,
                         type: layerConfig.type,
@@ -700,8 +719,8 @@ export class LayerOrderControl {
                         ...(layerConfig["source-layer"] && {
                             "source-layer": layerConfig["source-layer"],
                         }),
-                        ...(layerConfig.paint && { paint: layerConfig.paint }),
-                        ...(layerConfig.layout && { layout: layerConfig.layout }),
+                        ...(paint  && { paint }),
+                        ...(layout && { layout }),
                     };
 
                     if (!this.#map.getLayer(layerConfig.id)) {
