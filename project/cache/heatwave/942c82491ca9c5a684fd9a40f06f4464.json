@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.985, 31.7167]}, "properties": {"name": "Sheikhupura", "province": "Punjab", "temperature": 33.2, "apparent_temperature": 32.6, "humidity": 28, "precipitation": 0.0, "wind_speed": 8.8, "weather_code": 3, "temp_max": 35.8, "temp_min": 26.1, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

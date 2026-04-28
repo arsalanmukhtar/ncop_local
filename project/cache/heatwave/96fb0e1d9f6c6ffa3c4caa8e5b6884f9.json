@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [74.0789, 32.57]}, "properties": {"name": "Gujrat", "province": "Punjab", "temperature": 33.3, "apparent_temperature": 33.1, "humidity": 29, "precipitation": 0.0, "wind_speed": 7.3, "weather_code": 3, "temp_max": 34.0, "temp_min": 26.2, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

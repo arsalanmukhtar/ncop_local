@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.4534, 30.8138]}, "properties": {"name": "Okara", "province": "Punjab", "temperature": 36.0, "apparent_temperature": 36.3, "humidity": 26, "precipitation": 0.0, "wind_speed": 9.4, "weather_code": 3, "temp_max": 36.8, "temp_min": 26.0, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}

@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [70.2952, 28.4202]}, "properties": {"name": "Rahim Yar Khan", "province": "Punjab", "temperature": 36.2, "apparent_temperature": 39.8, "humidity": 32, "precipitation": 0.0, "wind_speed": 1.7, "weather_code": 0, "temp_max": 39.8, "temp_min": 28.8, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}

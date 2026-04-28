@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [74.3436, 31.5497]}, "properties": {"name": "Lahore", "province": "Punjab", "temperature": 33.8, "apparent_temperature": 33.0, "humidity": 26, "precipitation": 0.0, "wind_speed": 9.5, "weather_code": 3, "temp_max": 36.5, "temp_min": 28.4, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

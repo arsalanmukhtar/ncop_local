@@ -855,3 +855,514 @@
 .mapboxgl-popup.ncop-popup-host.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
     border-left-color: var(--popup-bg-solid);
 }
+
+/* ============================================================================
+   Heatwave Monitoring popup
+   The stats panel renders inside .ncop-popup__body-scroll alongside a Chart.js
+   canvas. Colors derive from the existing --popup-* tokens so day/night themes
+   inherit automatically.
+   ========================================================================= */
+
+.ncop-popup__badge--heatwave-normal   { --popup-badge-bg: #16a34a;            --popup-badge-text: #fff; }
+.ncop-popup__badge--heatwave-elevated { --popup-badge-bg: #facc15;            --popup-badge-text: #1a1a1a; }
+.ncop-popup__badge--heatwave-high     { --popup-badge-bg: #f97316;            --popup-badge-text: #fff; }
+.ncop-popup__badge--heatwave-severe   { --popup-badge-bg: #ef4444;            --popup-badge-text: #fff; }
+.ncop-popup__badge--heatwave-extreme  {
+    --popup-badge-bg: linear-gradient(135deg, #b91c1c, #7f1d1d);
+    --popup-badge-text: #fff;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.18) inset;
+    animation: heatwavePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes heatwavePulse {
+    0%, 100% { filter: brightness(1.0); }
+    50%      { filter: brightness(1.18); }
+}
+
+.heatwave-popup__header {
+    background: linear-gradient(135deg, rgba(127, 29, 29, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg, transparent);
+}
+
+/* ---------- Compact in-popup body --------------------------------------- */
+.heatwave-popup-body {
+    padding: 12px 14px 14px;
+    color: var(--popup-text);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.heatwave-popup-now {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+
+.heatwave-popup-now__main {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.heatwave-popup-now__value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #f97316;
+    line-height: 1;
+}
+
+.heatwave-popup-now__unit {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--popup-text-muted);
+}
+
+.heatwave-popup-now__sub {
+    font-size: 11px;
+    color: var(--popup-text-muted);
+    line-height: 1.3;
+}
+
+.heatwave-open-stats {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 0;
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+    font-family: inherit;
+    box-shadow: 0 6px 16px rgba(127, 29, 29, 0.35);
+}
+
+.heatwave-open-stats:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 22px rgba(127, 29, 29, 0.45);
+}
+
+.heatwave-open-stats svg { display: block; }
+
+/* =========================================================================
+   STANDALONE STATS MODAL (#heatwave-stats-modal)
+   Anchored to the right edge so it sits alongside (not on top of) the
+   popup. Uses the same popup design tokens so day/night themes inherit.
+   ========================================================================= */
+
+.heatwave-modal {
+    /* Default: bottom-anchored strip mirroring #news-modal placement
+       (left: 20%, width: 75%). Wider than tall — primary axis is the
+       chart panel on the right. JS pins to absolute pixels on first
+       drag/resize so these defaults only apply on initial open. */
+    position: absolute;
+    bottom: 12px;
+    left: 20%;
+    width: 75%;
+    height: 380px;
+    min-width: 540px;
+    min-height: 280px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    z-index: 999;
+    color: var(--popup-text);
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px var(--shadow-soft, rgba(0,0,0,0.45)),
+                0 24px 60px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(12px) scale(0.985);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.heatwave-modal.is-open {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.heatwave-modal.hidden {
+    display: none;
+}
+
+/* Subtle visual feedback while user is interacting with the chrome */
+.heatwave-modal.is-dragging,
+.heatwave-modal.is-resizing {
+    transition: none;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+.heatwave-modal__head {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 44px 10px 14px;
+    background: linear-gradient(135deg, rgba(127, 29, 29, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+    border-bottom: 1px solid var(--popup-divider);
+    cursor: grab;
+    user-select: none;
+    flex: 0 0 auto;
+}
+
+.heatwave-modal.is-dragging .heatwave-modal__head { cursor: grabbing; }
+
+.heatwave-modal__drag-grip {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 4px;
+    opacity: 0.55;
+    transition: opacity 0.18s ease;
+}
+.heatwave-modal__head:hover .heatwave-modal__drag-grip { opacity: 0.9; }
+
+.heatwave-modal__drag-grip span {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--popup-text-muted);
+}
+
+.heatwave-modal__title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.heatwave-modal__kicker {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f97316;
+    margin-bottom: 2px;
+}
+
+.heatwave-modal__title {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--popup-text);
+}
+
+.heatwave-modal__subtitle {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--popup-text-muted);
+}
+
+.heatwave-modal__badge {
+    flex: 0 0 auto;
+    align-self: flex-start;
+}
+
+.heatwave-modal__close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 0;
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--popup-text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.heatwave-modal__close:hover {
+    background: rgba(239, 68, 68, 0.32);
+    transform: rotate(90deg);
+}
+
+/* Body: 2-column layout — stats on the left, chart fills the right */
+.heatwave-modal__body {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    min-height: 0;
+}
+
+.heatwave-modal__left {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 10px;
+    border-right: 1px solid var(--popup-divider);
+    overflow: auto;
+}
+
+.heatwave-modal__right {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+
+.heatwave-modal__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 8px;
+    flex: 1 1 auto;
+    align-content: stretch;
+    min-height: 0;
+}
+
+.heatwave-stat {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.heatwave-stat:hover {
+    transform: translateY(-1px);
+    border-color: var(--popup-border-strong);
+}
+
+.heatwave-stat__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.heatwave-stat__value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--popup-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.heatwave-stat--temp .heatwave-stat__value {
+    color: #f97316;
+    font-size: 16px;
+}
+
+.heatwave-stat--feels .heatwave-stat__value {
+    color: #fbbf24;
+}
+
+.heatwave-modal__tabs {
+    display: flex;
+    gap: 6px;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 999px;
+    padding: 4px;
+    flex: 0 0 auto;
+}
+
+.heatwave-modal__tab {
+    flex: 1 1 0;
+    padding: 7px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--popup-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.18s ease;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.heatwave-modal__tab:hover {
+    color: var(--popup-text);
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.heatwave-modal__tab.is-active {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(127, 29, 29, 0.35);
+}
+
+.heatwave-modal__chart-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.heatwave-modal__chart-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    gap: 10px;
+}
+
+.heatwave-modal__chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--popup-text);
+}
+
+.heatwave-modal__chart-sub {
+    font-size: 11px;
+    color: var(--popup-text-muted);
+    text-align: right;
+    flex: 1 1 auto;
+}
+
+.heatwave-modal__canvas-host {
+    position: relative;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 160px;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 12px;
+    padding: 8px;
+}
+
+.heatwave-modal__canvas-host canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+.heatwave-modal__loader {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+}
+
+.heatwave-modal__loader span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f97316;
+    animation: heatwaveDot 0.9s ease-in-out infinite;
+}
+.heatwave-modal__loader span:nth-child(2) { animation-delay: 0.15s; background: #ef4444; }
+.heatwave-modal__loader span:nth-child(3) { animation-delay: 0.30s; background: #fbbf24; }
+
+@keyframes heatwaveDot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+    40%           { transform: scale(1.0); opacity: 1.0; }
+}
+
+.heatwave-modal__footnote {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--popup-text-muted);
+    text-align: right;
+    font-style: italic;
+    flex: 0 0 auto;
+}
+
+/* Resize handle — bottom-right corner. Touch-friendly hit area, subtle
+   chevron icon. Uses nwse-resize cursor and renders above the chart so
+   pointerdown reliably hits it before the canvas. */
+.heatwave-modal__resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    color: var(--popup-text-muted);
+    opacity: 0.65;
+    transition: opacity 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    z-index: 4;
+    touch-action: none;
+}
+
+.heatwave-modal__resize:hover {
+    opacity: 1;
+    color: #f97316;
+    transform: scale(1.08);
+}
+
+.heatwave-modal__resize svg { width: 14px; height: 14px; display: block; }
+
+.heatwave-modal.is-resizing .heatwave-modal__resize {
+    opacity: 1;
+    color: #f97316;
+}
+
+/* Narrow viewports — collapse to a single column and pin to bottom edge.
+   Min-width is also relaxed so the modal still fits below 540px screens. */
+@media (max-width: 720px) {
+    .heatwave-modal {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        bottom: 12px;
+        height: 60vh;
+        min-width: 0;
+    }
+    .heatwave-modal__body {
+        grid-template-columns: 1fr;
+    }
+    .heatwave-modal__left {
+        border-right: none;
+        border-bottom: 1px solid var(--popup-divider);
+        padding-right: 0;
+        padding-bottom: 8px;
+    }
+    .heatwave-modal__stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .heatwave-modal__tab {
+        font-size: 10px;
+        padding: 6px 6px;
+    }
+}

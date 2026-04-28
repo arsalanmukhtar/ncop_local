@@ -1353,6 +1353,777 @@ function handlePmdPopupClick(e) {
   }
 }
 
+// ========== HEATWAVE MONITORING — simple popup + standalone stats modal ==========
+const heatwaveChartInstances = {};
+const heatwaveDetailCache = {};
+const HEATWAVE_INFLIGHT = {};
+
+const HEATWAVE_MODAL_ID = "heatwave-stats-modal";
+const HEATWAVE_CANVAS_ID = "heatwave-modal-canvas";
+const HEATWAVE_INSTANCE_KEY = "modal";
+
+function heatwaveAlertVariant(level) {
+  switch (String(level || "").toLowerCase()) {
+    case "extreme":
+      return "heatwave-extreme";
+    case "severe":
+      return "heatwave-severe";
+    case "high":
+      return "heatwave-high";
+    case "elevated":
+      return "heatwave-elevated";
+    default:
+      return "heatwave-normal";
+  }
+}
+
+function heatwaveFmt(value, digits = 1, suffix = "") {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toFixed(digits)}${suffix}`;
+}
+
+// Slim popup — no charts, no tabs. Just identity, current temp, alert badge,
+// and a button that hands off to the standalone stats modal.
+function buildHeatwavePopupContent(props) {
+  const variant = heatwaveAlertVariant(props.alert_level);
+  const alertText = props.alert_level || "Normal";
+
+  const primary = `
+    <div class="ncop-popup__header heatwave-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${props.name || "City"}</div>
+        <div class="ncop-popup__subtitle">${props.province || ""} · Heatwave Monitoring</div>
+      </div>
+      <span class="ncop-popup__badge ncop-popup__badge--${variant}">${alertText}</span>
+    </div>
+  `;
+
+  const drawer = `
+    <div class="heatwave-popup-body">
+      <div class="heatwave-popup-now">
+        <div class="heatwave-popup-now__main">
+          <span class="heatwave-popup-now__value">${heatwaveFmt(props.temperature, 1, "")}</span>
+          <span class="heatwave-popup-now__unit">°C</span>
+        </div>
+        <div class="heatwave-popup-now__sub">
+          Feels ${heatwaveFmt(props.apparent_temperature, 0, "°")} ·
+          ${heatwaveFmt(props.temp_max, 0, "°")} / ${heatwaveFmt(props.temp_min, 0, "°")} ·
+          RH ${heatwaveFmt(props.humidity, 0, "%")}
+        </div>
+      </div>
+      <button type="button" class="heatwave-open-stats" data-lat="${props._lat || ""}" data-lon="${props._lon || ""}" data-name="${props.name || ""}" data-province="${props.province || ""}" data-alert="${alertText}" data-variant="${variant}">
+        Open Stats Panel
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  `;
+
+  return { primary, drawer, drawerTitle: "Heatwave" };
+}
+
+// ----- Standalone stats modal --------------------------------------------
+function ensureHeatwaveModal() {
+  let modal = document.getElementById(HEATWAVE_MODAL_ID);
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = HEATWAVE_MODAL_ID;
+  modal.className = "heatwave-modal hidden";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-label", "Heatwave Stats");
+  modal.innerHTML = `
+    <div class="heatwave-modal__head" data-heatwave-drag>
+      <div class="heatwave-modal__drag-grip" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="heatwave-modal__title-block">
+        <div class="heatwave-modal__kicker">Heatwave Monitoring</div>
+        <div class="heatwave-modal__title" id="heatwave-modal-name">—</div>
+        <div class="heatwave-modal__subtitle" id="heatwave-modal-meta"></div>
+      </div>
+      <span class="heatwave-modal__badge ncop-popup__badge ncop-popup__badge--heatwave-normal" id="heatwave-modal-badge">—</span>
+      <button type="button" class="heatwave-modal__close" aria-label="Close" data-heatwave-close>×</button>
+    </div>
+
+    <div class="heatwave-modal__body">
+      <aside class="heatwave-modal__left">
+        <div class="heatwave-modal__stats" id="heatwave-modal-stats"></div>
+      </aside>
+      <section class="heatwave-modal__right">
+        <div class="heatwave-modal__tabs" role="tablist">
+          <button class="heatwave-modal__tab is-active" data-mode="forecast" type="button">16-Day Forecast</button>
+          <button class="heatwave-modal__tab" data-mode="seasonal" type="button">6-Month Outlook</button>
+          <button class="heatwave-modal__tab" data-mode="climate" type="button">Climate Trend</button>
+        </div>
+        <div class="heatwave-modal__chart-wrap">
+          <div class="heatwave-modal__chart-head">
+            <div class="heatwave-modal__chart-title" id="heatwave-modal-title">16-Day Forecast</div>
+            <div class="heatwave-modal__chart-sub" id="heatwave-modal-sub">Loading…</div>
+          </div>
+          <div class="heatwave-modal__canvas-host">
+            <canvas id="${HEATWAVE_CANVAS_ID}"></canvas>
+            <div class="heatwave-modal__loader" id="heatwave-modal-loader"><span></span><span></span><span></span></div>
+          </div>
+          <div class="heatwave-modal__footnote">Data: Open-Meteo (forecast / seasonal / climate-change APIs)</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="heatwave-modal__resize" data-heatwave-resize aria-label="Resize">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M14 6 L6 14 M14 10 L10 14" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Wire close + tab clicks once.
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-heatwave-close]")) {
+      hideHeatwaveModal();
+      return;
+    }
+    const tab = ev.target.closest(".heatwave-modal__tab");
+    if (tab) {
+      const mode = tab.getAttribute("data-mode");
+      if (!mode) return;
+      modal
+        .querySelectorAll(".heatwave-modal__tab")
+        .forEach((t) => t.classList.remove("is-active"));
+      tab.classList.add("is-active");
+      const ctx = modal._heatwaveCtx;
+      if (ctx) loadHeatwaveMode(mode, ctx.lat, ctx.lon);
+    }
+  });
+
+  attachHeatwaveDragAndResize(modal);
+  return modal;
+}
+
+// ---- Drag + resize -------------------------------------------------------
+// Pointer-event based, single-touch friendly. The first drag/resize converts
+// the modal's CSS-driven default position (bottom/left%) into pixel-anchored
+// inline styles so subsequent moves stay sticky and the modal can be pushed
+// anywhere on screen.
+function attachHeatwaveDragAndResize(modal) {
+  const drag = modal.querySelector("[data-heatwave-drag]");
+  const resize = modal.querySelector("[data-heatwave-resize]");
+
+  const pinToPixels = () => {
+    // Snapshot current rect, then anchor to absolute viewport pixels so
+    // bottom/right rules from the stylesheet stop fighting our updates.
+    const r = modal.getBoundingClientRect();
+    modal.style.left = `${Math.round(r.left)}px`;
+    modal.style.top = `${Math.round(r.top)}px`;
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+    modal.style.width = `${Math.round(r.width)}px`;
+    modal.style.height = `${Math.round(r.height)}px`;
+  };
+
+  // Drag (header)
+  if (drag) {
+    drag.addEventListener("pointerdown", (e) => {
+      // Don't start a drag from interactive children (close button, badge).
+      if (e.target.closest("[data-heatwave-close]")) return;
+      if (e.button !== undefined && e.button !== 0) return;
+
+      pinToPixels();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startLeft = parseFloat(modal.style.left) || 0;
+      const startTop = parseFloat(modal.style.top) || 0;
+      modal.classList.add("is-dragging");
+      drag.setPointerCapture(e.pointerId);
+
+      const onMove = (ev) => {
+        const margin = 8;
+        const w = modal.offsetWidth;
+        const h = modal.offsetHeight;
+        let nl = startLeft + (ev.clientX - startX);
+        let nt = startTop + (ev.clientY - startY);
+        nl = Math.max(margin, Math.min(window.innerWidth - w - margin, nl));
+        nt = Math.max(margin, Math.min(window.innerHeight - h - margin, nt));
+        modal.style.left = `${Math.round(nl)}px`;
+        modal.style.top = `${Math.round(nt)}px`;
+      };
+      const onUp = () => {
+        modal.classList.remove("is-dragging");
+        try { drag.releasePointerCapture(e.pointerId); } catch (_) {}
+        drag.removeEventListener("pointermove", onMove);
+        drag.removeEventListener("pointerup", onUp);
+        drag.removeEventListener("pointercancel", onUp);
+      };
+      drag.addEventListener("pointermove", onMove);
+      drag.addEventListener("pointerup", onUp);
+      drag.addEventListener("pointercancel", onUp);
+      e.preventDefault();
+    });
+  }
+
+  // Resize (bottom-right corner handle)
+  if (resize) {
+    resize.addEventListener("pointerdown", (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      pinToPixels();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = modal.offsetWidth;
+      const startH = modal.offsetHeight;
+      const startLeft = parseFloat(modal.style.left) || 0;
+      const startTop = parseFloat(modal.style.top) || 0;
+      modal.classList.add("is-resizing");
+      resize.setPointerCapture(e.pointerId);
+
+      const minW = 540;
+      const minH = 280;
+
+      const onMove = (ev) => {
+        const margin = 8;
+        const maxW = window.innerWidth - startLeft - margin;
+        const maxH = window.innerHeight - startTop - margin;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        const w = Math.max(minW, Math.min(maxW, startW + dx));
+        const h = Math.max(minH, Math.min(maxH, startH + dy));
+        modal.style.width = `${Math.round(w)}px`;
+        modal.style.height = `${Math.round(h)}px`;
+        // Chart.js v4 + responsive:true watches its container via
+        // ResizeObserver, so the canvas re-fits automatically. No
+        // explicit chart.resize() call needed.
+      };
+      const onUp = () => {
+        modal.classList.remove("is-resizing");
+        try { resize.releasePointerCapture(e.pointerId); } catch (_) {}
+        resize.removeEventListener("pointermove", onMove);
+        resize.removeEventListener("pointerup", onUp);
+        resize.removeEventListener("pointercancel", onUp);
+      };
+      resize.addEventListener("pointermove", onMove);
+      resize.addEventListener("pointerup", onUp);
+      resize.addEventListener("pointercancel", onUp);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+}
+
+function setHeatwaveLoader(isLoading) {
+  const el = document.getElementById("heatwave-modal-loader");
+  if (el) el.style.display = isLoading ? "flex" : "none";
+}
+
+function setHeatwaveSub(text) {
+  const el = document.getElementById("heatwave-modal-sub");
+  if (el) el.textContent = text;
+}
+
+function setHeatwaveTitle(text) {
+  const el = document.getElementById("heatwave-modal-title");
+  if (el) el.textContent = text;
+}
+
+function showHeatwaveModalForCity(ctx) {
+  const modal = ensureHeatwaveModal();
+  modal._heatwaveCtx = ctx;
+  modal.classList.remove("hidden");
+  modal.classList.add("is-open");
+  // Position once contents are populated below — call after the stats grid
+  // is rendered so getBoundingClientRect() returns the final size.
+
+  const nameEl = document.getElementById("heatwave-modal-name");
+  const metaEl = document.getElementById("heatwave-modal-meta");
+  const badgeEl = document.getElementById("heatwave-modal-badge");
+  const statsEl = document.getElementById("heatwave-modal-stats");
+
+  if (nameEl) nameEl.textContent = ctx.name || "City";
+  if (metaEl) {
+    const lat = Number(ctx.lat).toFixed(3);
+    const lon = Number(ctx.lon).toFixed(3);
+    metaEl.textContent = `${ctx.province || ""}${ctx.province ? " · " : ""}${lat}, ${lon}`;
+  }
+  if (badgeEl) {
+    badgeEl.textContent = ctx.alert || "Normal";
+    badgeEl.className = `heatwave-modal__badge ncop-popup__badge ncop-popup__badge--${ctx.variant || "heatwave-normal"}`;
+  }
+  if (statsEl) {
+    const props = ctx.props || {};
+    statsEl.innerHTML = `
+      <div class="heatwave-stat heatwave-stat--temp">
+        <div class="heatwave-stat__label">Now</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.temperature, 1, "°C")}</div>
+      </div>
+      <div class="heatwave-stat heatwave-stat--feels">
+        <div class="heatwave-stat__label">Feels Like</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.apparent_temperature, 1, "°C")}</div>
+      </div>
+      <div class="heatwave-stat">
+        <div class="heatwave-stat__label">Today Max / Min</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.temp_max, 0, "°")} / ${heatwaveFmt(props.temp_min, 0, "°")}</div>
+      </div>
+      <div class="heatwave-stat">
+        <div class="heatwave-stat__label">Humidity</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.humidity, 0, "%")}</div>
+      </div>
+      <div class="heatwave-stat">
+        <div class="heatwave-stat__label">Wind</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.wind_speed, 1, " km/h")}</div>
+      </div>
+      <div class="heatwave-stat">
+        <div class="heatwave-stat__label">Precip</div>
+        <div class="heatwave-stat__value">${heatwaveFmt(props.precipitation, 1, " mm")}</div>
+      </div>
+    `;
+  }
+
+  // Reset to 16-day mode each time a new city is opened.
+  modal
+    .querySelectorAll(".heatwave-modal__tab")
+    .forEach((t) => t.classList.toggle("is-active", t.getAttribute("data-mode") === "forecast"));
+
+  loadHeatwaveMode("forecast", ctx.lat, ctx.lon);
+}
+
+function hideHeatwaveModal() {
+  const modal = document.getElementById(HEATWAVE_MODAL_ID);
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.classList.remove("is-open");
+  destroyHeatwaveChart(HEATWAVE_INSTANCE_KEY);
+}
+
+async function fetchHeatwaveDetail(lat, lon, kind) {
+  const key = `${kind}:${Number(lat).toFixed(3)}:${Number(lon).toFixed(3)}`;
+  if (heatwaveDetailCache[key]) return heatwaveDetailCache[key];
+  if (HEATWAVE_INFLIGHT[key]) return HEATWAVE_INFLIGHT[key];
+
+  const url = `${window.baseUrl || ""}/get-heatwave-detail/?lat=${lat}&lon=${lon}&type=${kind}`;
+  const promise = fetch(url, { credentials: "same-origin" })
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((json) => {
+      heatwaveDetailCache[key] = json;
+      delete HEATWAVE_INFLIGHT[key];
+      const keys = Object.keys(heatwaveDetailCache);
+      if (keys.length > 64) delete heatwaveDetailCache[keys[0]];
+      return json;
+    })
+    .catch((err) => {
+      delete HEATWAVE_INFLIGHT[key];
+      throw err;
+    });
+  HEATWAVE_INFLIGHT[key] = promise;
+  return promise;
+}
+
+function getHeatwaveChartTheme() {
+  const isDay = document.documentElement.getAttribute("data-theme") !== "night";
+  return {
+    text: "#e2e8f0",
+    grid: "rgba(148,163,184,0.18)",
+    accent: isDay ? "#0ea5e9" : "#38bdf8",
+    accentSoft: isDay ? "rgba(14,165,233,0.18)" : "rgba(56,189,248,0.18)",
+    warm: "#f97316",
+    danger: "#ef4444",
+    cool: "#3b82f6",
+  };
+}
+
+function destroyHeatwaveChart(key) {
+  const inst = heatwaveChartInstances[key];
+  if (inst && typeof inst.destroy === "function") {
+    try {
+      inst.destroy();
+    } catch (_) {}
+  }
+  delete heatwaveChartInstances[key];
+}
+
+function getHeatwaveCanvas() {
+  return document.getElementById(HEATWAVE_CANVAS_ID);
+}
+
+function renderHeatwaveForecast(payload) {
+  const data = payload?.data?.daily || {};
+  const labels = (data.time || []).map((d) => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  });
+  const tMax = data.temperature_2m_max || [];
+  const tMin = data.temperature_2m_min || [];
+  const precip = data.precipitation_sum || [];
+  const theme = getHeatwaveChartTheme();
+  const canvas = getHeatwaveCanvas();
+  if (!canvas) return;
+  destroyHeatwaveChart(HEATWAVE_INSTANCE_KEY);
+
+  heatwaveChartInstances[HEATWAVE_INSTANCE_KEY] = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Max °C",
+          data: tMax,
+          borderColor: theme.danger,
+          backgroundColor: "rgba(239,68,68,0.18)",
+          fill: false,
+          tension: 0.35,
+          borderWidth: 2.4,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          yAxisID: "y",
+        },
+        {
+          label: "Min °C",
+          data: tMin,
+          borderColor: theme.cool,
+          backgroundColor: "rgba(59,130,246,0.18)",
+          fill: false,
+          tension: 0.35,
+          borderWidth: 2.4,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          yAxisID: "y",
+        },
+        {
+          label: "Precip mm",
+          data: precip,
+          type: "bar",
+          backgroundColor: "rgba(56,189,248,0.45)",
+          borderRadius: 4,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 900, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: { color: theme.text, font: { size: 10 }, maxRotation: 0 },
+          grid: { display: false },
+        },
+        y: {
+          position: "left",
+          ticks: { color: theme.text, font: { size: 10 } },
+          grid: { color: theme.grid },
+          title: { display: true, text: "°C", color: theme.text, font: { size: 10 } },
+        },
+        y1: {
+          position: "right",
+          beginAtZero: true,
+          ticks: { color: theme.text, font: { size: 10 } },
+          grid: { display: false },
+          title: { display: true, text: "mm", color: theme.text, font: { size: 10 } },
+        },
+      },
+      plugins: {
+        legend: {
+          labels: { color: theme.text, font: { size: 10, weight: "600" }, boxWidth: 12 },
+        },
+        tooltip: {
+          backgroundColor: "rgba(15,23,42,0.95)",
+          borderColor: "rgba(148,163,184,0.3)",
+          borderWidth: 1,
+          titleColor: "#f1f5f9",
+          bodyColor: "#e2e8f0",
+        },
+      },
+    },
+  });
+}
+
+function renderHeatwaveSeasonal(payload) {
+  // Seasonal API: weekly is the only valid grouping for temperature_2m_mean.
+  // Daily series carries temperature_2m_max/min and humidity_2m_max/min, which
+  // we layer on top so the chart still tells the full seasonal story.
+  const weekly = payload?.data?.weekly || {};
+  const daily = payload?.data?.daily || {};
+
+  const weeklyLabels = (weekly.time || []).map((d) => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  });
+  const tMean = weekly.temperature_2m_mean || [];
+
+  // Down-sample the daily series so it stays readable on the same axis. We
+  // keep one point every 7 days, aligning roughly with the weekly index.
+  const dailyTimes = daily.time || [];
+  const stride = Math.max(1, Math.round(dailyTimes.length / Math.max(1, weeklyLabels.length || 12)));
+  const sampleIdx = [];
+  for (let i = 0; i < dailyTimes.length; i += stride) sampleIdx.push(i);
+  const sampledLabels = sampleIdx.map((i) => {
+    const dt = new Date(dailyTimes[i]);
+    return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  });
+  const sample = (arr) => sampleIdx.map((i) => (Array.isArray(arr) ? arr[i] ?? null : null));
+
+  // Prefer weekly labels when available; otherwise fall back to daily samples.
+  const labels = weeklyLabels.length ? weeklyLabels : sampledLabels;
+
+  const theme = getHeatwaveChartTheme();
+  const canvas = getHeatwaveCanvas();
+  if (!canvas) return;
+  destroyHeatwaveChart(HEATWAVE_INSTANCE_KEY);
+
+  const datasets = [];
+  if (tMean.length) {
+    datasets.push({
+      label: "Weekly Mean °C",
+      data: tMean,
+      borderColor: theme.warm,
+      backgroundColor: "rgba(249,115,22,0.22)",
+      fill: true,
+      tension: 0.4,
+      borderWidth: 2.4,
+      pointRadius: 2,
+      yAxisID: "y",
+    });
+  }
+  if (Array.isArray(daily.temperature_2m_max) && daily.temperature_2m_max.length) {
+    datasets.push({
+      label: "Daily Max °C",
+      data: weeklyLabels.length ? sample(daily.temperature_2m_max) : daily.temperature_2m_max,
+      borderColor: theme.danger,
+      backgroundColor: "rgba(239,68,68,0.0)",
+      fill: false,
+      tension: 0.35,
+      borderWidth: 1.8,
+      borderDash: [4, 3],
+      pointRadius: 0,
+      yAxisID: "y",
+    });
+  }
+  if (Array.isArray(daily.temperature_2m_min) && daily.temperature_2m_min.length) {
+    datasets.push({
+      label: "Daily Min °C",
+      data: weeklyLabels.length ? sample(daily.temperature_2m_min) : daily.temperature_2m_min,
+      borderColor: theme.cool,
+      backgroundColor: "rgba(59,130,246,0.0)",
+      fill: false,
+      tension: 0.35,
+      borderWidth: 1.8,
+      borderDash: [4, 3],
+      pointRadius: 0,
+      yAxisID: "y",
+    });
+  }
+  if (Array.isArray(daily.relative_humidity_2m_max) && daily.relative_humidity_2m_max.length) {
+    datasets.push({
+      label: "RH Max %",
+      data: weeklyLabels.length ? sample(daily.relative_humidity_2m_max) : daily.relative_humidity_2m_max,
+      borderColor: "rgba(56,189,248,0.85)",
+      backgroundColor: "rgba(56,189,248,0.18)",
+      fill: false,
+      tension: 0.4,
+      borderWidth: 1.6,
+      pointRadius: 0,
+      yAxisID: "y1",
+    });
+  }
+
+  heatwaveChartInstances[HEATWAVE_INSTANCE_KEY] = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 1000, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: { color: theme.text, font: { size: 9 }, maxRotation: 30, autoSkip: true, maxTicksLimit: 14 },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: theme.text, font: { size: 10 } },
+          grid: { color: theme.grid },
+          title: { display: true, text: "°C", color: theme.text, font: { size: 10 } },
+        },
+        y1: {
+          position: "right",
+          beginAtZero: true,
+          max: 100,
+          ticks: { color: theme.text, font: { size: 10 } },
+          grid: { display: false },
+          title: { display: true, text: "RH %", color: theme.text, font: { size: 10 } },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: theme.text, font: { size: 10, weight: "600" }, boxWidth: 12 } },
+        tooltip: {
+          backgroundColor: "rgba(15,23,42,0.95)",
+          titleColor: "#f1f5f9",
+          bodyColor: "#e2e8f0",
+        },
+      },
+    },
+  });
+}
+
+function aggregateMonthly(times, values) {
+  if (!Array.isArray(times) || !Array.isArray(values) || !times.length) {
+    return { labels: [], values: [] };
+  }
+  const buckets = new Map();
+  for (let i = 0; i < times.length; i++) {
+    const v = values[i];
+    if (v === null || v === undefined || Number.isNaN(Number(v))) continue;
+    const d = new Date(times[i]);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!buckets.has(key)) buckets.set(key, { sum: 0, n: 0 });
+    const b = buckets.get(key);
+    b.sum += Number(v);
+    b.n += 1;
+  }
+  const labels = [];
+  const out = [];
+  Array.from(buckets.keys()).sort().forEach((k) => {
+    const { sum, n } = buckets.get(k);
+    if (n === 0) return;
+    labels.push(k);
+    out.push(sum / n);
+  });
+  return { labels, values: out };
+}
+
+function renderHeatwaveClimate(payload) {
+  const daily = payload?.data?.daily || {};
+  const times = daily.time || [];
+  // Climate API returns variables suffixed by model — find any matching column.
+  const findKey = (prefix) =>
+    Object.keys(daily).find((k) => k === prefix || k.startsWith(`${prefix}_`));
+  const meanArr = daily[findKey("temperature_2m_mean")] || [];
+  const maxArr = daily[findKey("temperature_2m_max")] || [];
+  const aggMean = aggregateMonthly(times, meanArr);
+  const aggMax = aggregateMonthly(times, maxArr);
+  const theme = getHeatwaveChartTheme();
+  const canvas = getHeatwaveCanvas();
+  if (!canvas) return;
+  destroyHeatwaveChart(HEATWAVE_INSTANCE_KEY);
+
+  heatwaveChartInstances[HEATWAVE_INSTANCE_KEY] = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: {
+      labels: aggMean.labels.length ? aggMean.labels : aggMax.labels,
+      datasets: [
+        {
+          label: "Mean °C",
+          data: aggMean.values,
+          borderColor: theme.accent,
+          backgroundColor: theme.accentSoft,
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2.2,
+          pointRadius: 0,
+        },
+        {
+          label: "Max °C",
+          data: aggMax.values,
+          borderColor: theme.danger,
+          backgroundColor: "rgba(239,68,68,0.12)",
+          fill: false,
+          tension: 0.4,
+          borderWidth: 2,
+          borderDash: [4, 3],
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 1100, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          ticks: { color: theme.text, font: { size: 9 }, maxRotation: 30, autoSkip: true, maxTicksLimit: 12 },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: theme.text, font: { size: 10 } },
+          grid: { color: theme.grid },
+          title: { display: true, text: "°C (monthly avg)", color: theme.text, font: { size: 10 } },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: theme.text, font: { size: 10, weight: "600" }, boxWidth: 12 } },
+        tooltip: {
+          backgroundColor: "rgba(15,23,42,0.95)",
+          titleColor: "#f1f5f9",
+          bodyColor: "#e2e8f0",
+        },
+      },
+    },
+  });
+}
+
+async function loadHeatwaveMode(mode, lat, lon) {
+  setHeatwaveTitle(
+    mode === "seasonal"
+      ? "6-Month Seasonal Outlook"
+      : mode === "climate"
+      ? "Climate Change Trend"
+      : "16-Day Forecast"
+  );
+  setHeatwaveSub("Loading…");
+  setHeatwaveLoader(true);
+
+  try {
+    const payload = await fetchHeatwaveDetail(lat, lon, mode);
+    setHeatwaveLoader(false);
+    if (mode === "forecast") {
+      renderHeatwaveForecast(payload);
+      const daily = payload?.data?.daily || {};
+      const days = (daily.time || []).length;
+      setHeatwaveSub(`${days} day daily forecast · max / min / precipitation`);
+    } else if (mode === "seasonal") {
+      renderHeatwaveSeasonal(payload);
+      const w = payload?.data?.weekly || {};
+      const n = (w.time || []).length;
+      setHeatwaveSub(n ? `${n} weekly steps · seasonal outlook (CFSv2)` : "Seasonal data unavailable");
+    } else if (mode === "climate") {
+      renderHeatwaveClimate(payload);
+      setHeatwaveSub("Monthly aggregates · climate-change projection");
+    }
+  } catch (err) {
+    setHeatwaveLoader(false);
+    setHeatwaveSub("Could not load data — try again later.");
+    console.warn("Heatwave detail load failed:", err);
+  }
+}
+
+// Single delegated handler for the "Open Stats Panel" button inside the popup.
+function setupHeatwavePopupEventHandlers() {
+  document.removeEventListener("click", handleHeatwavePopupClick);
+  document.addEventListener("click", handleHeatwavePopupClick);
+}
+
+function handleHeatwavePopupClick(e) {
+  const btn = e.target.closest(".heatwave-open-stats");
+  if (!btn) return;
+  const lat = parseFloat(btn.getAttribute("data-lat"));
+  const lon = parseFloat(btn.getAttribute("data-lon"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  showHeatwaveModalForCity({
+    lat,
+    lon,
+    name: btn.getAttribute("data-name") || "City",
+    province: btn.getAttribute("data-province") || "",
+    alert: btn.getAttribute("data-alert") || "Normal",
+    variant: btn.getAttribute("data-variant") || "heatwave-normal",
+    props: btn._props || {},
+  });
+}
+// ========== END HEATWAVE MONITORING ==========
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;
@@ -2043,6 +2814,43 @@ export default class LayerAttributePopup {
           if (canvas) {
             createPmdChart(canvas, properties);
           }
+        });
+        return;
+      }
+
+      if (
+        layerId?.includes("heatwave_monitoring") ||
+        sourceId === "heatwave_monitoring-source"
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        // Carry click coordinates so the modal can hit our backend endpoint
+        // with the city's lat/lon (taken from the GeoJSON feature geometry).
+        try {
+          const coords = eligible.geometry?.coordinates;
+          if (Array.isArray(coords) && coords.length >= 2) {
+            properties._lon = coords[0];
+            properties._lat = coords[1];
+          }
+        } catch (_) {}
+        if (properties._lat == null || properties._lon == null) {
+          properties._lat = e.lngLat.lat;
+          properties._lon = e.lngLat.lng;
+        }
+
+        const { primary, drawer, drawerTitle } =
+          buildHeatwavePopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupHeatwavePopupEventHandlers();
+
+        // Stash the full property bag onto the button so the modal can show
+        // the same stats grid without needing another roundtrip.
+        requestAnimationFrame(() => {
+          const btn = this.popupEl.querySelector(".heatwave-open-stats");
+          if (btn) btn._props = properties;
         });
         return;
       }

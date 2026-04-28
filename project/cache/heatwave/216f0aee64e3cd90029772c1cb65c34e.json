@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.0169, 33.5651]}, "properties": {"name": "Rawalpindi", "province": "Punjab", "temperature": 29.9, "apparent_temperature": 29.7, "humidity": 33, "precipitation": 0.0, "wind_speed": 9.9, "weather_code": 1, "temp_max": 32.3, "temp_min": 23.0, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

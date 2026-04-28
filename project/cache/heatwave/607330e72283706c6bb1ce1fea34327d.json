@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [67.8773, 29.543]}, "properties": {"name": "Sibi", "province": "Balochistan", "temperature": 38.4, "apparent_temperature": 39.8, "humidity": 18, "precipitation": 0.0, "wind_speed": 4.2, "weather_code": 0, "temp_max": 41.6, "temp_min": 25.5, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}

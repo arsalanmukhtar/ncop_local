@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [70.9019, 31.8313]}, "properties": {"name": "Dera Ismail Khan", "province": "KPK", "temperature": 33.7, "apparent_temperature": 36.5, "humidity": 32, "precipitation": 0.0, "wind_speed": 2.5, "weather_code": 1, "temp_max": 34.8, "temp_min": 24.6, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

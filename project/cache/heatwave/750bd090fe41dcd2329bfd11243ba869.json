@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [71.5249, 30.1575]}, "properties": {"name": "Multan", "province": "Punjab", "temperature": 35.8, "apparent_temperature": 39.0, "humidity": 30, "precipitation": 0.0, "wind_speed": 3.3, "weather_code": 0, "temp_max": 38.4, "temp_min": 26.3, "alert_level": "Normal", "updated": "2026-04-28T11:00"}}

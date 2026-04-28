@@ -1101,7 +1101,7 @@ export const ncop_menu_items = {
         },
       },
     },
-    "Pakistan Meteorological Department (PMD)": {
+    "MET Monitoring": {
       toggle: {
         pmd_weather_stations: {
           label: "PMD Weather Stations",
@@ -1167,7 +1167,124 @@ export const ncop_menu_items = {
           ],
           popup: true,
           information:
-            "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+            "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the MET Monitoring. This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+        },
+        heatwave_monitoring: {
+          label: "Heatwave Monitoring",
+          theme: null,
+          source: {
+            id: "heatwave_monitoring-source",
+            type: "geojson",
+            data: `${baseUrl}/get-heatwave-monitoring/`,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "heatwave_monitoring-circle",
+              type: "circle",
+              source: "heatwave_monitoring-source",
+              paint: {
+                "circle-color": [
+                  "interpolate",
+                  ["linear"],
+                  ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                  20, "#2563eb",
+                  28, "#22c55e",
+                  34, "#facc15",
+                  38, "#f97316",
+                  42, "#ef4444",
+                  46, "#7f1d1d",
+                ],
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  4, [
+                    "interpolate",
+                    ["linear"],
+                    ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                    20, 9,
+                    30, 12,
+                    38, 16,
+                    46, 22,
+                  ],
+                  8, [
+                    "interpolate",
+                    ["linear"],
+                    ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                    20, 16,
+                    30, 22,
+                    38, 30,
+                    46, 40,
+                  ],
+                ],
+                "circle-opacity": 0.88,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-opacity": 0.9,
+              },
+            },
+            {
+              id: "heatwave_monitoring-label",
+              type: "symbol",
+              source: "heatwave_monitoring-source",
+              layout: {
+                "text-field": [
+                  "concat",
+                  [
+                    "to-string",
+                    ["round", ["coalesce", ["to-number", ["get", "temperature"]], 0]],
+                  ],
+                  "°",
+                ],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  4, 10,
+                  8, 14,
+                ],
+                "text-anchor": "center",
+                "text-allow-overlap": true,
+                "text-ignore-placement": true,
+              },
+              paint: {
+                "text-color": "#ffffff",
+                "text-halo-color": "rgba(0,0,0,0.55)",
+                "text-halo-width": 1.4,
+              },
+            },
+            {
+              id: "heatwave_monitoring-name",
+              type: "symbol",
+              source: "heatwave_monitoring-source",
+              minzoom: 5.5,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  5.5, 10,
+                  9, 13,
+                ],
+                "text-offset": [0, 1.6],
+                "text-anchor": "top",
+                "text-allow-overlap": false,
+                "text-optional": true,
+              },
+              paint: {
+                "text-color": "#0f172a",
+                "text-halo-color": "rgba(255,255,255,0.92)",
+                "text-halo-width": 1.6,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "The Heatwave Monitoring layer plots current air temperature for major Pakistani cities, sized and colored by intensity. Click a city to open a stats panel with the 16-day forecast, 6-month seasonal outlook, and a multi-year climate-change trend (powered by Open-Meteo).",
         },
       },
     },

@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [68.2123, 27.559]}, "properties": {"name": "Larkana", "province": "Sindh", "temperature": 39.8, "apparent_temperature": 40.4, "humidity": 21, "precipitation": 0.0, "wind_speed": 14.1, "weather_code": 0, "temp_max": 44.2, "temp_min": 28.8, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}

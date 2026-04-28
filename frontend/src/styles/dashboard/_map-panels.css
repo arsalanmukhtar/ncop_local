@@ -265,7 +265,7 @@
     display: flex !important;
     flex-direction: column;
     align-items: flex-end;
-    margin: 0 16px 16px 0 !important;
+    margin: 0 16px 6px 0 !important;
     pointer-events: none;
     z-index: 5;
 }
@@ -293,7 +293,7 @@
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     color: rgba(20, 20, 20, 0.92) !important;
-    font: 700 12px/1 "Inter", system-ui, -apple-system, "Segoe UI",
+    font: 700 11px/1 "Inter", system-ui, -apple-system, "Segoe UI",
         Roboto, sans-serif !important;
     letter-spacing: 0.02em;
     text-align: center;

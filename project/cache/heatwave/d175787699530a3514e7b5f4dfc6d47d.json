@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [68.3578, 25.396]}, "properties": {"name": "Hyderabad", "province": "Sindh", "temperature": 36.0, "apparent_temperature": 38.8, "humidity": 41, "precipitation": 0.0, "wind_speed": 20.9, "weather_code": 0, "temp_max": 40.6, "temp_min": 26.9, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}

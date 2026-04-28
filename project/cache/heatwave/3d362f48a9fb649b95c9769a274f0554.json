@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [63.044, 26.0031]}, "properties": {"name": "Turbat", "province": "Balochistan", "temperature": 38.0, "apparent_temperature": 39.2, "humidity": 19, "precipitation": 0.0, "wind_speed": 4.7, "weather_code": 0, "temp_max": 44.0, "temp_min": 27.0, "alert_level": "Elevated", "updated": "2026-04-28T11:00"}}
