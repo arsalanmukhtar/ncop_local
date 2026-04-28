@@ -1089,6 +1089,23 @@ window.updateTempSliderAsync = updateTempSliderAsync;
 window.hideAllSliderLayers = hideAllSliderLayers;
 window.cleanupSliderLayers = cleanupSliderLayers;
 
+// Read-only accessor for downstream consumers (e.g. WeatherReportControl)
+// that need to know which temporal layer is active and at what step. Pure
+// snapshot — no behavior change.
+function getCurrentTemporalState() {
+  const layersDef = _sliderRestore.layersDef;
+  const idx = _sliderRestore.currentIndex || 0;
+  const currentEntry = Array.isArray(layersDef) ? layersDef[idx] : null;
+  return {
+    layerKey: currentActiveLayerSet,
+    currentIndex: idx,
+    layersDef,
+    currentEntry,
+    date: currentEntry?.date || _sliderRestore.textContent || "",
+  };
+}
+window.getCurrentTemporalState = getCurrentTemporalState;
+
 // RainViewer is now handled as a regular temporal raster layer — frame
 // builders live in time-functions.js (generateRainViewerRadar/SatelliteIR
 // Layers) and are exposed on window[itemKey] like every other temporal

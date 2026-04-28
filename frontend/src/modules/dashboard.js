@@ -33,6 +33,7 @@ import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
+import { WeatherReportControl } from "./weather-report-control.js";
 
 
 // ---- Mapbox token handling ----
@@ -119,6 +120,7 @@ class DashboardManager {
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
     new LayerStyleConfig(this.#map, this.#sourceLayerControl);
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
+    new WeatherReportControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -431,6 +433,7 @@ const RAIL_PANEL_BUTTON_MAP = {
   layerOrderPanel: { btnId: "layerOrderToggle", visibleClass: "visible" },
   layerStylePanel: { btnId: "layerStyleToggle", visibleClass: "visible" },
   layerInfoPanel:  { btnId: "layerInfoToggle",  visibleClass: "visible" },
+  weatherReportPanel: { btnId: "weatherReportToggle", visibleClass: "visible" },
   ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
 };
 
@@ -482,6 +485,10 @@ function buildUnifiedRightRail() {
     push(mapWrapper.querySelector(".custom-layer-btn"));
     push(document.querySelector(".custom-layer-style-btn"));
     push(mapWrapper.querySelector(".custom-layer-info-btn"));
+    // Weather Report sits with the data/info controls so it's adjacent to
+    // the temporal slider's natural cohort (style + info). Wrapper div is
+    // injected by WeatherReportControl in init().
+    push(document.querySelector(".custom-weather-report-btn"));
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }
@@ -767,6 +774,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "layerStylePanel",      kind: "class",   cls: "visible",
     btn: { id: "layerStyleToggle", activeCls: "active-layer-style" } },
   { id: "layerInfoPanel",       kind: "class",   cls: "visible" },
+  { id: "weatherReportPanel",   kind: "class",   cls: "visible",
+    btn: { id: "weatherReportToggle", activeCls: "active-weather-report" } },
   { id: "ncopTourPanel",        kind: "class",   cls: "visible" },
   // Display-driven float panels
   { id: "gee-chat-modal",          kind: "display",
