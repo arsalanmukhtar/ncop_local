@@ -2192,18 +2192,26 @@ export default class LayerAttributePopup {
     //   └──────────────────────────┘
     const el = document.createElement("div");
     el.className = "layer-attribute-popup ncop-popup hidden";
+    // Close button removed — the popup now closes via the ESC key only,
+    // wired below as a single document-level keydown listener.  Keeping
+    // the close UI off the popup gives the data more breathing room and
+    // matches the modal-like ESC convention used elsewhere in NCOP.
     el.innerHTML = `
-      <button type="button" class="ncop-popup__close" aria-label="Close popup" title="Close">&times;</button>
       <div class="ncop-popup__primary">
         <div class="ncop-popup__primary-content"></div>
       </div>
       <div class="ncop-popup__body-scroll"></div>
     `;
     document.body.appendChild(el);
-    const closeBtn = el.querySelector(".ncop-popup__close");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
+
+    // ESC closes whichever popup is currently visible.  Bound once at
+    // creation; the visibility check inside means it's a no-op when the
+    // popup is hidden, so it's safe to leave attached for the page lifetime.
+    if (!this.__escBound) {
+      this.__escBound = true;
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape" && ev.key !== "Esc") return;
+        if (!this.popupEl || this.popupEl.classList.contains("hidden")) return;
         this.hide();
       });
     }

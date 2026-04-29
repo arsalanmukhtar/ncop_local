@@ -817,7 +817,7 @@ export class SourceLayerControl {
    * Manual user re-ordering via the Layer Order panel bypasses this because
    * applyLayerOrder() calls map.addLayer() without a beforeId.
    */
-  computeBeforeId(layerType) {
+  computeBeforeId(layerType, opts = {}) {
     const style = this.map.getStyle?.();
     if (!style || !Array.isArray(style.layers)) return undefined;
 
@@ -829,6 +829,29 @@ export class SourceLayerControl {
       }
     }
 
+    // ---- Temporal branch -----------------------------------------------
+    // Strict NCOP z-order rule: temporal layers (raster OR vector) must
+    // always sit BELOW every NCOP normal vector layer so click-popups go
+    // to the user-toggled vectors first.  We walk style layers in z-order
+    // (bottom → top) and return the FIRST NCOP-owned layer that is NOT in
+    // the temporal registry — that becomes our beforeId, slotting the new
+    // temporal directly below it.  If no normal NCOP layers exist, fall
+    // back to firstLabel so the temporal still sits beneath labels.
+    if (opts.isTemporal === true) {
+      const tempReg =
+        window.__ncop_temporal_registry instanceof Set
+          ? window.__ncop_temporal_registry
+          : null;
+      const ownIds = this._collectOurAllLayerIds();
+      for (const l of style.layers) {
+        if (!ownIds.has(l.id)) continue;
+        if (tempReg && tempReg.has(l.id)) continue; // skip other temporals
+        return l.id;
+      }
+      return firstLabel;
+    }
+
+    // ---- Non-temporal branches (existing behavior) ---------------------
     const isRaster = layerType === "raster" || layerType === "raster-dem";
     if (!isRaster) return firstLabel; // vector → below labels
 
@@ -838,6 +861,21 @@ export class SourceLayerControl {
       if (ourVectorIds.has(l.id)) return l.id;
     }
     return firstLabel;
+  }
+
+  // Like _collectOurVectorLayerIds but returns ALL NCOP-owned layer IDs
+  // (any type — vector, raster, symbol).  Used by the temporal branch of
+  // computeBeforeId() which needs to find the first non-temporal NCOP
+  // layer regardless of type, so a new temporal lands directly under it.
+  _collectOurAllLayerIds() {
+    const ownIds = new Set();
+    for (const [, info] of this.activeLayers) {
+      info?.layerIds?.forEach((id) => ownIds.add(id));
+    }
+    if (window.__ncop_layer_registry instanceof Set) {
+      for (const id of window.__ncop_layer_registry) ownIds.add(id);
+    }
+    return ownIds;
   }
 
   _collectOurVectorLayerIds(styleLayers) {

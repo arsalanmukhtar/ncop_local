@@ -52,26 +52,37 @@ let _opacityFactor = 1; // 1 = 100% (default). Controlled by UI popover.
 if (typeof window !== "undefined" && !(window.__ncop_layer_registry instanceof Set)) {
   window.__ncop_layer_registry = new Set();
 }
+// Separate registry for *temporal* layers only.  Drives the strict z-order
+// rule: temporal layers must always sit below every NCOP normal vector
+// layer (point/line/polygon).  Without this, queryRenderedFeatures on click
+// returns the temporal fill *above* a district polygon, dominating its
+// popup (the bug).  computeBeforeId(layerType, { isTemporal:true }) reads
+// this set to find the first NCOP non-temporal layer to insert before.
+if (typeof window !== "undefined" && !(window.__ncop_temporal_registry instanceof Set)) {
+  window.__ncop_temporal_registry = new Set();
+}
 
 /**
  * Add a layer to the map while enforcing the NCOP z-order rule
- *   vectors above rasters above basemap, labels stay on top
- * by deferring to SourceLayerControl.computeBeforeId(). Also records the
- * layer ID in the shared registry so future computeBeforeId() calls can see
- * it as "ours".
+ *   normal vectors > temporal layers > basemap, labels stay on top
+ * by deferring to SourceLayerControl.computeBeforeId() with the
+ * `isTemporal` flag.  Also records the layer ID in BOTH the shared
+ * registry and the temporal-only registry so future computeBeforeId()
+ * calls see it as "ours" AND know to keep it below normal vectors.
  */
 function _ncopAddLayerInOrder(map, layerCfg) {
   const slc = window.sourceLayerControl;
   let beforeId;
   if (slc && typeof slc.computeBeforeId === "function") {
     try {
-      beforeId = slc.computeBeforeId(layerCfg.type);
+      beforeId = slc.computeBeforeId(layerCfg.type, { isTemporal: true });
     } catch {}
   }
   if (beforeId) map.addLayer(layerCfg, beforeId);
   else map.addLayer(layerCfg);
   try {
     window.__ncop_layer_registry?.add(layerCfg.id);
+    window.__ncop_temporal_registry?.add(layerCfg.id);
   } catch {}
 }
 
@@ -279,14 +290,32 @@ function buildPopupContent(layerId, feature) {
         .join("")
     : `<tr><td colspan="2" class="ncop-popup__status-note" style="display:block;text-align:center;font-style:italic;">No properties available</td></tr>`;
 
+  // Close button removed — the popup now closes via the ESC key
+  // (handler bound once at module load below).  Keeps the data table
+  // uncluttered and matches the convention used across NCOP popups.
   return `<div class="ncop-popup ncop-popup--compact">
-    <button type="button" class="ncop-popup__close" aria-label="Close popup" title="Close">&times;</button>
     <div class="ncop-popup__body">
       <table class="ncop-popup__table">
         <tbody>${layerRow}${propertyRows}</tbody>
       </table>
     </div>
   </div>`;
+}
+
+// One global ESC handler for the temporal popup.  Bound once; checks
+// the module-level `clickPopup` so it only acts when a temporal popup
+// is actually open.  Mapbox Popup#remove is idempotent, so the call is
+// safe even on stale references.
+if (typeof document !== "undefined" && !window.__ts_esc_bound) {
+  window.__ts_esc_bound = true;
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" && ev.key !== "Esc") return;
+    try {
+      if (clickPopup && typeof clickPopup.isOpen === "function" && clickPopup.isOpen()) {
+        clickPopup.remove();
+      }
+    } catch {}
+  });
 }
 
 // ===== DRAG FUNCTION =====
@@ -471,19 +500,8 @@ function addClickListeners() {
       }
       const html = buildPopupContent(layerId, feature);
       clickPopup.setLngLat(coordinates).setHTML(html).addTo(map);
-      // Wire up the custom close button inside the popup content. The native
-      // Mapbox close button was unreliable for vector temporal fills (meteoblue)
-      // — clicks on the × occasionally re-triggered the layer-specific click
-      // handler and re-opened the popup. An in-content button we bind
-      // ourselves is fully deterministic.
-      const popupEl = clickPopup.getElement?.();
-      const closeEl = popupEl?.querySelector?.(".ncop-popup__close");
-      if (closeEl) {
-        closeEl.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          clickPopup.remove();
-        });
-      }
+      // Close-button binding removed — ESC keydown handler (module init
+      // above) is now the single dismissal path for this popup.
     });
     _boundClickLayers.add(layerId);
   });
@@ -498,6 +516,14 @@ function cleanupSliderLayers() {
     _layerTypeCache.delete(id);
     _opacityPropCache.delete(id);
     _layerOpacityState.delete(id);
+    // Symmetric: the layer was added to both registries in
+    // _ncopAddLayerInOrder(); drop it from both on removal so future
+    // computeBeforeId() calls don't keep treating a deleted ID as
+    // "still on the map".
+    try {
+      window.__ncop_layer_registry?.delete(id);
+      window.__ncop_temporal_registry?.delete(id);
+    } catch {}
   });
 
   const sourceIds = new Set();

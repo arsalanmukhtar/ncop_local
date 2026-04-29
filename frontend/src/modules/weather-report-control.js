@@ -22,6 +22,57 @@
 const PANEL_ID = "weatherReportPanel";
 const BTN_ID = "weatherReportToggle";
 
+// =========================================================================
+// Researched thresholds (single source of truth)
+// -------------------------------------------------------------------------
+// Sources: WHO 2021 Air Quality Guidelines, US EPA AQI breakpoints, IMD/PMD
+// rainfall classifications, Pakistan Met Department heat advisories.  These
+// are intentionally hard-coded so the report's "alert" semantics stay
+// stable across deployments.  Tuning a value? Edit it here and grep for
+// the kind to find every renderer using it.
+// =========================================================================
+const T = {
+  // Temperature (°C) — PMD heat advisory ladder. >=40 starts being
+  // dangerous in the Indus plains; >=42 is extreme.  Cold side: -15 is
+  // rare in Pakistan but flagged for high-altitude regions.
+  TEMP_HOT: 42,
+  TEMP_COLD: -15,
+  STATION_TEMP_HOT: 40, // tighter for in-situ readings (station accuracy)
+
+  // Precipitation (mm) — IMD/PMD daily classifications.  Hourly is much
+  // tighter because intense bursts cause flash flooding.
+  RAIN_HOURLY_HEAVY: 10,
+  RAIN_DAILY_HEAVY: 50, // daily rainfall classified "heavy"
+  RAIN_WEEKLY_HEAVY: 100, // weekly accumulation flag
+  RAIN_STATION_ALERT: 25, // station hourly accumulation alert
+
+  // Snowfall (mm liquid-water-equivalent) — daily totals.
+  SNOW_HOURLY_HEAVY: 5,
+  SNOW_DAILY_HEAVY: 30,
+
+  // Convection / severe weather (J/kg)
+  CAPE_ALERT: 1000, // moderate-to-severe instability
+  HELICITY_ALERT: 300, // tornadic supercell potential
+
+  // Air Quality Index (US EPA scale) — 101 is the "Unhealthy for Sensitive
+  // Groups" threshold; many public-health bodies issue advisories at 101+.
+  AQI_USG: 101,
+  AQI_UNHEALTHY: 151,
+
+  // Pollutant concentrations (µg/m³) — WHO 2021 24-hour guideline values.
+  // Alerts fire when concentrations exceed the WHO target by a margin that
+  // typical EU/EPA standards use as their hard limit.
+  PM25_ALERT: 35,
+  PM10_ALERT: 100,
+  NO2_ALERT: 40,
+  SO2_ALERT: 75,
+  CO_ALERT: 10000, // = 10 mg/m³, EPA 8-h alert level
+
+  // Aerosol products
+  DUST_ALERT: 200, // µg/m³, heavy dust event
+  AOD_ALERT: 0.5, // unitless, visibility/health concern
+};
+
 // Map of temporal layer key → { kind, label, sourceLayers[] }.  `kind`
 // drives signal interpretation (rainfall vs snowfall vs temperature etc.).
 // `sourceLayers` lists the mapbox vector "source-layer" names whose
@@ -31,46 +82,151 @@ const LAYER_KIND_MAP = {
     kind: "precipitation",
     label: "Weekly Precipitation",
     sourceLayers: ["precip", "snow"],
+    cadence: "weekly",
   },
   hourly_precipitation_2m_above_ground: {
     kind: "precipitation",
     label: "Hourly Precipitation",
     sourceLayers: ["precip", "layerSnow"],
+    cadence: "hourly",
   },
   hourly_snowfall_forecast: {
     kind: "snowfall",
     label: "Hourly Snowfall",
     sourceLayers: ["snow"],
+    cadence: "hourly",
   },
   weekly_snowfall_forecast: {
     kind: "snowfall",
     label: "Weekly Snowfall",
     sourceLayers: ["snow"],
+    cadence: "weekly",
   },
   cape_hourly_forecast: {
     kind: "cape",
     label: "CAPE (Hourly)",
     sourceLayers: ["layerCAPEInternal"],
+    cadence: "hourly",
   },
   cape_weekly_forecast: {
     kind: "cape",
     label: "CAPE (Weekly)",
     sourceLayers: ["layerCAPEInternal"],
+    cadence: "weekly",
   },
   storm_helicity_forecast_0_3km: {
     kind: "storm_helicity",
     label: "Storm Helicity 0–3 km",
     sourceLayers: ["stormhelicityColortable"],
+    cadence: "hourly",
   },
   temperature_2m_above_ground: {
     kind: "temperature",
     label: "Temperature (2 m)",
     sourceLayers: ["temperatureColortable"],
+    cadence: "hourly",
   },
   precipitation_radar: {
     kind: "raster",
     label: "Precipitation Radar",
     sourceLayers: [],
+    cadence: "hourly",
+  },
+
+  // ---- Meteoblue Air-Quality Forecast (hourly + daily variants) ---------
+  cams_air_quality_index_hourly: {
+    kind: "aqi",
+    label: "AQI (Hourly)",
+    sourceLayers: ["aqiColortable"],
+    cadence: "hourly",
+  },
+  cams_air_quality_index_daily: {
+    kind: "aqi",
+    label: "AQI (Daily)",
+    sourceLayers: ["aqiColortable"],
+    cadence: "daily",
+  },
+  cams_desert_dust_hourly: {
+    kind: "desert_dust",
+    label: "Desert Dust (Hourly)",
+    sourceLayers: ["desertDust"],
+    cadence: "hourly",
+  },
+  cams_desert_dust_daily: {
+    kind: "desert_dust",
+    label: "Desert Dust (Daily)",
+    sourceLayers: ["desertDust"],
+    cadence: "daily",
+  },
+  cams_aerosol_optical_depth_hourly: {
+    kind: "aod",
+    label: "AOD (Hourly)",
+    sourceLayers: ["aod"],
+    cadence: "hourly",
+  },
+  cams_aerosol_optical_depth_daily: {
+    kind: "aod",
+    label: "AOD (Daily)",
+    sourceLayers: ["aod"],
+    cadence: "daily",
+  },
+  cams_nitrogen_dioxide_daily: {
+    kind: "no2",
+    label: "NO₂ (Daily)",
+    sourceLayers: ["no2"],
+    cadence: "daily",
+  },
+  cams_carbon_monoxide_daily: {
+    kind: "co",
+    label: "CO (Daily)",
+    sourceLayers: ["COColorTable"],
+    cadence: "daily",
+  },
+  cams_sulphur_dioxide_daily: {
+    kind: "so2",
+    label: "SO₂ (Daily)",
+    sourceLayers: ["so2"],
+    cadence: "daily",
+  },
+};
+
+// =========================================================================
+// Station-based sources — driven by the "toggle on AND visible" rule, not
+// by the temporal slider.  When no temporal layer is active, the highest-
+// priority visible station feeds the report.  Even when a temporal IS
+// active, stations can enrich each district card with additional readings
+// (rendered as small tags below the primary reading).
+// =========================================================================
+const STATION_KIND_MAP = {
+  // WAQI air-quality station network — `aqi` is the primary numeric.
+  waqi_stations: {
+    kind: "aqi",
+    label: "WAQI Stations",
+    layerIds: ["waqi_stations-circle"],
+    valueProp: "aqi",
+  },
+  // PMD MET monitoring rainfall — symbol layer; `rainfall` is the metric
+  // that drives the rain-vs-sun icon split in the layer's own styling.
+  pmd_weather_stations: {
+    kind: "rainfall_station",
+    label: "PMD Weather Stations",
+    layerIds: [
+      "pmd_weather_stations-sun-symbol",
+      "pmd_weather_stations-rain-symbol",
+    ],
+    valueProp: "rainfall",
+  },
+  // Heatwave city points — `temperature` (°C) drives circle color/size.
+  // Uses `temperature_station` (a station-tightened variant of the
+  // `temperature` kind) so the threshold is the EPA station-accuracy
+  // value (T.STATION_TEMP_HOT = 40 °C) instead of the looser 42 °C
+  // forecast threshold.  Symmetric with rainfall_station vs
+  // precipitation in the temporal kinds.
+  heatwave_monitoring: {
+    kind: "temperature_station",
+    label: "Heatwave Monitoring",
+    layerIds: ["heatwave_monitoring-circle"],
+    valueProp: "temperature",
   },
 };
 
@@ -116,18 +272,40 @@ export class WeatherReportControl {
   #footerEl = null;
   #subtitleEl = null;
   #titleEl = null;
-  #renderRafId = null;
+  #thresholdEl = null;
+  #thresholdValueEl = null;
+
+  // Throttle bookkeeping. `#renderTimerId` covers both rAF and setTimeout
+  // ids so we have a single "is a render queued" flag to check.
+  #renderTimerId = null;
+  #lastRenderAt = 0;
+
+  // Skip-redundant-render fingerprint. Each render computes a string
+  // describing its inputs (active layer + step + viewport bounds + which
+  // station layers are visible).  If the new fingerprint matches the
+  // last AND the last render produced a real report (not a loading /
+  // empty state), we skip — district queries + per-feature sampling is
+  // the app's hottest cost path.  The `lastRenderComplete` gate prevents
+  // us from getting stuck on a "Fetching results…" spinner once tiles
+  // arrive (because tile-load events don't change the fingerprint).
+  #lastFingerprint = "";
+  #lastRenderComplete = false;
+
+  // Listeners are wired only while the panel is open.  Closing the panel
+  // detaches them so the cost of every map idle / slider input / DOM
+  // mutation drops to zero when the user isn't looking at the report.
   #observer = null;
   #boundOnSliderInput = null;
   #boundOnTemporalDom = null;
   #boundOnMapMove = null;
   #boundOnMapIdle = null;
+  #listenersAttached = false;
 
   constructor(map) {
     this.#map = map;
     this.#render();
     this.#wireToggle();
-    this.#wireReactivity();
+    // Listeners attach lazily on panel open — see #attachListeners.
   }
 
   // -------------------------------------------------------------- DOM build
@@ -157,6 +335,10 @@ export class WeatherReportControl {
         <div class="wrp-header-text">
           <h3 class="wrp-title">Weather Report</h3>
           <p class="wrp-subtitle">Enable a temporal layer to begin</p>
+          <p class="wrp-threshold" hidden>
+            <span class="wrp-threshold-label">Alert threshold:</span>
+            <span class="wrp-threshold-value"></span>
+          </p>
         </div>
         <button class="wrp-close-btn" type="button" title="Close" aria-label="Close">
           <i data-lucide="x"></i>
@@ -171,6 +353,8 @@ export class WeatherReportControl {
     this.#footerEl = panel.querySelector("#weatherReportFooter");
     this.#titleEl = panel.querySelector(".wrp-title");
     this.#subtitleEl = panel.querySelector(".wrp-subtitle");
+    this.#thresholdEl = panel.querySelector(".wrp-threshold");
+    this.#thresholdValueEl = panel.querySelector(".wrp-threshold-value");
 
     // Lucide icons get rendered by the global init pass; nudge it in case
     // we're mounted after the initial pass.
@@ -185,7 +369,12 @@ export class WeatherReportControl {
       const willOpen = !this.#panelEl.classList.contains("visible");
       this.#panelEl.classList.toggle("visible", willOpen);
       this.#btnEl.classList.toggle("active-weather-report", willOpen);
-      if (willOpen) this.#scheduleRender();
+      if (willOpen) {
+        this.#attachListeners();
+        this.#scheduleRender();
+      } else {
+        this.#detachListeners();
+      }
     });
 
     const closeBtn = this.#panelEl.querySelector(".wrp-close-btn");
@@ -194,95 +383,191 @@ export class WeatherReportControl {
         ev.stopPropagation();
         this.#panelEl.classList.remove("visible");
         this.#btnEl.classList.remove("active-weather-report");
+        this.#detachListeners();
       });
     }
   }
 
   // -------------------------------------------------------------- reactivity
-  #wireReactivity() {
-    // Slider step changes — listen on input event of #slider1. The
-    // handler is debounced via rAF so dragging produces 1 render/frame.
+  // Listeners attach lazily on panel open and detach on close so we
+  // don't pay any cost for slider drags / map idles / DOM mutations
+  // while the user is doing something else.  This was the dominant
+  // source of lag before — multi-Hz mutation events were waking up the
+  // throttle even when the panel was hidden.
+  #attachListeners() {
+    if (this.#listenersAttached) return;
+    this.#listenersAttached = true;
+    // Force the next render to do real work even if state hasn't
+    // technically changed since the last time the panel was open.
+    this.#lastFingerprint = "";
+    this.#lastRenderComplete = false;
+
+    // Slider input → step changes. Throttled via #scheduleRender so
+    // dragging at 60Hz collapses to ~6 renders/sec.
     this.#boundOnSliderInput = () => this.#scheduleRender();
     const slider = document.getElementById("slider1");
     if (slider) slider.addEventListener("input", this.#boundOnSliderInput);
 
-    // The slider element itself appears / disappears, and the variable
-    // label changes when the user toggles a different temporal layer.
-    // A single MutationObserver on #temp-slider1 (style + subtree) catches
-    // both: visibility flips AND label updates inside .ts-variable p.
+    // Narrow MutationObserver — was previously watching subtree +
+    // characterData which fired ~60Hz during slider play (every label /
+    // active-step class change).  We only actually need to know when
+    // the slider element's style attribute flips display:none↔block
+    // (layer activation) or its class changes — both are on
+    // #temp-slider1 itself, no subtree needed.
     const tempSlider = document.getElementById("temp-slider1");
     if (tempSlider) {
       this.#boundOnTemporalDom = () => this.#scheduleRender();
       this.#observer = new MutationObserver(this.#boundOnTemporalDom);
       this.#observer.observe(tempSlider, {
         attributes: true,
-        attributeFilter: ["style"],
-        childList: true,
-        subtree: true,
-        characterData: true,
+        attributeFilter: ["style", "class"],
+        childList: false,
+        subtree: false,
+        characterData: false,
       });
     }
 
-    // Pan / zoom changes the visible districts → re-render so the report
-    // tracks the viewport. moveend is a single fire after movement settles.
-    this.#boundOnMapMove = () => {
-      if (this.#isOpen()) this.#scheduleRender();
-    };
+    // Pan / zoom changes the visible districts.
+    this.#boundOnMapMove = () => this.#scheduleRender();
     this.#map.on("moveend", this.#boundOnMapMove);
 
-    // `idle` fires when the map has finished loading tiles + animations
-    // for its current state.  This is what flips us out of the loading
-    // spinner once the just-activated frame's tiles arrive.  rAF debounce
-    // in #scheduleRender keeps it cheap.
-    this.#boundOnMapIdle = () => {
-      if (this.#isOpen()) this.#scheduleRender();
-    };
+    // `idle` fires when tiles/animations settle — flips the loading
+    // spinner state once data lands.  Throttle prevents it from over-
+    // rendering during normal map operation.
+    this.#boundOnMapIdle = () => this.#scheduleRender();
     this.#map.on("idle", this.#boundOnMapIdle);
+  }
+
+  #detachListeners() {
+    if (!this.#listenersAttached) return;
+    this.#listenersAttached = false;
+
+    if (this.#renderTimerId != null) {
+      clearTimeout(this.#renderTimerId);
+      this.#renderTimerId = null;
+    }
+
+    const slider = document.getElementById("slider1");
+    if (slider && this.#boundOnSliderInput) {
+      slider.removeEventListener("input", this.#boundOnSliderInput);
+    }
+    if (this.#observer) {
+      this.#observer.disconnect();
+      this.#observer = null;
+    }
+    if (this.#boundOnMapMove) {
+      this.#map.off("moveend", this.#boundOnMapMove);
+    }
+    if (this.#boundOnMapIdle) {
+      this.#map.off("idle", this.#boundOnMapIdle);
+    }
+    this.#boundOnSliderInput = null;
+    this.#boundOnTemporalDom = null;
+    this.#boundOnMapMove = null;
+    this.#boundOnMapIdle = null;
   }
 
   #isOpen() {
     return this.#panelEl?.classList.contains("visible") === true;
   }
 
+  // Time-based throttle: guarantee at least 150ms between renders.
+  // Multiple calls inside the window collapse into a single trailing
+  // render when the window expires.  This was previously rAF-only,
+  // which means each frame of slider drag (60Hz) triggered a fresh
+  // render — way too much for the heavy queryRenderedFeatures /
+  // per-district sampling work the report does.
   #scheduleRender() {
     if (!this.#isOpen()) return;
-    if (this.#renderRafId != null) return;
-    this.#renderRafId = requestAnimationFrame(() => {
-      this.#renderRafId = null;
+    if (this.#renderTimerId != null) return; // already queued
+
+    const RENDER_MIN_INTERVAL_MS = 150;
+    const wait = Math.max(
+      0,
+      RENDER_MIN_INTERVAL_MS - (performance.now() - this.#lastRenderAt)
+    );
+
+    this.#renderTimerId = setTimeout(() => {
+      this.#renderTimerId = null;
+      if (!this.#isOpen()) return;
+      this.#lastRenderAt = performance.now();
       try {
         this.#renderReport();
       } catch (e) {
         console.warn("[WeatherReport] render failed:", e);
       }
-    });
+    }, wait);
   }
 
   // -------------------------------------------------------------- engine
+  // Cheap fingerprint of every input that affects the rendered report.
+  // If unchanged from the last render, we skip the heavy district +
+  // per-feature sampling work entirely — this is the hottest cost path
+  // when the panel is open (queryRenderedFeatures is called once per
+  // district in the worst case).  A pan that doesn't actually change
+  // which districts are visible (e.g. scrolling within the same admin
+  // unit) results in a no-op render even though `moveend` fires.
+  #computeFingerprint(state, activeStations) {
+    const b = this.#map.getBounds?.();
+    const zoom = this.#map.getZoom?.();
+    // Round bounds so micro-pans don't change the fingerprint.
+    const fmt = (n) => (typeof n === "number" ? n.toFixed(2) : "");
+    const bbox = b
+      ? `${fmt(b.getWest())},${fmt(b.getSouth())},${fmt(b.getEast())},${fmt(b.getNorth())}`
+      : "";
+    return [
+      state.layerKey || "",
+      state.currentIndex || 0,
+      state.date || "",
+      activeStations.join("|"),
+      bbox,
+      typeof zoom === "number" ? zoom.toFixed(2) : "",
+    ].join("§");
+  }
+
   #renderReport() {
     const state = window.getCurrentTemporalState
       ? window.getCurrentTemporalState()
       : { layerKey: null, currentEntry: null, date: "", currentIndex: 0 };
 
     const layerKey = state.layerKey;
-    const meta = layerKey ? LAYER_KIND_MAP[layerKey] : null;
+    const tempMeta = layerKey ? LAYER_KIND_MAP[layerKey] : null;
+    const activeStations = this.#activeStationKeys();
+    const fallbackStationKey = activeStations[0] || null;
+    const fallbackStationMeta = fallbackStationKey
+      ? STATION_KIND_MAP[fallbackStationKey]
+      : null;
 
-    // ----- Subtitle / title ---------------------------------------------
+    // Skip redundant work: if every input is identical AND the last
+    // render produced a real report (not loading / empty), bail.
+    const fp = this.#computeFingerprint(state, activeStations);
+    if (fp === this.#lastFingerprint && this.#lastRenderComplete) return;
+    this.#lastFingerprint = fp;
+    this.#lastRenderComplete = false; // flipped to true at the end of a successful row render
+
     this.#titleEl.textContent = "Weather Report";
-    if (!layerKey || !meta) {
+
+    // ----- No data sources at all ---------------------------------------
+    if (!tempMeta && !fallbackStationMeta) {
+      this.#clearThreshold();
       this.#subtitleEl.textContent =
-        "Enable any temporal weather layer to generate a report.";
+        "Enable any temporal weather or station layer to generate a report.";
       this.#renderEmpty(
-        "No active temporal layer",
-        "Toggle a Meteoblue temporal layer (precipitation, snowfall, CAPE, helicity, temperature, …) and use the slider to step through frames. The report below will follow the current step automatically."
+        "No active layer",
+        "Toggle a Meteoblue temporal layer or a station layer (WAQI, PMD Weather Stations, Heatwave Monitoring) to populate the report."
       );
       return;
     }
 
-    if (meta.kind === "raster") {
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
+    // Active raster temporal can't be sampled per-district — but if a
+    // station is also visible, fall through to station-only mode rather
+    // than dead-end.  Without a station, surface the raster-only message.
+    if (tempMeta && tempMeta.kind === "raster" && !fallbackStationMeta) {
+      this.#applyThreshold(tempMeta);
+      this.#subtitleEl.textContent = `${tempMeta.label} · ${state.date || "Current step"}`;
       this.#renderEmpty(
-        `${meta.label} is raster-only`,
-        "Per-district readings are not available for radar tiles. Switch to a vector temporal layer (precipitation, snowfall, CAPE, helicity, temperature) to see district aggregations."
+        `${tempMeta.label} is raster-only`,
+        "Per-district readings are not available for radar tiles. Switch to a vector temporal layer or enable a station layer (WAQI / PMD / Heatwave) to see district aggregations."
       );
       return;
     }
@@ -291,7 +576,8 @@ export class WeatherReportControl {
     const districtVisible = this.#anyLayerVisible(DISTRICT_LAYER_IDS);
     const provinceVisible = this.#anyLayerVisible(PROVINCE_LAYER_IDS);
     if (!districtVisible || !provinceVisible) {
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
+      const lbl = tempMeta?.label || fallbackStationMeta?.label || "";
+      this.#subtitleEl.textContent = `${lbl} · ${state.date || "Current step"}`;
       this.#renderEmpty(
         "Boundaries required",
         "Enable both <b>District Boundary</b> and <b>Provincial Boundary</b> in the sidebar to generate the per-district report."
@@ -299,50 +585,89 @@ export class WeatherReportControl {
       return;
     }
 
-    // ----- Active frame's vector layer IDs ------------------------------
-    const frame = state.currentEntry;
-    const targetLayerIds = (frame?.layers || [])
-      .map((l) => l.id)
-      .filter((id) => this.#map.getLayer(id))
-      .filter((id) => {
-        const lyr = this.#map.getLayer(id);
-        if (!lyr) return false;
-        // Exclude raster sub-layers (composite radar) — they have no minValue.
-        if (lyr.type === "raster") return false;
-        // Only keep layers whose source-layer is one of the report-relevant ones.
-        const sl = lyr["source-layer"] || lyr.sourceLayer;
-        return meta.sourceLayers.length === 0 || meta.sourceLayers.includes(sl);
-      });
+    // ----- Determine the *primary* sampling mode ------------------------
+    // Active vector temporal wins; otherwise the highest-priority visible
+    // station drives the report.  Either way the same district loop below
+    // runs and ends up writing into the same `rows` shape.
+    const isTemporalPrimary =
+      !!tempMeta && tempMeta.kind !== "raster";
+    const primaryMeta = isTemporalPrimary ? tempMeta : fallbackStationMeta;
+    const primarySubtitleLabel = primaryMeta?.label || "";
+    // Show the alert threshold for the chosen primary so the user can
+    // see at a glance what bar a card has to clear to flip into red.
+    this.#applyThreshold(primaryMeta);
 
-    if (!targetLayerIds.length) {
-      // Layers haven't been registered on the map yet — this is the
-      // transient window right after activation while addSource/addLayer
-      // is still running.  Spinner is the right UX, not an error.
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
-      this.#renderLoading();
-      return;
-    }
+    // For temporal mode, resolve frame layer IDs and verify sources are loaded.
+    let targetLayerIds = [];
+    if (isTemporalPrimary) {
+      const frame = state.currentEntry;
+      targetLayerIds = (frame?.layers || [])
+        .map((l) => l.id)
+        .filter((id) => this.#map.getLayer(id))
+        .filter((id) => {
+          const lyr = this.#map.getLayer(id);
+          if (!lyr) return false;
+          if (lyr.type === "raster") return false;
+          const sl = lyr["source-layer"] || lyr.sourceLayer;
+          return (
+            tempMeta.sourceLayers.length === 0 ||
+            tempMeta.sourceLayers.includes(sl)
+          );
+        });
 
-    // Sources may exist but tiles for the current viewport may still be
-    // in flight — `isSourceLoaded` is the canonical mapbox signal.  When
-    // any of the active frame's sources is mid-fetch, defer to the
-    // spinner; the `idle` listener (#wireReactivity) will kick a re-render
-    // the moment loading settles.
-    const frameSourceIds = this.#frameSourceIds(frame);
-    if (frameSourceIds.length && !frameSourceIds.every((id) => this.#sourceIsLoaded(id))) {
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
-      this.#renderLoading();
-      return;
+      if (!targetLayerIds.length) {
+        this.#subtitleEl.textContent = `${primarySubtitleLabel} · ${state.date || "Current step"}`;
+        this.#renderLoading();
+        return;
+      }
+
+      const frameSourceIds = this.#frameSourceIds(frame);
+      if (
+        frameSourceIds.length &&
+        !frameSourceIds.every((id) => this.#sourceIsLoaded(id))
+      ) {
+        this.#subtitleEl.textContent = `${primarySubtitleLabel} · ${state.date || "Current step"}`;
+        this.#renderLoading();
+        return;
+      }
+    } else {
+      // Station-only mode: gate on the chosen station's source being loaded.
+      const stationLayerIds = fallbackStationMeta.layerIds.filter((id) =>
+        this.#map.getLayer(id)
+      );
+      if (!stationLayerIds.length) {
+        this.#subtitleEl.textContent = `${primarySubtitleLabel}`;
+        this.#renderLoading();
+        return;
+      }
+      // GeoJSON sources load fast but can be in flight on first paint.
+      const sourceIds = stationLayerIds
+        .map((id) => this.#map.getLayer(id)?.source)
+        .filter(Boolean);
+      if (
+        sourceIds.length &&
+        !sourceIds.every((sid) => this.#sourceIsLoaded(sid))
+      ) {
+        this.#subtitleEl.textContent = `${primarySubtitleLabel}`;
+        this.#renderLoading();
+        return;
+      }
     }
 
     // ----- Query districts in viewport ----------------------------------
+    // Query only the FILL layer — outline shares the same source so the
+    // outline query would just return duplicate features which we'd then
+    // dedupe.  One query, half the work.
+    const districtQueryLayers = DISTRICT_LAYER_IDS.filter((id) =>
+      this.#map.getLayer(id)
+    ).slice(0, 1); // prefer the fill layer (first in the constant)
     const districtFeatures = this.#dedupedFeaturesByName(
-      this.#map.queryRenderedFeatures({ layers: DISTRICT_LAYER_IDS }),
+      this.#map.queryRenderedFeatures({ layers: districtQueryLayers }),
       DISTRICT_NAME_KEYS
     );
 
     if (!districtFeatures.length) {
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
+      this.#subtitleEl.textContent = `${primarySubtitleLabel} · ${state.date || "Current step"}`;
       this.#renderEmpty(
         "No districts in view",
         "Pan or zoom so district polygons are visible, then the report will populate."
@@ -350,16 +675,37 @@ export class WeatherReportControl {
       return;
     }
 
-    // Province lookup table: build a flat list once, then use centroid PIP
-    // via simple bbox containment when district feature lacks a province
-    // property of its own.  Cheap fallback — most district features carry
-    // their province key directly.
-    const provinceFeatures = this.#dedupedFeaturesByName(
-      this.#map.queryRenderedFeatures({ layers: PROVINCE_LAYER_IDS }),
-      PROVINCE_NAME_KEYS
+    // Province features are only needed as a *fallback* when a district
+    // feature lacks a province name property of its own.  If the very
+    // first district carries a recognised province key, every other
+    // district in this dataset will too — skip the second viewport
+    // query entirely.  Saves one heavy queryRenderedFeatures call per
+    // render in the common case.
+    const sampleHasProvince = districtFeatures.some((d) =>
+      this.#firstProp(d, PROVINCE_NAME_KEYS)
     );
+    const provinceFeatures = sampleHasProvince
+      ? []
+      : this.#dedupedFeaturesByName(
+          this.#map.queryRenderedFeatures({
+            layers: PROVINCE_LAYER_IDS.filter((id) => this.#map.getLayer(id)).slice(0, 1),
+          }),
+          PROVINCE_NAME_KEYS
+        );
 
-    // ----- Sample each district's center point against vector layer -----
+    // Pre-build station feature pools once (cheap viewport queries).
+    // Each entry: { metaKey, meta, features[] } — features are picked
+    // up by the per-district loop via bbox containment.
+    const stationPools = activeStations.map((stKey) => {
+      const stMeta = STATION_KIND_MAP[stKey];
+      const visibleIds = stMeta.layerIds.filter((id) => this.#map.getLayer(id));
+      const features = visibleIds.length
+        ? this.#map.queryRenderedFeatures({ layers: visibleIds })
+        : [];
+      return { metaKey: stKey, meta: stMeta, features };
+    });
+
+    // ----- Sample each district -----------------------------------------
     const rows = [];
     for (const district of districtFeatures) {
       const districtName = this.#firstProp(district, DISTRICT_NAME_KEYS);
@@ -373,22 +719,67 @@ export class WeatherReportControl {
         this.#provinceForCenter(center, provinceFeatures) ||
         "Unknown";
 
-      const sampled = this.#sampleAt(center, targetLayerIds);
-      const reading = this.#aggregateReading(sampled, meta.kind);
-      if (reading == null) continue;
+      // Primary reading (temporal sample, or station aggregation if no temporal).
+      let primaryReading = null;
+      if (isTemporalPrimary) {
+        const sampled = this.#sampleAt(center, targetLayerIds);
+        primaryReading = this.#aggregateReading(sampled, tempMeta.kind, tempMeta);
+      } else {
+        // Station-as-primary: collect station features whose point lies
+        // inside the district bbox, aggregate via the station's valueProp.
+        const inside = this.#stationsInDistrict(district, fallbackStationMeta, [
+          {
+            metaKey: fallbackStationKey,
+            meta: fallbackStationMeta,
+            features: stationPools.find(
+              (p) => p.metaKey === fallbackStationKey
+            )?.features || [],
+          },
+        ]);
+        if (inside.length) {
+          primaryReading = this.#aggregateReading(
+            inside,
+            fallbackStationMeta.kind,
+            fallbackStationMeta,
+            { valueProp: fallbackStationMeta.valueProp }
+          );
+        }
+      }
+
+      // Extras: every OTHER active station that has features inside this
+      // district contributes a tag-style reading.  Skip the primary
+      // station to avoid duplicate readings when in station-only mode.
+      const extras = [];
+      for (const pool of stationPools) {
+        if (!isTemporalPrimary && pool.metaKey === fallbackStationKey) continue;
+        const inside = this.#stationsInDistrict(district, pool.meta, [pool]);
+        if (!inside.length) continue;
+        const r = this.#aggregateReading(
+          inside,
+          pool.meta.kind,
+          pool.meta,
+          { valueProp: pool.meta.valueProp }
+        );
+        if (r) extras.push({ source: pool.meta.label, ...r });
+      }
+
+      if (!primaryReading && !extras.length) continue;
 
       rows.push({
         district: districtName,
         province: provinceName,
-        reading,
+        // If the primary slot is empty (no temporal sample, no station-as-primary
+        // hit, but a secondary station got a reading), promote the first extra.
+        reading: primaryReading || extras.shift(),
+        extras,
       });
     }
 
     if (!rows.length) {
-      this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"}`;
+      this.#subtitleEl.textContent = `${primarySubtitleLabel} · ${state.date || "Current step"}`;
       this.#renderEmpty(
         "No signals at current step",
-        "The active temporal frame has no readings over the visible districts. Try a different time step or pan to a region with coverage."
+        "The active layer has no readings over the visible districts. Try a different time step or pan to a region with coverage."
       );
       return;
     }
@@ -397,8 +788,144 @@ export class WeatherReportControl {
     rows.sort((a, b) => b.reading.score - a.reading.score);
 
     // ----- Render -------------------------------------------------------
-    this.#subtitleEl.textContent = `${meta.label} · ${state.date || "Current step"} · ${rows.length} district${rows.length === 1 ? "" : "s"}`;
-    this.#renderRows(rows, meta);
+    const dateSuffix = isTemporalPrimary && state.date ? ` · ${state.date}` : "";
+    this.#subtitleEl.textContent = `${primarySubtitleLabel}${dateSuffix} · ${rows.length} district${rows.length === 1 ? "" : "s"}`;
+    this.#renderRows(rows, primaryMeta);
+    this.#lastRenderComplete = true;
+  }
+
+  // -------------------------------------------------------------- station helpers
+  // Which station layers are toggled on AND visible right now?  Returns
+  // the keys in priority order (WAQI → PMD → Heatwave) — the first one
+  // becomes the fallback when no temporal is active.
+  #activeStationKeys() {
+    const keys = [];
+    for (const key of Object.keys(STATION_KIND_MAP)) {
+      const meta = STATION_KIND_MAP[key];
+      if (this.#anyLayerVisible(meta.layerIds)) keys.push(key);
+    }
+    return keys;
+  }
+
+  // Filter a pool of station features down to those whose centroid lies
+  // inside the district's bbox.  bbox-only PIP is cheap and accurate
+  // enough for non-overlapping district polygons.
+  #stationsInDistrict(district, _stationMeta, pools) {
+    const bbox = this.#featureBbox(district);
+    if (!bbox) return [];
+    const [minX, minY, maxX, maxY] = bbox;
+    const out = [];
+    for (const pool of pools || []) {
+      for (const f of pool.features || []) {
+        const geom = f?.geometry;
+        if (!geom) continue;
+        // Stations are point geometries — fast path.
+        if (geom.type === "Point") {
+          const [x, y] = geom.coordinates;
+          if (x >= minX && x <= maxX && y >= minY && y <= maxY) out.push(f);
+          continue;
+        }
+        // Fallback for non-point: use centroid of feature bbox.
+        const c = this.#featureCenter(f);
+        if (!c) continue;
+        if (c[0] >= minX && c[0] <= maxX && c[1] >= minY && c[1] <= maxY) {
+          out.push(f);
+        }
+      }
+    }
+    return out;
+  }
+
+  // Renders a human-readable description of when this kind/cadence
+   // triggers an alert.  Used to populate the "Alert threshold: ..." line
+   // at the top of the panel so users know exactly what bar each card has
+   // to clear to flip into the red-alert state.
+  #thresholdDescription(meta) {
+    if (!meta) return "";
+    const cadence = meta.cadence || "hourly";
+    switch (meta.kind) {
+      case "precipitation":
+        return cadence === "hourly"
+          ? `≥ ${T.RAIN_HOURLY_HEAVY} mm/h rain (or ≥ ${T.SNOW_HOURLY_HEAVY} mm snow)`
+          : cadence === "weekly"
+            ? `≥ ${T.RAIN_WEEKLY_HEAVY} mm rain (weekly)`
+            : `≥ ${T.RAIN_DAILY_HEAVY} mm rain (or ≥ ${T.SNOW_DAILY_HEAVY} mm snow, daily)`;
+      case "snowfall":
+        return cadence === "hourly"
+          ? `≥ ${T.SNOW_HOURLY_HEAVY} mm/h snow`
+          : `≥ ${T.SNOW_DAILY_HEAVY} mm snow (daily)`;
+      case "cape":
+        return `≥ ${T.CAPE_ALERT} J/kg (severe instability)`;
+      case "storm_helicity":
+        return `≥ ${T.HELICITY_ALERT} J/kg (tornadic potential)`;
+      case "temperature":
+        return `≥ ${T.TEMP_HOT} °C or ≤ ${T.TEMP_COLD} °C`;
+      case "aqi":
+        return `AQI ≥ ${T.AQI_USG} (Unhealthy for Sensitive Groups)`;
+      case "desert_dust":
+        return `≥ ${T.DUST_ALERT} µg/m³ (heavy dust event)`;
+      case "aod":
+        return `≥ ${T.AOD_ALERT} (heavy aerosol loading)`;
+      case "no2":
+        return `≥ ${T.NO2_ALERT} µg/m³ NO₂ (WHO 24h alert)`;
+      case "co":
+        return `≥ ${(T.CO_ALERT / 1000).toFixed(0)} mg/m³ CO (EPA 8h alert)`;
+      case "so2":
+        return `≥ ${T.SO2_ALERT} µg/m³ SO₂ (WHO 24h alert)`;
+      case "rainfall_station":
+        return `≥ ${T.RAIN_STATION_ALERT} mm at any station`;
+      case "temperature_station":
+        return `≥ ${T.STATION_TEMP_HOT} °C at any station (heat advisory)`;
+      case "raster":
+        return "raster-only (no per-district threshold)";
+      default:
+        return "";
+    }
+  }
+
+  #applyThreshold(meta) {
+    if (!this.#thresholdEl || !this.#thresholdValueEl) return;
+    const text = this.#thresholdDescription(meta);
+    if (!text) {
+      this.#thresholdEl.hidden = true;
+      this.#thresholdValueEl.textContent = "";
+      return;
+    }
+    this.#thresholdValueEl.textContent = text;
+    this.#thresholdEl.hidden = false;
+  }
+
+  #clearThreshold() {
+    if (!this.#thresholdEl) return;
+    this.#thresholdEl.hidden = true;
+    if (this.#thresholdValueEl) this.#thresholdValueEl.textContent = "";
+  }
+
+  #featureBbox(feature) {
+    const geom = feature?.geometry;
+    if (!geom) return null;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    const visit = (coords) => {
+      if (typeof coords[0] === "number") {
+        const [x, y] = coords;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        return;
+      }
+      for (const c of coords) visit(c);
+    };
+    try {
+      visit(geom.coordinates);
+    } catch {
+      return null;
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null;
+    return [minX, minY, maxX, maxY];
   }
 
   // -------------------------------------------------------------- helpers
@@ -509,12 +1036,19 @@ export class WeatherReportControl {
     }
   }
 
-  #aggregateReading(features, kind) {
+  // Aggregate a list of features down to one reading with kind-specific
+  // labelling + alert flag.  Thresholds live in the `T` constant block at
+  // the top of the file so the rules are auditable in one place.  `meta`
+  // is the LAYER_KIND_MAP / STATION_KIND_MAP entry — its `cadence` field
+  // (hourly vs daily vs weekly) lets us pick the right rainfall threshold
+  // tier from the same shared set.
+  #aggregateReading(features, kind, meta = {}, opts = {}) {
     if (!features.length) return null;
+    const valueProp = opts.valueProp || "minValue";
     let best = -Infinity;
     let bestSourceLayer = "";
     for (const f of features) {
-      const v = Number(f?.properties?.minValue);
+      const v = Number(f?.properties?.[valueProp]);
       if (!Number.isFinite(v)) continue;
       if (v > best) {
         best = v;
@@ -523,20 +1057,33 @@ export class WeatherReportControl {
     }
     if (!Number.isFinite(best)) return null;
 
-    // Kind-specific labels + alert thresholds (mirrors weatherreport sample).
+    const cadence = meta.cadence || opts.cadence || "hourly";
     let label = "";
     let unit = "";
     let alert = false;
     let score = Math.abs(best);
+
     switch (kind) {
       case "precipitation": {
         unit = "mm";
-        if (bestSourceLayer === "snow" || bestSourceLayer === "layerSnow") {
+        const isSnow =
+          bestSourceLayer === "snow" || bestSourceLayer === "layerSnow";
+        if (isSnow) {
           label = `Snow ${best.toFixed(1)} ${unit}`;
-          alert = best >= 10;
+          alert =
+            cadence === "hourly"
+              ? best >= T.SNOW_HOURLY_HEAVY
+              : best >= T.SNOW_DAILY_HEAVY;
         } else {
           label = `Rain ${best.toFixed(1)} ${unit}`;
-          alert = best >= 20;
+          // Tier the rain alert by cadence so an hourly burst and a
+          // weekly accumulation aren't held to the same number.
+          alert =
+            cadence === "hourly"
+              ? best >= T.RAIN_HOURLY_HEAVY
+              : cadence === "weekly"
+                ? best >= T.RAIN_WEEKLY_HEAVY
+                : best >= T.RAIN_DAILY_HEAVY;
         }
         score = best;
         break;
@@ -544,25 +1091,81 @@ export class WeatherReportControl {
       case "snowfall":
         unit = "mm";
         label = `Snow ${best.toFixed(1)} ${unit}`;
-        alert = best >= 10;
+        alert =
+          cadence === "hourly"
+            ? best >= T.SNOW_HOURLY_HEAVY
+            : best >= T.SNOW_DAILY_HEAVY;
         score = best;
         break;
       case "cape":
         unit = "J/kg";
         label = `CAPE ${best.toFixed(0)} ${unit}`;
-        alert = best >= 1000;
+        alert = best >= T.CAPE_ALERT;
         score = best;
         break;
       case "storm_helicity":
         unit = "J/kg";
         label = `Helicity ${best.toFixed(0)} ${unit}`;
-        alert = best >= 300;
+        alert = best >= T.HELICITY_ALERT;
         score = best;
         break;
       case "temperature":
         unit = "°C";
         label = `Temp ${best >= 0 ? "+" : ""}${best.toFixed(1)} ${unit}`;
-        alert = best >= 42 || best <= -15;
+        alert = best >= T.TEMP_HOT || best <= T.TEMP_COLD;
+        score = Math.abs(best);
+        break;
+      // ---- Air-quality kinds ----------------------------------------
+      case "aqi":
+        unit = "AQI";
+        label = `AQI ${best.toFixed(0)}`;
+        alert = best >= T.AQI_USG;
+        score = best;
+        break;
+      case "desert_dust":
+        unit = "µg/m³";
+        label = `Dust ${best.toFixed(0)} ${unit}`;
+        alert = best >= T.DUST_ALERT;
+        score = best;
+        break;
+      case "aod":
+        unit = "";
+        label = `AOD ${best.toFixed(2)}`;
+        alert = best >= T.AOD_ALERT;
+        score = best;
+        break;
+      case "no2":
+        unit = "µg/m³";
+        label = `NO₂ ${best.toFixed(0)} ${unit}`;
+        alert = best >= T.NO2_ALERT;
+        score = best;
+        break;
+      case "co":
+        unit = "µg/m³";
+        label = `CO ${best.toFixed(0)} ${unit}`;
+        alert = best >= T.CO_ALERT;
+        score = best;
+        break;
+      case "so2":
+        unit = "µg/m³";
+        label = `SO₂ ${best.toFixed(0)} ${unit}`;
+        alert = best >= T.SO2_ALERT;
+        score = best;
+        break;
+      // ---- Station-only kinds ---------------------------------------
+      case "rainfall_station":
+        unit = "mm";
+        label = `Rain ${best.toFixed(1)} ${unit}`;
+        alert = best >= T.RAIN_STATION_ALERT;
+        score = best;
+        break;
+      case "temperature_station":
+        // Tighter threshold than the `temperature` (forecast) kind —
+        // station readings are point measurements with higher accuracy
+        // and Pakistan heat-warning protocols flag at ≥ 40 °C.
+        unit = "°C";
+        label = `Temp ${best >= 0 ? "+" : ""}${best.toFixed(1)} ${unit}`;
+        alert = best >= T.STATION_TEMP_HOT || best <= T.TEMP_COLD;
         score = Math.abs(best);
         break;
       default:
@@ -653,9 +1256,13 @@ export class WeatherReportControl {
           ? `
         <div class="wrp-hotspot ${top.reading.alert ? "is-alert" : ""}">
           <div class="wrp-hotspot-tag">HOTSPOT</div>
-          <div class="wrp-hotspot-name">${escapeHtml(top.district)}</div>
-          <div class="wrp-hotspot-meta">${escapeHtml(top.province)}</div>
-          <div class="wrp-hotspot-value">${escapeHtml(top.reading.label)}</div>
+          <div class="wrp-hotspot-row">
+            <div class="wrp-hotspot-text">
+              <div class="wrp-hotspot-name">${escapeHtml(top.district)}</div>
+              <div class="wrp-hotspot-meta">${escapeHtml(top.province)}</div>
+            </div>
+            <div class="wrp-hotspot-value">${escapeHtml(top.reading.label)}</div>
+          </div>
         </div>
       `
           : ""
@@ -673,25 +1280,43 @@ export class WeatherReportControl {
 
     for (const [province, list] of orderedProvinces) {
       const provinceAlerts = list.filter((r) => r.reading.alert).length;
+      // Header layout per spec: district count stays as text (no icon),
+      // alert count becomes an icon badge (Lucide `octagon-alert`).
+      // The badge only renders when there's at least one alert in the
+      // province — otherwise the right side stays clean.
+      const alertBadgeHtml =
+        provinceAlerts > 0
+          ? `<span class="wrp-group-alert-badge" title="${provinceAlerts} alert${provinceAlerts === 1 ? "" : "s"}">
+               <i data-lucide="octagon-alert" class="wrp-group-alert-icon"></i>
+               <span class="wrp-group-alert-count">${provinceAlerts}</span>
+             </span>`
+          : "";
       groupsHtml += `
         <div class="wrp-group">
           <div class="wrp-group-head">
             <span class="wrp-group-name">${escapeHtml(province)}</span>
             <span class="wrp-group-meta">
-              ${list.length} district${list.length === 1 ? "" : "s"}
-              ${provinceAlerts > 0 ? `· <b class="wrp-group-alerts">${provinceAlerts} alert${provinceAlerts === 1 ? "" : "s"}</b>` : ""}
+              <span class="wrp-group-district-count">${list.length} district${list.length === 1 ? "" : "s"}</span>
+              ${alertBadgeHtml}
             </span>
           </div>
           <div class="wrp-cards">
             ${list
-              .map(
-                (r) => `
+              .map((r) => {
+                const extrasHtml = (r.extras || [])
+                  .map(
+                    (ex) =>
+                      `<span class="wrp-card-extra ${ex.alert ? "is-alert" : ""}" title="${escapeHtml(ex.source || "")}">${escapeHtml(ex.label)}</span>`
+                  )
+                  .join("");
+                return `
               <div class="wrp-card ${r.reading.alert ? "is-alert" : ""}">
                 <div class="wrp-card-name">${escapeHtml(r.district)}</div>
                 <div class="wrp-card-value">${escapeHtml(r.reading.label)}</div>
+                ${extrasHtml ? `<div class="wrp-card-extras">${extrasHtml}</div>` : ""}
               </div>
-            `
-              )
+            `;
+              })
               .join("")}
           </div>
         </div>
@@ -717,19 +1342,21 @@ export class WeatherReportControl {
       this.#footerEl.innerHTML = `${escapeHtml(meta.label)} · Generated ${generated}`;
       this.#footerEl.classList.add("is-visible");
     }
+    // The new alert badges contain `<i data-lucide="octagon-alert">` —
+    // lucide.createIcons() walks the DOM and replaces those placeholders
+    // with their inline SVGs.  Cheap to call (it short-circuits when
+    // there are no remaining `[data-lucide]` nodes).
+    if (window.lucide?.createIcons) {
+      try { window.lucide.createIcons(); } catch {}
+    }
   }
 
   // -------------------------------------------------------------- destroy
   destroy() {
-    if (this.#renderRafId != null) cancelAnimationFrame(this.#renderRafId);
-    if (this.#observer) this.#observer.disconnect();
-    const slider = document.getElementById("slider1");
-    if (slider && this.#boundOnSliderInput)
-      slider.removeEventListener("input", this.#boundOnSliderInput);
-    if (this.#boundOnMapMove)
-      this.#map.off("moveend", this.#boundOnMapMove);
-    if (this.#boundOnMapIdle)
-      this.#map.off("idle", this.#boundOnMapIdle);
+    // Single source of truth — same path used on panel close.  No need
+    // to also clear #renderRafId because the throttle uses setTimeout
+    // and #detachListeners clears that.
+    this.#detachListeners();
   }
 }
 
