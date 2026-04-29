@@ -242,9 +242,26 @@ const DISTRICT_NAME_KEYS = [
   "DISTRICT",
   "DISTRICT_NAME",
 ];
+// Keys for *province feature* dedup — province polygons carry their own
+// name in `name`/`NAME` so generic keys are correct here.
 const PROVINCE_NAME_KEYS = [
   "name",
   "NAME",
+  "province",
+  "province_name",
+  "provincename",
+  "PROVINCE",
+  "PROVINCE_NAME",
+  "admin1",
+  "ADM1_EN",
+  "prov_name",
+];
+
+// Keys for reading the PROVINCE NAME from a DISTRICT feature.  Excludes
+// generic `name`/`NAME` because those hold the *district's* own name —
+// without this separation, every district reported its own name as its
+// province (the "34 PROVINCES for 34 districts" bug in the screenshot).
+const DISTRICT_PROVINCE_PROP_KEYS = [
   "province",
   "province_name",
   "provincename",
@@ -707,13 +724,12 @@ export class WeatherReportControl {
     }
 
     // Province features are only needed as a *fallback* when a district
-    // feature lacks a province name property of its own.  If the very
-    // first district carries a recognised province key, every other
-    // district in this dataset will too — skip the second viewport
-    // query entirely.  Saves one heavy queryRenderedFeatures call per
-    // render in the common case.
+    // feature lacks a province name property of its own.  Use the
+    // district-only key list — `PROVINCE_NAME_KEYS` would falsely
+    // match every district's own `name` and skip the fallback query
+    // when we actually need it.
     const sampleHasProvince = districtFeatures.some((d) =>
-      this.#firstProp(d, PROVINCE_NAME_KEYS)
+      this.#firstProp(d, DISTRICT_PROVINCE_PROP_KEYS)
     );
     const provinceFeatures = sampleHasProvince
       ? []
@@ -746,7 +762,9 @@ export class WeatherReportControl {
       if (!center) continue;
 
       const provinceName =
-        this.#firstProp(district, PROVINCE_NAME_KEYS) ||
+        // Use the *district-feature* province key list (excludes generic
+        // 'name'/'NAME' which would match the district's own name).
+        this.#firstProp(district, DISTRICT_PROVINCE_PROP_KEYS) ||
         this.#provinceForCenter(center, provinceFeatures) ||
         "Unknown";
 
@@ -1243,6 +1261,91 @@ export class WeatherReportControl {
     }
   }
 
+  // ---- Province aggregation -------------------------------------------
+  // Reduce a province's per-district readings to a single representative
+  // number + label.  Aggregation strategy is kind-aware:
+  //   - cape, storm_helicity → MAX (worst-case is the headline number)
+  //   - everything else      → MEAN (typical conditions in the province)
+  // Returns { value, label, alert, title } or null if no readings.
+  #provinceAggregate(rows, meta) {
+    if (!rows || !rows.length || !meta) return null;
+    const values = rows
+      .map((r) => r.reading?.value)
+      .filter((v) => Number.isFinite(v));
+    if (!values.length) return null;
+
+    const useMax = meta.kind === "cape" || meta.kind === "storm_helicity";
+    const agg = useMax
+      ? Math.max(...values)
+      : values.reduce((a, b) => a + b, 0) / values.length;
+    const prefix = useMax ? "Max" : "Avg";
+
+    const fmt = this.#formatProvinceReading(meta.kind, agg, prefix);
+    // Alert flag at province level uses the same threshold as a single
+    // district reading — pass the aggregate value through aggregateReading
+    // by pretending it's a single-feature query.
+    const synth = [{ properties: { minValue: agg } }];
+    const reading = this.#aggregateReading(synth, meta.kind, meta);
+    const alert = reading?.alert === true;
+    return {
+      value: agg,
+      label: fmt,
+      alert,
+      title: `${rows.length} district${rows.length === 1 ? "" : "s"} · ${prefix.toLowerCase()}`,
+    };
+  }
+
+  #formatProvinceReading(kind, value, prefix) {
+    switch (kind) {
+      case "temperature":
+      case "temperature_station":
+        return `${prefix} ${value >= 0 ? "+" : ""}${value.toFixed(1)} °C`;
+      case "precipitation":
+        return `${prefix} ${value.toFixed(1)} mm`;
+      case "snowfall":
+        return `${prefix} ${value.toFixed(1)} mm`;
+      case "rainfall_station":
+        return `${prefix} ${value.toFixed(1)} mm`;
+      case "cape":
+        return `${prefix} ${value.toFixed(0)} J/kg`;
+      case "storm_helicity":
+        return `${prefix} ${value.toFixed(0)} J/kg`;
+      case "aqi":
+        return `${prefix} AQI ${value.toFixed(0)}`;
+      case "desert_dust":
+        return `${prefix} ${value.toFixed(0)} µg/m³`;
+      case "aod":
+        return `${prefix} AOD ${value.toFixed(2)}`;
+      case "no2":
+        return `${prefix} ${value.toFixed(0)} µg/m³`;
+      case "co":
+        return `${prefix} ${value.toFixed(0)} µg/m³`;
+      case "so2":
+        return `${prefix} ${value.toFixed(0)} µg/m³`;
+      default:
+        return `${prefix} ${value.toFixed(1)}`;
+    }
+  }
+
+  // Union of multiple bbox tuples [w,s,e,n] — used to fit-bounds a
+  // whole province from its constituent district bboxes.
+  #unionBboxes(bboxes) {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const b of bboxes || []) {
+      if (!Array.isArray(b) || b.length !== 4) continue;
+      if (!b.every(Number.isFinite)) continue;
+      if (b[0] < minX) minX = b[0];
+      if (b[1] < minY) minY = b[1];
+      if (b[2] > maxX) maxX = b[2];
+      if (b[3] > maxY) maxY = b[3];
+    }
+    if (!Number.isFinite(minX)) return null;
+    return [minX, minY, maxX, maxY];
+  }
+
   #frameSourceIds(frame) {
     if (!frame) return [];
     if (Array.isArray(frame.sources)) return frame.sources.map((s) => s.id);
@@ -1319,6 +1422,13 @@ export class WeatherReportControl {
 
     for (const [province, list] of orderedProvinces) {
       const provinceAlerts = list.filter((r) => r.reading.alert).length;
+      // Province-level aggregate: kind-aware aggregation across the
+      // districts in this province.  CAPE / helicity take the MAX
+      // (hotspot semantics — worst-case is the meaningful number),
+      // every other kind takes the MEAN (typical conditions).
+      const provinceAgg = this.#provinceAggregate(list, meta);
+      // Province bbox: union of district bboxes — click-to-fly target.
+      const provinceBbox = this.#unionBboxes(list.map((r) => r.bbox));
       // Header layout per spec: district count stays as text (no icon),
       // alert count becomes an icon badge (Lucide `octagon-alert`).
       // The badge only renders when there's at least one alert in the
@@ -1330,11 +1440,18 @@ export class WeatherReportControl {
                <span class="wrp-group-alert-count">${provinceAlerts}</span>
              </span>`
           : "";
+      const aggHtml = provinceAgg
+        ? `<span class="wrp-group-aggregate ${provinceAgg.alert ? "is-alert" : ""}" title="${escapeHtml(provinceAgg.title)}">${escapeHtml(provinceAgg.label)}</span>`
+        : "";
       groupsHtml += `
         <div class="wrp-group">
-          <div class="wrp-group-head">
+          <div class="wrp-group-head"
+               ${bboxAttr(provinceBbox)}
+               role="button" tabindex="0"
+               title="Fly to ${escapeHtml(province)}">
             <span class="wrp-group-name">${escapeHtml(province)}</span>
             <span class="wrp-group-meta">
+              ${aggHtml}
               <span class="wrp-group-district-count">${list.length} district${list.length === 1 ? "" : "s"}</span>
               ${alertBadgeHtml}
             </span>

@@ -503,6 +503,28 @@
 .weather-report-panel .wrp-group-district-count {
     color: var(--text-muted);
 }
+/* Province-level aggregate (mean / max across the province's
+   districts).  Default tone is the panel's primary text; alert
+   variant flips to red so the eye picks up provinces that are in
+   trouble even before scanning the alert badge. */
+.weather-report-panel .wrp-group-aggregate {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 9px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-group-aggregate.is-alert {
+    background: rgba(120, 0, 0, 0.85);
+    border-color: var(--ndma-red);
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
 /* Alert badge: octagon-alert icon + count, red pill.  Replaces the
    plain "X alerts" text.  Only renders when alerts > 0. */
 .weather-report-panel .wrp-group-alert-badge {
@@ -622,14 +644,27 @@
     }
 }
 
-/* Click-to-fly affordance — every card with a bbox gets pointer cursor
-   + a background tint shift on hover.  No transform/translate so the
-   row stays put; only the fill changes.  Keyboard focus ring lives
-   on the same hook. */
+/* Click-to-fly affordance — every element with a bbox gets pointer
+   cursor + a background tint shift on hover.  No transform/translate
+   so the row stays put; only the fill changes.  Keyboard focus ring
+   lives on the same hook. */
 .weather-report-panel .wrp-card[data-fly-bbox],
-.weather-report-panel .wrp-hotspot[data-fly-bbox] {
+.weather-report-panel .wrp-hotspot[data-fly-bbox],
+.weather-report-panel .wrp-group-head[data-fly-bbox] {
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+/* Province header hover — subtle bg tint so the strip reads as
+   interactive without dominating the alert/aggregate spans. */
+.weather-report-panel .wrp-group-head[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    margin: 0 -4px 4px;
+    padding: 0 4px 4px;
+}
+.weather-report-panel .wrp-group-head[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
 }
 /* Non-alert card hover — slightly lighter glass so the row visibly
    responds without changing layout. */
