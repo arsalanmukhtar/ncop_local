@@ -359,6 +359,37 @@ export class WeatherReportControl {
     // Lucide icons get rendered by the global init pass; nudge it in case
     // we're mounted after the initial pass.
     if (window.lucide?.createIcons) window.lucide.createIcons();
+
+    // ONE delegated handler for the entire body — survives every render
+    // (innerHTML changes don't drop listeners on the parent).  Reads
+    // `data-fly-bbox` off the closest ancestor and flies the map to
+    // that bbox.  No per-card listeners → zero per-render setup cost.
+    const flyHandler = (ev) => {
+      // Keyboard activation: only fire on Enter/Space, never block other keys.
+      if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") {
+        return;
+      }
+      const target = ev.target.closest("[data-fly-bbox]");
+      if (!target) return;
+      const raw = target.getAttribute("data-fly-bbox");
+      if (!raw) return;
+      const [w, s, e, n] = raw.split(",").map(Number);
+      if (![w, s, e, n].every(Number.isFinite)) return;
+      ev.preventDefault();
+      try {
+        this.#map.fitBounds(
+          [
+            [w, s],
+            [e, n],
+          ],
+          { padding: 60, duration: 900, maxZoom: 10 }
+        );
+      } catch (err) {
+        console.warn("[WeatherReport] fitBounds failed:", err);
+      }
+    };
+    this.#contentEl.addEventListener("click", flyHandler);
+    this.#contentEl.addEventListener("keydown", flyHandler);
   }
 
   #wireToggle() {
@@ -765,9 +796,14 @@ export class WeatherReportControl {
 
       if (!primaryReading && !extras.length) continue;
 
+      // Cache the district's bbox here so the per-card click handler can
+      // fly to it without re-querying the source feature on click.
+      const bbox = this.#featureBbox(district);
+
       rows.push({
         district: districtName,
         province: provinceName,
+        bbox,
         // If the primary slot is empty (no temporal sample, no station-as-primary
         // hit, but a secondary station got a reading), promote the first extra.
         reading: primaryReading || extras.shift(),
@@ -1254,7 +1290,10 @@ export class WeatherReportControl {
       ${
         top
           ? `
-        <div class="wrp-hotspot ${top.reading.alert ? "is-alert" : ""}">
+        <div class="wrp-hotspot ${top.reading.alert ? "is-alert" : ""}"
+             ${bboxAttr(top.bbox)}
+             role="button" tabindex="0"
+             title="Fly to ${escapeHtml(top.district)}">
           <div class="wrp-hotspot-tag">HOTSPOT</div>
           <div class="wrp-hotspot-row">
             <div class="wrp-hotspot-text">
@@ -1310,7 +1349,10 @@ export class WeatherReportControl {
                   )
                   .join("");
                 return `
-              <div class="wrp-card ${r.reading.alert ? "is-alert" : ""}">
+              <div class="wrp-card ${r.reading.alert ? "is-alert" : ""}"
+                   ${bboxAttr(r.bbox)}
+                   role="button" tabindex="0"
+                   title="Fly to ${escapeHtml(r.district)}">
                 <div class="wrp-card-name">${escapeHtml(r.district)}</div>
                 <div class="wrp-card-value">${escapeHtml(r.reading.label)}</div>
                 ${extrasHtml ? `<div class="wrp-card-extras">${extrasHtml}</div>` : ""}
@@ -1367,4 +1409,14 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// Serialise a bbox tuple [w,s,e,n] to a `data-fly-bbox="w,s,e,n"`
+// attribute fragment.  Returns "" if the bbox is missing/invalid so
+// the card just renders without the click affordance instead of
+// rendering with a broken value.
+function bboxAttr(bbox) {
+  if (!Array.isArray(bbox) || bbox.length !== 4) return "";
+  if (!bbox.every(Number.isFinite)) return "";
+  return `data-fly-bbox="${bbox.map((n) => n.toFixed(4)).join(",")}"`;
 }

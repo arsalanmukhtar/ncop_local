@@ -622,6 +622,43 @@
     }
 }
 
+/* Click-to-fly affordance — every card with a bbox gets pointer cursor
+   + a background tint shift on hover.  No transform/translate so the
+   row stays put; only the fill changes.  Keyboard focus ring lives
+   on the same hook. */
+.weather-report-panel .wrp-card[data-fly-bbox],
+.weather-report-panel .wrp-hotspot[data-fly-bbox] {
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+/* Non-alert card hover — slightly lighter glass so the row visibly
+   responds without changing layout. */
+.weather-report-panel .wrp-card[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.12));
+    border-color: var(--ndma-blue-light);
+}
+/* Alert card hover — preserve the dark-crimson alert bg but lift the
+   tint a touch so the row still reads as interactive on hover. */
+.weather-report-panel .wrp-card.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+/* Hotspot hover — same logic, separate tier. */
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:hover {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.18) 0%,
+        var(--frost-bg, rgba(255, 255, 255, 0.12)) 75%
+    );
+}
+.weather-report-panel .wrp-hotspot.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+.weather-report-panel .wrp-card[data-fly-bbox]:focus-visible,
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
 .weather-report-panel .wrp-card-name {
     font-size: 10px;
     font-weight: 500;
