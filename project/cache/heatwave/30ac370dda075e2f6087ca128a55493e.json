@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [68.7592, 27.5295]}, "properties": {"name": "Khairpur", "province": "Sindh", "temperature": 42.8, "apparent_temperature": 43.0, "humidity": 11, "precipitation": 0.0, "wind_speed": 6.8, "weather_code": 0, "temp_max": 43.3, "temp_min": 29.1, "alert_level": "High", "updated": "2026-04-29T13:45"}}

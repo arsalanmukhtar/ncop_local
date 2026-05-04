@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [71.6836, 29.3956]}, "properties": {"name": "Bahawalpur", "province": "Punjab", "temperature": 37.7, "apparent_temperature": 39.3, "humidity": 22, "precipitation": 0.0, "wind_speed": 4.2, "weather_code": 0, "temp_max": 38.3, "temp_min": 24.9, "alert_level": "Elevated", "updated": "2026-04-29T13:45"}}

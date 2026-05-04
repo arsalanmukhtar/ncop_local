@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [66.975, 30.1798]}, "properties": {"name": "Quetta", "province": "Balochistan", "temperature": 27.4, "apparent_temperature": 24.0, "humidity": 16, "precipitation": 0.0, "wind_speed": 21.9, "weather_code": 0, "temp_max": 29.0, "temp_min": 14.9, "alert_level": "Normal", "updated": "2026-04-29T13:45"}}

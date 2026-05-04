@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [70.6403, 30.0561]}, "properties": {"name": "Dera Ghazi Khan", "province": "Punjab", "temperature": 35.8, "apparent_temperature": 38.6, "humidity": 28, "precipitation": 0.0, "wind_speed": 1.9, "weather_code": 1, "temp_max": 36.7, "temp_min": 24.0, "alert_level": "Normal", "updated": "2026-04-29T13:45"}}

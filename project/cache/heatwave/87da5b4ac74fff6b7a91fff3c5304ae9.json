@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.2117, 34.1463]}, "properties": {"name": "Abbottabad", "province": "KPK", "temperature": 19.3, "apparent_temperature": 20.1, "humidity": 71, "precipitation": 0.0, "wind_speed": 2.9, "weather_code": 2, "temp_max": 22.6, "temp_min": 15.1, "alert_level": "Normal", "updated": "2026-04-29T13:45"}}

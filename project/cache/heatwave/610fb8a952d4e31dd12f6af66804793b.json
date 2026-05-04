@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [75.6304, 35.2987]}, "properties": {"name": "Skardu", "province": "GB", "temperature": 13.4, "apparent_temperature": 12.2, "humidity": 50, "precipitation": 0.0, "wind_speed": 2.6, "weather_code": 3, "temp_max": 13.5, "temp_min": 7.8, "alert_level": "Normal", "updated": "2026-04-29T13:45"}}

@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [72.0231, 34.1989]}, "properties": {"name": "Mardan", "province": "KPK", "temperature": 29.6, "apparent_temperature": 30.7, "humidity": 45, "precipitation": 0.5, "wind_speed": 9.9, "weather_code": 80, "temp_max": 30.5, "temp_min": 19.0, "alert_level": "Normal", "updated": "2026-04-29T13:45"}}

@@ -1,1 +1,0 @@
-{"type": "Feature", "geometry": {"type": "Point", "coordinates": [68.8574, 27.7059]}, "properties": {"name": "Sukkur", "province": "Sindh", "temperature": 40.5, "apparent_temperature": 41.7, "humidity": 16, "precipitation": 0.0, "wind_speed": 5.6, "weather_code": 0, "temp_max": 41.8, "temp_min": 28.5, "alert_level": "High", "updated": "2026-04-29T13:45"}}
