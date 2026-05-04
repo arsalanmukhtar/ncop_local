@@ -331,7 +331,8 @@
 /* ---------- Summary stats ---------- */
 .weather-report-panel .wrp-summary {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     gap: 6px;
 }
 .weather-report-panel .wrp-stat {

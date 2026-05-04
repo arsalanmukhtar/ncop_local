@@ -1385,10 +1385,6 @@ export class WeatherReportControl {
           <strong>${alertCount}</strong>
           <span>Alerts</span>
         </div>
-        <div class="wrp-stat">
-          <strong>${provinces.size}</strong>
-          <span>Provinces</span>
-        </div>
       </div>
       ${
         top
