@@ -180,4 +180,6 @@ staticfiles
 
 # Vite cache
 .vite
-../logs/
+
+# Backend cache (heatwave / weather snapshots)
+project/cache/

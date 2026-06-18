@@ -1,0 +1,807 @@
+/* =========================================================================
+   Weather Report Panel
+   -------------------------------------------------------------------------
+   Slide-from-right panel anchored to its rail button by anchorRailPanels-
+   ToButtons() (see dashboard.js).  Theming uses the same NCOP custom
+   properties the rest of the rail panels rely on, so day/night flip
+   automatically via [data-theme="night"] overrides at the bottom.
+   ========================================================================= */
+
+/* The wrapper only exists so the rail builder has a known parent to pull
+   the button out of — once `buildUnifiedRightRail` reparents the button,
+   the wrapper is dead weight, so we hide it.  Mirrors the geocoder
+   wrapper pattern in _controls.css. */
+.custom-weather-report-control {
+    display: none !important;
+}
+
+/* Resting background — explicit `var(--secondary-bg)` + blur so the
+   button looks identical to its neighbours against the rail's tinted
+   background.  Without the pair, the browser default `<button>` paint
+   shows through as a lighter tile (this is the same reason geocoder
+   reproduces these rules at _controls.css:1033-1037). */
+.map-right-rail > .custom-weather-report-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: var(--white) !important;
+    cursor: pointer;
+}
+
+/* Hover — matches the unified hover effect, but scoped so my active
+   state isn't overpainted. */
+.map-right-rail > .custom-weather-report-btn:hover:not(.active-weather-report) {
+    background: var(--primary-bg) !important;
+}
+
+/* Night-mode resting — mirror the geocoder pattern so the rail stays
+   visually homogeneous in both themes. */
+[data-theme="night"] .map-right-rail > .custom-weather-report-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="night"] .map-right-rail > .custom-weather-report-btn:hover:not(.active-weather-report) {
+    background: var(--glass-highlight) !important;
+}
+
+/* Active state — the panel is open.  Match the geocoder's NDMA-blue
+   selected fill so the rail's "this is on" affordance is consistent. */
+.map-right-rail > .custom-weather-report-btn.active-weather-report {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ---------- Panel shell ---------- */
+/* Switched from `max-height` to a definite `height` because flex-child
+   layout math is unreliable when the parent's height is "up to N" rather
+   than exactly N — Chromium in particular leaks content height into
+   `flex: 1 1 auto` children and the inner scroll never gets a bounded
+   height.  Definite height = deterministic layout. */
+.weather-report-panel {
+    position: absolute;
+    top: 0;
+    right: 42px;
+    width: 425px;
+    height: min(620px, calc(100vh - 240px)) !important;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 12px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px var(--shadow-soft, rgba(0, 0, 0, 0.4));
+    color: var(--text-primary);
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    z-index: 1001;
+}
+
+.weather-report-panel .wrp-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 8px;
+}
+.weather-report-panel .wrp-header-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+.weather-report-panel .wrp-subtitle {
+    margin: 3px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Threshold strip — sits directly under the subtitle so the user knows
+   at a glance which numeric bar a district has to clear before its
+   card flips into the red animated alert state.  Allows wrapping
+   because long thresholds (AQI, NO₂, etc. with their parenthetical
+   citations) wouldn't fit on one line at the panel's 425 px width
+   and were being silently ellipsised down to "...". */
+.weather-report-panel .wrp-threshold {
+    margin: 5px 0 0;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+.weather-report-panel .wrp-threshold[hidden] {
+    display: none;
+}
+.weather-report-panel .wrp-threshold-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    /* flex `gap` on the parent handles spacing now */
+    flex: 0 0 auto;
+}
+/* Pill-style: dark backdrop + white text + red border so the threshold
+   number is legible against any panel background variant.  Day-mode
+   panel bg is dark glass and night-mode is light glass — both work
+   with this pill because it carries its own backdrop. */
+.weather-report-panel .wrp-threshold-value {
+    display: inline-block;
+    padding: 1px 9px;
+    background: rgba(120, 0, 0, 0.85);
+    border: 1px solid var(--ndma-red);
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.4;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+.weather-report-panel .wrp-close-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.weather-report-panel .wrp-close-btn:hover {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+.weather-report-panel .wrp-close-btn svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+/* ---------- Body (flex column, no scroll itself) ----------
+   Body owns layout but NOT overflow.  It splits into three rows:
+     .wrp-fixed   — pinned reference data (summary + hotspot)
+     .wrp-scroll  — the only scrolling region (per-province district list)
+     .wrp-footer  — pinned bottom strip
+   Padding sits on the body so the scrollbar of .wrp-scroll runs flush
+   against the panel edge instead of indented under the padding. */
+/* ---- Panel body uses CSS GRID, not flex --------------------------------
+   Two prior flex-based attempts to solve the "scroll doesn't work"
+   regression both leaked enough content height into the scroll row that
+   the scrollbar never appeared.  Grid is deterministic here:
+     grid-template-rows: auto 1fr → first row sizes to .wrp-fixed's
+     content; second row gets EXACTLY the remaining height.  Combined
+     with min-height: 0 + overflow on the 1fr child, the scrollbar
+     appears the moment .wrp-scroll's content exceeds that row.  No
+     flex-grow heuristics, no implicit shrinking, no surprises. */
+.weather-report-panel .wrp-body {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    min-width: 0;
+    overflow: hidden !important;
+    padding: 10px 13px 13px;
+    display: grid !important;
+    grid-template-rows: auto 1fr !important;
+    grid-row-gap: 9px;
+}
+
+.weather-report-panel .wrp-fixed {
+    /* Auto row of the body grid — sizes to content. */
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+}
+
+/* The ONLY scrolling region in the panel.  `!important` on the overflow
+   pair guarantees no later rule can suppress it.  `min-height: 0` is
+   the magic that lets a grid 1fr row actually be smaller than its
+   intrinsic content height — without it, the row grows to fit content
+   and there's nothing to overflow. */
+.weather-report-panel .wrp-scroll {
+    min-height: 0 !important;
+    min-width: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-right: -5px;
+    padding-right: 5px;
+}
+.weather-report-panel .wrp-scroll > .wrp-group {
+    flex: 0 0 auto !important;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar-thumb {
+    background: var(--ndma-red-light);
+    border-radius: 4px;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--ndma-red);
+}
+
+/* ---------- Loading state ---------- */
+/* Centered spinner + label.  Spinner colors hook into the NDMA palette
+   so day/night flips automatically; the inner ring is a hue-rotated
+   variant for two-tone motion.  Dimensions kept compact so the spinner
+   sits comfortably even when the panel max-height is constrained on
+   short viewports. */
+.weather-report-panel .wrp-loading {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 35px 20px;
+    color: var(--text-secondary);
+}
+.weather-report-panel .wrp-loader {
+    width: 52px;
+    aspect-ratio: 1;
+    display: grid;
+}
+.weather-report-panel .wrp-loader::before,
+.weather-report-panel .wrp-loader::after {
+    content: "";
+    grid-area: 1 / 1;
+    --wrp-loader-c: var(--ndma-blue);
+    --c: no-repeat radial-gradient(farthest-side, var(--wrp-loader-c) 92%, transparent);
+    background:
+        var(--c) 50% 0,
+        var(--c) 50% 100%,
+        var(--c) 100% 50%,
+        var(--c) 0 50%;
+    background-size: 12px 12px;
+    animation: wrp-loader-spin 1s infinite;
+}
+.weather-report-panel .wrp-loader::before {
+    margin: 5px;
+    filter: hue-rotate(45deg);
+    background-size: 9px 9px;
+    animation-timing-function: linear;
+}
+.weather-report-panel .wrp-loading-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+}
+
+@keyframes wrp-loader-spin {
+    100% {
+        transform: rotate(0.5turn);
+    }
+}
+
+/* Night theme — switch to NDMA green for the spinner so it pops against
+   the lighter glass background; hue-rotate gives a complementary teal
+   for the inner ring. */
+[data-theme="night"] .weather-report-panel .wrp-loader::before,
+[data-theme="night"] .weather-report-panel .wrp-loader::after {
+    --wrp-loader-c: var(--ndma-green);
+}
+
+/* ---------- Empty state ---------- */
+.weather-report-panel .wrp-empty {
+    padding: 15px 13px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    text-align: left;
+}
+.weather-report-panel .wrp-empty h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.weather-report-panel .wrp-empty p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* ---------- Summary stats ---------- */
+.weather-report-panel .wrp-summary {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 6px;
+}
+.weather-report-panel .wrp-stat {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    padding: 7px 5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.weather-report-panel .wrp-stat strong {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1;
+}
+.weather-report-panel .wrp-stat span {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* ---------- Hotspot ---------- */
+/* The hotspot is *always* the most extreme reading on the active step,
+   so it's always "critical" in a relative sense — keep it permanently
+   red-toned to match that semantics.  `.is-alert` only deepens the
+   gradient when the value also crosses an absolute threshold. */
+.weather-report-panel .wrp-hotspot {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.08) 0%,
+        var(--secondary-bg) 75%
+    );
+    border: 1px solid var(--border-dark);
+    border-left: 4px solid var(--ndma-red);
+    border-radius: 8px;
+    padding: 9px 11px;
+}
+
+/* When the hotspot is in alert state, swap its translucent gradient for
+   the same solid dark crimson the alert cards use.  Halo pulse lives
+   in ::before with `inset: -6px` so it never overlaps the text. */
+.weather-report-panel .wrp-hotspot.is-alert {
+    background: linear-gradient(135deg, #2a0000 0%, #4a0000 100%);
+    border-color: var(--ndma-red);
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-name,
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-tag {
+    color: #fff !important;
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-meta {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-value {
+    color: #ffd6d6 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.weather-report-panel .wrp-hotspot.is-alert::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 9px;
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(255, 0, 0, 0.65) 0%,
+            rgba(255, 0, 0, 0.28) 50%,
+            transparent 80%
+        );
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.4;
+    transform: scale(0.94);
+    transform-origin: center;
+    animation: wrp-alert-pulse 1.2s ease-in-out infinite;
+    will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weather-report-panel .wrp-hotspot.is-alert::before {
+        animation: none;
+        opacity: 0.7;
+        transform: scale(1);
+    }
+}
+.weather-report-panel .wrp-hotspot-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    color: var(--ndma-red);
+    margin-bottom: 4px;
+}
+/* Row layout — district/province on the left, reading on the right.
+   Filling the previously empty right side cuts the card height by ~40%
+   compared to the old stacked layout. */
+.weather-report-panel .wrp-hotspot-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.weather-report-panel .wrp-hotspot-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-hotspot-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-hotspot-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-hotspot-value {
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ndma-red);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* ---------- Province group ---------- */
+.weather-report-panel .wrp-group {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+/* Switched from `align-items: baseline` to `center` because mixing the
+   text + the inline-flex aggregate/alert pills with `baseline` gave
+   the pills a half-pixel offset that read as wobble.  Center is
+   pixel-stable. */
+.weather-report-panel .wrp-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed var(--border-dark);
+}
+.weather-report-panel .wrp-group-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-group-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+.weather-report-panel .wrp-group-district-count {
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+/* Province-level aggregate (mean / max across the province's
+   districts).  Default tone is the panel's primary text; alert
+   variant flips to red so the eye picks up provinces that are in
+   trouble even before scanning the alert badge. */
+.weather-report-panel .wrp-group-aggregate {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-group-aggregate.is-alert {
+    background: rgba(120, 0, 0, 0.85);
+    border-color: var(--ndma-red);
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+/* Alert badge: octagon-alert icon + count, red pill.  Replaces the
+   plain "X alerts" text.  Only renders when alerts > 0.
+   --------------------------------------------------------------
+   Alignment fix: Lucide replaces the <i> placeholder with an <svg>
+   that defaults to inline + vertical-align: baseline, which made
+   the icon sit a couple pixels below the count text.  Forcing the
+   icon AND count to `display: flex; align-items: center` with an
+   explicit `line-height: 1` removes the baseline offset entirely. */
+.weather-report-panel .wrp-group-alert-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 9px 3px 7px;
+    background: rgba(255, 0, 0, 0.14);
+    border: 1px solid var(--ndma-red-light);
+    border-radius: 999px;
+    color: var(--ndma-red);
+    font-weight: 600;
+    line-height: 1;
+}
+.weather-report-panel .wrp-group-alert-icon,
+.weather-report-panel .wrp-group-alert-badge svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    color: var(--ndma-red);
+    flex-shrink: 0;
+}
+.weather-report-panel .wrp-group-alert-count {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.weather-report-panel .wrp-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+.weather-report-panel .wrp-card {
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 5px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+/* Alert card — danger pulse, GPU-cheap, LEGIBLE.
+   ----------------------------------------------------------------
+   Earlier versions painted a red radial-gradient glow OVER the card,
+   which made red-on-red text unreadable in both themes.  This pass:
+   1) Card body gets a SOLID dark backdrop (so white text reads)
+   2) The pulsing glow lives in a SEPARATE pseudo-element that sits
+      BEHIND the card AND extends OUTSIDE its perimeter (inset: -6px).
+      The pulse therefore reads as an outer ring/halo around the
+      card, never crossing the text.
+   3) Text is white (high contrast on the dark backdrop)
+   4) Animation still uses only `opacity` + `transform` — both are
+      pure GPU compositor properties so the cumulative paint cost
+      stays at zero regardless of how many cards are alerting. */
+.weather-report-panel .wrp-card.is-alert {
+    position: relative;
+    z-index: 1;
+    border: 1.5px solid var(--ndma-red);
+    /* Solid dark crimson — makes white text pop and stays consistent
+       across day/night themes (the panel bg flips, this stays fixed). */
+    background: linear-gradient(135deg, #2a0000 0%, #4a0000 100%);
+    isolation: isolate;
+}
+
+.weather-report-panel .wrp-card.is-alert::before {
+    content: "";
+    position: absolute;
+    /* -6px so the glow extends well outside the card edge — the pulse
+       reads as a halo around the card, never overlapping the text. */
+    inset: -6px;
+    border-radius: 9px;
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(255, 0, 0, 0.65) 0%,
+            rgba(255, 0, 0, 0.28) 50%,
+            transparent 80%
+        );
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.4;
+    transform: scale(0.94);
+    transform-origin: center;
+    animation: wrp-alert-pulse 1.2s ease-in-out infinite;
+    will-change: opacity, transform;
+}
+
+@keyframes wrp-alert-pulse {
+    0%, 100% {
+        opacity: 0.35;
+        transform: scale(0.94);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.12);
+    }
+}
+
+/* Text inside an alert card — high-contrast white-on-dark.  No
+   animation on text properties: animating color/text-shadow forces
+   text re-rasterisation every frame and was visibly costly with
+   many alerts on screen. */
+.weather-report-panel .wrp-card.is-alert .wrp-card-name {
+    color: #fff !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-card.is-alert .wrp-card-value {
+    color: #ffd6d6 !important;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Reduced-motion fallback — keep the glow visible without the pulse. */
+@media (prefers-reduced-motion: reduce) {
+    .weather-report-panel .wrp-card.is-alert::before {
+        animation: none;
+        opacity: 0.7;
+        transform: scale(1);
+    }
+}
+
+/* Click-to-fly affordance — every element with a bbox gets pointer
+   cursor + a background tint shift on hover.  No transform/translate
+   so the row stays put; only the fill changes.  Keyboard focus ring
+   lives on the same hook. */
+.weather-report-panel .wrp-card[data-fly-bbox],
+.weather-report-panel .wrp-hotspot[data-fly-bbox],
+.weather-report-panel .wrp-group-head[data-fly-bbox] {
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+/* Province header hover — subtle bg tint so the strip reads as
+   interactive without dominating the alert/aggregate spans. */
+.weather-report-panel .wrp-group-head[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    margin: 0 -4px 4px;
+    padding: 0 4px 4px;
+}
+.weather-report-panel .wrp-group-head[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+/* Non-alert card hover — slightly lighter glass so the row visibly
+   responds without changing layout. */
+.weather-report-panel .wrp-card[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.12));
+    border-color: var(--ndma-blue-light);
+}
+/* Alert card hover — preserve the dark-crimson alert bg but lift the
+   tint a touch so the row still reads as interactive on hover. */
+.weather-report-panel .wrp-card.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+/* Hotspot hover — same logic, separate tier. */
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:hover {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.18) 0%,
+        var(--frost-bg, rgba(255, 255, 255, 0.12)) 75%
+    );
+}
+.weather-report-panel .wrp-hotspot.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+.weather-report-panel .wrp-card[data-fly-bbox]:focus-visible,
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+.weather-report-panel .wrp-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-card-value {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.2;
+}
+.weather-report-panel .wrp-card.is-alert .wrp-card-value {
+    color: var(--ndma-red);
+    font-weight: 600;
+}
+
+/* Extras row — secondary readings from station layers (e.g. WAQI) when
+   a temporal layer is the primary source.  Compact tag style; alert
+   tags get the same red treatment as the primary value. */
+.weather-report-panel .wrp-card-extras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+.weather-report-panel .wrp-card-extra {
+    font-size: 10px;
+    line-height: 1.1;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-card-extra.is-alert {
+    background: rgba(255, 0, 0, 0.1);
+    border-color: var(--ndma-red-light);
+    color: var(--ndma-red);
+    font-weight: 600;
+}
+
+/* ---------- Footer (panel-level chrome strip) ---------- */
+/* Footer is a sibling of .wrp-body, so it lives OUTSIDE the scrolling
+   region entirely — solid border + tinted background read as chrome,
+   not as the tail of the scroll list.  Hidden by default until a real
+   report populates it via .is-visible. */
+.weather-report-panel .wrp-footer {
+    flex: 0 0 auto;
+    display: none;
+    padding: 8px 13px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    border-top: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+}
+.weather-report-panel .wrp-footer.is-visible {
+    display: block;
+}
+
+/* =========================================================================
+   Night theme — inherit from --primary-bg / --text-* tokens (already
+   redefined under [data-theme="night"]) so most rules need no override.
+   Only the alert-tinted backgrounds need a slightly different mix because
+   the night palette is light glass on dark, not dark glass on light.
+   ========================================================================= */
+[data-theme="night"] .weather-report-panel .wrp-hotspot {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.12) 0%,
+        var(--secondary-bg) 75%
+    );
+}
+[data-theme="night"] .weather-report-panel .wrp-hotspot.is-alert {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.22) 0%,
+        var(--secondary-bg) 75%
+    );
+}
+[data-theme="night"] .weather-report-panel .wrp-card.is-alert {
+    background: rgba(255, 0, 0, 0.1);
+}

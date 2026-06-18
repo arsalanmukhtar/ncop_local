@@ -228,10 +228,8 @@ export class NavigationPanel {
     // keep the live clock running
     setInterval(() => this.#updateNewsClock(), 1000);
 
-    // Restore terrain state
-    this.restoreToggle3DState(
-      window.ncop_storage?.getSetting("terrainEnabled") || false
-    );
+    // Sync toggle with current map terrain state
+    this.restoreToggle3DState(!!this.#map?.getTerrain?.());
   }
 
   /**
@@ -335,7 +333,7 @@ export class NavigationPanel {
       <div class="gee-chat-input-wrapper">
         <input type="text" 
               id="geeChatInput" 
-              placeholder="Ask for data: 'Show snow cover in Swat Valley'"
+              placeholder="Ask for data…"
               autocomplete="off"
               data-lpignore="true"
               data-form-type="other"
@@ -566,8 +564,7 @@ export class NavigationPanel {
    * Handle 3D toggle
    */
   #handleToggle3D() {
-    const currentTerrain =
-      window.ncop_storage?.getSetting("terrainEnabled") || false;
+    const currentTerrain = !!this.#map?.getTerrain?.();
     const newTerrainState = !currentTerrain;
 
     if (newTerrainState) {
@@ -596,8 +593,20 @@ export class NavigationPanel {
     new mapboxgl.Marker({ color: "#ff4500" })
       .setLngLat(islamabadCoords)
       .setPopup(
-        new mapboxgl.Popup().setHTML(
-          "<strong>📍 Islamabad</strong><br>Capital of Pakistan<br><small>Your Location Marker</small>"
+        new mapboxgl.Popup({ className: "ncop-popup-host", maxWidth: "320px" }).setHTML(
+          `<div class="ncop-popup ncop-popup--compact">
+            <div class="ncop-popup__header">
+              <div class="ncop-popup__title-block">
+                <div class="ncop-popup__title">📍 Islamabad</div>
+                <div class="ncop-popup__subtitle">Capital of Pakistan</div>
+              </div>
+            </div>
+            <div class="ncop-popup__body">
+              <div class="ncop-popup__info">
+                <p class="ncop-popup__info-row">Your Location Marker</p>
+              </div>
+            </div>
+          </div>`
         )
       )
       .addTo(this.#map);
@@ -2070,6 +2079,23 @@ export class NavigationPanel {
    * @param {boolean} includeSM - Include social media or just regular
    */
   async #fetchNews(includeSM = false) {
+    // Render the loading animation immediately so the user gets feedback
+    // the moment they click a toggle.  Using `.is-loading` neutralizes
+    // the marquee animation so the dots stay centered instead of being
+    // dragged off-screen by the scroll-left keyframes.
+    const preContainer = document.getElementById("news-scroll");
+    if (preContainer) {
+      preContainer.classList.add("is-loading");
+      preContainer.innerHTML = `
+        <div class="news-loading" role="status" aria-live="polite">
+          <span class="news-loading-label">Loading news…</span>
+          <div class="news-loading-track" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+    }
+
     try {
       const url = includeSM
         ? `${
@@ -2093,13 +2119,14 @@ export class NavigationPanel {
         return;
       }
 
+      container.classList.remove("is-loading");
       container.innerHTML = "";
 
       // No data case
       if (!geojson.features || geojson.features.length === 0) {
         container.innerHTML = `
-          <div style="color: white; padding: 20px; text-align: center;">
-              <p>🔍 No news data found for South Asia</p>
+          <div class="news-empty">
+              🔍 No news data found for South Asia
               <small>Try switching between Social Media and Regular News</small>
           </div>
         `;
@@ -2113,36 +2140,43 @@ export class NavigationPanel {
         box.className = "news-box";
 
         const fullUrl = props.url || "#";
-        const maxLength = 50;
+        const maxLength = 38;
         const shortUrl =
           fullUrl.length > maxLength
             ? fullUrl.substring(0, maxLength / 2) +
-              "..." +
+              "…" +
               fullUrl.slice(-maxLength / 2)
             : fullUrl;
 
-        const sourceDisplay = this.#generateSourceDisplay(props);
+        const headerInner = this.#generateSourceDisplay(props);
         const displayDate = this.#formatGdeltDate(props.formatted_date);
+        const safeUrl = this.#sanitizeHTML(fullUrl);
 
         box.innerHTML = `
-            ${sourceDisplay}
-            <div style="margin-top: 6px;">
-                <strong style="display:block; font-size:13px; line-height:1.4;">
-                    ${this.#sanitizeHTML(props.title || "Untitled")}
-                </strong>
-                <small style="font-size:11px;">
-                    <a href="${fullUrl}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style="color:#cce6ff; text-decoration:underline;">
-                        ${this.#sanitizeHTML(shortUrl)}
-                    </a>
-                </small>
-                <div style="font-size:10px; color:#999; margin-top:4px;">
-                    ${displayDate}
-                </div>
-            </div>
+          <div class="news-box-header">
+            ${headerInner}
+          </div>
+          <div class="news-box-title">
+            ${this.#sanitizeHTML(props.title || "Untitled")}
+          </div>
+          <div class="news-box-footer">
+            <a class="news-box-link"
+               href="${safeUrl}"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="${safeUrl}">
+              ${this.#sanitizeHTML(shortUrl)}
+            </a>
+            <span class="news-box-time">${this.#sanitizeHTML(displayDate)}</span>
+          </div>
         `;
+
+        // Stop link clicks from also toggling the marker (prevents the
+        // map flying to the location while the user just wanted to open
+        // the article in a new tab).
+        box
+          .querySelector(".news-box-link")
+          ?.addEventListener("click", (e) => e.stopPropagation());
 
         box.dataset.index = index;
         box.addEventListener("click", () =>
@@ -2151,17 +2185,38 @@ export class NavigationPanel {
         container.appendChild(box);
       });
 
+      // Duplicate the rendered cards once so the marquee animation
+      // (translateX 0% → -50%) loops seamlessly.  Clones carry
+      // `data-clone="true"` so click handlers can still locate the
+      // original feature index.
+      const originals = Array.from(container.children);
+      originals.forEach((node) => {
+        const clone = node.cloneNode(true);
+        clone.dataset.clone = "true";
+        clone.setAttribute("aria-hidden", "true");
+        const idx = Number(clone.dataset.index);
+        const feat = geojson.features[idx];
+        if (feat) {
+          clone.addEventListener("click", () =>
+            this.#toggleNewsMarker(idx, feat)
+          );
+          clone
+            .querySelector(".news-box-link")
+            ?.addEventListener("click", (e) => e.stopPropagation());
+        }
+        container.appendChild(clone);
+      });
+
       window.gdeltNewsFeatures = geojson.features;
     } catch (error) {
       console.error("❌ Error fetching news:", error);
       const container = document.getElementById("news-scroll");
       if (container) {
+        container.classList.remove("is-loading");
         container.innerHTML = `
-          <div style="color:#ff6b6b; padding:20px;">
+          <div class="news-error">
               <strong>Failed to load news</strong>
-              <small style="display:block; margin-top:8px;">
-                  ${this.#sanitizeHTML(error.message)}
-              </small>
+              <small>${this.#sanitizeHTML(error.message)}</small>
           </div>
         `;
       }
@@ -2174,65 +2229,65 @@ export class NavigationPanel {
   #generateSourceDisplay(props) {
     const flagBase = "https://flagcdn.com/";
 
-    // Reddit source
+    // Reddit source — badge + r/sub + (upvotes / comments)
     if (props.source_platform === "reddit") {
       return `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="background: #ff4500; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
-                REDDIT
-            </span>
-            <span style="font-size: 11px; color: #ccc;">
-                r/${this.#sanitizeHTML(props.reddit_subreddit || "unknown")}
-            </span>
-            <span style="font-size: 9px; color: #888;">
-                👍 ${props.reddit_score || 0} | 💬 ${props.reddit_comments || 0}
-            </span>
+        <div class="news-box-source">
+          <span class="news-box-badge news-box-badge--reddit">REDDIT</span>
+          <span class="news-box-source-meta">
+            r/${this.#sanitizeHTML(props.reddit_subreddit || "unknown")}
+          </span>
+        </div>
+        <div class="news-box-meta">
+          <span class="news-box-meta-stat">⬆️ ${this.#sanitizeHTML(
+            String(props.reddit_score || 0)
+          )}</span>
+          <span class="news-box-meta-stat">💬 ${this.#sanitizeHTML(
+            String(props.reddit_comments || 0)
+          )}</span>
         </div>
       `;
     }
 
-    // Mastodon source
+    // Mastodon source — badge + @author + (favorites / reblogs)
     if (props.source_platform === "mastodon") {
       return `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-            <span style="background: #6364ff; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
-                MASTODON
-            </span>
-            <span style="font-size: 11px; color: #ccc;">
-                @${this.#sanitizeHTML(props.mastodon_author || "unknown")}
-            </span>
-            <span style="font-size: 9px; color: #888;">
-                ⭐ ${props.mastodon_favourites || 0} | 🔄 ${
-        props.mastodon_reblogs || 0
-      }
-            </span>
+        <div class="news-box-source">
+          <span class="news-box-badge news-box-badge--mastodon">MASTODON</span>
+          <span class="news-box-source-meta">
+            @${this.#sanitizeHTML(props.mastodon_author || "unknown")}
+          </span>
+        </div>
+        <div class="news-box-meta">
+          <span class="news-box-meta-stat">⭐ ${this.#sanitizeHTML(
+            String(props.mastodon_favourites || 0)
+          )}</span>
+          <span class="news-box-meta-stat">🔁 ${this.#sanitizeHTML(
+            String(props.mastodon_reblogs || 0)
+          )}</span>
         </div>
       `;
     }
 
-    // Traditional news (GDELT)
+    // Traditional news (GDELT) — badge + flag + country
     const country = props.sourcecountry || "Unknown";
-    const isoCode = COUNTRY_ISO_MAP[country] || "un";
+    const isoCode = (COUNTRY_ISO_MAP[country] || "un").toLowerCase();
+    const safeCountry = this.#sanitizeHTML(country);
 
     return `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-          <picture style="display: flex; align-items: center;">
-              <source type="image/webp" srcset="${flagBase}16x12/${isoCode.toLowerCase()}.webp">
-              <source type="image/png" srcset="${flagBase}16x12/${isoCode.toLowerCase()}.png">
-              <img 
-                  src="${flagBase}16x12/${isoCode.toLowerCase()}.png" 
-                  width="16" 
-                  height="12" 
-                  alt="${country} flag"
-                  onerror="this.style.display='none'"
-              >
+      <div class="news-box-source">
+        <span class="news-box-badge news-box-badge--news">NEWS</span>
+        <span class="news-box-source-meta">
+          <picture>
+            <source type="image/webp" srcset="${flagBase}16x12/${isoCode}.webp">
+            <source type="image/png"  srcset="${flagBase}16x12/${isoCode}.png">
+            <img src="${flagBase}16x12/${isoCode}.png"
+                 width="14" height="10"
+                 alt="${safeCountry} flag"
+                 onerror="this.style.display='none'">
           </picture>
-          <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;">
-              NEWS
-          </span>
-          <span style="font-size: 11px; color: #ccc;">
-              ${this.#sanitizeHTML(country)}
-          </span>
+          ${safeCountry}
+        </span>
       </div>
     `;
   }
@@ -2250,9 +2305,11 @@ export class NavigationPanel {
       this.#newsMarkers[id].remove();
       delete this.#newsMarkers[id];
 
+      // Strip `.active` from BOTH the original card and its marquee
+      // clone (cards are duplicated so the scroll loop is seamless).
       document
-        .querySelector(`[data-index="${index}"]`)
-        ?.classList.remove("active");
+        .querySelectorAll(`.news-box[data-index="${index}"]`)
+        .forEach((el) => el.classList.remove("active"));
 
       this.#resumeScroll();
       return;
@@ -2275,53 +2332,47 @@ export class NavigationPanel {
 
     // Create popup on marker click
     marker.getElement().addEventListener("click", () => {
-      let popupContent = `<strong>${this.#sanitizeHTML(
-        props.title
-      )}</strong><br>`;
+      let platformBlock;
+      let badgeVariant = "status-active";
+      let badgeLabel = "News";
 
       if (props.source_platform === "reddit") {
-        popupContent += `
-          <small>
-              📱 <strong>Reddit</strong> • r/${
-                props.reddit_subreddit || "unknown"
-              }<br>
-              👍 ${props.reddit_score || 0} upvotes | 💬 ${
-          props.reddit_comments || 0
-        } comments
-          </small><br>
+        badgeLabel = "Reddit";
+        platformBlock = `
+          <p class="ncop-popup__info-row">📱 <strong>Reddit</strong> · r/${props.reddit_subreddit || "unknown"}</p>
+          <p class="ncop-popup__info-row">👍 ${props.reddit_score || 0} upvotes · 💬 ${props.reddit_comments || 0} comments</p>
         `;
       } else if (props.source_platform === "mastodon") {
-        popupContent += `
-          <small>
-              🐘 <strong>Mastodon</strong> • @${
-                props.mastodon_author || "unknown"
-              }<br>
-              ⭐ ${props.mastodon_favourites || 0} favorites | 🔄 ${
-          props.mastodon_reblogs || 0
-        } reblogs
-          </small><br>
+        badgeLabel = "Mastodon";
+        platformBlock = `
+          <p class="ncop-popup__info-row">🐘 <strong>Mastodon</strong> · @${props.mastodon_author || "unknown"}</p>
+          <p class="ncop-popup__info-row">⭐ ${props.mastodon_favourites || 0} favorites · 🔄 ${props.mastodon_reblogs || 0} reblogs</p>
         `;
       } else {
-        popupContent += `
-          <small>
-              📰 <strong>${this.#sanitizeHTML(
-                props.domain || "News Source"
-              )}</strong><br>
-              🌍 ${this.#sanitizeHTML(props.sourcecountry || "Unknown Country")}
-          </small><br>
+        badgeVariant = "status-open";
+        badgeLabel = this.#sanitizeHTML(props.domain || "News");
+        platformBlock = `
+          <p class="ncop-popup__info-row">📰 <strong>${this.#sanitizeHTML(props.domain || "News Source")}</strong></p>
+          <p class="ncop-popup__info-row">🌍 ${this.#sanitizeHTML(props.sourcecountry || "Unknown Country")}</p>
         `;
       }
 
-      popupContent += `
-        <a href="${props.url}"
-           target="_blank"
-           rel="noopener noreferrer"
-           style="color:#0099ff;">
-            Read More →
-        </a>
-      `;
+      const popupContent = `<div class="ncop-popup ncop-popup--compact">
+        <div class="ncop-popup__header">
+          <div class="ncop-popup__title-block">
+            <div class="ncop-popup__title">${this.#sanitizeHTML(props.title)}</div>
+          </div>
+          <span class="ncop-popup__badge ncop-popup__badge--${badgeVariant}">${badgeLabel}</span>
+        </div>
+        <div class="ncop-popup__body">
+          <div class="ncop-popup__info">${platformBlock}</div>
+        </div>
+        <div class="ncop-popup__actions">
+          <a class="ncop-popup__button ncop-popup__button--primary" href="${props.url}" target="_blank" rel="noopener noreferrer">Read More →</a>
+        </div>
+      </div>`;
 
-      new mapboxgl.Popup()
+      new mapboxgl.Popup({ className: "ncop-popup-host", maxWidth: "360px" })
         .setLngLat(coords)
         .setHTML(popupContent)
         .addTo(this.#map);
@@ -2336,7 +2387,9 @@ export class NavigationPanel {
       duration: 1500,
     });
 
-    document.querySelector(`[data-index="${index}"]`)?.classList.add("active");
+    document
+      .querySelectorAll(`.news-box[data-index="${index}"]`)
+      .forEach((el) => el.classList.add("active"));
   }
 
   /**

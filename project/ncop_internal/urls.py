@@ -33,8 +33,10 @@ from .views import (
     SlickPlusGeojsonApi,
     GdeltNewsEventsApi,
     WindOceanParticleDataApi,
+    HeatwaveMonitoringView,
+    HeatwaveDetailView,
 
-    
+
 )
 
 
@@ -73,5 +75,7 @@ urlpatterns = [
     path('api/gee/legend/', GenerateLegendView.as_view(), name='gee_legend'),
     path('api/gee/temporal-layer/', TemporalGEELayerView.as_view(), name='temporal_gee_layer'),
     path("api/wind-ocean-particles/", WindOceanParticleDataApi.as_view(), name="wind_ocean_particles"),
-    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" )
+    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
+    path("get-heatwave-monitoring/", HeatwaveMonitoringView.as_view(), name="heatwave-monitoring"),
+    path("get-heatwave-detail/", HeatwaveDetailView.as_view(), name="heatwave-detail"),
 ]

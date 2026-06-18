@@ -1,0 +1,1 @@
+import"./auth-forms-CCBaCsj-.js";import{i as e,n as t,r as n,t as r}from"./set-assets-WxvbCpLf.js";window.lucide={createIcons:(t={})=>n({icons:e,...t}),icons:e},document.addEventListener(`DOMContentLoaded`,()=>{r({ndmaLogo:t}),window.lucide.createIcons()});

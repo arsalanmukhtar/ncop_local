@@ -1,8 +1,11 @@
 import { Popup } from "mapbox-gl";
-import {map_icons} from "./map-icons.js"
-import { PMD_RAIN_ICON_ID, PMD_SUN_ICON_ID } from "./pmd-weather-icons.js";
-import { EONET_ICON_IDS } from "./eonet-icons.js";
-import { USGS_ICON_IDS } from "./usgs-earthquake-icons.js";
+import {
+  map_icons,
+  PMD_RAIN_ICON_ID,
+  PMD_SUN_ICON_ID,
+  EONET_ICON_IDS,
+  USGS_ICON_IDS,
+} from "./map-icons.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -60,6 +63,11 @@ import {
   generateThunderstormProbability3HourlyLayers,
   generateLiquidFogProbability3HourlyLayers,
   generateConvectivePrecipitationWeeklyLayers,
+  // RainViewer builders are temporarily disabled for production. Re-import
+  // alongside re-enabling the menu entries when the rate-limit + frame-pacing
+  // tuning is finalised.
+  // generateRainViewerRadarLayers,
+  // generateRainViewerSatelliteIRLayers,
 } from "./time-functions.js";
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
@@ -159,8 +167,6 @@ function createUsgsEarthquakeLayers(sourceId) {
     },
   ];
 }
-console.log(window.baseUrl);
-fetch(`${window.baseUrl}/stories/?full=1`).then((r) => r.status);
 // GloFAS Layers baseURL
 const glofaswmsurl =
   "https://globalfloods-ows.ecmwf.int/glofas-ows/ows.py?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={bbox-epsg-3857}&CRS=EPSG:3857&WIDTH=1439&HEIGHT=602&LAYERS=EGE_probRgt50&STYLES=&FORMAT=image/png&DPI=96&MAP_RESOLUTION=96&FORMAT_OPTIONS=dpi:96&TRANSPARENT=TRUE";
@@ -500,6 +506,14 @@ window.snowfall_hourly_forecast = snowfall_hourly_layers;
 window.thunderstorm_probability_3hourly_forecast = thunderstorm_prob_3hourly_layers;
 window.liquid_fog_probability_3hourly_forecast = liquid_fog_prob_3hourly_layers;
 window.convective_precipitation_weekly_forecast = convective_precip_weekly_layers;
+
+// RainViewer is descriptor-driven (frame list comes from a runtime API call),
+// so we expose *functions* instead of static arrays. The temporal dispatcher
+// calls these and feeds the resolved Promise<layers> to updateTempSliderAsync.
+// Temporarily disabled for production along with the menu entries; re-enable
+// the imports + these registrations when the layers are restored.
+// window.realtime_radar = generateRainViewerRadarLayers;
+// window.satellite_infrared = generateRainViewerSatelliteIRLayers;
 // console.log(
 //   "✅ DWD layers created:",
 //   window.dwd_satellite_infrared.length,
@@ -875,6 +889,11 @@ export const ncop_menu_items = {
     "Radar Layers": {
       temporal: {
         realtime_radar: {
+          // Temporarily hidden from the sidebar — RainViewer integration
+          // through the unified slider works for radar but is being held
+          // back until the rate-limit + frame-pacing tuning is finalised.
+          // Flip `hidden` to false (or delete it) to restore.
+          hidden: true,
           label: "Realtime Radar",
           image: getImage("rainViewer_radar_precip.webp"),
           type: "raster",
@@ -884,6 +903,10 @@ export const ncop_menu_items = {
             "The Realtime Radar layer provides up-to-the-minute radar imagery, allowing users to monitor precipitation patterns and intensity in real-time. This layer is crucial for tracking weather events such as storms, rainfall, and severe weather conditions.",
         },
         satellite_infrared: {
+          // Temporarily hidden — upstream RainViewer satellite IR descriptor
+          // is intermittently empty; will re-enable once the fallback /
+          // retry path is in place.
+          hidden: true,
           label: "Satellite Infrared",
           image: getImage("rainViewer_satellite.webp"),
           type: "raster",
@@ -1100,7 +1123,7 @@ export const ncop_menu_items = {
         },
       },
     },
-    "Pakistan Meteorological Department (PMD)": {
+    "MET Monitoring": {
       toggle: {
         pmd_weather_stations: {
           label: "PMD Weather Stations",
@@ -1166,7 +1189,124 @@ export const ncop_menu_items = {
           ],
           popup: true,
           information:
-            "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the Pakistan Meteorological Department (PMD). This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+            "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the MET Monitoring. This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+        },
+        heatwave_monitoring: {
+          label: "Heatwave Monitoring",
+          theme: null,
+          source: {
+            id: "heatwave_monitoring-source",
+            type: "geojson",
+            data: `${baseUrl}/get-heatwave-monitoring/`,
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "heatwave_monitoring-circle",
+              type: "circle",
+              source: "heatwave_monitoring-source",
+              paint: {
+                "circle-color": [
+                  "interpolate",
+                  ["linear"],
+                  ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                  20, "#2563eb",
+                  28, "#22c55e",
+                  34, "#facc15",
+                  38, "#f97316",
+                  42, "#ef4444",
+                  46, "#7f1d1d",
+                ],
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  4, [
+                    "interpolate",
+                    ["linear"],
+                    ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                    20, 9,
+                    30, 12,
+                    38, 16,
+                    46, 22,
+                  ],
+                  8, [
+                    "interpolate",
+                    ["linear"],
+                    ["coalesce", ["to-number", ["get", "temperature"]], 0],
+                    20, 16,
+                    30, 22,
+                    38, 30,
+                    46, 40,
+                  ],
+                ],
+                "circle-opacity": 0.88,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-opacity": 0.9,
+              },
+            },
+            {
+              id: "heatwave_monitoring-label",
+              type: "symbol",
+              source: "heatwave_monitoring-source",
+              layout: {
+                "text-field": [
+                  "concat",
+                  [
+                    "to-string",
+                    ["round", ["coalesce", ["to-number", ["get", "temperature"]], 0]],
+                  ],
+                  "°",
+                ],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  4, 10,
+                  8, 14,
+                ],
+                "text-anchor": "center",
+                "text-allow-overlap": true,
+                "text-ignore-placement": true,
+              },
+              paint: {
+                "text-color": "#ffffff",
+                "text-halo-color": "rgba(0,0,0,0.55)",
+                "text-halo-width": 1.4,
+              },
+            },
+            {
+              id: "heatwave_monitoring-name",
+              type: "symbol",
+              source: "heatwave_monitoring-source",
+              minzoom: 5.5,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                "text-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  5.5, 10,
+                  9, 13,
+                ],
+                "text-offset": [0, 1.6],
+                "text-anchor": "top",
+                "text-allow-overlap": false,
+                "text-optional": true,
+              },
+              paint: {
+                "text-color": "#0f172a",
+                "text-halo-color": "rgba(255,255,255,0.92)",
+                "text-halo-width": 1.6,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "The Heatwave Monitoring layer plots current air temperature for major Pakistani cities, sized and colored by intensity. Click a city to open a stats panel with the 16-day forecast, 6-month seasonal outlook, and a multi-year climate-change trend (powered by Open-Meteo).",
         },
       },
     },
@@ -1867,7 +2007,7 @@ export const ncop_menu_items = {
         cams_air_quality_index_hourly: {
           label: "Air Quality Index (AQI) Hourly",
           image: getImage("meteoblue_cams_aqi_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AQI",
           information: "The CAMS Air Quality Index (AQI) Hourly layer displays hourly forecasts of overall air quality. The index ranges from good (green) to hazardous (purple), providing an easy-to-understand measure of air pollution levels.",
@@ -1875,7 +2015,7 @@ export const ncop_menu_items = {
         cams_air_quality_index_daily: {
           label: "Air Quality Index (AQI) Daily",
           image: getImage("meteoblue_cams_aqi_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AQI",
           information: "The CAMS Air Quality Index (AQI) Daily layer displays daily average forecasts of overall air quality. This layer helps in understanding air quality trends over multiple days.",
@@ -1883,7 +2023,7 @@ export const ncop_menu_items = {
         cams_desert_dust_hourly: {
           label: "Desert Dust Hourly Forecast",
           image: getImage("meteoblue_cams_desert_dust_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "Desert Dust (µg/m³)",
           information: "The Desert Dust Hourly Forecast layer displays hourly predictions of desert dust concentrations. This is particularly important for monitoring dust storms and their impact on air quality and visibility.",
@@ -1891,7 +2031,7 @@ export const ncop_menu_items = {
         cams_desert_dust_daily: {
           label: "Desert Dust Daily Forecast",
           image: getImage("meteoblue_cams_desert_dust_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "Desert Dust (µg/m³)",
           information: "The Desert Dust Daily Forecast layer displays daily average predictions of desert dust concentrations, useful for medium-term air quality planning.",
@@ -1899,7 +2039,7 @@ export const ncop_menu_items = {
         cams_aerosol_optical_depth_hourly: {
           label: "Aerosol Optical Depth (AOD) Hourly",
           image: getImage("meteoblue_cams_aod_hourly.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AOD",
           information: "The Aerosol Optical Depth (AOD) Hourly layer measures the extinction of solar radiation by aerosols in the atmosphere. Higher AOD values indicate more aerosols and reduced visibility.",
@@ -1907,7 +2047,7 @@ export const ncop_menu_items = {
         cams_aerosol_optical_depth_daily: {
           label: "Aerosol Optical Depth (AOD) Daily",
           image: getImage("meteoblue_cams_aod_hourly.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "AOD",
           information: "The Aerosol Optical Depth (AOD) Daily layer provides daily average forecasts of atmospheric aerosol levels, useful for air quality monitoring and climate studies.",
@@ -1915,7 +2055,7 @@ export const ncop_menu_items = {
         cams_nitrogen_dioxide_daily: {
           label: "Nitrogen Dioxide (NO₂) Daily Forecast",
           image: getImage("meteoblue_cams_no2_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "NO₂ (µg/m³)",
           information: "The Nitrogen Dioxide (NO₂) Daily Forecast layer displays daily predictions of NO₂ concentrations. NO₂ is a major air pollutant primarily from combustion processes and vehicle emissions.",
@@ -1923,7 +2063,7 @@ export const ncop_menu_items = {
         cams_carbon_monoxide_daily: {
           label: "Carbon Monoxide (CO) Daily Forecast",
           image: getImage("meteoblue_cams_co_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "CO (µg/m³)",
           information: "The Carbon Monoxide (CO) Daily Forecast layer displays daily predictions of CO concentrations. CO is a colorless, odorless gas produced by incomplete combustion and is harmful to human health.",
@@ -1931,7 +2071,7 @@ export const ncop_menu_items = {
         cams_sulphur_dioxide_daily: {
           label: "Sulphur Dioxide (SO₂) Daily Forecast",
           image: getImage("meteoblue_cams_so2_daily.webp"),
-          type: "vector",
+          type: "raster",
           theme: "slider",
           title: "SO₂ (µg/m³)",
           information: "The Sulphur Dioxide (SO₂) Daily Forecast layer displays daily predictions of SO₂ concentrations. SO₂ is a major air pollutant from industrial processes and fossil fuel combustion.",
@@ -2620,65 +2760,65 @@ export const ncop_menu_items = {
         },
       },
     },
-    "DEW Parameters": {
-      button: {
-        tech_ew: {
-          label: "Tech EW",
-          color: "#FF5733", // Bright Orange-Red (Existing)
-          outline: "#C70039", // Dark Red (Existing)
-        },
-        nidm: {
-          label: "NIDM",
-          color: "#3366FF", // Royal Blue (Formal/Professional)
-          outline: "#0033CC",
-        },
-        mobile_app: {
-          label: "Mobile App",
-          color: "#00CC99", // Teal (Modern/Digital)
-          outline: "#008066",
-        },
-        media_comm: {
-          label: "Media Comm",
-          color: "#FFC300", // Gold/Amber (Communication/Alerts)
-          outline: "#CC9900",
-        },
-        drr: {
-          label: "DRR",
-          color: "#339933", // Forest Green (Safety/Environment)
-          outline: "#1E661E",
-        },
-        infra_development: {
-          label: "Infra Development",
-          color: "#607D8B", // Slate Blue-Gray (Structure/Construction)
-          outline: "#455A64",
-        },
-        operations: {
-          label: "Operations",
-          color: "#CC0066", // Deep Magenta (Action/Management)
-          outline: "#99004C",
-        },
-        plans: {
-          label: "Plans",
-          color: "#663399", // Deep Purple (Strategy/Planning)
-          outline: "#4C2673",
-        },
-        intl_colaboration: {
-          label: "Intl Collaboration",
-          color: "#33CCFF", // Bright Sky Blue (Global/Partnership)
-          outline: "#0099CC",
-        },
-        rm_and_m: {
-          label: "RM & M",
-          color: "#996633", // Earthy Brown (Resource Management)
-          outline: "#664422",
-        },
-        cdrf: {
-          label: "CDRF",
-          color: "#00BFA5", // Mint Teal (Finance/Sustainability)
-          outline: "#00897B",
-        },
-      },
-    },
+    // "DEW Parameters": {
+    //   button: {
+    //     tech_ew: {
+    //       label: "Tech EW",
+    //       color: "#FF5733", // Bright Orange-Red (Existing)
+    //       outline: "#C70039", // Dark Red (Existing)
+    //     },
+    //     nidm: {
+    //       label: "NIDM",
+    //       color: "#3366FF", // Royal Blue (Formal/Professional)
+    //       outline: "#0033CC",
+    //     },
+    //     mobile_app: {
+    //       label: "Mobile App",
+    //       color: "#00CC99", // Teal (Modern/Digital)
+    //       outline: "#008066",
+    //     },
+    //     media_comm: {
+    //       label: "Media Comm",
+    //       color: "#FFC300", // Gold/Amber (Communication/Alerts)
+    //       outline: "#CC9900",
+    //     },
+    //     drr: {
+    //       label: "DRR",
+    //       color: "#339933", // Forest Green (Safety/Environment)
+    //       outline: "#1E661E",
+    //     },
+    //     infra_development: {
+    //       label: "Infra Development",
+    //       color: "#607D8B", // Slate Blue-Gray (Structure/Construction)
+    //       outline: "#455A64",
+    //     },
+    //     operations: {
+    //       label: "Operations",
+    //       color: "#CC0066", // Deep Magenta (Action/Management)
+    //       outline: "#99004C",
+    //     },
+    //     plans: {
+    //       label: "Plans",
+    //       color: "#663399", // Deep Purple (Strategy/Planning)
+    //       outline: "#4C2673",
+    //     },
+    //     intl_colaboration: {
+    //       label: "Intl Collaboration",
+    //       color: "#33CCFF", // Bright Sky Blue (Global/Partnership)
+    //       outline: "#0099CC",
+    //     },
+    //     rm_and_m: {
+    //       label: "RM & M",
+    //       color: "#996633", // Earthy Brown (Resource Management)
+    //       outline: "#664422",
+    //     },
+    //     cdrf: {
+    //       label: "CDRF",
+    //       color: "#00BFA5", // Mint Teal (Finance/Sustainability)
+    //       outline: "#00897B",
+    //     },
+    //   },
+    // },
   },
 };
 window.ncop_menu_items = ncop_menu_items;

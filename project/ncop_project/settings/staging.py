@@ -1,46 +1,46 @@
 """
-Staging settings for NCOP Project
-Replica of dev-arsalan environment running on Waitress server
+Staging settings — replica of dev behavior served by Waitress on port 8080.
+
+Entry point: ``ncop_project.wsgi_staging:application``.
 """
 
-from .base import *
 import os
 
-# ===== CORE DEBUG & SETTINGS =====
-DEBUG = False
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+from .base import *  # noqa: F401,F403
 
-# ===== VITE FRONTEND CONFIGURATION =====
-# Keep dev_mode=True for HMR to work while running `npm run dev`
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": False,
-        "manifest_path": BASE_DIR.parent / "frontend" / "dist" / ".vite" / "manifest.json",
-        "static_url_prefix": "/",  # Changed from STATIC_URL to just "/"
-    }
-}
-# ===== WSGI APPLICATION =====
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
+DEBUG = False
 WSGI_APPLICATION = "ncop_project.wsgi_staging.application"
 
-# ===== DATABASE CONFIGURATION =====
-# Use same database as dev
+# ---------------------------------------------------------------------------
+# Vite — use built manifest, keep the "/" prefix used by the dev bundles.
+# ---------------------------------------------------------------------------
+DJANGO_VITE["default"]["dev_mode"] = False
+DJANGO_VITE["default"]["static_url_prefix"] = "/"
+
+# ---------------------------------------------------------------------------
+# Database — staging defaults to a local postgres role, overridable via env.
+# Engine is env-driven so a staging box without PostGIS can fall back to plain
+# postgresql without editing settings.
+# ---------------------------------------------------------------------------
 DATABASES["default"]["ENGINE"] = env(
-    "POSTGRES_ENGINE", 
-    default="django.contrib.gis.db.backends.postgis"
+    "POSTGRES_ENGINE",
+    default="django.contrib.gis.db.backends.postgis",
 )
-DATABASES["default"]["NAME"] = env("POSTGRES_DB", default="ncop")
-DATABASES["default"]["HOST"] = env("POSTGRES_HOST", default="localhost")
 DATABASES["default"]["USER"] = env("POSTGRES_USER", default="postgres")
 DATABASES["default"]["PASSWORD"] = env("POSTGRES_PASSWORD", default="postgres")
-DATABASES["default"]["PORT"] = env("POSTGRES_PORT", default="5432")
 
-# ===== EMAIL CONFIGURATION =====
-# Console output for testing (same as dev)
+# ---------------------------------------------------------------------------
+# Email — console output so password-reset links surface in the Waitress log.
+# ---------------------------------------------------------------------------
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@ncop.local"
 
-# ===== SECURITY CONFIGURATION =====
-# Relaxed for localhost staging
+# ---------------------------------------------------------------------------
+# Security — relaxed for a LAN/localhost staging deploy behind HTTP.
+# ---------------------------------------------------------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
@@ -49,20 +49,22 @@ SECURE_HSTS_SECONDS = 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
-# ===== CORS CONFIGURATION =====
-# Allow localhost on multiple ports
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
-    "http://127.0.0.1:8080",  # Waitress
-    "http://127.0.0.1:5173",  # Vite dev server
-    "http://localhost:8080",   # Waitress (hostname)
-    "http://localhost:5173",   # Vite dev server (hostname)
-])
-
-# Allow insecure transport for localhost (HTTP)
+# Allow Google OAuth flows over plain HTTP on the staging host.
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-# ===== CACHE CONFIGURATION =====
-# Local memory cache for staging
+# ---------------------------------------------------------------------------
+# CORS — Waitress on 8080, Vite on 5173.
+# ---------------------------------------------------------------------------
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://localhost:5173",
+])
+
+# ---------------------------------------------------------------------------
+# Cache — in-process, fine for single-worker staging.
+# ---------------------------------------------------------------------------
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -71,8 +73,16 @@ CACHES = {
     }
 }
 
-# ===== LOGGING CONFIGURATION =====
-# Simple console logging
+# ---------------------------------------------------------------------------
+# Static files — no manifest lookup in staging so a missing file does not 500.
+# ---------------------------------------------------------------------------
+STORAGES = {
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -100,23 +110,11 @@ LOGGING = {
     },
 }
 
-# ===== STATIC FILES & WHITENOISE =====
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "static" / "dist"
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-STORAGES = {
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
-}
-
-# ===== API KEYS =====
-MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="")
-METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="")
-WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="")
-
-# ===== STARTUP MESSAGE =====
-print(f"✅ NCOP Staging initialized (dev-arsalan replica on Waitress)")
+# ---------------------------------------------------------------------------
+# Startup banner — visible on `waitress-serve` spin-up.
+# ---------------------------------------------------------------------------
+print("✅ NCOP Staging initialized (dev-arsalan replica on Waitress)")
 print(f"   Debug: {DEBUG}")
 print(f"   Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"   Vite Dev Mode: {DJANGO_VITE['default']['dev_mode']}")
-print(f"   Ready to run with Waitress on port 8080")
+print("   Ready to run with Waitress on port 8080")

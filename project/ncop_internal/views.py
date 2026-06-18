@@ -1019,7 +1019,457 @@ class WeatherDataPMDFFDView(View):
         self._cache = {"data": geojson, "timestamp": datetime.now()}
 
         return JsonResponse(geojson)
-    
+
+
+# =============================================================================
+# Heatwave Monitoring (Open-Meteo) - Major Pakistani cities
+# Used by frontend layer "heatwave_monitoring" under PMD subcategory.
+# Two endpoints:
+#   GET /get-heatwave-monitoring/  -> GeoJSON FeatureCollection of cities w/ now-temp
+#   GET /get-heatwave-detail/?lat&lon&type=forecast|seasonal|climate&name
+# Both use ThreadPoolExecutor + a process-wide Semaphore to keep total
+# concurrent outbound calls below Open-Meteo's free-tier comfort zone.
+# =============================================================================
+
+# Major cities / districts of Pakistan (curated for heatwave coverage)
+PAKISTAN_HEATWAVE_CITIES = [
+    {"name": "Karachi",          "lat": 24.8607, "lon": 67.0011, "province": "Sindh"},
+    {"name": "Lahore",           "lat": 31.5497, "lon": 74.3436, "province": "Punjab"},
+    {"name": "Islamabad",        "lat": 33.6844, "lon": 73.0479, "province": "ICT"},
+    {"name": "Rawalpindi",       "lat": 33.5651, "lon": 73.0169, "province": "Punjab"},
+    {"name": "Faisalabad",       "lat": 31.4504, "lon": 73.1350, "province": "Punjab"},
+    {"name": "Multan",           "lat": 30.1575, "lon": 71.5249, "province": "Punjab"},
+    {"name": "Hyderabad",        "lat": 25.3960, "lon": 68.3578, "province": "Sindh"},
+    {"name": "Peshawar",         "lat": 34.0151, "lon": 71.5249, "province": "KPK"},
+    {"name": "Quetta",           "lat": 30.1798, "lon": 66.9750, "province": "Balochistan"},
+    {"name": "Gujranwala",       "lat": 32.1877, "lon": 74.1945, "province": "Punjab"},
+    {"name": "Sialkot",          "lat": 32.4945, "lon": 74.5229, "province": "Punjab"},
+    {"name": "Bahawalpur",       "lat": 29.3956, "lon": 71.6836, "province": "Punjab"},
+    {"name": "Sukkur",           "lat": 27.7059, "lon": 68.8574, "province": "Sindh"},
+    {"name": "Sargodha",         "lat": 32.0836, "lon": 72.6711, "province": "Punjab"},
+    {"name": "Larkana",          "lat": 27.5590, "lon": 68.2123, "province": "Sindh"},
+    {"name": "Sheikhupura",      "lat": 31.7167, "lon": 73.9850, "province": "Punjab"},
+    {"name": "Mardan",           "lat": 34.1989, "lon": 72.0231, "province": "KPK"},
+    {"name": "Mingora",          "lat": 34.7795, "lon": 72.3614, "province": "KPK"},
+    {"name": "Dera Ghazi Khan",  "lat": 30.0561, "lon": 70.6403, "province": "Punjab"},
+    {"name": "Rahim Yar Khan",   "lat": 28.4202, "lon": 70.2952, "province": "Punjab"},
+    {"name": "Sahiwal",          "lat": 30.6707, "lon": 73.1064, "province": "Punjab"},
+    {"name": "Okara",            "lat": 30.8138, "lon": 73.4534, "province": "Punjab"},
+    {"name": "Mirpur Khas",      "lat": 25.5269, "lon": 69.0125, "province": "Sindh"},
+    {"name": "Jacobabad",        "lat": 28.2823, "lon": 68.4514, "province": "Sindh"},
+    {"name": "Khairpur",         "lat": 27.5295, "lon": 68.7592, "province": "Sindh"},
+    {"name": "Nawabshah",        "lat": 26.2442, "lon": 68.4100, "province": "Sindh"},
+    {"name": "Turbat",           "lat": 26.0031, "lon": 63.0440, "province": "Balochistan"},
+    {"name": "Sibi",             "lat": 29.5430, "lon": 67.8773, "province": "Balochistan"},
+    {"name": "Gwadar",           "lat": 25.1216, "lon": 62.3254, "province": "Balochistan"},
+    {"name": "Khuzdar",          "lat": 27.8126, "lon": 66.6173, "province": "Balochistan"},
+    {"name": "Abbottabad",       "lat": 34.1463, "lon": 73.2117, "province": "KPK"},
+    {"name": "Dera Ismail Khan", "lat": 31.8313, "lon": 70.9019, "province": "KPK"},
+    {"name": "Chitral",          "lat": 35.8511, "lon": 71.7889, "province": "KPK"},
+    {"name": "Skardu",           "lat": 35.2987, "lon": 75.6304, "province": "GB"},
+    {"name": "Gilgit",           "lat": 35.9208, "lon": 74.3144, "province": "GB"},
+    {"name": "Muzaffarabad",     "lat": 34.3700, "lon": 73.4711, "province": "AJK"},
+    {"name": "Jhelum",           "lat": 32.9425, "lon": 73.7257, "province": "Punjab"},
+    {"name": "Gujrat",           "lat": 32.5700, "lon": 74.0789, "province": "Punjab"},
+    {"name": "Kasur",            "lat": 31.1156, "lon": 74.4467, "province": "Punjab"},
+    {"name": "Khanewal",         "lat": 30.3017, "lon": 71.9321, "province": "Punjab"},
+]
+
+# Process-wide semaphore so concurrent endpoint hits don't blow the
+# Open-Meteo free-tier rate limit (~10 req/s).
+_HEATWAVE_API_SEMAPHORE = threading.Semaphore(8)
+# Single shared session with retry/backoff.
+_heatwave_session = requests.Session()
+_heatwave_session.mount(
+    "https://",
+    HTTPAdapter(
+        max_retries=Retry(
+            total=2,
+            backoff_factor=0.4,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+        ),
+        pool_connections=16,
+        pool_maxsize=32,
+    ),
+)
+
+
+def _heatwave_get(url, params, timeout=8):
+    """Rate-limited GET wrapper for Open-Meteo. Returns (json, error)."""
+    with _HEATWAVE_API_SEMAPHORE:
+        try:
+            r = _heatwave_session.get(url, params=params, timeout=timeout)
+            if r.status_code == 200:
+                return r.json(), None
+            # Surface upstream error messages (helps debug 4xx mistakes).
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": r.text[:300]}
+            logger.warning("Open-Meteo non-200 (%s) for %s: %s", r.status_code, url, body)
+            return None, {"status": r.status_code, "body": body}
+        except Exception as exc:
+            logger.warning("Open-Meteo fetch failed for %s: %s", url, exc)
+            return None, {"status": 0, "body": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Disk-backed persistent cache for Open-Meteo data
+# ---------------------------------------------------------------------------
+# LocMemCache (the project default) evaporates on every gunicorn restart, which
+# turns into a thundering-herd of Open-Meteo calls and trips the free-tier
+# rate limit. This little helper mirrors every (kind, lat, lon) result to a
+# JSON blob on disk so a restart re-uses the prior fetches until they expire.
+#
+# Two-tier reads: the in-memory cache on each view stays the hot path; misses
+# fall through to disk; misses there hit the network.
+# ---------------------------------------------------------------------------
+
+try:
+    _HEATWAVE_CACHE_DIR = os.path.join(settings.BASE_DIR, "cache", "heatwave")
+except Exception:
+    # BASE_DIR may not be available during cold imports — fall back to /tmp.
+    import tempfile as _tempfile
+    _HEATWAVE_CACHE_DIR = os.path.join(_tempfile.gettempdir(), "ncop_heatwave_cache")
+
+os.makedirs(_HEATWAVE_CACHE_DIR, exist_ok=True)
+_HEATWAVE_DISK_LOCK = threading.Lock()
+_HEATWAVE_DISK_MAX_FILES = 1024  # soft cap; janitor trims oldest beyond this
+
+
+def _heatwave_disk_path(key):
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return os.path.join(_HEATWAVE_CACHE_DIR, f"{digest}.json")
+
+
+def _heatwave_disk_get(key, ttl_seconds):
+    """Return cached JSON for `key` if it's on disk and within TTL."""
+    path = _heatwave_disk_path(key)
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+    if (time.time() - st.st_mtime) > ttl_seconds:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        logger.debug("Heatwave disk-cache read failed for %s: %s", key, exc)
+        return None
+
+
+def _heatwave_disk_put(key, payload):
+    """Atomically write `payload` to disk for `key`."""
+    path = _heatwave_disk_path(key)
+    tmp_path = f"{path}.{os.getpid()}.tmp"
+    try:
+        with _HEATWAVE_DISK_LOCK:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            os.replace(tmp_path, path)
+            _heatwave_disk_janitor()
+    except Exception as exc:
+        logger.debug("Heatwave disk-cache write failed for %s: %s", key, exc)
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def _heatwave_disk_janitor():
+    """Best-effort prune so the cache dir doesn't grow unbounded."""
+    try:
+        names = [
+            n for n in os.listdir(_HEATWAVE_CACHE_DIR)
+            if n.endswith(".json")
+        ]
+        if len(names) <= _HEATWAVE_DISK_MAX_FILES:
+            return
+        entries = []
+        for n in names:
+            p = os.path.join(_HEATWAVE_CACHE_DIR, n)
+            try:
+                entries.append((os.path.getmtime(p), p))
+            except OSError:
+                continue
+        entries.sort()
+        for _, p in entries[: len(entries) - _HEATWAVE_DISK_MAX_FILES]:
+            try:
+                os.remove(p)
+            except OSError:
+                continue
+    except Exception:
+        pass
+
+
+class HeatwaveMonitoringView(View):
+    """
+    GeoJSON of major Pakistani cities with current temperature, humidity,
+    precipitation, and daily min/max — sourced from the Open-Meteo public
+    forecast API.
+
+    Cache layers:
+      * in-memory  (10 min) — hot path for repeat hits within a process
+      * disk       (30 min) — survives restarts, blunts the rate-limit storm
+      * per-city disk (15 min) — persists each city's current-weather sample
+        so a fresh aggregate after a restart only refetches stale cities.
+    """
+    CACHE_TTL = timedelta(minutes=10)
+    DISK_TTL_SECONDS = 30 * 60
+    PER_CITY_DISK_TTL = 15 * 60
+    _cache_lock = threading.Lock()
+    _cache = {"data": None, "ts": None}
+
+    FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def _fetch_city_now(self, city):
+        # Per-city disk cache — survives restarts and lets the aggregate fetch
+        # only call Open-Meteo for cities whose sample has expired.
+        ck = f"city-now:{city['name']}:{round(float(city['lat']), 3)}:{round(float(city['lon']), 3)}"
+        cached_feature = _heatwave_disk_get(ck, self.PER_CITY_DISK_TTL)
+        if cached_feature is not None:
+            return cached_feature
+
+        params = {
+            "latitude": city["lat"],
+            "longitude": city["lon"],
+            "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code,apparent_temperature,wind_speed_10m",
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "forecast_days": 1,
+            "timezone": "Asia/Karachi",
+        }
+        data, _err = _heatwave_get(self.FORECAST_URL, params, timeout=8)
+        cur = (data or {}).get("current") or {}
+        daily = (data or {}).get("daily") or {}
+        temp = cur.get("temperature_2m")
+        try:
+            t_max = (daily.get("temperature_2m_max") or [None])[0]
+            t_min = (daily.get("temperature_2m_min") or [None])[0]
+        except Exception:
+            t_max = t_min = None
+        # Heatwave alert tier (PMD-style thresholds for Pakistan)
+        alert = "Normal"
+        if isinstance(temp, (int, float)):
+            if temp >= 48:
+                alert = "Extreme"
+            elif temp >= 44:
+                alert = "Severe"
+            elif temp >= 40:
+                alert = "High"
+            elif temp >= 36:
+                alert = "Elevated"
+        feature = {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [city["lon"], city["lat"]]},
+            "properties": {
+                "name": city["name"],
+                "province": city["province"],
+                "temperature": temp,
+                "apparent_temperature": cur.get("apparent_temperature"),
+                "humidity": cur.get("relative_humidity_2m"),
+                "precipitation": cur.get("precipitation"),
+                "wind_speed": cur.get("wind_speed_10m"),
+                "weather_code": cur.get("weather_code"),
+                "temp_max": t_max,
+                "temp_min": t_min,
+                "alert_level": alert,
+                "updated": cur.get("time"),
+            },
+        }
+        # Persist this city's sample so a later restart can rebuild the
+        # aggregate without re-hammering Open-Meteo for every city.
+        if temp is not None:
+            _heatwave_disk_put(ck, feature)
+        return feature
+
+    def _read_cache(self):
+        with self._cache_lock:
+            if self._cache["data"] and self._cache["ts"]:
+                if datetime.now() - self._cache["ts"] < self.CACHE_TTL:
+                    return self._cache["data"]
+        return None
+
+    def _write_cache(self, data):
+        with self._cache_lock:
+            self._cache = {"data": data, "ts": datetime.now()}
+
+    def get(self, request, *args, **kwargs):
+        # 1. Hot in-memory cache
+        cached = self._read_cache()
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 2. Disk cache (persistent across restarts)
+        disk_key = "heatwave-monitoring:aggregate"
+        disk_cached = _heatwave_disk_get(disk_key, self.DISK_TTL_SECONDS)
+        if disk_cached is not None:
+            self._write_cache(disk_cached)
+            return JsonResponse(disk_cached)
+
+        # 3. Network — _fetch_city_now itself reads/writes per-city disk
+        # entries, so cities whose samples are still fresh skip the API.
+        features = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(self._fetch_city_now, c) for c in PAKISTAN_HEATWAVE_CITIES]
+            for fut in as_completed(futures):
+                try:
+                    feat = fut.result()
+                    if feat and feat["properties"].get("temperature") is not None:
+                        features.append(feat)
+                except Exception as exc:
+                    logger.debug("Heatwave city fetch failed: %s", exc)
+
+        geojson = {"type": "FeatureCollection", "features": features}
+        self._write_cache(geojson)
+        if features:
+            _heatwave_disk_put(disk_key, geojson)
+        return JsonResponse(geojson)
+
+
+class HeatwaveDetailView(View):
+    """
+    Detail endpoint used by the popup charts. Returns one of three datasets:
+
+        type=forecast  -> 16-day daily forecast (api.open-meteo.com /forecast)
+        type=seasonal  -> 6-month seasonal/weekly forecast (seasonal-forecast-api)
+        type=climate   -> climate-change daily projection (climate-api)
+
+    Per (lat, lon, type) results are cached in-process AND on disk so a
+    server restart doesn't burn through the Open-Meteo rate limit. TTLs are
+    chosen to match how often each upstream actually changes.
+
+    Outbound calls are funneled through the same semaphore as
+    HeatwaveMonitoringView.
+    """
+    CACHE_TTL = timedelta(minutes=15)
+    _cache_lock = threading.Lock()
+    _cache = {}  # key -> (data, ts)
+
+    URLS = {
+        "forecast": "https://api.open-meteo.com/v1/forecast",
+        "seasonal": "https://seasonal-api.open-meteo.com/v1/seasonal",
+        "climate":  "https://climate-api.open-meteo.com/v1/climate",
+    }
+
+    # Disk TTLs (seconds). Forecast updates ~hourly upstream so 1h is fine;
+    # seasonal refreshes daily (cap at 6h); climate projections are
+    # effectively static (24h is more than enough).
+    DISK_TTL_SECONDS = {
+        "forecast": 60 * 60,
+        "seasonal": 6 * 60 * 60,
+        "climate":  24 * 60 * 60,
+    }
+
+    def _cache_get(self, key):
+        with self._cache_lock:
+            entry = self._cache.get(key)
+            if entry and datetime.now() - entry[1] < self.CACHE_TTL:
+                return entry[0]
+        return None
+
+    def _cache_put(self, key, data):
+        with self._cache_lock:
+            # Soft cap to avoid unbounded growth
+            if len(self._cache) > 256:
+                self._cache.clear()
+            self._cache[key] = (data, datetime.now())
+
+    def _build_params(self, kind, lat, lon):
+        if kind == "forecast":
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_max,relative_humidity_2m_min,apparent_temperature_max",
+                "current": "temperature_2m,relative_humidity_2m,precipitation",
+                "forecast_days": 16,
+                "timezone": "Asia/Karachi",
+            }
+        if kind == "seasonal":
+            # NOTE: seasonal-api supports a *very* narrow set of weekly
+            # variables — only `temperature_2m_mean` validates. Humidity / min
+            # / max come from the `daily` series instead.
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "weekly": "temperature_2m_mean",
+                "daily": "temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,relative_humidity_2m_min",
+                "timezone": "Asia/Karachi",
+            }
+        if kind == "climate":
+            today = datetime.utcnow().date()
+            start = today.replace(year=today.year - 1).isoformat()
+            end = today.replace(year=today.year + 4).isoformat()
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "start_date": start,
+                "end_date": end,
+                "daily": "temperature_2m_mean,temperature_2m_max,precipitation_sum",
+                "models": "MRI_AGCM3_2_S",
+                "timezone": "Asia/Karachi",
+            }
+        return None
+
+    def get(self, request, *args, **kwargs):
+        try:
+            lat = float(request.GET.get("lat"))
+            lon = float(request.GET.get("lon"))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "lat/lon required"}, status=400)
+        kind = (request.GET.get("type") or "forecast").lower()
+        if kind not in self.URLS:
+            return JsonResponse({"error": "invalid type"}, status=400)
+
+        key = f"{kind}:{round(lat, 3)}:{round(lon, 3)}"
+
+        # 1. Hot in-memory cache
+        cached = self._cache_get(key)
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 2. Disk cache — survives gunicorn restarts
+        disk_ttl = self.DISK_TTL_SECONDS.get(kind, 60 * 60)
+        disk_key = f"detail:{key}"
+        disk_cached = _heatwave_disk_get(disk_key, disk_ttl)
+        if disk_cached is not None:
+            self._cache_put(key, disk_cached)
+            return JsonResponse(disk_cached)
+
+        # 3. Network
+        params = self._build_params(kind, lat, lon)
+        url = self.URLS[kind]
+
+        # Even though this is a single call we still wrap it so the same
+        # semaphore caps total concurrent outbound traffic across endpoints.
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            data, err = ex.submit(_heatwave_get, url, params, 12).result()
+
+        if data is None:
+            # Last-ditch fallback: if Open-Meteo refused/rate-limited but we
+            # have a stale-but-not-ancient disk entry, serve it rather than
+            # surfacing a 502 to the user. Marks the response so the client
+            # can flag it as stale if it cares.
+            stale = _heatwave_disk_get(disk_key, disk_ttl * 4)
+            if stale is not None:
+                stale_marked = dict(stale)
+                stale_marked["stale"] = True
+                return JsonResponse(stale_marked)
+            return JsonResponse(
+                {"error": "upstream fetch failed", "type": kind, "detail": err or {}},
+                status=502,
+            )
+
+        payload = {"type": kind, "lat": lat, "lon": lon, "data": data}
+        self._cache_put(key, payload)
+        _heatwave_disk_put(disk_key, payload)
+        return JsonResponse(payload)
+
+
 #WAQI LOCAL PAKISTAN STATION SMOG VIEW
 
 class WAQIgeojson(View):
