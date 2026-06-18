@@ -7,6 +7,18 @@
 // Single source of truth for navigation + news
 
 import { MapControls } from "./map-controls.js";
+import Chart from "chart.js/auto";
+import {
+  toggleWindParticleLayer,
+  toggleOceanParticleLayer,
+} from "./wind-ocean-particles.js";
+
+const ndmaLogoSrc = new URL(
+  "../assets/images/bg_images/ndma-logo.png",
+  import.meta.url
+).href;
+
+const CUMEC_TO_CUSEC = 35.3147;
 
 /**
  * South Asia Geographic Coordinates
@@ -180,6 +192,19 @@ export class NavigationPanel {
   #temporalLayers = {};
   #temporalLayerCache = new Map(); // ✅ Optimized temporal cache
   #geeChatMessages; // ✅ Required for temporal dialog
+  #geoglowsMarker = null;
+  #geoglowsEnabled = false;
+  #geoglowsSelecting = false;
+  #geoglowsSelectionHandler = null;
+  #geoglowsAbortController = null;
+  #geoglowsChartView = false;
+  #geoglowsActiveResult = null;
+  #geoglowsForecastChart = null;
+  #geoglowsStatsChart = null;
+  #geoglowsDailyChart = null;
+  #geoglowsMonthlyChart = null;
+  #geoglowsAnnualChart = null;
+  #geoglowsUnit = "cumecs";
 
   /**
    * @param {mapboxgl.Map} mapInstance
@@ -190,8 +215,10 @@ export class NavigationPanel {
     this.#map = mapInstance;
     this.#mapControls = mapControlsInstance;
     this.projectionPanel = projectionPanelInstance;
+    this.#geoglowsSelectionHandler = this.#handleGeoGlowsMapClick.bind(this);
 
     this.render();
+    this.#ensureGeoGlowsStyles();
     this.addEventListeners();
     this.setupNewsIntegration();
     this.#initializeNewsModal();
@@ -238,6 +265,21 @@ export class NavigationPanel {
           <!-- PROJECTION SWITCH -->
           <button id="projectionSwitch" class="custom-nav-btn" title="Map Projections">
               <i data-lucide="earth"></i>
+          </button>
+
+          <!-- WIND PARTICLES -->
+          <button id="windParticles" class="custom-nav-btn" title="Toggle Wind Animation">
+              <i data-lucide="wind"></i>
+          </button>
+
+          <!-- OCEAN CURRENTS -->
+          <button id="oceanParticles" class="custom-nav-btn" title="Toggle Ocean Currents">
+              <i data-lucide="waves"></i>
+          </button>
+
+          <!-- GEOGLOWS FORECAST -->
+          <button id="geoglowsForecast" class="custom-nav-btn" title="GeoGLOWS River Forecast">
+              <i data-lucide="activity"></i>
           </button>
           
           <!-- LOCATE USER -->
@@ -305,6 +347,42 @@ export class NavigationPanel {
     `;
     mapContainer.appendChild(geeChatModal);
 
+    const geoglowsModal = document.createElement("div");
+    geoglowsModal.id = "geoglows-forecast-panel";
+    geoglowsModal.style.display = "none";
+    geoglowsModal.innerHTML = `
+      <div class="geoglows-panel-shell">
+        <div class="geoglows-panel-header">
+          <div class="geoglows-panel-logo">
+            <img src="${ndmaLogoSrc}" alt="NDMA Logo">
+          </div>
+          <div class="geoglows-panel-info">
+            <div class="geoglows-panel-kicker">GeoGLOWS Monitoring</div>
+            <div class="geoglows-panel-title">River Forecast</div>
+            <div class="geoglows-panel-subtitle">Click the map near a river reach to load the nearest forecast and streamflow statistics from GeoGLOWS.</div>
+          </div>
+        </div>
+        <div class="geoglows-panel-actions">
+          <div class="geoglows-panel-label-wrap">
+            <div class="geoglows-panel-label-caption">Mode</div>
+            <div class="geoglows-panel-label" id="geoglowsModeLabel">Ready</div>
+          </div>
+          <div class="geoglows-panel-button-row">
+            <button type="button" class="geoglows-view-btn" id="geoglowsViewToggleBtn" disabled>Chart View</button>
+            <button type="button" class="geoglows-unit-btn" id="geoglowsUnitToggleBtn" disabled>Show ft³/s</button>
+            <button type="button" class="geoglows-clear-btn" id="geoglowsClearBtn">Clear</button>
+          </div>
+        </div>
+        <div class="geoglows-panel-body" id="geoglowsPanelBody">
+          <div class="geoglows-empty-state">
+            <div class="geoglows-empty-title">GeoGLOWS is ready</div>
+            <div class="geoglows-empty-copy">Use the GeoGLOWS control, then click a location on the map near a river to resolve the nearest reach ID and open the forecast panels.</div>
+          </div>
+        </div>
+      </div>
+    `;
+    mapContainer.appendChild(geoglowsModal);
+
     // Story modal shell (kept dumb; logic handled elsewhere)
     const storyModal = document.createElement("div");
     storyModal.id = "story-modal";
@@ -370,6 +448,36 @@ export class NavigationPanel {
     document
       .getElementById("locate")
       ?.addEventListener("click", this.#handleLocate.bind(this));
+
+    // Wind particles
+    document.getElementById("windParticles")?.addEventListener("click", () => {
+      const isOn = toggleWindParticleLayer();
+      document.getElementById("windParticles")?.classList.toggle("active-wind", isOn);
+    });
+
+    // Ocean particles
+    document.getElementById("oceanParticles")?.addEventListener("click", () => {
+      const isOn = toggleOceanParticleLayer();
+      document
+        .getElementById("oceanParticles")
+        ?.classList.toggle("active-ocean", isOn);
+    });
+
+    document
+      .getElementById("geoglowsForecast")
+      ?.addEventListener("click", this.#handleGeoGlowsToggle.bind(this));
+
+    document
+      .getElementById("geoglowsClearBtn")
+      ?.addEventListener("click", () => this.#clearGeoGlowsState());
+
+    document
+      .getElementById("geoglowsViewToggleBtn")
+      ?.addEventListener("click", () => this.#toggleGeoGlowsView());
+
+    document
+      .getElementById("geoglowsUnitToggleBtn")
+      ?.addEventListener("click", () => this.#toggleGeoGlowsUnit());
 
     // Home Extent (South Asia)
     document
@@ -547,6 +655,1313 @@ export class NavigationPanel {
         button.classList.remove("terrain-active");
       }
     }
+  }
+
+  #ensureGeoGlowsStyles() {
+    if (document.getElementById("geoglows-control-styles")) return;
+
+    const style = document.createElement("style");
+    style.id = "geoglows-control-styles";
+    style.textContent = `
+      .custom-nav-btn.active-geoglows {
+        background: var(--ndma-blue) !important;
+        border-color: var(--ndma-blue) !important;
+        box-shadow: 0 0 12px var(--ndma-blue-glow) !important;
+        color: #fff !important;
+      }
+
+      #geoglows-forecast-panel {
+        position: absolute;
+        right: 54px;
+        bottom: 72px;
+        z-index: 1002;
+        width: min(780px, calc(100vw - 96px));
+        max-height: 72vh;
+        overflow: auto;
+      }
+
+      .geoglows-panel-shell {
+        background: rgba(15, 23, 42, 0.96);
+        color: rgb(226, 232, 240);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 18px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+        padding: 14px;
+        backdrop-filter: blur(14px);
+      }
+
+      .geoglows-panel-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 12px;
+      }
+
+      .geoglows-panel-logo {
+        width: 56px;
+        height: 56px;
+        flex: 0 0 56px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(34, 197, 94, 0.12));
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .geoglows-panel-logo img {
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+      }
+
+      .geoglows-panel-kicker {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #7dd3fc;
+      }
+
+      .geoglows-panel-title {
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-top: 2px;
+      }
+
+      .geoglows-panel-subtitle {
+        margin-top: 4px;
+        color: #cbd5e1;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .geoglows-panel-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .geoglows-panel-label-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .geoglows-panel-label-caption {
+        color: #94a3b8;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .geoglows-panel-label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(37, 99, 235, 0.18);
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        color: #e0f2fe;
+        font-weight: 700;
+        font-size: 12px;
+      }
+
+      .geoglows-clear-btn {
+        border: none;
+        border-radius: 10px;
+        padding: 8px 14px;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .geoglows-panel-button-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .geoglows-view-btn {
+        border: 1px solid rgba(96, 165, 250, 0.32);
+        border-radius: 10px;
+        padding: 8px 14px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(14, 165, 233, 0.16));
+        color: #e0f2fe;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .geoglows-view-btn.is-chart {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.26), rgba(59, 130, 246, 0.22));
+        border-color: rgba(74, 222, 128, 0.3);
+      }
+
+      .geoglows-unit-btn {
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        border-radius: 10px;
+        padding: 8px 14px;
+        background: linear-gradient(135deg, rgba(51, 65, 85, 0.55), rgba(30, 41, 59, 0.7));
+        color: #f8fafc;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .geoglows-panel-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .geoglows-panel-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .geoglows-chart-stack {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .geoglows-subgrid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .geoglows-chart-card {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .geoglows-chart-card h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        font-weight: 800;
+        color: #f8fafc;
+      }
+
+      .geoglows-chart-card p {
+        margin: 0 0 12px;
+        color: #cbd5e1;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .geoglows-chart-wrap {
+        position: relative;
+        width: 100%;
+        min-height: 240px;
+      }
+
+      .geoglows-chart-wrap canvas {
+        width: 100% !important;
+        height: 240px !important;
+      }
+
+      .geoglows-panel-card {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .geoglows-panel-card h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        font-weight: 800;
+        color: #f8fafc;
+      }
+
+      .geoglows-panel-card p {
+        margin: 0 0 10px;
+        color: #cbd5e1;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .geoglows-metadata-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .geoglows-metadata-item {
+        background: rgba(30, 41, 59, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 12px;
+        padding: 10px;
+      }
+
+      .geoglows-metadata-label {
+        display: block;
+        color: #94a3b8;
+        font-size: 11px;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .geoglows-metadata-value {
+        color: #f8fafc;
+        font-weight: 700;
+        font-size: 13px;
+        word-break: break-word;
+      }
+
+      .geoglows-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .geoglows-table th,
+      .geoglows-table td {
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        text-align: left;
+      }
+
+      .geoglows-table th {
+        color: #93c5fd;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .geoglows-table td:last-child,
+      .geoglows-table th:last-child {
+        text-align: right;
+      }
+
+      .geoglows-mini-group + .geoglows-mini-group {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .geoglows-mini-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: #e2e8f0;
+        margin-bottom: 6px;
+      }
+
+      .geoglows-empty-state,
+      .geoglows-loading-state,
+      .geoglows-error-state {
+        padding: 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      .geoglows-empty-title,
+      .geoglows-loading-title,
+      .geoglows-error-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 6px;
+      }
+
+      .geoglows-empty-copy,
+      .geoglows-loading-copy,
+      .geoglows-error-copy {
+        font-size: 13px;
+        color: #cbd5e1;
+        line-height: 1.5;
+      }
+
+      .geoglows-loading-spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(148, 163, 184, 0.3);
+        border-top-color: #38bdf8;
+        border-radius: 999px;
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+        animation: ncop-spin 0.7s linear infinite;
+      }
+
+      @media (max-width: 900px) {
+        #geoglows-forecast-panel {
+          right: 50px;
+          width: min(540px, calc(100vw - 80px));
+        }
+
+        .geoglows-panel-grid,
+        .geoglows-metadata-grid,
+        .geoglows-subgrid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        #geoglows-forecast-panel {
+          right: 12px;
+          left: 12px;
+          bottom: 72px;
+          width: auto;
+        }
+
+        .geoglows-panel-header,
+        .geoglows-panel-actions {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  #handleGeoGlowsToggle() {
+    if (this.#geoglowsEnabled) {
+      this.#clearGeoGlowsState();
+      return;
+    }
+
+    this.#geoglowsEnabled = true;
+    this.#geoglowsSelecting = true;
+    document
+      .getElementById("geoglowsForecast")
+      ?.classList.add("active-geoglows");
+    this.#setGeoGlowsModeLabel("Select River");
+    this.#setGeoGlowsMapCursor("crosshair");
+    this.#showGeoGlowsPanel();
+    this.#setGeoGlowsBody(`
+      <div class="geoglows-loading-state">
+        <div class="geoglows-loading-title"><span class="geoglows-loading-spinner"></span>GeoGLOWS selection mode enabled</div>
+        <div class="geoglows-loading-copy">Click a point on the map near a river reach. NCOP will resolve the nearest GeoGLOWS river ID, place a marker, and fetch the forecast panels.</div>
+      </div>
+    `);
+    this.#map.off("click", this.#geoglowsSelectionHandler);
+    this.#map.on("click", this.#geoglowsSelectionHandler);
+  }
+
+  #handleGeoGlowsMapClick(event) {
+    if (!this.#geoglowsEnabled) return;
+    this.#loadGeoGlowsForecast(event.lngLat);
+  }
+
+  async #loadGeoGlowsForecast(lngLat) {
+    this.#geoglowsSelecting = false;
+    this.#map.off("click", this.#geoglowsSelectionHandler);
+    this.#setGeoGlowsMapCursor("");
+    this.#setGeoGlowsModeLabel("Loading");
+    this.#destroyGeoGlowsCharts();
+    this.#geoglowsActiveResult = null;
+    this.#geoglowsChartView = false;
+    this.#geoglowsUnit = "cumecs";
+    this.#updateGeoGlowsViewToggle();
+    this.#updateGeoGlowsUnitToggle();
+    this.#setGeoGlowsMarker(lngLat);
+    this.#setGeoGlowsBody(`
+      <div class="geoglows-loading-state">
+        <div class="geoglows-loading-title"><span class="geoglows-loading-spinner"></span>Loading GeoGLOWS forecast</div>
+        <div class="geoglows-loading-copy">Resolving the nearest stream reach and fetching forecast summary plus ensemble statistics for the selected location.</div>
+      </div>
+    `);
+
+    this.#geoglowsAbortController?.abort();
+    this.#geoglowsAbortController = new AbortController();
+
+    try {
+      const riverRes = await fetch(
+        `${this.#baseUrl}/get-geoglows-riverid/?lat=${encodeURIComponent(
+          lngLat.lat
+        )}&lon=${encodeURIComponent(lngLat.lng)}`,
+        { signal: this.#geoglowsAbortController.signal }
+      );
+      const riverData = await riverRes.json();
+      if (!riverRes.ok || !riverData?.river_id) {
+        throw new Error(riverData?.detail || "Unable to resolve GeoGLOWS river ID");
+      }
+
+      const riverId = riverData.river_id;
+      const [forecastRes, statsRes, dailyRes, monthlyRes, annualRes] = await Promise.all([
+        fetch(`${this.#baseUrl}/get-geoglows-forecast/${riverId}/`, {
+          signal: this.#geoglowsAbortController.signal,
+        }),
+        fetch(`${this.#baseUrl}/get-geoglows-forecaststats/${riverId}/`, {
+          signal: this.#geoglowsAbortController.signal,
+        }),
+        fetch(`${this.#baseUrl}/get-geoglows-dailyaverages/${riverId}/`, {
+          signal: this.#geoglowsAbortController.signal,
+        }),
+        fetch(`${this.#baseUrl}/get-geoglows-monthlyaverages/${riverId}/`, {
+          signal: this.#geoglowsAbortController.signal,
+        }),
+        fetch(`${this.#baseUrl}/get-geoglows-annualaverages/${riverId}/`, {
+          signal: this.#geoglowsAbortController.signal,
+        }),
+      ]);
+
+      const [forecastData, statsData, dailyData, monthlyData, annualData] = await Promise.all([
+        forecastRes.json(),
+        statsRes.json(),
+        dailyRes.json(),
+        monthlyRes.json(),
+        annualRes.json(),
+      ]);
+
+      if (!forecastRes.ok) {
+        throw new Error(
+          forecastData?.detail || "Unable to load GeoGLOWS forecast data"
+        );
+      }
+      if (!statsRes.ok) {
+        throw new Error(
+          statsData?.detail || "Unable to load GeoGLOWS forecast statistics"
+        );
+      }
+
+      const averageWarnings = [];
+      const safeDailyData = dailyRes.ok
+        ? dailyData
+        : (averageWarnings.push(
+            dailyData?.detail || "Daily averages were unavailable for this reach."
+          ),
+          null);
+      const safeMonthlyData = monthlyRes.ok
+        ? monthlyData
+        : (averageWarnings.push(
+            monthlyData?.detail || "Monthly averages were unavailable for this reach."
+          ),
+          null);
+      const safeAnnualData = annualRes.ok
+        ? annualData
+        : (averageWarnings.push(
+            annualData?.detail || "Annual averages were unavailable for this reach."
+          ),
+          null);
+
+      this.#renderGeoGlowsResults({
+        riverId,
+        point: { lon: lngLat.lng, lat: lngLat.lat },
+        forecast: forecastData,
+        stats: statsData,
+        daily: safeDailyData,
+        monthly: safeMonthlyData,
+        annual: safeAnnualData,
+        averageWarnings,
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      this.#setGeoGlowsModeLabel("Error");
+      this.#setGeoGlowsBody(`
+        <div class="geoglows-error-state">
+          <div class="geoglows-error-title">GeoGLOWS request failed</div>
+          <div class="geoglows-error-copy">${this.#escapeHtml(
+            error?.message || "An unexpected error occurred while loading GeoGLOWS."
+          )}</div>
+        </div>
+      `);
+    }
+  }
+
+  #renderGeoGlowsResults({
+    riverId,
+    point,
+    forecast,
+    stats,
+    daily,
+    monthly,
+    annual,
+    averageWarnings = [],
+  }) {
+    const forecastSeries = this.#extractGeoGlowsSeries(
+      forecast?.raw ?? forecast,
+      ["forecast", "average_flow", "mean"]
+    );
+    const statGroups = this.#extractGeoGlowsStatGroups(stats?.raw ?? stats);
+    const dailySeries = this.#extractGeoGlowsSeries(daily?.raw ?? daily);
+    const monthlySeries = this.#extractGeoGlowsSeries(monthly?.raw ?? monthly);
+    const annualSeries = this.#extractGeoGlowsSeries(annual?.raw ?? annual);
+    this.#geoglowsActiveResult = {
+      riverId,
+      point,
+      forecastSeries,
+      statGroups,
+      dailySeries,
+      monthlySeries,
+      annualSeries,
+      averageWarnings,
+    };
+
+    this.#renderGeoGlowsActiveView();
+  }
+
+  #renderGeoGlowsActiveView() {
+    if (!this.#geoglowsActiveResult) return;
+    if (this.#geoglowsChartView) {
+      this.#renderGeoGlowsChartView();
+    } else {
+      this.#renderGeoGlowsTableView();
+    }
+    this.#updateGeoGlowsViewToggle();
+    this.#updateGeoGlowsUnitToggle();
+  }
+
+  #renderGeoGlowsTableView() {
+    const { riverId, point, forecastSeries, statGroups, dailySeries, monthlySeries, annualSeries, averageWarnings } =
+      this.#geoglowsActiveResult;
+    const unitText = this.#getGeoGlowsUnitLabel();
+    const forecastRows = forecastSeries.length
+      ? forecastSeries
+          .slice(0, 10)
+          .map(
+            (item) => `
+              <tr>
+                <td>${this.#escapeHtml(item.label)}</td>
+                <td>${this.#formatGeoGlowsDisplayValue(item.value)}</td>
+              </tr>
+            `
+          )
+          .join("")
+      : `<tr><td colspan="2">No forecast samples were returned.</td></tr>`;
+
+    const statsMarkup = statGroups.length
+      ? statGroups
+          .slice(0, 4)
+          .map((group) => {
+            const rows = group.series
+              .slice(0, 6)
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${this.#escapeHtml(item.label)}</td>
+                    <td>${this.#formatGeoGlowsDisplayValue(item.value)}</td>
+                  </tr>
+                `
+              )
+              .join("");
+
+            return `
+              <div class="geoglows-mini-group">
+                <div class="geoglows-mini-title">${this.#escapeHtml(group.title)}</div>
+                <table class="geoglows-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Flow</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            `;
+          })
+          .join("")
+      : `
+        <div class="geoglows-mini-group">
+          <div class="geoglows-mini-title">Forecast Statistics</div>
+          <div class="geoglows-empty-copy">No statistical series were returned for the selected reach.</div>
+        </div>
+      `;
+
+    const dailyRows = this.#buildGeoGlowsRowsMarkup(dailySeries, 6);
+    const monthlyRows = this.#buildGeoGlowsRowsMarkup(monthlySeries, 6);
+    const annualRows = this.#buildGeoGlowsRowsMarkup(annualSeries, 6);
+
+    const warningMarkup = averageWarnings.length
+      ? `
+        <div class="geoglows-error-state">
+          <div class="geoglows-error-title">Some historic averages were unavailable</div>
+          <div class="geoglows-error-copy">${this.#escapeHtml(averageWarnings.join(" "))}</div>
+        </div>
+      `
+      : "";
+
+    this.#setGeoGlowsModeLabel("Active Reach");
+    this.#setGeoGlowsBody(`
+      ${warningMarkup}
+      <div class="geoglows-metadata-grid">
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Reach ID</span>
+          <div class="geoglows-metadata-value">${this.#escapeHtml(
+            String(riverId)
+          )}</div>
+        </div>
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Latitude</span>
+          <div class="geoglows-metadata-value">${Number(point.lat).toFixed(4)}</div>
+        </div>
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Longitude</span>
+          <div class="geoglows-metadata-value">${Number(point.lon).toFixed(4)}</div>
+        </div>
+      </div>
+      <div class="geoglows-panel-grid">
+        <section class="geoglows-panel-card">
+          <h4>Average Forecast</h4>
+          <p>Representative discharge forecast for the nearest GeoGLOWS stream reach in ${unitText}.</p>
+          <table class="geoglows-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Flow</th>
+              </tr>
+            </thead>
+            <tbody>${forecastRows}</tbody>
+          </table>
+        </section>
+        <section class="geoglows-panel-card">
+          <h4>Forecast Statistics</h4>
+          <p>Ensemble-derived forecast statistics for the same reach, grouped by the returned statistic series in ${unitText}.</p>
+          ${statsMarkup}
+        </section>
+      </div>
+      <div class="geoglows-subgrid-3">
+        <section class="geoglows-panel-card">
+          <h4>Daily Averages</h4>
+          <p>Historic simulation daily-average flow profile for the selected reach in ${unitText}.</p>
+          <table class="geoglows-table">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Flow</th>
+              </tr>
+            </thead>
+            <tbody>${dailyRows}</tbody>
+          </table>
+        </section>
+        <section class="geoglows-panel-card">
+          <h4>Monthly Averages</h4>
+          <p>Historic monthly-average discharge values for the same river reach in ${unitText}.</p>
+          <table class="geoglows-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Flow</th>
+              </tr>
+            </thead>
+            <tbody>${monthlyRows}</tbody>
+          </table>
+        </section>
+        <section class="geoglows-panel-card">
+          <h4>Annual Averages</h4>
+          <p>Historic annual-average flow series derived from the GeoGLOWS simulation in ${unitText}.</p>
+          <table class="geoglows-table">
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Flow</th>
+              </tr>
+            </thead>
+            <tbody>${annualRows}</tbody>
+          </table>
+        </section>
+      </div>
+    `);
+  }
+
+  #renderGeoGlowsChartView() {
+    const { riverId, point, forecastSeries, statGroups, dailySeries, monthlySeries, annualSeries, averageWarnings } =
+      this.#geoglowsActiveResult;
+    const unitText = this.#getGeoGlowsUnitLabel();
+
+    const warningMarkup = averageWarnings.length
+      ? `
+        <div class="geoglows-error-state">
+          <div class="geoglows-error-title">Some historic averages were unavailable</div>
+          <div class="geoglows-error-copy">${this.#escapeHtml(averageWarnings.join(" "))}</div>
+        </div>
+      `
+      : "";
+
+    this.#setGeoGlowsModeLabel("Chart View");
+    this.#setGeoGlowsBody(`
+      ${warningMarkup}
+      <div class="geoglows-metadata-grid">
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Reach ID</span>
+          <div class="geoglows-metadata-value">${this.#escapeHtml(
+            String(riverId)
+          )}</div>
+        </div>
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Latitude</span>
+          <div class="geoglows-metadata-value">${Number(point.lat).toFixed(4)}</div>
+        </div>
+        <div class="geoglows-metadata-item">
+          <span class="geoglows-metadata-label">Longitude</span>
+          <div class="geoglows-metadata-value">${Number(point.lon).toFixed(4)}</div>
+        </div>
+      </div>
+      <div class="geoglows-chart-stack">
+        <section class="geoglows-chart-card">
+          <h4>Average Forecast Chart</h4>
+          <p>Line chart for the representative discharge forecast at the selected GeoGLOWS reach in ${unitText}.</p>
+          <div class="geoglows-chart-wrap">
+            <canvas id="geoglowsForecastChartCanvas"></canvas>
+          </div>
+        </section>
+        <section class="geoglows-chart-card">
+          <h4>Forecast Statistics Chart</h4>
+          <p>Multi-series chart for the returned forecast statistics in ${unitText} so you can compare the temporal patterns more clearly.</p>
+          <div class="geoglows-chart-wrap">
+            <canvas id="geoglowsStatsChartCanvas"></canvas>
+          </div>
+        </section>
+        <div class="geoglows-subgrid-3">
+          <section class="geoglows-chart-card">
+            <h4>Daily Averages Chart</h4>
+            <p>Historic daily-average flow distribution for the selected reach in ${unitText}.</p>
+            <div class="geoglows-chart-wrap">
+              <canvas id="geoglowsDailyChartCanvas"></canvas>
+            </div>
+          </section>
+          <section class="geoglows-chart-card">
+            <h4>Monthly Averages Chart</h4>
+            <p>Historic monthly-average discharge values for the same reach in ${unitText}.</p>
+            <div class="geoglows-chart-wrap">
+              <canvas id="geoglowsMonthlyChartCanvas"></canvas>
+            </div>
+          </section>
+          <section class="geoglows-chart-card">
+            <h4>Annual Averages Chart</h4>
+            <p>Historic annual-average flow series from the GeoGLOWS simulation in ${unitText}.</p>
+            <div class="geoglows-chart-wrap">
+              <canvas id="geoglowsAnnualChartCanvas"></canvas>
+            </div>
+          </section>
+        </div>
+      </div>
+    `);
+
+    queueMicrotask(() => {
+      this.#drawGeoGlowsCharts(
+        forecastSeries,
+        statGroups,
+        dailySeries,
+        monthlySeries,
+        annualSeries
+      );
+    });
+  }
+
+  #drawGeoGlowsCharts(forecastSeries, statGroups, dailySeries, monthlySeries, annualSeries) {
+    this.#destroyGeoGlowsCharts();
+    const unitText = this.#getGeoGlowsUnitLabel();
+
+    const forecastCanvas = document.getElementById("geoglowsForecastChartCanvas");
+    const statsCanvas = document.getElementById("geoglowsStatsChartCanvas");
+    const dailyCanvas = document.getElementById("geoglowsDailyChartCanvas");
+    const monthlyCanvas = document.getElementById("geoglowsMonthlyChartCanvas");
+    const annualCanvas = document.getElementById("geoglowsAnnualChartCanvas");
+
+    if (forecastCanvas && forecastSeries.length) {
+      this.#geoglowsForecastChart = new Chart(forecastCanvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: forecastSeries.map((item) => item.label),
+          datasets: [
+            {
+              label: `Average Forecast (${unitText})`,
+              data: forecastSeries.map((item) => this.#convertGeoGlowsValue(item.value)),
+              borderColor: "#38bdf8",
+              backgroundColor: "rgba(56, 189, 248, 0.18)",
+              fill: true,
+              borderWidth: 2,
+              tension: 0.28,
+              pointRadius: 2,
+            },
+          ],
+        },
+        options: this.#getGeoGlowsChartOptions(),
+      });
+    }
+
+    if (statsCanvas && statGroups.length) {
+      const palette = ["#f97316", "#22c55e", "#a855f7", "#facc15", "#ef4444"];
+      this.#geoglowsStatsChart = new Chart(statsCanvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: statGroups[0].series.map((item) => item.label),
+          datasets: statGroups.slice(0, 5).map((group, index) => ({
+            label: `${group.title} (${unitText})`,
+            data: group.series.map((item) => this.#convertGeoGlowsValue(item.value)),
+            borderColor: palette[index % palette.length],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.22,
+            pointRadius: 1.5,
+          })),
+        },
+        options: this.#getGeoGlowsChartOptions(8),
+      });
+    }
+
+    if (dailyCanvas && dailySeries.length) {
+      this.#geoglowsDailyChart = new Chart(dailyCanvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: dailySeries.map((item) => item.label),
+          datasets: [
+            {
+              label: `Daily Average (${unitText})`,
+              data: dailySeries.map((item) => this.#convertGeoGlowsValue(item.value)),
+              borderColor: "#22c55e",
+              backgroundColor: "rgba(34, 197, 94, 0.15)",
+              fill: true,
+              borderWidth: 2,
+              tension: 0.22,
+              pointRadius: 1,
+            },
+          ],
+        },
+        options: this.#getGeoGlowsChartOptions(10),
+      });
+    }
+
+    if (monthlyCanvas && monthlySeries.length) {
+      this.#geoglowsMonthlyChart = new Chart(monthlyCanvas.getContext("2d"), {
+        type: "bar",
+        data: {
+          labels: monthlySeries.map((item) => item.label),
+          datasets: [
+            {
+              label: `Monthly Average (${unitText})`,
+              data: monthlySeries.map((item) => this.#convertGeoGlowsValue(item.value)),
+              backgroundColor: "rgba(249, 115, 22, 0.55)",
+              borderColor: "#f97316",
+              borderWidth: 1.5,
+            },
+          ],
+        },
+        options: this.#getGeoGlowsChartOptions(12),
+      });
+    }
+
+    if (annualCanvas && annualSeries.length) {
+      this.#geoglowsAnnualChart = new Chart(annualCanvas.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: annualSeries.map((item) => item.label),
+          datasets: [
+            {
+              label: `Annual Average (${unitText})`,
+              data: annualSeries.map((item) => this.#convertGeoGlowsValue(item.value)),
+              borderColor: "#a855f7",
+              backgroundColor: "rgba(168, 85, 247, 0.16)",
+              fill: true,
+              borderWidth: 2,
+              tension: 0.2,
+              pointRadius: 1.5,
+            },
+          ],
+        },
+        options: this.#getGeoGlowsChartOptions(8),
+      });
+    }
+  }
+
+  #getGeoGlowsChartOptions(maxTicksLimit = 8) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: "index",
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: "#e2e8f0",
+            boxWidth: 12,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#cbd5e1",
+            maxTicksLimit,
+          },
+          grid: {
+            color: "rgba(148, 163, 184, 0.12)",
+          },
+        },
+        y: {
+          ticks: {
+            color: "#cbd5e1",
+          },
+          title: {
+            display: true,
+            text: `Flow (${this.#getGeoGlowsUnitLabel()})`,
+            color: "#e2e8f0",
+          },
+          grid: {
+            color: "rgba(148, 163, 184, 0.12)",
+          },
+        },
+      },
+    };
+  }
+
+  #buildGeoGlowsRowsMarkup(series, limit = 6) {
+    if (!series.length) {
+      return `<tr><td colspan="2">No data returned.</td></tr>`;
+    }
+
+    return series
+      .slice(0, limit)
+      .map(
+        (item) => `
+          <tr>
+            <td>${this.#escapeHtml(item.label)}</td>
+            <td>${this.#formatGeoGlowsDisplayValue(item.value)}</td>
+          </tr>
+        `
+      )
+      .join("");
+  }
+
+  #toggleGeoGlowsView() {
+    if (!this.#geoglowsActiveResult) return;
+    this.#geoglowsChartView = !this.#geoglowsChartView;
+    this.#renderGeoGlowsActiveView();
+  }
+
+  #toggleGeoGlowsUnit() {
+    this.#geoglowsUnit =
+      this.#geoglowsUnit === "cumecs" ? "cusecs" : "cumecs";
+    this.#renderGeoGlowsActiveView();
+    this.#updateGeoGlowsUnitToggle();
+  }
+
+  #updateGeoGlowsViewToggle() {
+    const btn = document.getElementById("geoglowsViewToggleBtn");
+    if (!btn) return;
+    btn.disabled = !this.#geoglowsActiveResult;
+    btn.textContent = this.#geoglowsChartView ? "Table View" : "Chart View";
+    btn.classList.toggle("is-chart", this.#geoglowsChartView);
+  }
+
+  #updateGeoGlowsUnitToggle() {
+    const btn = document.getElementById("geoglowsUnitToggleBtn");
+    if (!btn) return;
+    btn.disabled = !this.#geoglowsActiveResult;
+    btn.textContent =
+      this.#geoglowsUnit === "cumecs" ? "Show ft³/s" : "Show m³/s";
+  }
+
+  #extractGeoGlowsStatGroups(payload) {
+    const source = payload?.raw ?? payload;
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      const fallbackSeries = this.#extractGeoGlowsSeries(source);
+      return fallbackSeries.length
+        ? [{ title: "Statistics", series: fallbackSeries }]
+        : [];
+    }
+
+    const groups = [];
+    for (const [key, value] of Object.entries(source)) {
+      const series = this.#extractGeoGlowsSeries(value);
+      if (series.length) {
+        groups.push({ title: this.#prettifyGeoGlowsKey(key), series });
+      }
+    }
+
+    if (!groups.length) {
+      const fallbackSeries = this.#extractGeoGlowsSeries(source);
+      if (fallbackSeries.length) {
+        groups.push({ title: "Statistics", series: fallbackSeries });
+      }
+    }
+
+    return groups;
+  }
+
+  #extractGeoGlowsSeries(payload, preferredKeys = []) {
+    const source = payload?.raw ?? payload;
+    if (!source) return [];
+
+    if (Array.isArray(source)) {
+      return source
+        .map((item, index) => this.#normalizeGeoGlowsPoint(item, index))
+        .filter(Boolean);
+    }
+
+    if (typeof source !== "object") return [];
+
+    for (const key of preferredKeys) {
+      if (source[key] != null) {
+        const preferredSeries = this.#extractGeoGlowsSeries(source[key]);
+        if (preferredSeries.length) return preferredSeries;
+      }
+    }
+
+    const keys = Object.keys(source);
+    const looksLikeDateMap =
+      keys.length > 1 &&
+      keys.every((key) => !Number.isNaN(Date.parse(String(key))));
+    if (looksLikeDateMap) {
+      return keys
+        .map((key, index) =>
+          this.#normalizeGeoGlowsPoint(
+            { date: key, value: source[key] },
+            index
+          )
+        )
+        .filter(Boolean);
+    }
+
+    const dateArray =
+      (Array.isArray(source.datetime) && source.datetime) ||
+      (Array.isArray(source.date) && source.date) ||
+      (Array.isArray(source.time) && source.time) ||
+      null;
+
+    if (dateArray) {
+      const valueKey = Object.keys(source).find((key) => {
+        if (["datetime", "date", "time"].includes(key)) return false;
+        const value = source[key];
+        return (
+          Array.isArray(value) &&
+          value.length === dateArray.length &&
+          value.some((item) => Number.isFinite(Number(item)))
+        );
+      });
+
+      if (valueKey) {
+        return dateArray
+          .map((label, index) =>
+            this.#normalizeGeoGlowsPoint(
+              { date: label, value: source[valueKey][index] },
+              index
+            )
+          )
+          .filter(Boolean);
+      }
+    }
+
+    for (const value of Object.values(source)) {
+      const nestedSeries = this.#extractGeoGlowsSeries(value);
+      if (nestedSeries.length) return nestedSeries;
+    }
+
+    return [];
+  }
+
+  #normalizeGeoGlowsPoint(item, index) {
+    if (item == null) return null;
+
+    if (Array.isArray(item) && item.length >= 2) {
+      const value = Number(item[1]);
+      if (!Number.isFinite(value)) return null;
+      return {
+        label: this.#formatGeoGlowsLabel(item[0], index),
+        value,
+      };
+    }
+
+    if (typeof item === "object") {
+      const label =
+        item.datetime ??
+        item.date ??
+        item.time ??
+        item.timestamp ??
+        item.label ??
+        item.x ??
+        `Point ${index + 1}`;
+
+      const valueKey = [
+        "value",
+        "flow",
+        "streamflow",
+        "mean",
+        "average_flow",
+        "avg",
+        "high_res",
+        "median",
+        "p50",
+      ].find((key) => Number.isFinite(Number(item[key])));
+
+      if (valueKey) {
+        return {
+          label: this.#formatGeoGlowsLabel(label, index),
+          value: Number(item[valueKey]),
+        };
+      }
+
+      const firstNumericEntry = Object.entries(item).find(([, value]) =>
+        Number.isFinite(Number(value))
+      );
+      if (firstNumericEntry) {
+        return {
+          label: this.#formatGeoGlowsLabel(label, index),
+          value: Number(firstNumericEntry[1]),
+        };
+      }
+    }
+
+    return null;
+  }
+
+  #formatGeoGlowsLabel(value, index) {
+    if (value == null || value === "") return `Point ${index + 1}`;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString("en-US", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    return String(value);
+  }
+
+  #formatGeoGlowsValue(value) {
+    if (!Number.isFinite(Number(value))) return "N/A";
+    return `${Number(value).toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+    })} m³/s`;
+  }
+
+  #prettifyGeoGlowsKey(key) {
+    return String(key)
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  #convertGeoGlowsValue(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return value;
+    return this.#geoglowsUnit === "cusecs"
+      ? numeric * CUMEC_TO_CUSEC
+      : numeric;
+  }
+
+  #getGeoGlowsUnitLabel() {
+    return this.#geoglowsUnit === "cusecs" ? "ft³/s" : "m³/s";
+  }
+
+  #formatGeoGlowsDisplayValue(value) {
+    if (!Number.isFinite(Number(value))) return "N/A";
+    return `${this.#convertGeoGlowsValue(value).toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+    })} ${this.#getGeoGlowsUnitLabel()}`;
+  }
+
+  #escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  #setGeoGlowsMarker(lngLat) {
+    if (this.#geoglowsMarker) {
+      this.#geoglowsMarker.setLngLat(lngLat);
+      return;
+    }
+
+    this.#geoglowsMarker = new mapboxgl.Marker({ color: "#38bdf8" })
+      .setLngLat(lngLat)
+      .addTo(this.#map);
+  }
+
+  #showGeoGlowsPanel() {
+    const panel = document.getElementById("geoglows-forecast-panel");
+    if (panel) panel.style.display = "block";
+  }
+
+  #hideGeoGlowsPanel() {
+    const panel = document.getElementById("geoglows-forecast-panel");
+    if (panel) panel.style.display = "none";
+  }
+
+  #setGeoGlowsModeLabel(text) {
+    const label = document.getElementById("geoglowsModeLabel");
+    if (label) label.textContent = text;
+  }
+
+  #setGeoGlowsBody(markup) {
+    const body = document.getElementById("geoglowsPanelBody");
+    if (body) body.innerHTML = markup;
+  }
+
+  #setGeoGlowsMapCursor(cursor) {
+    const canvas = this.#map?.getCanvas?.();
+    if (canvas) canvas.style.cursor = cursor;
+  }
+
+  #destroyGeoGlowsCharts() {
+    if (this.#geoglowsForecastChart) {
+      try {
+        this.#geoglowsForecastChart.destroy();
+      } catch (_) {}
+      this.#geoglowsForecastChart = null;
+    }
+
+    if (this.#geoglowsStatsChart) {
+      try {
+        this.#geoglowsStatsChart.destroy();
+      } catch (_) {}
+      this.#geoglowsStatsChart = null;
+    }
+
+    if (this.#geoglowsDailyChart) {
+      try {
+        this.#geoglowsDailyChart.destroy();
+      } catch (_) {}
+      this.#geoglowsDailyChart = null;
+    }
+
+    if (this.#geoglowsMonthlyChart) {
+      try {
+        this.#geoglowsMonthlyChart.destroy();
+      } catch (_) {}
+      this.#geoglowsMonthlyChart = null;
+    }
+
+    if (this.#geoglowsAnnualChart) {
+      try {
+        this.#geoglowsAnnualChart.destroy();
+      } catch (_) {}
+      this.#geoglowsAnnualChart = null;
+    }
+  }
+
+  #clearGeoGlowsState() {
+    this.#geoglowsAbortController?.abort();
+    this.#geoglowsAbortController = null;
+    this.#destroyGeoGlowsCharts();
+    this.#geoglowsActiveResult = null;
+    this.#geoglowsChartView = false;
+
+    if (this.#geoglowsMarker) {
+      this.#geoglowsMarker.remove();
+      this.#geoglowsMarker = null;
+    }
+
+    this.#geoglowsEnabled = false;
+    this.#geoglowsSelecting = false;
+    this.#map.off("click", this.#geoglowsSelectionHandler);
+    this.#setGeoGlowsMapCursor("");
+    this.#hideGeoGlowsPanel();
+    this.#setGeoGlowsModeLabel("Ready");
+    document
+      .getElementById("geoglowsForecast")
+      ?.classList.remove("active-geoglows");
+    this.#updateGeoGlowsViewToggle();
+    this.#updateGeoGlowsUnitToggle();
   }
 
   /**

@@ -63,6 +63,7 @@ from ncop_project.settings.base import (
 )
 
 import os
+import math
 import time
 import asyncio
 import httpx
@@ -1703,6 +1704,9 @@ def normalize_gdacs_impacts(event_type: str, details: Dict[str, Any]) -> Dict[st
 # normalized = normalize_gdacs_impacts(event_type, details_json)
 # print(normalized)
 GDACS_BASE = "https://www.gdacs.org/gdacsapi/api"
+EONET_BASE = "https://eonet.gsfc.nasa.gov/api/v3"
+USGS_BASE = "https://earthquake.usgs.gov/fdsnws/event/1"
+GEOGLOWS_BASE = "https://geoglows.ecmwf.int/api"
 
 
 def _safe_get_json(url, params=None, timeout=15):
@@ -1712,6 +1716,257 @@ def _safe_get_json(url, params=None, timeout=15):
             return r.json()
     except requests.RequestException as e:
         print("GDACS JSON error:", url, e)
+    return None
+
+
+def _safe_geoglows_json(path, params=None, timeout=20):
+    try:
+        response = requests.get(
+            f"{GEOGLOWS_BASE}{path}",
+            params=params,
+            timeout=timeout,
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        return response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("GeoGLOWS JSON error for %s: %s", path, exc)
+        return None
+
+
+def _parse_geoglows_csv(text):
+    stream = io.StringIO(text.strip())
+    reader = csv.DictReader(stream)
+    rows = list(reader)
+    if not rows or not reader.fieldnames:
+        return None
+
+    label_field = next(
+        (
+            field
+            for field in reader.fieldnames
+            if field and field.lower() in {"datetime", "date", "time", "timestamp"}
+        ),
+        reader.fieldnames[0],
+    )
+
+    numeric_fields = []
+    for field in reader.fieldnames:
+        if not field or field == label_field:
+            continue
+        if any(
+            row.get(field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(field))
+            for row in rows
+        ):
+            numeric_fields.append(field)
+
+    if not numeric_fields:
+        return rows
+
+    if len(numeric_fields) == 1:
+        value_field = numeric_fields[0]
+        return [
+            {
+                "date": row.get(label_field),
+                "value": float(row.get(value_field)),
+            }
+            for row in rows
+            if row.get(value_field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(value_field))
+        ]
+
+    grouped = {}
+    for field in numeric_fields:
+        grouped[field] = [
+            {
+                "date": row.get(label_field),
+                "value": float(row.get(field)),
+            }
+            for row in rows
+            if row.get(field) not in (None, "", "nan", "NaN")
+            and _is_numeric(row.get(field))
+        ]
+
+    return grouped
+
+
+def _safe_geoglows_payload(path, params=None, timeout=20):
+    try:
+        response = requests.get(
+            f"{GEOGLOWS_BASE}{path}",
+            params=params,
+            timeout=timeout,
+            headers={"Accept": "application/json,text/csv;q=0.9,*/*;q=0.8"},
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        detail = getattr(getattr(exc, "response", None), "text", "") or str(exc)
+        detail = str(detail).strip().replace("\n", " ")[:280]
+        logger.warning("GeoGLOWS request error for %s: %s", path, detail)
+        return None, detail
+
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    text = response.text or ""
+    trimmed = text.lstrip()
+
+    if "json" in content_type or trimmed.startswith("{") or trimmed.startswith("["):
+        try:
+            return response.json(), None
+        except ValueError as exc:
+            logger.warning("GeoGLOWS JSON parse error for %s: %s", path, exc)
+
+    parsed_csv = _parse_geoglows_csv(text)
+    if parsed_csv is not None:
+        return parsed_csv, None
+
+    detail = trimmed[:280] or "GeoGLOWS returned an empty response"
+    logger.warning("GeoGLOWS unsupported payload for %s: %s", path, detail)
+    return None, detail
+
+
+def _coerce_geoglows_dates(payload):
+    def _normalize_date(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, dict):
+            for nested_value in value.values():
+                normalized = _normalize_date(nested_value)
+                if normalized:
+                    return normalized
+            return None
+
+        text = str(value).strip()
+        digits = "".join(ch for ch in text if ch.isdigit())
+        if len(digits) >= 8:
+            return digits[:8]
+        return None
+
+    if isinstance(payload, dict):
+        for key in ("available_dates", "dates", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                normalized = [_normalize_date(item) for item in value]
+                return [item for item in normalized if item]
+            normalized_single = _normalize_date(value)
+            if normalized_single:
+                return [normalized_single]
+    if isinstance(payload, list):
+        normalized = [_normalize_date(item) for item in payload]
+        return [item for item in normalized if item]
+    return []
+
+
+def _get_recent_geoglows_dates(limit=5):
+    today = timezone.now().date()
+    min_allowed = today - timedelta(days=14)
+    payload, _ = _safe_geoglows_payload("/v2/dates", timeout=15)
+    dates = _coerce_geoglows_dates(payload)
+    if dates:
+        deduped = list(dict.fromkeys(dates))
+        filtered = []
+        for item in deduped:
+            try:
+                parsed = datetime.strptime(item, "%Y%m%d").date()
+            except ValueError:
+                continue
+            if parsed >= min_allowed:
+                filtered.append(item)
+        if filtered:
+            return filtered[-limit:]
+
+    fallback = []
+    for offset in range(1, limit + 1):
+        fallback.append((today - timedelta(days=offset)).strftime("%Y%m%d"))
+    return list(reversed(fallback))
+
+
+def _get_preferred_geoglows_forecast_dates(limit=6):
+    """
+    Prefer very recent forecast runs first, matching the desired behavior:
+    today or yesterday, then only a few earlier days if GeoGLOWS has not
+    published/served the latest run yet.
+    """
+    today = timezone.now().date()
+    preferred = []
+    for offset in range(0, limit):
+        preferred.append((today - timedelta(days=offset)).strftime("%Y%m%d"))
+    return preferred
+
+
+def _fetch_geoglows_with_date_fallback(path, request_params=None, timeout=25):
+    params = dict(request_params or {})
+    explicit_date = params.get("date")
+    if explicit_date:
+        payload, error_detail = _safe_geoglows_payload(path, params=params, timeout=timeout)
+        if payload is not None:
+            return payload, explicit_date, None
+        return None, explicit_date, error_detail
+
+    error_detail = None
+    for forecast_date in _get_preferred_geoglows_forecast_dates(limit=6):
+        retry_params = dict(params)
+        retry_params["date"] = forecast_date
+        payload, retry_error = _safe_geoglows_payload(
+            path,
+            params=retry_params,
+            timeout=timeout,
+        )
+        if payload is not None:
+            return payload, forecast_date, None
+        error_detail = retry_error or error_detail
+
+    # Secondary fallback: try any recent dates advertised by GeoGLOWS,
+    # but keep them constrained to the recent window instead of drifting
+    # to older runs.
+    for forecast_date in reversed(_get_recent_geoglows_dates(limit=6)):
+        retry_params = dict(params)
+        retry_params["date"] = forecast_date
+        payload, retry_error = _safe_geoglows_payload(
+            path,
+            params=retry_params,
+            timeout=timeout,
+        )
+        if payload is not None:
+            return payload, forecast_date, None
+        error_detail = retry_error or error_detail
+
+    return (
+        None,
+        None,
+        error_detail
+        or "No recent GeoGLOWS forecast was available within the last 14 days.",
+    )
+
+
+def _is_numeric(value):
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _extract_geoglows_river_id(payload):
+    if isinstance(payload, (int, float)):
+        return int(payload)
+
+    if isinstance(payload, dict):
+        for key in ("river_id", "reach_id", "comid", "id"):
+            value = payload.get(key)
+            if value not in (None, ""):
+                try:
+                    return int(float(value))
+                except (TypeError, ValueError):
+                    continue
+
+        if len(payload) == 1:
+            only_value = next(iter(payload.values()))
+            return _extract_geoglows_river_id(only_value)
+
+    if isinstance(payload, list) and payload:
+        return _extract_geoglows_river_id(payload[0])
+
     return None
 
 
@@ -1749,6 +2004,399 @@ class GdacsEventsGeojsonApi(View):
             "features": [],
         }
         return JsonResponse(response_data)
+
+
+def _safe_json_dumps(value):
+    try:
+        return json.dumps(value or [])
+    except Exception:
+        return "[]"
+
+
+def _normalize_eonet_feature(feature):
+    props = feature.get("properties", {}) or {}
+    categories = props.get("categories") or []
+    sources = props.get("sources") or []
+
+    category_titles = ", ".join(
+        [c.get("title", "") for c in categories if isinstance(c, dict) and c.get("title")]
+    )
+    category_ids = ", ".join(
+        [c.get("id", "") for c in categories if isinstance(c, dict) and c.get("id")]
+    )
+    source_titles = ", ".join(
+        [s.get("id", "") for s in sources if isinstance(s, dict) and s.get("id")]
+    )
+    source_urls = ", ".join(
+        [
+            s.get("url", "")
+            for s in sources
+            if isinstance(s, dict) and s.get("url")
+        ]
+    )
+
+    normalized_props = {
+        **props,
+        "event_id": feature.get("id") or props.get("id"),
+        "title": props.get("title") or "NASA EONET Event",
+        "event_link": props.get("link"),
+        "event_status": "Closed" if props.get("closed") else "Open",
+        "category_titles": category_titles,
+        "category_ids": category_ids,
+        "source_titles": source_titles,
+        "source_urls": source_urls,
+        "categories_json": _safe_json_dumps(categories),
+        "sources_json": _safe_json_dumps(sources),
+        "magnitude_label": " ".join(
+            [
+                str(props.get("magnitudeValue", "")).strip(),
+                str(props.get("magnitudeUnit", "")).strip(),
+            ]
+        ).strip(),
+        "magnitude_description": props.get("magnitudeDescription"),
+    }
+
+    return {
+        "type": "Feature",
+        "id": feature.get("id"),
+        "geometry": feature.get("geometry"),
+        "properties": normalized_props,
+    }
+
+
+class NasaEonetEventsGeojsonApi(View):
+    """
+    NASA EONET v3 GeoJSON proxy.
+
+    GET /get-nasa-eonet-events/<category_slug>/
+    category_slug: all | severeStorms | wildfires | volcanoes | earthquakes | seaLakeIce
+
+    Supported passthrough query params from EONET v3:
+      - source
+      - status
+      - limit
+      - days
+      - start
+      - end
+      - magID
+      - magMin
+      - magMax
+      - bbox
+    """
+
+    def get(self, request, category_slug="all"):
+        params = {
+            "status": request.GET.get("status", "open"),
+            "days": request.GET.get("days", "60"),
+            "limit": request.GET.get("limit", "200"),
+        }
+
+        passthrough_keys = [
+            "source",
+            "start",
+            "end",
+            "magID",
+            "magMin",
+            "magMax",
+            "bbox",
+        ]
+        for key in passthrough_keys:
+            value = request.GET.get(key)
+            if value not in (None, ""):
+                params[key] = value
+
+        if category_slug and category_slug != "all":
+            params["category"] = category_slug
+
+        response_data = _safe_get_json(f"{EONET_BASE}/events/geojson", params) or {
+            "type": "FeatureCollection",
+            "features": [],
+        }
+
+        features = response_data.get("features", []) or []
+        normalized = [_normalize_eonet_feature(feature) for feature in features]
+
+        return JsonResponse(
+            {
+                "type": "FeatureCollection",
+                "features": normalized,
+            }
+        )
+
+
+def _usgs_default_starttime(days=2):
+    return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _normalize_usgs_feature(feature):
+    props = feature.get("properties", {}) or {}
+    geometry = feature.get("geometry", {}) or {}
+    coordinates = geometry.get("coordinates", []) or []
+    depth = coordinates[2] if len(coordinates) > 2 else None
+
+    normalized_props = {
+        **props,
+        "event_id": feature.get("id"),
+        "depth_km": depth,
+        "magnitude": props.get("mag"),
+        "event_time_iso": datetime.utcfromtimestamp((props.get("time") or 0) / 1000).strftime("%Y-%m-%d %H:%M UTC") if props.get("time") else None,
+        "updated_time_iso": datetime.utcfromtimestamp((props.get("updated") or 0) / 1000).strftime("%Y-%m-%d %H:%M UTC") if props.get("updated") else None,
+        "usgs_detail_url": props.get("detail"),
+        "usgs_event_url": props.get("url"),
+        "felt_reports": props.get("felt"),
+        "mmi_value": props.get("mmi"),
+        "cdi_value": props.get("cdi"),
+        "significance": props.get("sig"),
+    }
+
+    return {
+        "type": "Feature",
+        "id": feature.get("id"),
+        "geometry": geometry,
+        "properties": normalized_props,
+    }
+
+
+class UsgsEarthquakeAlertsGeojsonApi(View):
+    """
+    USGS realtime earthquake feed proxy with optimized defaults.
+    Defaults to the last 2 days of events ordered by time.
+    """
+
+    def get(self, request):
+        params = {
+            "format": "geojson",
+            "orderby": request.GET.get("orderby", "time"),
+            "starttime": request.GET.get("starttime", _usgs_default_starttime(2)),
+            "endtime": request.GET.get("endtime", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")),
+            "limit": request.GET.get("limit", "400"),
+        }
+
+        passthrough_keys = [
+            "minmagnitude",
+            "maxmagnitude",
+            "minlatitude",
+            "maxlatitude",
+            "minlongitude",
+            "maxlongitude",
+            "latitude",
+            "longitude",
+            "maxradius",
+            "maxradiuskm",
+            "updatedafter",
+        ]
+        for key in passthrough_keys:
+            value = request.GET.get(key)
+            if value not in (None, ""):
+                params[key] = value
+
+        response_data = _safe_get_json(f"{USGS_BASE}/query", params) or {
+            "type": "FeatureCollection",
+            "metadata": {},
+            "features": [],
+        }
+
+        features = response_data.get("features", []) or []
+        normalized = [_normalize_usgs_feature(feature) for feature in features]
+
+        return JsonResponse(
+            {
+                "type": "FeatureCollection",
+                "metadata": response_data.get("metadata", {}),
+                "features": normalized,
+            }
+        )
+
+
+class UsgsEarthquakeDetailApi(View):
+    def get(self, request, event_id):
+        response_data = _safe_get_json(
+            f"{USGS_BASE}/query",
+            {"format": "geojson", "eventid": event_id},
+        ) or {}
+        return JsonResponse(response_data)
+
+
+class UsgsShakemapContentProxyApi(View):
+    def get(self, request):
+        url = request.GET.get("url", "")
+        if not url.startswith("https://earthquake.usgs.gov/"):
+            return JsonResponse({"detail": "Invalid ShakeMap URL"}, status=400)
+
+        try:
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            payload = response.json()
+            return JsonResponse(payload, safe=isinstance(payload, dict))
+        except Exception as exc:
+            return JsonResponse({"detail": f"Failed to load ShakeMap content: {exc}"}, status=502)
+
+
+class GeoGlowsRiverIdApi(View):
+    def get(self, request):
+        lat = request.GET.get("lat")
+        lon = request.GET.get("lon")
+
+        if lat in (None, "") or lon in (None, ""):
+            return JsonResponse({"detail": "lat and lon are required"}, status=400)
+
+        try:
+            lat_value = float(lat)
+            lon_value = float(lon)
+        except (TypeError, ValueError):
+            return JsonResponse({"detail": "lat and lon must be numeric"}, status=400)
+
+        payload = _safe_geoglows_json(
+            "/v2/getriverid",
+            {"lat": lat_value, "lon": lon_value},
+        )
+        if payload is None:
+            return JsonResponse({"detail": "Failed to load GeoGLOWS river ID"}, status=502)
+
+        river_id = _extract_geoglows_river_id(payload)
+        if river_id is None:
+            return JsonResponse(
+                {"detail": "GeoGLOWS did not return a valid river ID", "raw": payload},
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "selected_point": {"lat": lat_value, "lon": lon_value},
+                "raw": payload,
+            }
+        )
+
+
+class GeoGlowsForecastApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        date = request.GET.get("date")
+        if date:
+            params["date"] = date
+
+        payload, resolved_date, error_detail = _fetch_geoglows_with_date_fallback(
+            f"/v2/forecast/{river_id}",
+            request_params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS forecast",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "kind": "forecast",
+                "date": resolved_date or params.get("date"),
+                "raw": payload,
+            },
+            safe=True,
+        )
+
+
+class GeoGlowsForecastStatsApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        date = request.GET.get("date")
+        if date:
+            params["date"] = date
+
+        payload, resolved_date, error_detail = _fetch_geoglows_with_date_fallback(
+            f"/v2/forecaststats/{river_id}",
+            request_params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS forecast statistics",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+
+        return JsonResponse(
+            {
+                "river_id": river_id,
+                "kind": "forecaststats",
+                "date": resolved_date or params.get("date"),
+                "raw": payload,
+            },
+            safe=True,
+        )
+
+
+class GeoGlowsDailyAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/dailyaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS daily averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "dailyaverages", "raw": payload},
+            safe=True,
+        )
+
+
+class GeoGlowsMonthlyAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/monthlyaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS monthly averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "monthlyaverages", "raw": payload},
+            safe=True,
+        )
+
+
+class GeoGlowsAnnualAveragesApi(View):
+    def get(self, request, river_id):
+        params = {"format": request.GET.get("format", "json")}
+        payload, error_detail = _safe_geoglows_payload(
+            f"/v2/annualaverages/{river_id}",
+            params=params,
+            timeout=25,
+        )
+        if payload is None:
+            return JsonResponse(
+                {
+                    "detail": "Failed to load GeoGLOWS annual averages",
+                    "upstream_detail": error_detail,
+                },
+                status=502,
+            )
+        return JsonResponse(
+            {"river_id": river_id, "kind": "annualaverages", "raw": payload},
+            safe=True,
+        )
 
 
 # ---- NEW: per-event details + optional impact polygons/media ----
@@ -5735,6 +6383,293 @@ class GdeltNewsEventsApi(View):
                 self.thread_pool.shutdown(wait=False)
         except:
             pass
+
+
+class _WopRateLimiter:
+    def __init__(self, rate_per_sec=8):
+        self.interval = 1.0 / rate_per_sec
+        self.lock = threading.Lock()
+        self.last = 0.0
+
+    def wait(self):
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.last
+            if elapsed < self.interval:
+                time.sleep(self.interval - elapsed)
+            self.last = time.time()
+
+
+_wop_limiter = _WopRateLimiter(rate_per_sec=8)
+
+
+class WindOceanParticleDataApi(LoginRequiredMixin, View):
+    """
+    GET /api/wind-ocean-particles/?sw_lat=&sw_lng=&ne_lat=&ne_lng=
+    Returns:
+    {
+      "bbox": {...},
+      "meta": {...},
+      "wind": [{lat,lon,u,v,spd}, ...],
+      "ocean": [{lat,lon,u,v,spd}, ...]
+    }
+    """
+
+    WIND_URL = "https://api.open-meteo.com/v1/forecast"
+    MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
+
+    GRID_ROWS = 6
+    GRID_COLS = 10
+    CACHE_TTL = 3600
+    REQ_TIMEOUT = 10
+    MAX_WORKERS = 16
+
+    @staticmethod
+    def _normalize_bbox(sw_lat, sw_lng, ne_lat, ne_lng):
+        sw_lat = max(float(sw_lat), -85.0)
+        ne_lat = min(float(ne_lat), 85.0)
+        sw_lng = float(sw_lng)
+        ne_lng = float(ne_lng)
+
+        if sw_lat > ne_lat:
+            sw_lat, ne_lat = ne_lat, sw_lat
+
+        def norm_lon(lon):
+            while lon < -180:
+                lon += 360
+            while lon > 180:
+                lon -= 360
+            return lon
+
+        sw_lng = norm_lon(sw_lng)
+        ne_lng = norm_lon(ne_lng)
+
+        return sw_lat, sw_lng, ne_lat, ne_lng
+
+    @staticmethod
+    def _bbox_span(sw_lat, sw_lng, ne_lat, ne_lng):
+        lat_span = max(0.1, abs(ne_lat - sw_lat))
+        lon_span = abs(ne_lng - sw_lng)
+        if lon_span > 180:
+            lon_span = 360 - lon_span
+        lon_span = max(0.1, lon_span)
+        return lat_span, lon_span
+
+    def _grid_shape(self, sw_lat, sw_lng, ne_lat, ne_lng):
+        lat_span, lon_span = self._bbox_span(sw_lat, sw_lng, ne_lat, ne_lng)
+
+        rows = self.GRID_ROWS
+        cols = self.GRID_COLS
+
+        if lat_span > 20:
+            rows += 1
+        if lat_span > 40:
+            rows += 1
+
+        if lon_span > 25:
+            cols += 2
+        if lon_span > 50:
+            cols += 2
+
+        rows = min(rows, 8)
+        cols = min(cols, 14)
+        return rows, cols
+
+    @staticmethod
+    def _make_grid(sw_lat, sw_lng, ne_lat, ne_lng, rows, cols):
+        if sw_lng <= ne_lng:
+            return [
+                (
+                    round(sw_lat + (ne_lat - sw_lat) * r / max(rows - 1, 1), 3),
+                    round(sw_lng + (ne_lng - sw_lng) * c / max(cols - 1, 1), 3),
+                )
+                for r in range(rows)
+                for c in range(cols)
+            ]
+
+        west_span = 180 - sw_lng
+        east_span = ne_lng + 180
+        total_span = west_span + east_span
+
+        pts = []
+        for r in range(rows):
+            lat = round(sw_lat + (ne_lat - sw_lat) * r / max(rows - 1, 1), 3)
+            for c in range(cols):
+                frac = c / max(cols - 1, 1)
+                offset = frac * total_span
+                if offset <= west_span:
+                    lon = sw_lng + offset
+                else:
+                    lon = -180 + (offset - west_span)
+                pts.append((lat, round(lon, 3)))
+        return pts
+
+    def _fetch_wind(self, lat: float, lon: float) -> Optional[Dict]:
+        _wop_limiter.wait()
+        try:
+            r = requests.get(
+                self.WIND_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "wind_speed_10m,wind_direction_10m",
+                    "wind_speed_unit": "ms",
+                },
+                timeout=self.REQ_TIMEOUT,
+            )
+            r.raise_for_status()
+            d = r.json()
+
+            c = d.get("current", {}) or {}
+            spd = c.get("wind_speed_10m")
+            dirn = c.get("wind_direction_10m")
+
+            if spd is None or dirn is None:
+                h = d.get("hourly", {}) or {}
+                spd_arr = h.get("wind_speed_10m") or []
+                dir_arr = h.get("wind_direction_10m") or []
+                if spd_arr and dir_arr:
+                    spd = spd_arr[0]
+                    dirn = dir_arr[0]
+
+            if spd is None or dirn is None:
+                return None
+
+            spd = float(spd)
+            dirn = float(dirn)
+            rad = math.radians(dirn)
+
+            return {
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "u": round(-math.sin(rad) * spd, 4),
+                "v": round(-math.cos(rad) * spd, 4),
+                "spd": round(spd, 2),
+            }
+        except Exception as e:
+            print(f"[WOP wind] failed at lat={lat}, lon={lon}: {e}")
+            return None
+
+    def _fetch_ocean(self, lat: float, lon: float) -> Optional[Dict]:
+        _wop_limiter.wait()
+        try:
+            r = requests.get(
+                self.MARINE_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": "ocean_current_velocity,ocean_current_direction",
+                    "hourly": "ocean_current_velocity,ocean_current_direction",
+                    "cell_selection": "sea",
+                    "length_unit": "metric",
+                },
+                timeout=self.REQ_TIMEOUT,
+            )
+            r.raise_for_status()
+            d = r.json()
+
+            if d.get("error"):
+                return None
+
+            c = d.get("current", {}) or {}
+            spd = c.get("ocean_current_velocity")
+            dirn = c.get("ocean_current_direction")
+
+            if spd is None or dirn is None:
+                h = d.get("hourly", {}) or {}
+                spd_arr = h.get("ocean_current_velocity") or []
+                dir_arr = h.get("ocean_current_direction") or []
+                if spd_arr and dir_arr:
+                    spd = spd_arr[0]
+                    dirn = dir_arr[0]
+
+            if spd is None or dirn is None:
+                return None
+
+            spd = float(spd)
+            dirn = float(dirn)
+
+            if not math.isfinite(spd) or not math.isfinite(dirn):
+                return None
+
+            rad = math.radians(dirn)
+
+            return {
+                "lat": round(lat, 4),
+                "lon": round(lon, 4),
+                "u": round(math.sin(rad) * spd, 4),
+                "v": round(math.cos(rad) * spd, 4),
+                "spd": round(spd, 4),
+            }
+        except Exception as e:
+            print(f"[WOP ocean] failed at lat={lat}, lon={lon}: {e}")
+            return None
+
+    def get(self, request, *args, **kwargs):
+        try:
+            sw_lat, sw_lng, ne_lat, ne_lng = self._normalize_bbox(
+                request.GET["sw_lat"],
+                request.GET["sw_lng"],
+                request.GET["ne_lat"],
+                request.GET["ne_lng"],
+            )
+        except (KeyError, TypeError, ValueError):
+            return JsonResponse({"error": "Invalid bbox params"}, status=400)
+
+        rows, cols = self._grid_shape(sw_lat, sw_lng, ne_lat, ne_lng)
+
+        ck = (
+            f"wop|{round(sw_lat, 2)}|{round(sw_lng, 2)}|"
+            f"{round(ne_lat, 2)}|{round(ne_lng, 2)}|{rows}|{cols}"
+        )
+
+        cached = cache.get(ck)
+        if cached:
+            return JsonResponse(cached)
+
+        grid = self._make_grid(sw_lat, sw_lng, ne_lat, ne_lng, rows, cols)
+
+        wind_pts: List[Dict] = []
+        ocean_pts: List[Dict] = []
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as ex:
+            wind_futs = [ex.submit(self._fetch_wind, lat, lon) for lat, lon in grid]
+            ocean_futs = [ex.submit(self._fetch_ocean, lat, lon) for lat, lon in grid]
+
+            for fut in as_completed(wind_futs):
+                try:
+                    res = fut.result()
+                    if res is not None:
+                        wind_pts.append(res)
+                except Exception as e:
+                    print(f"[WOP wind future] {e}")
+
+            for fut in as_completed(ocean_futs):
+                try:
+                    res = fut.result()
+                    if res is not None:
+                        ocean_pts.append(res)
+                except Exception as e:
+                    print(f"[WOP ocean future] {e}")
+
+        payload = {
+            "bbox": {"s": sw_lat, "w": sw_lng, "n": ne_lat, "e": ne_lng},
+            "meta": {
+                "rows": rows,
+                "cols": cols,
+                "grid_count": len(grid),
+                "wind_count": len(wind_pts),
+                "ocean_count": len(ocean_pts),
+                "empty": (len(wind_pts) == 0 and len(ocean_pts) == 0),
+            },
+            "wind": wind_pts,
+            "ocean": ocean_pts,
+        }
+
+        if wind_pts or ocean_pts:
+            cache.set(ck, payload, self.CACHE_TTL)
+
+        return JsonResponse(payload)
 
 
 # ==================== UTILITY FUNCTIONS & TESTING ====================

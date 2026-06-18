@@ -55,6 +55,7 @@ import { LayerOrderControl } from "./layer-order-control.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import { LayerInfoPanel } from "./layer-info-panel.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
+import { NCOPTourControl } from "./ncop-tour-control.js";
 
 
 // ---- Mapbox token handling ----
@@ -137,6 +138,7 @@ class DashboardManager {
     new BasemapPanel(this.#map, this.#mapControls);
     new LayerOrderControl(this.#map, this.#sourceLayerControl);
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
+    new NCOPTourControl();
     new SidebarMenu();
     new UtilityManager();
 
@@ -400,12 +402,12 @@ function setupMapControlsExclusivePanels() {
   if (!wrapper) return;
   const panels = Array.from(
     wrapper.querySelectorAll(
-      ".layer-order-panel, .layer-info-panel, .basemap-panel"
+      ".layer-order-panel, .layer-info-panel, .basemap-panel, .ncop-tour-panel"
     )
   );
   const buttons = Array.from(
     wrapper.querySelectorAll(
-      ".custom-layer-btn, .custom-layer-info-btn, .custom-basemap-btn"
+      ".custom-layer-btn, .custom-layer-info-btn, .custom-basemap-btn, .custom-tour-btn"
     )
   );
   buttons.forEach((btn, idx) => {

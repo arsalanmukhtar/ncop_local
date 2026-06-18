@@ -1,5 +1,8 @@
 import { Popup } from "mapbox-gl";
 import {map_icons} from "./map-icons.js"
+import { PMD_RAIN_ICON_ID, PMD_SUN_ICON_ID } from "./pmd-weather-icons.js";
+import { EONET_ICON_IDS } from "./eonet-icons.js";
+import { USGS_ICON_IDS } from "./usgs-earthquake-icons.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -40,6 +43,7 @@ import {
   generateMBX_MeteoblueDailyCAPELayers,
   generateMBX_MeteoblueOfficialWeatherWarningsLayers,
   generateMBX_MeteoblueForecastWarningsDailyLayers,
+  generateMBX_MeteoblueLHASA2LatestLayer,
   generateMeteoblueCAMSAirQualityHourlyLayers,
   generateMeteoblueCAMSAirQualityDailyLayers,
   generateMeteoblueCAMSDesertDustHourlyLayers,
@@ -71,6 +75,89 @@ const legend_images = import.meta.glob("@assets/images/layer_legends/*.webp", { 
 function getLegendImage(filename) {
   const match = Object.entries(legend_images).find(([path]) => path.includes(filename));
   return match ? match[1].default : null;
+}
+
+function createEonetLayers(sourceId, pointColor, polygonColor, iconId) {
+  return [
+    {
+      id: `${sourceId}-fill`,
+      type: "fill",
+      source: sourceId,
+      paint: {
+        "fill-color": polygonColor,
+        "fill-opacity": 0.22,
+      },
+    },
+    {
+      id: `${sourceId}-outline`,
+      type: "line",
+      source: sourceId,
+      paint: {
+        "line-color": polygonColor,
+        "line-width": 2,
+        "line-opacity": 0.9,
+      },
+    },
+    {
+      id: `${sourceId}-point`,
+      type: "symbol",
+      source: sourceId,
+      filter: ["==", "$type", "Point"],
+      layout: {
+        "icon-image": iconId,
+        "icon-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          4,
+          0.45,
+          7,
+          0.58,
+          10,
+          0.72,
+        ],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+    },
+  ];
+}
+
+function createUsgsEarthquakeLayers(sourceId) {
+  return [
+    {
+      id: `${sourceId}-symbol`,
+      type: "symbol",
+      source: sourceId,
+      layout: {
+        "icon-image": [
+          "case",
+          [">=", ["to-number", ["coalesce", ["get", "mag"], 0]], 7],
+          USGS_ICON_IDS.major,
+          [">=", ["to-number", ["coalesce", ["get", "mag"], 0]], 5],
+          USGS_ICON_IDS.strong,
+          [">=", ["to-number", ["coalesce", ["get", "mag"], 0]], 3],
+          USGS_ICON_IDS.moderate,
+          USGS_ICON_IDS.low,
+        ],
+        "icon-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          3,
+          0.9,
+          5,
+          1.2,
+          7,
+          1.6,
+          10,
+          2,
+        ],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+    },
+  ];
 }
 console.log(window.baseUrl);
 fetch(`${window.baseUrl}/stories/?full=1`).then((r) => r.status);
@@ -339,6 +426,7 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
+const mbx_lhasa2_latest     = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
 const cams_aqi_hourly_layers = generateMeteoblueCAMSAirQualityHourlyLayers(metbluT);
 const cams_aqi_daily_layers = generateMeteoblueCAMSAirQualityDailyLayers(metbluT);
 const cams_desert_dust_hourly_layers = generateMeteoblueCAMSDesertDustHourlyLayers(metbluT);
@@ -395,6 +483,7 @@ window.weekly_snowfall_forecast = mbx_snow_daily;
 window.cape_weekly_forecast = mbx_cape_daily;
 window.official_weather_warnings_forecast = mbx_warn_official;
 window.meteorological_risks_forecast = mbx_warn_forecast;
+window.lhasa2_latest = mbx_lhasa2_latest;
 window.cams_air_quality_index_hourly = cams_aqi_hourly_layers;
 window.cams_air_quality_index_daily = cams_aqi_daily_layers;
 window.cams_desert_dust_hourly = cams_desert_dust_hourly_layers;
@@ -835,6 +924,7 @@ export const ncop_menu_items = {
           image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
           type: "raster",
           theme: "slider",
+          title: "Relative Humidity (g/kg)",
           geometry: null,
           information:"The Relative Humidity (2m Above Ground) layer displays the relative humidity levels at 2 meters above ground level. This layer is essential for understanding moisture content in the atmosphere and its impact on weather patterns.",
         },
@@ -843,6 +933,7 @@ export const ncop_menu_items = {
           image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
           type: "raster",
           theme: "slider",
+          title: "Accumulated Precipitation (mm)",
           geometry: null,
           information:"The Accumulated Precipitation layer displays the total precipitation accumulated over a specified period. This layer is essential for understanding rainfall patterns and their impact on the environment.",
         },
@@ -1003,24 +1094,9 @@ export const ncop_menu_items = {
           image: getImage("meteoblue_nems_temperature.webp"),
           type: "raster",
           theme: "slider",
+          title: "Daily Max Temperature (°C)",
           geometry: null,
-          information:"The Temperature (2m Above Ground) layer displays the temperature levels at 2 meters above ground level. This layer is essential for understanding atmospheric conditions and their impact on weather patterns.",
-        },
-        official_weather_warnings_forecast: {
-          label: "Official Weather Warnings (Forecast)",
-          image: getImage("nems_forecast_offical_warnings.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          information:"The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
-        },
-        meteorological_risks_forecast: {
-          label: "Meteorological Risks (Forecast)",
-          image: getImage("nems_forecast_met_warnings.webp"),
-          type: "raster",
-          theme: "slider",
-          geometry: null,
-          information:"The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+          information:"The Temperature (2m Above Ground) layer displays the forecast daily maximum temperature at 2 meters above ground level. This layer is useful for tracking expected daytime heat patterns and temperature extremes.",
         },
       },
     },
@@ -1037,24 +1113,54 @@ export const ncop_menu_items = {
           },
           layers: [
             {
-              id: "pmd_weather_stations-symbol",
+              id: "pmd_weather_stations-sun-symbol",
               type: "symbol",
               source: "pmd_weather_stations-source",
               layout: {
-                "icon-image": map_icons.weatherStationIcon, // Use custom icon name
-                // Interpolate icon-size based on zoom for smooth scaling
+                "icon-image": PMD_SUN_ICON_ID,
                 "icon-size": [
                   "interpolate",
                   ["linear"],
                   ["zoom"],
                   5,
-                  0.25,
-                  10,
                   0.5,
+                  7,
+                  0.6,
+                  10,
+                  0.76,
                   15,
                   1,
                 ],
                 "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+              },
+            },
+            {
+              id: "pmd_weather_stations-rain-symbol",
+              type: "symbol",
+              source: "pmd_weather_stations-source",
+              filter: [
+                ">",
+                ["to-number", ["coalesce", ["get", "rainfall"], 0]],
+                0,
+              ],
+              layout: {
+                "icon-image": PMD_RAIN_ICON_ID,
+                "icon-size": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  5,
+                  0.5,
+                  7,
+                  0.6,
+                  10,
+                  0.76,
+                  15,
+                  1,
+                ],
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
               },
             },
           ],
@@ -2363,44 +2469,152 @@ export const ncop_menu_items = {
           },
         },
 
-        // âœ… EXISTING: Regional Alerts (kept as toggle items)
-        "Regional Alerts": {
-          toggle: {
-            rajanpur_and_dg_khan: {
-              label: "Rajanpur and DG Khan",
+        "NASA EONET Events": {
+          static: {
+            eonet_all_events: {
+              label: "NASA EONET Events",
+              image: getImage("eonetevents.webp"),
               type: "geojson",
               theme: null,
-              geometry: null,
+              source: {
+                id: "eonet_all_events",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/all/`,
+              },
+              layers: createEonetLayers("eonet_all_events", "#0ea5e9", "#38bdf8", EONET_ICON_IDS.all),
+              popup: true,
+              information:
+                "Displays NASA EONET natural events from the official EONET v3 feed, including open event geometries and event metadata.",
             },
-            balochistan_drought: {
-              label: "Balochistan Drought Alert",
+            eonet_severe_storms: {
+              label: "NASA EONET Severe Storms",
+              image: getImage("eonet_severeStorms.webp"),
               type: "geojson",
               theme: null,
-              geometry: null,
+              source: {
+                id: "eonet_severe_storms",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/severeStorms/`,
+              },
+              layers: createEonetLayers("eonet_severe_storms", "#2563eb", "#60a5fa", EONET_ICON_IDS.severeStorms),
+              popup: true,
+              information:
+                "Displays open NASA EONET severe storm events with associated event geometry and sources.",
             },
-            sindh_heatwave: {
-              label: "Sindh Heatwave Alert",
+            eonet_wildfires: {
+              label: "NASA EONET Wildfires",
+              image: getImage("eonet_wildfires.webp"),
               type: "geojson",
               theme: null,
-              geometry: null,
+              source: {
+                id: "eonet_wildfires",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/wildfires/`,
+              },
+              layers: createEonetLayers("eonet_wildfires", "#dc2626", "#f97316", EONET_ICON_IDS.wildfires),
+              popup: true,
+              information:
+                "Displays open NASA EONET wildfire events with geometry, categories, and source metadata.",
+            },
+            eonet_volcanoes: {
+              label: "NASA EONET Volcanoes",
+              image: getImage("eonet_volcano.webp"),
+              type: "geojson",
+              theme: null,
+              source: {
+                id: "eonet_volcanoes",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/volcanoes/`,
+              },
+              layers: createEonetLayers("eonet_volcanoes", "#7c3aed", "#a855f7", EONET_ICON_IDS.volcanoes),
+              popup: true,
+              information:
+                "Displays open NASA EONET volcano events with event geometry and descriptive metadata.",
+            },
+            eonet_earthquakes: {
+              label: "NASA EONET Earthquakes",
+              image: getImage("eonet_earthquakes.webp"),
+              type: "geojson",
+              theme: null,
+              source: {
+                id: "eonet_earthquakes",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/earthquakes/`,
+              },
+              layers: createEonetLayers("eonet_earthquakes", "#ca8a04", "#facc15", EONET_ICON_IDS.earthquakes),
+              popup: true,
+              information:
+                "Displays open NASA EONET earthquake events with event geometry and source references.",
+            },
+            eonet_sea_lake_ice: {
+              label: "NASA EONET Sea Lake Ice",
+              image: getImage("eonet_seaLakeIce.webp"),
+              type: "geojson",
+              theme: null,
+              source: {
+                id: "eonet_sea_lake_ice",
+                type: "geojson",
+                data: `${baseUrl}/get-nasa-eonet-events/seaLakeIce/`,
+              },
+              layers: createEonetLayers("eonet_sea_lake_ice", "#0891b2", "#22d3ee", EONET_ICON_IDS.seaLakeIce),
+              popup: true,
+              information:
+                "Displays open NASA EONET sea and lake ice events with geometry and source references.",
             },
           },
         },
 
-        // âœ… EXISTING: Infrastructure Alerts (kept as toggle items)
-        "Infrastructure Alerts": {
-          toggle: {
-            dam_structural_alert: {
-              label: "Dam Structural Alert",
+        "USGS Earthquake Alerts": {
+          static: {
+            usgs_realtime_eq_events: {
+              label: "USGS Realtime Earthquakes",
+              image: getImage("usgs_realtime_earthquake_events.webp"),
               type: "geojson",
               theme: null,
-              geometry: null,
+              source: {
+                id: "usgs_realtime_eq_events",
+                type: "geojson",
+                data: `${baseUrl}/get-usgs-earthquake-alerts/`,
+              },
+              layers: createUsgsEarthquakeLayers("usgs_realtime_eq_events"),
+              popup: true,
+              information:
+                "Displays realtime USGS earthquake events from the last 2 days with pulsing markers sized by magnitude and popup-driven ShakeMap access.",
             },
-            bridge_safety_alert: {
-              label: "Bridge Safety Alert",
-              type: "geojson",
-              theme: null,
+          },
+        },
+
+        "Meteoblue early warnings": {
+          temporal: {
+            official_weather_warnings_forecast: {
+              label: "Official Weather Warnings (Forecast)",
+              image: getImage("nems_forecast_offical_warnings.webp"),
+              type: "raster",
+              theme: "slider",
               geometry: null,
+              information:
+                "The Official Weather Warnings (Forecast) layer displays the official weather warnings issued by meteorological authorities. This layer is essential for staying informed about severe weather threats and taking appropriate precautions.",
+            },
+            meteorological_risks_forecast: {
+              label: "Meteorological Risks (Forecast)",
+              image: getImage("nems_forecast_met_warnings.webp"),
+              type: "raster",
+              theme: "slider",
+              geometry: null,
+              information:
+                "The Meteorological Risks (Forecast) layer displays the meteorological risks associated with various weather phenomena. This layer is essential for understanding potential weather hazards and preparing for adverse conditions.",
+            },
+          },
+          static: {
+            lhasa2_latest: {
+              label: "LHASA2 Landslide Probability (Latest)",
+              image: getImage("nems_forecast_met_warnings.webp"),
+              type: "raster",
+              theme: null,
+              source: mbx_lhasa2_latest.source,
+              layers: mbx_lhasa2_latest.layers,
+              information:
+                "The LHASA2 Landslide Probability (Latest) layer displays the latest Meteoblue landslide probability daily product as a dynamically updating static layer using the most recent daily time returned by Meteoblue.",
             },
           },
         },
