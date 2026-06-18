@@ -10,34 +10,50 @@ import lightLogo from "@assets/images/basemap_images/light.webp";
 import darkLogo from "@assets/images/basemap_images/dark.webp";
 
 /**
+ * Module-level basemap registry. Exported so `dashboard.js` can resolve the
+ * persisted basemap id to a URL at map-construction time — which avoids the
+ * expensive setStyle rebuild that happens when we boot on one style and then
+ * switch to another.
+ */
+export const BASEMAP_STYLES = [
+    { id: "streets-v12", name: "Streets", image: streetsLogo },
+    { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
+    { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
+    { id: "carto/positron", name: "CARTO Positron", image: lightLogo, url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
+    { id: "carto/voyager", name: "CARTO Voyager", image: streetsLogo, url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
+    { id: "carto/dark-matter", name: "CARTO Dark Matter", image: darkLogo, url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
+    { id: "openfreemap/liberty", name: "OpenFreeMap Liberty", image: streetsLogo, url: "https://tiles.openfreemap.org/styles/liberty" },
+    { id: "openfreemap/bright", name: "OpenFreeMap Bright", image: osmLogo, url: "https://tiles.openfreemap.org/styles/bright" },
+    { id: "openfreemap/positron", name: "OpenFreeMap Positron", image: lightLogo, url: "https://tiles.openfreemap.org/styles/positron" },
+    { id: "stadia/alidade_smooth", name: "Alidade Smooth", image: lightLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth.json" },
+    { id: "stadia/alidade_smooth_dark", name: "Alidade Smooth Dark", image: darkLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json" },
+    { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
+    { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
+    { id: "navigation-day-v1", name: "Day", image: lightLogo },
+    { id: "navigation-night-v1", name: "Night", image: darkLogo },
+];
+
+/**
+ * Resolve a persisted basemap id (e.g. "navigation-day-v1", "carto/positron")
+ * to a style URL usable by `mapboxgl.Map({ style })` or `map.setStyle(...)`.
+ * Unknown / missing ids fall back to the Mapbox streets-v12 default.
+ */
+export function resolveBasemapUrl(id) {
+    const found = BASEMAP_STYLES.find((s) => s.id === id);
+    if (found?.url) return found.url;
+    if (found) return `mapbox://styles/mapbox/${found.id}`;
+    return "mapbox://styles/mapbox/streets-v12";
+}
+
+/**
  * Handles the top-right basemap/style and labels control.
- * Note: Basemap selections are not persisted to storage - always defaults to streets-v12 on load.
  */
 export class BasemapPanel {
     #map;
-    #storage = window.ncop_storage;
     #mapControls;
-    #basemapStyles = [
-        { id: "streets-v12", name: "Streets", image: streetsLogo },
-        { id: "stadia/stamen_satellite", name: "Hybrid", image: hybridLogo, url: "https://tiles.stadiamaps.com/styles/alidade_satellite.json" },
-        { id: "stadia/stamen_streets", name: "Open Street Map", image: osmLogo, url: "https://tiles.stadiamaps.com/styles/osm_bright.json" },
-        { id: "carto/positron", name: "CARTO Positron", image: lightLogo, url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
-        { id: "carto/voyager", name: "CARTO Voyager", image: streetsLogo, url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
-        { id: "carto/dark-matter", name: "CARTO Dark Matter", image: darkLogo, url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
-        { id: "openfreemap/liberty", name: "OpenFreeMap Liberty", image: streetsLogo, url: "https://tiles.openfreemap.org/styles/liberty" },
-        { id: "openfreemap/bright", name: "OpenFreeMap Bright", image: osmLogo, url: "https://tiles.openfreemap.org/styles/bright" },
-        { id: "openfreemap/positron", name: "OpenFreeMap Positron", image: lightLogo, url: "https://tiles.openfreemap.org/styles/positron" },
-        { id: "stadia/alidade_smooth", name: "Alidade Smooth", image: lightLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth.json" },
-        { id: "stadia/alidade_smooth_dark", name: "Alidade Smooth Dark", image: darkLogo, url: "https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json" },
-        { id: "outdoors-v12", name: "Outdoors", image: outdoorsLogo },
-        { id: "satellite-v9", name: "Satellite", image: satelliteLogo },
-        { id: "navigation-day-v1", name: "Day", image: lightLogo },
-        { id: "navigation-night-v1", name: "Night", image: darkLogo },
-        // { id: "light-v11", name: "Light", image: "/static/images/basemap_images/day.webp" },
-        // { id: "dark-v11", name: "Dark", image: "/static/images/basemap_images/night.webp" },
-    ];
-    #currentStyle;
-    #labelsEnabled;
+    #basemapStyles = BASEMAP_STYLES;
+    #currentStyle = "streets-v12";
+    #labelsEnabled = true;
 
     /**
      * @param {mapboxgl.Map} mapInstance
@@ -45,9 +61,6 @@ export class BasemapPanel {
      */    constructor(mapInstance, mapControlsInstance) {
         this.#map = mapInstance;
         this.#mapControls = mapControlsInstance;
-        // Always default to streets-v12, no storage for basemap
-        this.#currentStyle = "streets-v12";
-        this.#labelsEnabled = this.#storage ? this.#storage.getLabelsState() : true;
         this.render();
         this.addEventListeners();
     }
@@ -128,10 +141,6 @@ export class BasemapPanel {
         const labelsToggle = document.getElementById("labelsToggle");
         labelsToggle.classList.toggle("active", this.#labelsEnabled);
 
-        if (this.#storage) {
-            this.#storage.saveLabelsState(this.#labelsEnabled);
-        }
-
         this.#mapControls.toggleMapLabels(this.#labelsEnabled);
     }    #handleBasemapSelection(event) {
         const basemapItem = event.target.closest(".basemap-item");        if (basemapItem) {
@@ -156,8 +165,6 @@ export class BasemapPanel {
                 try {
                     this.#map.setStyle('mapbox://styles/mapbox/streets-v12');
                     this.#currentStyle = 'streets-v12';
-                    
-                    // Note: Basemap fallback is not saved to storage
                 } catch (fallbackError) {
                     console.error('Critical error: Cannot load fallback basemap', fallbackError);
                 }
@@ -212,12 +219,10 @@ export class BasemapPanel {
                 
                 // Set the style
                 this.#map.setStyle(styleUrl);
-                
+
                 // Update current style immediately (optimistic)
                 this.#currentStyle = newStyle;
 
-                // Note: Basemap selection is not saved to storage
-                
             } catch (error) {
                 fallbackToStreets(`Synchronous error setting basemap style: ${newStyle}`);
             }
@@ -257,5 +262,164 @@ export class BasemapPanel {
             });
         });
         observer.observe(userPanel, { attributes: true });
+    }
+}
+
+// ===========================================================================
+// Projection panel (previously: projection-panel.js)
+// ===========================================================================
+
+/**
+ * Handles the logic for the map projection selection panel.
+ */
+export class ProjectionPanel {
+    #map;
+    #mapControls;
+    #panel;
+
+    /**
+     * @param {mapboxgl.Map} mapInstance
+     * @param {MapControls} mapControlsInstance
+     */
+    constructor(mapInstance, mapControlsInstance) {
+        this.#map = mapInstance;
+        this.#mapControls = mapControlsInstance;
+        this.render();
+        this.addEventListeners();
+    }
+
+    /**
+     * Renders the projection panel HTML.
+     */
+    render() {
+        const mapContainer = document.getElementById("map");
+        const savedProjection = "mercator";
+
+        const projections = [
+            {
+                key: "mercator",
+                name: "Mercator",
+                desc: "Standard web map projection",
+                emoji: "🌍",
+            },
+            { key: "globe", name: "Globe", desc: "3D globe view", emoji: "🌐" },
+            {
+                key: "albers",
+                name: "Albers",
+                desc: "Equal-area conic projection",
+                emoji: "🗺️",
+            },
+            {
+                key: "equalEarth",
+                name: "Equal Earth",
+                desc: "Equal-area pseudocylindrical",
+                emoji: "🌎",
+            },
+            {
+                key: "naturalEarth",
+                name: "Natural Earth",
+                desc: "Compromise pseudocylindrical",
+                emoji: "🌏",
+            },
+            {
+                key: "winkelTripel",
+                name: "Winkel Tripel",
+                desc: "Modified azimuthal projection",
+                emoji: "🗺️",
+            },
+        ];
+
+        this.#panel = document.createElement("div");
+        this.#panel.id = "projectionPanel";
+        this.#panel.className = "projection-panel";
+        this.#panel.innerHTML = `
+            <div class="projection-header">
+                <h3>Map Projections</h3>
+                <button id="projectionClose" class="projection-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="projection-list">
+                ${projections
+                .map(
+                    (p) => `
+                    <div class="projection-item ${p.key === savedProjection ? "active" : ""
+                        }" data-projection="${p.key}">
+                        <div class="projection-preview">${p.emoji}</div>
+                        <div class="projection-info">
+                            <div class="projection-name">${p.name}</div>
+                            <div class="projection-desc">${p.desc}</div>
+                        </div>
+                    </div>
+                `
+                )
+                .join("")}
+            </div>
+        `;
+
+        mapContainer.appendChild(this.#panel);
+        lucide.createIcons();
+    }
+
+    addEventListeners() {
+        document
+            .getElementById("projectionClose")
+            ?.addEventListener("click", () => {
+                this.#panel.classList.remove("visible");
+            });
+
+        this.#panel.querySelectorAll(".projection-item").forEach((item) => {
+            item.addEventListener(
+                "click",
+                this.#handleProjectionSelection.bind(this, item)
+            );
+        });
+
+        document.addEventListener("click", this.#handleOutsideClick.bind(this));
+    }
+
+    #handleProjectionSelection(item) {
+        const projection = item.dataset.projection;
+        this.#mapControls.changeMapProjection(projection);
+
+        this.#panel
+            .querySelectorAll(".projection-item")
+            .forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
+
+        setTimeout(() => {
+            this.#panel.classList.remove("visible");
+        }, 500);
+    }
+
+    updateActiveProjection() {
+        const currentProjection = "mercator";
+
+        this.#panel.querySelectorAll(".projection-item").forEach((item) => {
+            item.classList.remove("active");
+            if (item.dataset.projection === currentProjection) {
+                item.classList.add("active");
+            }
+        });
+    }
+
+    /**
+     * Toggles the visibility of the projection panel.
+     */
+    togglePanel() {
+        if (this.#panel) {
+            if (!this.#panel.classList.contains("visible")) {
+                this.updateActiveProjection();
+            }
+            this.#panel.classList.toggle("visible");
+        }
+    }
+
+    #handleOutsideClick(event) {
+        const projectionSwitchBtn = document.getElementById("projectionSwitch");
+        if (
+            !this.#panel.contains(event.target) &&
+            !projectionSwitchBtn.contains(event.target)
+        ) {
+            this.#panel.classList.remove("visible");
+        }
     }
 }

@@ -12,8 +12,6 @@ import { setAssets } from "../modules/set-assets.js";
 
 // Load supporting modules (DashboardManager lives in ../modules/dashboard.js)
 import "../modules/dashboard.js";
-import "../modules/local-storage-manager.js";
-import "../modules/utility-manager.js";
 
 // ---- Lucide shim (so existing `lucide.createIcons()` keeps working) ----
 window.lucide = {

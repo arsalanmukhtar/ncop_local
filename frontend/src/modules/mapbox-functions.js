@@ -2,11 +2,6 @@
 
 // Import the menu configuration to access item data
 import { ncop_menu_items } from './map-layers.js';
-import {
-  showRainViewerPlayer,
-  hideRainViewerPlayer,
-  initRainViewerPlayer,
-} from "./rainviewer-player.js";
 
 
 
@@ -73,31 +68,55 @@ export function initializeSourceLayerControl(sourceLayerControlInstance) {
 
 
 /**
+ * Toggle a spinner on a sidebar item while its source is loading.
+ * We listen for the first `sourcedata` event that reports the source as
+ * loaded, then remove the loading class. Safety timeout of 20s in case the
+ * event never fires (e.g. source errors out).
+ */
+function showLayerLoading(itemKey, sourceId) {
+    const row = document.querySelector(
+        `.ncop-item[data-item-key="${itemKey}"], input[data-item-key="${itemKey}"]`
+    );
+    const itemEl = row?.closest?.(".ncop-item") || row;
+    if (!itemEl) return;
+    itemEl.classList.add("is-loading");
+
+    const map = window.ncop_map || window.map;
+    if (!map || !sourceId) {
+        setTimeout(() => itemEl.classList.remove("is-loading"), 600);
+        return;
+    }
+
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+        itemEl.classList.remove("is-loading");
+        map.off("sourcedata", onData);
+        clearTimeout(bailout);
+    };
+    const onData = (e) => {
+        if (e.sourceId === sourceId && e.isSourceLoaded) finish();
+    };
+    map.on("sourcedata", onData);
+    // Safety net: never leave the spinner spinning forever.
+    const bailout = setTimeout(finish, 20000);
+}
+
+/**
  * Handle toggle item interactions (checkboxes)
  */
 export function handleToggleInteraction(categoryKey, subcategoryKey, itemKey, isChecked) {
     const stateKey = initializeItemState(categoryKey, subcategoryKey, itemKey);
     const itemData = getItemData(categoryKey, subcategoryKey, itemKey, 'toggle');
-    
-    // Update state
+
     layerStates.set(stateKey, { active: isChecked });
-    
-    // Log the interaction with full item data
-    // console.log('🔄 TOGGLE INTERACTION:', {
-    //     category: categoryKey,
-    //     subcategory: subcategoryKey,
-    //     itemKey: itemKey,
-    //     itemData: itemData,
-    //     active: isChecked,
-    //     stateKey: stateKey
-    // });
-      // Handle layer management using SourceLayerControl
+
     if (sourceLayerControl && itemData && itemData.source && itemData.layers) {
         if (isChecked) {
-            // Add layer to map
+            showLayerLoading(itemKey, itemData.source.id);
             sourceLayerControl.addLayerByKey(itemKey);
         } else {
-            // Remove layer from map
             sourceLayerControl.removeLayerByKey(itemKey);
         }
     }
@@ -200,91 +219,49 @@ export function handleTemporalInteraction(
   isActive,
   layerConfig
 ) {
-  // ✅ Special-case RainViewer temporal items WITHOUT changing sidebar core logic
-  const isRainViewer =
-    itemKey === "realtime_radar" || itemKey === "satellite_infrared";
+  // Unified temporal flow. Each temporal item exposes its layer set on
+  // `window[itemKey]`, which can be one of:
+  //   * Array<entry>            — pre-baked frames (DWD, IMERG, ECMWF, ...)
+  //   * Promise<Array<entry>>   — descriptor-driven, already in-flight
+  //   * () => Array | Promise   — descriptor-driven, lazily resolved on click
+  //                                (e.g. RainViewer radar / satellite-IR)
+  //
+  // Either form goes through the standard #temp-slider1 controller, so its
+  // `currentActiveLayerSet` enforces single-select replacement across every
+  // temporal layer in the app — toggling a new one tears down whichever was
+  // previously active, regardless of which group it came from.
+  if (isActive) {
+    let layerSrc = window[itemKey];
 
-  if (isRainViewer) {
-    const map = window.ncop_map || window.map;
-
-    if (!map) {
-      console.error("❌ RainViewer: map not found on window.ncop_map/window.map");
-      return;
-    }
-
-    // Helper: check if the other RainViewer toggle is still ON
-    const otherKey =
-      itemKey === "realtime_radar" ? "satellite_infrared" : "realtime_radar";
-
-    const otherChecked =
-      document.querySelector(`input[data-item-key="${otherKey}"]`)?.checked ===
-      true;
-
-    // Ensure init once (safe-guarded)
-    const ensureInit = () => {
-      if (!window.__rvPlayerInited) {
-        try {
-          initRainViewerPlayer(map);
-          window.__rvPlayerInited = true;
-        } catch (e) {
-          console.warn("RainViewer init failed:", e);
-        }
-      }
-    };
-
-    if (isActive) {
-      ensureInit();
-
-      // Radar vs Satellite mode based on itemKey
-      const mode = itemKey === "satellite_infrared" ? "satellite" : "radar";
-
-      // Show RainViewer slider + lock mode (two separate toggles behavior)
-      // (If your showRainViewerPlayer supports 2nd arg lockMode, keep it true)
+    if (typeof layerSrc === "function") {
       try {
-        showRainViewerPlayer(mode, true);
-      } catch {
-        // fallback if your function signature is showRainViewerPlayer(mode)
-        showRainViewerPlayer(mode);
-      }
-
-      return; // IMPORTANT: do not run normal temp-slider logic
-    } else {
-      // Turning OFF one toggle:
-      // If the other is still ON, keep RainViewer visible in the other mode.
-      if (otherChecked) {
-        ensureInit();
-        const mode = otherKey === "satellite_infrared" ? "satellite" : "radar";
-        try {
-          showRainViewerPlayer(mode, true);
-        } catch {
-          showRainViewerPlayer(mode);
-        }
+        layerSrc = layerSrc();
+      } catch (err) {
+        console.error(`❌ Layer builder threw for ${itemKey}:`, err);
         return;
       }
-
-      // Otherwise, hide RainViewer slider + remove its layers/sources
-      hideRainViewerPlayer(map);
-      return;
     }
-  }
 
-  // ---------------------------
-  // Existing behavior for other temporal layers (UNCHANGED)
-  // ---------------------------
-  if (isActive) {
-    const layerArray = window[itemKey];
-
-    if (!layerArray) {
+    if (!layerSrc) {
       console.error(`❌ Layer array not found: ${itemKey}`);
       return;
     }
 
     const title = layerConfig?.title || subcategoryKey;
+    const isAsync = typeof layerSrc?.then === "function";
 
-    if (typeof window.updateTempSlider === "function") {
-      window.updateTempSlider(layerArray, title, itemKey, null);
+    if (isAsync) {
+      if (typeof window.updateTempSliderAsync === "function") {
+        window.updateTempSliderAsync(layerSrc, title, itemKey);
+      } else {
+        console.error("❌ updateTempSliderAsync function not found");
+      }
     } else {
-      console.error("❌ updateTempSlider function not found");
+      if (typeof window.updateTempSlider === "function") {
+        window.updateTempSlider(layerSrc, title, itemKey, null);
+      } else {
+        console.error("❌ updateTempSlider function not found");
+      }
     }
   } else {
     const tempSlider = document.getElementById("temp-slider1");

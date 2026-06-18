@@ -6,8 +6,7 @@ import { createIcons, icons } from "lucide";
 import ndmaLogo from "@assets/images/bg_images/ndma-logo.png";
 import { setAssets } from "../modules/set-assets.js";
 
-import "../modules/auth-base.js";
-import "../modules/signup.js";
+import "../modules/auth-forms.js";
 
 // Shim the old global so existing inline code `lucide.createIcons()` still works.
 window.lucide = {
