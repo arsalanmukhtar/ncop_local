@@ -225,6 +225,14 @@ export class LayerStyleConfig {
   // key -> { [mapboxLayerId]: { paint: {prop:value}, layout: {prop:value} } }
   #originalSnapshots = new Map();
 
+  // User-applied overrides per layer key — survive across basemap switches.
+  // Replayed every time SourceLayerControl re-adds a layer (initial toggle,
+  // restore-after-setStyle, etc).  Shape mirrors #originalSnapshots:
+  // key -> { [mapboxLayerId]: { paint: {prop:value}, layout: {prop:value} } }
+  // The mapboxLayerId is stable across re-adds (derived from the config's
+  // own layer ids), so the override re-binds to the right layer cleanly.
+  #userOverrides = new Map();
+
   // Element refs for the currently-rendered controls
   #styleControlsEl;
   #labelsContentEl;
@@ -400,6 +408,12 @@ export class LayerStyleConfig {
     const origRem = slc.removeLayerByKey.bind(slc);
     slc.addLayerByKey = (...args) => {
       const r = origAdd(...args);
+      // Replay any persisted user style overrides for this layer key —
+      // covers initial toggle (no-op when no overrides) and the
+      // restore-after-setStyle path that previously dropped them.
+      try { this.#reapplyOverridesFor(args[0]); } catch (e) {
+        console.warn("[LayerStyle] reapply failed:", e);
+      }
       this.#onActiveLayersChanged();
       return r;
     };
@@ -672,8 +686,72 @@ export class LayerStyleConfig {
       } else {
         this.#map.setPaintProperty(id, def.prop, value);
       }
+      this.#recordOverride(id, def.type === "layout" ? "layout" : "paint", def.prop, value);
     } catch (e) {
       console.warn(`[LayerStyle] Failed to set ${def.prop} on ${id}:`, e);
+    }
+  }
+
+  // Persist the override under the currently-selected layer key so we can
+  // replay it after every basemap switch (or any other action that wipes
+  // the style and forces SourceLayerControl to re-add layers).
+  #recordOverride(mapboxLayerId, propType, prop, value) {
+    if (!this.#currentKey) return;
+    let bucket = this.#userOverrides.get(this.#currentKey);
+    if (!bucket) {
+      bucket = {};
+      this.#userOverrides.set(this.#currentKey, bucket);
+    }
+    const slot = bucket[mapboxLayerId] || (bucket[mapboxLayerId] = { paint: {}, layout: {} });
+    slot[propType][prop] = value;
+  }
+
+  // Replay the saved overrides for a given layer key.  Called from the
+  // `addLayerByKey` wrapper installed in #hookSourceLayerControl so it
+  // fires both on the initial toggle (no-op if no overrides) and on the
+  // style.load restore path (re-applies every customization the user made
+  // before the basemap was switched).
+  #reapplyOverridesFor(layerKey) {
+    const bucket = this.#userOverrides.get(layerKey);
+    if (bucket) {
+      for (const [mapboxLayerId, slot] of Object.entries(bucket)) {
+        if (!this.#map.getLayer(mapboxLayerId)) continue;
+        for (const [prop, value] of Object.entries(slot.paint || {})) {
+          try { this.#map.setPaintProperty(mapboxLayerId, prop, value); }
+          catch (e) { console.warn(`[LayerStyle] replay paint ${prop}:`, e); }
+        }
+        for (const [prop, value] of Object.entries(slot.layout || {})) {
+          try { this.#map.setLayoutProperty(mapboxLayerId, prop, value); }
+          catch (e) { console.warn(`[LayerStyle] replay layout ${prop}:`, e); }
+        }
+      }
+    }
+    // Labels are a synthesized symbol layer that #enableLabels owns.
+    // If the user had labels turned on, the layer was destroyed by
+    // setStyle — recreate it and replay any per-label overrides.
+    const labelState = this.#labelState.get(layerKey);
+    if (labelState?.enabled) {
+      const prevKey = this.#currentKey;
+      this.#currentKey = layerKey;
+      labelState.enabled = false; // #enableLabels short-circuits if already on
+      labelState.symbolLayerId = null;
+      this.#enableLabels();
+      // After recreate, replay overrides again so any label-prop overrides
+      // (text-color, text-size, etc) that target the re-created layer id
+      // land on it too.
+      const refreshed = this.#userOverrides.get(layerKey);
+      if (refreshed) {
+        for (const [mapboxLayerId, slot] of Object.entries(refreshed)) {
+          if (!this.#map.getLayer(mapboxLayerId)) continue;
+          for (const [prop, value] of Object.entries(slot.paint || {})) {
+            try { this.#map.setPaintProperty(mapboxLayerId, prop, value); } catch {}
+          }
+          for (const [prop, value] of Object.entries(slot.layout || {})) {
+            try { this.#map.setLayoutProperty(mapboxLayerId, prop, value); } catch {}
+          }
+        }
+      }
+      this.#currentKey = prevKey;
     }
   }
 
@@ -800,6 +878,7 @@ export class LayerStyleConfig {
         // for "solid" which Mapbox treats the same way.
         this.#map.setPaintProperty(targetId, "line-dasharray",
           opt.dash || undefined);
+        this.#recordOverride(targetId, "paint", "line-dasharray", opt.dash || undefined);
       } catch (err) {
         console.warn("[LayerStyle] dasharray:", err);
       }
@@ -833,6 +912,7 @@ export class LayerStyleConfig {
       if (!id || !this.#map.getLayer(id)) return;
       try {
         this.#map.setLayoutProperty(id, "text-field", ["get", select.value]);
+        this.#recordOverride(id, "layout", "text-field", ["get", select.value]);
       } catch (e) { console.warn("[LayerStyle] text-field:", e); }
     });
     control.appendChild(wrap);
@@ -946,6 +1026,9 @@ export class LayerStyleConfig {
   // ------------------------------------------------------------------ reset
   #resetCurrent() {
     if (!this.#currentKey) return;
+    // Drop persisted user overrides for this layer so they don't replay
+    // back on the next basemap switch.
+    this.#userOverrides.delete(this.#currentKey);
     const snap = this.#originalSnapshots.get(this.#currentKey);
     if (!snap) return;
     const defs = GEOMETRY_CONTROL_DEFS[this.#currentGeometry] || [];
