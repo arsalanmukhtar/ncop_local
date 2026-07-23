@@ -4910,22 +4910,28 @@ class GDELTClient:
             }
         )
 
-        # Configure retry strategy with version compatibility
+        # Configure retry strategy with version compatibility.
+        # NOTE: total=0 (was 3).  The old value meant urllib3 retried 3
+        # times BEFORE our own retry loop in fetch_articles() got to
+        # decide anything — so every network hiccup ate 1+2+4 = 7 extra
+        # seconds inside a SINGLE session.get() call, plus the manual
+        # retries on top.  In production this stacked past nginx's
+        # 60s proxy_read_timeout → clients saw 504 before Django even
+        # returned.  We keep the retry policy in one place now (the
+        # manual loop below) and cap the total budget from the caller.
         try:
-            # Try new parameter name first (urllib3 >= 1.26.0)
             retry_strategy = Retry(
-                total=3,
+                total=0,
                 status_forcelist=[429, 500, 502, 503, 504],
                 allowed_methods=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1,
+                backoff_factor=0,
             )
         except TypeError:
-            # Fallback to old parameter name (urllib3 < 1.26.0)
             retry_strategy = Retry(
-                total=3,
+                total=0,
                 status_forcelist=[429, 500, 502, 503, 504],
                 method_whitelist=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1,
+                backoff_factor=0,
             )
 
         # Mount adapter with retry strategy
@@ -4945,9 +4951,26 @@ class GDELTClient:
         max_records: int = 200,
         source_country: str = "",
         max_retries: int = 3,
+        deadline_seconds: float = 50.0,
     ) -> Dict[str, Any]:
         """
-        Fetch articles from GDELT with robust error handling and SSL bypass
+        Fetch articles from GDELT with a hard time budget.
+
+        `deadline_seconds` bounds the TOTAL wall-clock this call may
+        consume across all retries and sleeps.  Nginx in production
+        proxies with a 60s upstream timeout, so we keep the budget
+        strictly under that (default 50s = ~10s safety margin for
+        GeoJSON building + serialization + network back to the client).
+
+        Prior versions used 25s which was too aggressive — GDELT's own
+        read-timeout could eat a whole attempt, leaving no room for
+        even a single retry.  50s comfortably fits 2 attempts at 20s
+        each plus the backoff sleep between them.
+
+        The manual retry loop below is the ONLY retry layer now — the
+        HTTPAdapter has been configured with total=0.  Between attempts
+        we sleep with backoff, but only if the remaining budget
+        actually allows another attempt.
         """
         # Query already has OR operators, so wrap in parentheses properly
         final_query = f"({query}) AND sourcelang:english"
@@ -4964,22 +4987,28 @@ class GDELTClient:
             "enddatetime": end_date,
         }
 
+        deadline = time.time() + max(1.0, deadline_seconds)
+        # Per-attempt HTTP timeout — sized so that at least 2 attempts
+        # fit inside the deadline.  Smaller than the old 30s (which
+        # allowed only one attempt inside a 60s nginx window) but
+        # larger than the too-aggressive 12s we tried earlier.
+        per_call_timeout = min(20.0, max(8.0, deadline_seconds / 2.5))
+
         for attempt in range(max_retries):
+            remaining = deadline - time.time()
+            if remaining <= 1.0:
+                print(f"GDELT: out of time budget after {attempt} attempts, giving up.")
+                break
             try:
-                print(f"Making GDELT API request (attempt {attempt + 1}/{max_retries})")
-                print(f"URL: {self.base_url}")
-                print(f"Params: {params}")
+                print(f"Making GDELT API request (attempt {attempt + 1}/{max_retries}, {remaining:.1f}s left)")
 
                 response = self.session.get(
                     self.base_url,
                     params=params,
-                    timeout=30,
+                    timeout=min(per_call_timeout, remaining),
                     verify=False,
                     stream=False,
                 )
-
-                print(f"GDELT API Response Status: {response.status_code}")
-                print(f"Response Headers: {dict(response.headers)}")
 
                 if response.status_code == 200:
                     try:
@@ -4991,33 +5020,36 @@ class GDELTClient:
                             return data
                         else:
                             print(f"Invalid response structure: {type(data)}")
-                            print(f"Response keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
 
                     except json.JSONDecodeError as e:
                         print(f"JSON decode error: {e}")
-                        print(f"Response content (first 500 chars): {response.text[:500]}")
 
                 elif response.status_code == 429:
-                    wait_time = min(60 * (attempt + 1), 300)
-                    print(f"Rate limited, waiting {wait_time} seconds...")
+                    # Cap the 429 backoff HARD — the previous formula
+                    # (60 × attempt, cap 300) meant a single 429 could
+                    # freeze the request for 5 minutes.  15s cap keeps
+                    # the whole retry loop under budget.
+                    wait_time = min(5 * (attempt + 1), 15)
+                    remaining_now = deadline - time.time()
+                    if wait_time >= remaining_now:
+                        print(f"GDELT 429: would need {wait_time}s but only {remaining_now:.1f}s left, aborting.")
+                        break
+                    print(f"GDELT rate limited, waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
 
                 elif response.status_code in [500, 502, 503, 504]:
-                    print(f"Server error: {response.status_code}")
-                    if attempt < max_retries - 1:
-                        wait_time = 2**attempt
-                        print(f"Waiting {wait_time} seconds before retry...")
-                        time.sleep(wait_time)
-                        continue
+                    print(f"GDELT server error {response.status_code}")
 
                 else:
-                    print(f"HTTP error: {response.status_code}")
-                    print(f"Response content: {response.text[:200]}")
+                    print(f"GDELT HTTP {response.status_code}: {response.text[:200]}")
 
+                # Backoff before the next attempt (short exponential).
                 if attempt < max_retries - 1:
-                    wait_time = 2**attempt
-                    print(f"Request failed, waiting {wait_time} seconds before retry...")
+                    wait_time = min(1 + attempt, 3)
+                    remaining_now = deadline - time.time()
+                    if wait_time >= remaining_now:
+                        break
                     time.sleep(wait_time)
                     continue
 
@@ -5878,11 +5910,27 @@ class GdeltNewsEventsApi(View):
 
             print("Starting data fetching with ENHANCED PAKISTAN FOCUS...")
 
-            # Test GDELT connection first
-            if not include_only_social_media:
-                connection_test = self.gdelt_client.test_connection()
-                if not connection_test:
-                    print("GDELT connection test failed, will try to proceed anyway...")
+            # Cache key covers everything that affects the response — a
+            # cache hit means the SAME (query, days, max_records, sources,
+            # include-flags) tuple can be served from memory instantly.
+            # bucket_10min rounds the current UTC minute down so hits
+            # within the same 10-minute window reuse the same key.
+            bucket_10min = int(time.time()) // 600
+            cache_key = (
+                f"gdelt_news|q={hash(search_query)}|d={days_back}|m={max_records}|"
+                f"sc={source_country}|ism={include_social_media}|iom={include_only_social_media}|"
+                f"ir={include_reddit}|im={include_mastodon}|b={bucket_10min}"
+            )
+            cached = cache.get(cache_key)
+            if cached:
+                print("GDELT: serving fresh cached response.")
+                return JsonResponse(cached)
+
+            # NOTE: previous code called self.gdelt_client.test_connection()
+            # here, which fired an extra network round-trip on every user
+            # click.  That test frequently 429'd (Nginx would 504 waiting
+            # for the retries) even when the real fetch below would have
+            # succeeded — and its result was thrown away.  Skipped.
 
             # Initialize data containers
             gdelt_data = {'articles': []}
@@ -5922,15 +5970,46 @@ class GdeltNewsEventsApi(View):
                         "GDELT API failed, checking if social media can provide data..."
                     )
                     if not include_social_media:
+                        # Stale-fallback: if we have a last-known-good
+                        # response for this query tuple, hand it back
+                        # as 200 with metadata.stale=true so the client
+                        # keeps rendering yesterday's cards instead of
+                        # an empty panel + fatal error.
+                        try:
+                            stable_key = cache_key.rsplit("|b=", 1)[0] + "|lkg"
+                            stale = cache.get(stable_key)
+                            if stale and stale.get("features"):
+                                print("GDELT: upstream failed; serving stale LKG.")
+                                stale_meta = dict(stale.get("metadata") or {})
+                                stale_meta["stale"] = True
+                                stale_meta["stale_reason"] = "GDELT upstream unavailable (likely rate-limited)"
+                                return JsonResponse({**stale, "metadata": stale_meta})
+                        except Exception:
+                            pass
+                        # No cache to fall back on — return an EMPTY
+                        # valid GeoJSON with an inline warning instead
+                        # of 503.  This lets the frontend render a
+                        # friendly "News temporarily unavailable" state
+                        # via the same code path it uses for normal
+                        # responses, and it stops nginx from surfacing
+                        # a bare Bad Gateway page in production.
                         return JsonResponse(
                             {
-                                "error": "GDELT API is currently unavailable due to SSL certificate issues. Please try enabling social media sources or contact support.",
-                                "status": "error",
-                                "technical_details": "SSL certificate verification failed",
-                                "suggestion": "Add ?include_social_media=true to your request to get data from alternative sources",
-                                "retry_after": "Please try again later or use social media sources",
+                                "type": "FeatureCollection",
+                                "features": [],
+                                "metadata": {
+                                    "generated_at": datetime.utcnow().isoformat(),
+                                    "sources": [],
+                                    "total_features": 0,
+                                    "stale": False,
+                                    "error": True,
+                                    "error_reason": (
+                                        "GDELT upstream is currently rate-limited "
+                                        "or unreachable. Try refreshing in a few minutes."
+                                    ),
+                                },
                             },
-                            status=503,
+                            status=200,
                         )
 
                 # Fetch social media data if requested
@@ -5975,7 +6054,19 @@ class GdeltNewsEventsApi(View):
                     if not include_only_social_media
                     else None
                 ),
+                "stale": False,
             }
+
+            # Cache the successful response for 10 min AND also keep a
+            # "last-known-good" copy under a stable key for the stale-
+            # fallback path below.  The bucketed key expires with the
+            # bucket; the last-known-good key survives multiple buckets
+            # so a failed refresh can still hand back yesterday's news
+            # instead of an empty panel.
+            if geojson_data.get("features"):
+                cache.set(cache_key, geojson_data, 600)
+                stable_key = cache_key.rsplit("|b=", 1)[0] + "|lkg"
+                cache.set(stable_key, geojson_data, 86400)  # 24 h
 
             return JsonResponse(geojson_data)
 
@@ -5985,6 +6076,28 @@ class GdeltNewsEventsApi(View):
             )
         except Exception as e:
             print(f"Unexpected server error: {e}")
+            # Stale-fallback: if we have a last-known-good response for
+            # THIS query tuple, serve it with metadata.stale = True so
+            # the browser can render the last-good cards and just tag
+            # the panel as "showing older data" instead of an empty box.
+            try:
+                bucket_10min = int(time.time()) // 600
+                cache_key_local = (
+                    f"gdelt_news|q={hash(search_query)}|d={days_back}|m={max_records}|"
+                    f"sc={source_country}|ism={include_social_media}|iom={include_only_social_media}|"
+                    f"ir={include_reddit}|im={include_mastodon}|b={bucket_10min}"
+                )
+                stable_key = cache_key_local.rsplit("|b=", 1)[0] + "|lkg"
+                stale = cache.get(stable_key)
+                if stale:
+                    print("GDELT: upstream failed; serving stale last-known-good response.")
+                    meta = stale.get("metadata") or {}
+                    meta = {**meta, "stale": True, "stale_reason": str(e)[:200]}
+                    stale = {**stale, "metadata": meta}
+                    return JsonResponse(stale)
+            except Exception:
+                pass
+
             return JsonResponse(
                 {
                     "error": "Internal server error",
