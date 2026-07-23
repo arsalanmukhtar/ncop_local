@@ -34,6 +34,7 @@ import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
 import { WeatherReportControl } from "./weather-report-control.js";
+import SplitCompareControl from "./split-compare-control.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
@@ -145,6 +146,11 @@ class DashboardManager {
     new LayerStyleConfig(this.#map, this.#sourceLayerControl);
     new LayerInfoPanel(this.#map, this.#sourceLayerControl);
     new WeatherReportControl(this.#map);
+    // Split Compare View — sits alongside Weather Report on the rail.
+    // Fully self-contained: adds its own button + owns its own second
+    // Mapbox instance while active.  No hook into the primary map's
+    // existing render pipeline required.
+    new SplitCompareControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -524,6 +530,10 @@ function buildUnifiedRightRail() {
     // the temporal slider's natural cohort (style + info). Wrapper div is
     // injected by WeatherReportControl in init().
     push(document.querySelector(".custom-weather-report-btn"));
+    // Split Compare View — pushed right after Weather Report so the two
+    // "analysis" buttons live next to each other in the rail.  Wrapper
+    // div is injected by SplitCompareControl in its constructor.
+    push(document.querySelector(".custom-split-compare-btn"));
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }

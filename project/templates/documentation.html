@@ -356,6 +356,7 @@
             <div class="sidebar-section">
                 <div class="sidebar-heading">Data &amp; Layers</div>
                 <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
+                <a href="#new-gis-layers" class="sidebar-link">New GIS Layers &mdash; Hydrology / Geology / Seismology</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
                 <a href="#station-layers" class="sidebar-link">Station Layers</a>
@@ -375,6 +376,8 @@
                 <a href="#layer-order-panel" class="sidebar-link">Layer Order</a>
                 <a href="#temporal-slider" class="sidebar-link">Temporal Slider</a>
                 <a href="#weather-report" class="sidebar-link">Weather Report</a>
+                <a href="#split-compare" class="sidebar-link">Split Compare View</a>
+                <a href="#guided-tour" class="sidebar-link">Guided Tour</a>
                 <a href="#popups" class="sidebar-link">Feature Popups</a>
                 <a href="#basemap-projection" class="sidebar-link">Basemaps</a>
             </div>
@@ -402,7 +405,7 @@
             <div class="page-meta">
                 <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
                 <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
-                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-23</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-25</span>
             </div>
 
             <!-- ============================================================ -->
@@ -892,7 +895,7 @@ sudo journalctl -u ncop-waitress.service -f
                             <tr><th>Category</th><th>Subcategories</th><th>Highlights</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers</td><td>National / provincial / district / tehsil boundaries; airports, hospitals, watershed.</td></tr>
+                            <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers <em>(expanded)</em>, Geology <em>(new)</em>, Seismology <em>(new)</em></td><td>National / provincial / district / tehsil boundaries; airports, schools, settlements; rivers, dams, watersheds AND 20 pre-computed flood-extent polygons across 6 major river basins &times; 3 severities; geological formations + PGA zones; fault lines, seismic source zones, seismic hazard map. See <a href="#new-gis-layers">New GIS Layers</a> for the full breakdown.</td></tr>
                             <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
                             <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
                             <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
@@ -1073,15 +1076,39 @@ sudo journalctl -u ncop-waitress.service -f
             <!-- ============================================================ -->
             <section id="geoserver">
                 <h2 class="section-title">GeoServer Boundaries <span class="section-anchor">#</span></h2>
-                <p>Administrative and infrastructure boundary layers are served as vector tiles from a self-hosted GeoServer instance via GWC TMS:</p>
-<pre><code>http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/
+                <p>Administrative and infrastructure boundary layers are served as vector tiles from a self-hosted GeoServer instance via GWC TMS. The catalogue has expanded substantially in the latest release &mdash; every hydrology, geology, and seismology layer is now sourced the same way.</p>
+                <h3 class="subsection-title">Administrative &amp; infrastructure (<code>gcop:</code> workspace)</h3>
+<pre><code>http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/
   gcop:national_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
   gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
   gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
   gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
   gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:schools@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:settlements@EPSG:900913@pbf/{z}/{x}/{y}.pbf
 </code></pre>
-                <p>The browser hits GeoServer directly &mdash; Django is not in the tile path. This requires that the GeoServer host be reachable from each client&rsquo;s network.</p>
+                <h3 class="subsection-title">Hydrology (<code>hydrology_pak:</code> workspace) &mdash; new</h3>
+                <p>Six rivers &times; three severities = 20 pre-computed flood-extent polygons, plus rivers, reservoirs, watersheds, and dams &mdash; 26 layers total, all replacing the previous broken stubs.</p>
+<pre><code>hydrology_pak:major_rivers, hydrology_pak:minor_rivers
+hydrology_pak:reservoirs,    hydrology_pak:water_shed
+hydrology_pak:major_dams,    hydrology_pak:minor_dams
+
+hydrology_pak:uihfex, uimfex, uilfex   (Upper Indus &mdash; High/Medium/Low)
+hydrology_pak:lihfex, limfex, lilfex   (Lower Indus)
+hydrology_pak:jhfex,  jlfex            (Jhelum &mdash; H / L only)
+hydrology_pak:chfex,  cmfex,  clfex    (Chenab)
+hydrology_pak:rhfex,  rmfex,  rlfex    (Ravi)
+hydrology_pak:shfex,  smfex,  slfex    (Sutlej)
+hydrology_pak:khfex,  kmfex,  klfex    (Kabul)
+</code></pre>
+                <h3 class="subsection-title">Geology &amp; Seismology (<code>geological_global:</code> / <code>seismological_global:</code>) &mdash; new</h3>
+<pre><code>geological_global:geology            (40-formation lithology w/ RdYlBu ramp)
+geological_global:pga_zones          (Peak Ground Acceleration hazard zones)
+seismological_global:faultlines
+seismological_global:seismic_source_zones
+seismological_global:seismic_hazard_map
+</code></pre>
+                <p>The browser hits GeoServer directly &mdash; Django is not in the tile path. This requires that the GeoServer host be reachable from each client&rsquo;s network. Every new layer above is registered in <code>map-layers.js</code> with a matching <code>information</code> string and dynamic-legend config so the Layer Info panel renders swatches without any per-layer image asset.</p>
             </section>
 
             <!-- ============================================================ -->
@@ -1101,21 +1128,25 @@ sudo journalctl -u ncop-waitress.service -f
             <!-- ============================================================ -->
             <section id="unified-right-rail">
                 <h2 class="section-title">Right Rail <span class="section-anchor">#</span></h2>
-                <p>The vertical rail on the right is built by <code>buildUnifiedRightRail()</code> and hosts every floating panel button:</p>
-                <ul>
-                    <li>User profile</li>
-                    <li>Geocoder (search)</li>
-                    <li>Layer Order panel</li>
-                    <li>Layer Style panel</li>
-                    <li>Layer Info panel</li>
-                    <li>Projection toggle (Globe / Mercator)</li>
-                    <li>Basemap picker</li>
-                    <li>Wind / Ocean particles</li>
-                    <li>Weather Report panel</li>
-                    <li>Tour panel</li>
-                    <li>Story builder</li>
-                </ul>
-                <p>Each button toggles its corresponding right-side panel. Only one panel is open at a time &mdash; clicking one closes any other rail panel.</p>
+                <p>The vertical rail on the right is built by <code>buildUnifiedRightRail()</code> in <code>dashboard.js</code>, which flattens every legacy button wrapper (<code>.custom-nav-control</code>, <code>.map-controls-wrapper</code>, <code>.custom-user-control</code>, &hellip;) into a single <code>.map-right-rail</code> column so every icon shares one uniform 32&nbsp;&times;&nbsp;32&nbsp;px geometry, hover ramp, and active-state highlight.</p>
+                <p>Stack order, top &rarr; bottom (workflow-grouped):</p>
+                <ol>
+                    <li><strong>Chevron collapse</strong> &mdash; hides every other icon leaving only the toggler.</li>
+                    <li><strong>User profile</strong></li>
+                    <li><strong>Geocoder (search)</strong></li>
+                    <li><strong>Layer Order</strong> &mdash; drag active layers to reorder z-index.</li>
+                    <li><strong>Layer Style</strong> &mdash; palette icon; restyle any active vector layer.</li>
+                    <li><strong>Layer Info</strong> &mdash; descriptions + dynamic legends per layer.</li>
+                    <li><strong>Weather Report</strong> &mdash; slide-out situational report.</li>
+                    <li><strong>Split Compare View</strong> <em>(new)</em> &mdash; toggles the side-by-side dual-map comparison; see <a href="#split-compare">Split Compare View</a>.</li>
+                    <li><strong>Basemap picker</strong></li>
+                    <li><strong>Guided Tour</strong> &mdash; graduation-cap; blinks green on first load with a companion hint tooltip. See <a href="#guided-tour">Guided Tour</a>.</li>
+                    <li><strong>3D toggle</strong>, <strong>Projection switch</strong>, <strong>Wind particles</strong>, <strong>Ocean currents</strong>, <strong>GeoGLOWS</strong>, <strong>Locate</strong>, <strong>Local News</strong>, <strong>GEE Chat</strong>, <strong>Home extent</strong>, <strong>Story panel</strong></li>
+                    <li><strong>Zoom In / Zoom Out / Reset Bearing</strong> pinned at the bottom.</li>
+                </ol>
+                <p>Only one slide-out panel is open at a time &mdash; clicking any rail button closes every other panel. The exceptions are the standalone hamburger menu (<code>#menuToggle</code>) at the top-left and the temporal slider under the map, both of which stay visible independent of the rail.</p>
+                <h3 class="subsection-title">Split-Compare mode adjustments</h3>
+                <p>When Split Compare View is active the rail (plus every rail-panel: layer-order, layer-info, layer-style, weather-report, basemap) is hidden via <code>body.split-compare-active .map-right-rail { display:none }</code> and analogous rules in <code>_split-compare.css</code>. The hamburger menu button stays visible on purpose so the user can still reach Map&nbsp;A&rsquo;s layer catalogue.</p>
             </section>
 
             <!-- ============================================================ -->
@@ -1255,6 +1286,140 @@ sudo journalctl -u ncop-waitress.service -f
 
                 <h3 class="subsection-title">Alert thresholds</h3>
                 <p>Thresholds live in the <code>T</code> constant block of <code>weather-report-control.js</code> and are sourced from WHO&nbsp;2021 AQ guidelines, US&nbsp;EPA AQI breakpoints, IMD/PMD precipitation classifications and PMD heat advisories.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="split-compare">
+                <h2 class="section-title">Split Compare View <span class="section-anchor">#</span></h2>
+                <p>The <strong>Split Compare View</strong> (columns-icon on the right rail, <code>#splitCompareToggle</code>) turns the map into a side-by-side dual-map comparison: a full second Mapbox instance is spun up in a right-hand overlay pane, cameras are synced in real time, and a second temporal slider mirrors the first. Everything is additive &mdash; no core module was modified.</p>
+
+                <h3 class="subsection-title">What activates when you toggle it</h3>
+                <ul>
+                    <li>A new <code>&lt;div class="split-compare-overlay"&gt;</code> is appended over <code>#map</code>, containing an inner pane clipped via <code>clip-path: inset()</code> and a draggable vertical divider.</li>
+                    <li>A second <code>mapboxgl.Map</code> is instantiated in the inner pane using the plain <code>mapbox://styles/mapbox/streets-v12</code> URL (using the primary map&rsquo;s serialised style caused silent tile-fetch failures on styles with token-scoped sprites &mdash; the plain URL always resolves).</li>
+                    <li>Boundary layers (national / provincial / district / tehsil) are deep-cloned onto Map&nbsp;B so the split retains its administrative context.</li>
+                    <li>Map&nbsp;A&rsquo;s primary slider is repositioned to the top-left half; a full replica <code>#temp-slider2</code> is built for the top-right half with a <strong>MAP&nbsp;B</strong> purple badge.</li>
+                    <li>A bottom-centre <strong>Compare Layer (Map&nbsp;B)</strong> picker panel appears, populated by the sidebar catalogue.</li>
+                    <li>The right rail + every rail-panel + the NCOP header are hidden via <code>body.split-compare-active</code> scoped CSS. The hamburger menu (<code>#menuToggle</code>) stays visible so Map&nbsp;A layers remain reachable.</li>
+                </ul>
+
+                <h3 class="subsection-title">Camera synchronisation</h3>
+                <p>The primary map&rsquo;s <code>move</code> event schedules a <code>requestAnimationFrame</code>-throttled sync onto Map&nbsp;B via <code>easeTo({ center, zoom, bearing, pitch, duration: 0, animate: false })</code>. A pane-centring offset is applied so both panes render around the same lng/lat despite the split. Divider drag adjusts the clip-path fraction and re-fires the sync.</p>
+
+                <h3 class="subsection-title">Slider B &mdash; pixel-for-pixel replica of Slider A</h3>
+                <p>Because <code>_temporal.css</code> is ID-scoped (<code>#temp-slider1</code>, <code>#playPauseButton1</code>, <code>#slider1</code>, <code>#legend-container-slider1</code>&hellip;), the sibling <code>_b</code> IDs on Slider B inherit nothing by default. <code>frontend/src/styles/dashboard/_split-compare.css</code> mirrors <em>every</em> ID-scoped rule (transport panel, play/pause blue circles, speed pill, year-labels container, timeline track, legend container, night-mode overrides) so both sliders render identically. Play/pause on Slider B forwards clicks onto Slider A via a <code>MutationObserver</code> on <code>#playPauseButton1</code>&rsquo;s <code>style.display</code>, and Slider B&rsquo;s legend is pulled from the shared <code>legends</code> dictionary in <code>temporal-layer-legends.js</code>.</p>
+
+                <h3 class="subsection-title">Layer-B picker (bottom-centre panel)</h3>
+                <p>The dropdown is grouped into HTML <code>&lt;optgroup&gt;</code> blocks that mirror the sidebar&rsquo;s subcategory structure (Radar Layers, GDPS, ECMWF, Meteoblue Forecast, Live Meteorological Operations, &hellip;) so the picker reads the way the sidebar reads. On selection, the layer&rsquo;s step array (<code>window[itemKey]</code>) is deep-cloned before being added to Map&nbsp;B &mdash; passing shared references caused silent failures because Mapbox mutates source objects with owner-map refs and cached <code>_data</code>. The <code>id</code> field is stripped from source configs before <code>addSource(id, cfg)</code>.</p>
+
+                <h3 class="subsection-title">Play/pause + speed sync</h3>
+                <p>A <code>MutationObserver</code> on the primary Play &harr; Pause buttons drives Slider&nbsp;B automatically. The speed pill on Slider&nbsp;B is a passthrough &mdash; clicking it re-fires the click on Slider&nbsp;A&rsquo;s speed pill so both cycle 0.5&times; / 1&times; / 2&times; / 4&times; together, one source of truth.</p>
+
+                <h3 class="subsection-title">Rail-button styling parity</h3>
+                <p>The rail button&rsquo;s day / night / hover / active states mirror the weather-report pattern (<code>_split-compare.css</code> &rarr; <code>.map-right-rail &gt; .custom-split-compare-btn</code> selectors) so it reads as one of the family &mdash; identical fill to the clipboard icon above it, NDMA-blue when split view is active.</p>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/split-compare-control.js</code> &mdash; class + all state; ~900 lines.</li>
+                    <li><code>frontend/src/styles/dashboard/_split-compare.css</code> &mdash; overlay, divider, Slider&nbsp;B mirrors, bottom picker, rail button styling; imported via <code>dashboard.css</code>.</li>
+                    <li><code>frontend/src/modules/dashboard.js</code> &mdash; instantiates <code>SplitCompareControl</code> alongside the other rail-panel controls; pushes the button into the unified rail in <code>buildUnifiedRightRail()</code>.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="guided-tour">
+                <h2 class="section-title">Guided Tour (53 steps) <span class="section-anchor">#</span></h2>
+                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Rewritten from ~45 stale steps into <strong>53 workflow-ordered steps</strong> that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
+
+                <h3 class="subsection-title">Section flow</h3>
+                <ol>
+                    <li><strong>Orientation</strong> (2 steps) &mdash; NCOP header + mini globe.</li>
+                    <li><strong>Sidebar layer catalogue</strong> (3 steps) &mdash; hamburger menu, sidebar panel overview, search box.</li>
+                    <li><strong>GIS Layers accordion</strong> (6 steps) &mdash; Administrative Boundaries &rarr; Infrastructure &rarr; Hydrological Layers &rarr; Geology <em>(new)</em> &rarr; Seismology <em>(new)</em>.</li>
+                    <li><strong>Weather Systems accordion</strong> (7 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations.</li>
+                    <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
+                    <li><strong>Air Quality accordion</strong> (2 steps).</li>
+                    <li><strong>Right rail</strong> (25 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the new <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps.</li>
+                    <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint.</li>
+                </ol>
+
+                <h3 class="subsection-title">Smart step preparation (<code>NCOPTour.executeAction</code>)</h3>
+                <p>Each step can declare an <code>action</code> that runs BEFORE the tooltip is positioned. The current action registry:</p>
+                <ul>
+                    <li><code>openSidebar</code> / <code>openSidebarAccordion</code> / <code>openSidebarSubcategory</code> &mdash; open + expand the correct sidebar section.</li>
+                    <li><code>activateTemporalItem</code> &mdash; simulates a click on the temporal item so the temporal slider populates for the demo.</li>
+                    <li><code>openBasemapPanel</code>, <code>openLayerOrderPanel</code>, <code>openLayerInfoPanel</code>, <code>openLayerStylePanel</code>, <code>openWeatherReportPanel</code>, <code>openGeocoderPanel</code>, <code>openUserPanel</code> &mdash; each clicks its rail toggle if the panel isn&rsquo;t already visible.</li>
+                </ul>
+                <p><code>cleanupStepContext</code> mirrors each open action with a close call the moment the tour advances past the step, so panels never stack.</p>
+
+                <h3 class="subsection-title">Sidebar-tolerant transitions</h3>
+                <p>The sidebar stays open through the <em>entire</em> catalogue walkthrough &mdash; from step 4 (open sidebar) all the way to step 25 (last Air Quality step). Only when the tour reaches the right-rail overview (step 26) does the sidebar close. This is handled by an <code>isSidebarSectionStep()</code> helper that treats any step with a sidebar action OR a <code>#temp-slider1</code> target as belonging to the same section &mdash; without it, the temporal-slider step (which has no <code>action</code>) would trigger a spurious close/reopen flash between activateTemporalItem &rarr; #temp-slider1 &rarr; ECMWF.</p>
+                <p>The demo temporal layer (Specific Humidity 2&nbsp;m) is also kept loaded on the map throughout the catalogue walk so the slider + legend context introduced in step&nbsp;15 stays visible while the user reads about ECMWF, Meteoblue, and Live Met Ops &mdash; it&rsquo;s unloaded cleanly only when the tour leaves the sidebar section entirely.</p>
+
+                <h3 class="subsection-title">Prominent green pulse + first-load hint</h3>
+                <p>The tour button pulses continuously in emerald-500 (<code>rgb(34, 197, 94)</code>) &mdash; hard-coded RGB (not CSS var) so day and night render identically, with <code>!important</code> on both <code>border-color</code> and <code>box-shadow</code> to beat the <code>.map-right-rail &gt; .rail-btn</code> baseline. The pulse is a 4-layer box-shadow (halo ring + outer glow + inset glow + 1.06 scale) that reads clearly as a "start here" affordance.</p>
+                <p>A one-time <strong>floating hint tooltip</strong> appears 1.2&nbsp;s after mount (waiting for <code>buildUnifiedRightRail</code> to flatten the button so <code>getBoundingClientRect</code> resolves correctly), positioned to the left of the button with a matching green gradient and right-pointing arrow. Copy: <em>&ldquo;NEW HERE? &mdash; Take the guided tour to learn every control, layer, and feature of NCOP in a few minutes.&rdquo;</em> Auto-dismisses after 10&nbsp;s, on close-<code>&times;</code> click, on tooltip-body click (which also opens the tour panel as a &ldquo;yes, show me&rdquo; affordance), or on the first click of the tour button.</p>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/nav-controls.js</code> &mdash; <code>TOUR_STEPS</code> array, <code>NCOPTour</code> engine, <code>NCOPTourControl</code> button + first-load hint. All tour styles injected once via <code>ensureTourStyles()</code>.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="new-gis-layers">
+                <h2 class="section-title">New GIS Layers &mdash; Hydrology / Geology / Seismology <span class="section-anchor">#</span></h2>
+                <p>Three major GIS-Layers subcategories landed in the same release. All served as vector tiles from GeoServer (see <a href="#geoserver">GeoServer Boundaries</a> for the tile URLs) and configured in <code>frontend/src/modules/map-layers.js</code> with dynamic legends so the Layer Info panel renders swatches without any image asset.</p>
+
+                <h3 class="subsection-title">Hydrological Layers &mdash; expanded from 6 stubs to 26 real layers</h3>
+                <p>The previous hydrology stubs were replaced with GeoServer-backed vector tiles from the <code>hydrology_pak:</code> workspace:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Group</th><th>Layers</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Base hydrology</td><td>Major Rivers, Minor Rivers, Reservoirs, Watershed Catchment, Major Dams, Minor Dams &mdash; 6 layers.</td></tr>
+                            <tr><td>Upper Indus flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                            <tr><td>Lower Indus flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                            <tr><td>Jhelum flood extents</td><td>High / Low &mdash; 2 layers.</td></tr>
+                            <tr><td>Chenab flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                            <tr><td>Ravi flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                            <tr><td>Sutlej flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                            <tr><td>Kabul flood extents</td><td>High / Medium / Low &mdash; 3 layers.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>Total: <strong>26 vector-tile layers</strong>. Each flood-extent polygon set is a pre-computed hydraulic model output, ready to overlay on live FFD gauge readings + GloFAS forecasts for integrated situational awareness.</p>
+
+                <h3 class="subsection-title">Geology &mdash; new subcategory</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Source</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Geological Formations</strong> (<code>geology</code>)</td><td><code>geological_global:geology</code></td><td>40-formation lithology polygons rendered with a 40-stop <em>RdYlBu</em> categorical ramp. Baseline geological context for landslide susceptibility, aquifer studies, and hazard modelling.</td></tr>
+                            <tr><td><strong>PGA Zones</strong> (<code>pga_zones</code>)</td><td><code>geological_global:pga_zones</code></td><td>Peak Ground Acceleration hazard zones (5-level classification). Used to assess structural risk to infrastructure and to prioritise seismic retrofit programmes.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">Seismology &mdash; new subcategory</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Source</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Fault Lines</strong></td><td><code>seismological_global:faultlines</code></td><td>Mapped active faults across Pakistan and neighbouring tectonic regions.</td></tr>
+                            <tr><td><strong>Seismic Source Zones</strong></td><td><code>seismological_global:seismic_source_zones</code></td><td>Areal source zones used in probabilistic seismic hazard analysis.</td></tr>
+                            <tr><td><strong>Seismic Hazard Map</strong></td><td><code>seismological_global:seismic_hazard_map</code></td><td>National seismic hazard raster/polygon layer &mdash; the tectonic context behind any earthquake alert or risk assessment.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>All new layers carry <code>dynamicLegend</code> configuration in <code>map-layers.js</code> so the Layer Info panel auto-renders coloured swatches without a separate image legend asset &mdash; consistent with the shift to declarative legends documented in <a href="#layer-info-panel">Layer Info &amp; Legends</a>.</p>
             </section>
 
             <!-- ============================================================ -->

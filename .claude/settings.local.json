@@ -26,7 +26,11 @@
       "Bash(awk 'NR>=868 && /^    \\\\}/{print NR\": \"$0; exit}' frontend/src/modules/map-layers.js)",
       "Bash(awk '/\"Geology\":/,/^    \"Seismology\":/' frontend/src/modules/map-layers.js)",
       "Bash(awk '/\"Seismology\":/,/^  weather:/' frontend/src/modules/map-layers.js)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(node --check frontend/src/modules/split-compare-control.js)",
+      "Bash(node --check frontend/src/modules/nav-controls.js)",
+      "Bash(node -e \"const src = require\\('fs'\\).readFileSync\\('frontend/src/modules/nav-controls.js', 'utf8'\\); const startIdx = src.indexOf\\('const TOUR_STEPS = ['\\); const endIdx = src.indexOf\\('];', startIdx\\); const block = src.slice\\(startIdx, endIdx\\); const matches = block.match\\(/^\\\\s{2}\\\\{$/gm\\) || []; console.log\\('Total steps:', matches.length\\);\")",
+      "Bash(grep -n '\\\\`[^\\\\`]*\\\\`' frontend/src/modules/nav-controls.js)"
     ]
   }
 }

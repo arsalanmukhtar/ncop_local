@@ -61,33 +61,80 @@ const TOUR_CONFIG = {
   zIndex: 10000,
 };
 
+// ---------------------------------------------------------------------------
+// TOUR_STEPS
+// ---------------------------------------------------------------------------
+// Full end-to-end walkthrough — orientation → layer catalogue → every rail
+// control → the new analysis features (Split Compare, Weather Report,
+// dynamic legends).  Each step is a plain data object:
+//
+//   target          CSS selector to highlight (or omit + use targetResolver)
+//   title           Header shown in the tooltip
+//   content         Body text; write as if you are demoing to a new user
+//   position        "top" | "bottom" | "left" | "right" — tooltip placement
+//   action          Optional prep action executed BEFORE showing the step
+//                   (opens sidebar, expands accordion, opens rail panel, …)
+//   actionValue     Argument to the action (accordion title, item label, …)
+//   targetResolver  For dynamic targets that don't have a static selector
+//                   (e.g. accordion header by its title text)
+//   targetValue     Argument to the resolver
+//
+// New actions added below (see NCOPTour.executeAction):
+//   openWeatherReportPanel · openLayerStylePanel · activateSplitCompare
+// ---------------------------------------------------------------------------
 const TOUR_STEPS = [
+  // ===============================================================
+  //  ORIENTATION
+  // ===============================================================
   {
     target: "#ncop-home-top-bar, .ncop-home-top-bar",
     title: "Welcome to NCOP",
     content:
-      "This is your operational workspace for monitoring layers, alerts, weather, and map-based analysis tools in one place.",
+      "This is your NDMA National Common Operating Picture — an operational workspace combining GIS layers, weather forecasts, flood monitoring, air quality, satellite imagery, and side-by-side comparison tools in a single map interface. This tour will walk you through every category, every control, and every advanced feature.",
     position: "bottom",
   },
   {
     target: "#miniglobe-wrapper",
-    title: "Overview Globe",
+    title: "Overview Mini-Globe",
     content:
-      "Use the mini globe for quick orientation while you move around the main operational map.",
+      "The mini-globe in the corner keeps you oriented globally. It mirrors the main map's centre and zoom so you always know where you are on Earth while working locally.",
     position: "left",
+  },
+
+  // ===============================================================
+  //  SIDEBAR — layer catalogue
+  // ===============================================================
+  {
+    target: "#menuToggle, .custom-menu-control",
+    title: "Menu Button — open the Layer Catalogue",
+    content:
+      "This hamburger button on the top-left opens the sidebar layer catalogue. All operational data layers — boundaries, weather forecasts, flood extents, air-quality products — are organized inside it. The button stays visible even in Split-Compare mode so you can add layers to Map A without leaving the split view.",
+    position: "right",
   },
   {
     target: "#sidebarPanel.sidebar-panel",
-    title: "Layers Panel",
+    title: "Sidebar Panel — the Layer Catalogue",
     content:
-      "Open the sidebar to browse categories, toggle operational layers, and work with temporal products.",
+      "The sidebar groups every layer into four top-level accordions: GIS Layers, Weather Systems, Flood Monitoring, and Air Quality. Each accordion has multiple subcategories, and each subcategory contains either toggleable vector layers or clickable temporal (time-aware) layers.",
     position: "right",
     action: "openSidebar",
   },
   {
-    title: "GIS Layers",
+    target: "#sidebarSearch, .sidebar-search-container",
+    title: "Search Box",
     content:
-      "This section contains core geographic reference layers such as boundaries, infrastructure, and hydrological context.",
+      "Type any layer name here to filter the whole catalogue instantly — useful when you know the layer you want but don't remember which category it lives in.",
+    position: "right",
+    action: "openSidebar",
+  },
+
+  // ===============================================================
+  //  GIS LAYERS accordion — boundaries, infra, hydrology, geology, seismology
+  // ===============================================================
+  {
+    title: "1 · GIS Layers",
+    content:
+      "The first accordion holds all foundational geographic reference layers — administrative boundaries, critical infrastructure, hydrological network, geological formations, and seismic hazard maps. These are the base context you overlay everything else onto.",
     position: "right",
     action: "openSidebarAccordion",
     actionValue: "GIS Layers",
@@ -95,9 +142,63 @@ const TOUR_STEPS = [
     targetValue: "GIS Layers",
   },
   {
-    title: "Weather Systems",
+    title: "Administrative Boundaries",
     content:
-      "This section groups weather observations, PMD stations, radar layers, and forecast products for operational monitoring.",
+      "National, Provincial, District, and Tehsil boundary polygons for Pakistan. Toggle any combination to build the administrative context you need for a specific incident or analysis.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Administrative Boundaries",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Administrative Boundaries",
+  },
+  {
+    title: "Infrastructure",
+    content:
+      "Point layers for Airports, Schools, and Settlements. Turn them on to see critical facilities that may need evacuation planning, protection, or resource dispatch during an emergency.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Infrastructure",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Infrastructure",
+  },
+  {
+    title: "Hydrological Layers",
+    content:
+      "Rivers, reservoirs, dams, watershed catchments, AND — new in this release — 20 pre-computed flood-extent polygons for the six major river basins (Upper/Lower Indus, Jhelum, Chenab, Ravi, Sutlej, Kabul), each split into High / Medium / Low severity. All served directly from GeoServer as vector tiles.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Hydrological Layers",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Hydrological Layers",
+  },
+  {
+    title: "Geology",
+    content:
+      "Two layers new to this release: Geological Formations (40-formation lithology with an RdYlBu colour ramp) and PGA Zones (Peak Ground Acceleration hazard zones for structural risk assessment).",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Geology",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Geology",
+  },
+  {
+    title: "Seismology",
+    content:
+      "Three layers new to this release: Fault Lines, Seismic Source Zones, and the national Seismic Hazard Map. Together they give you the tectonic context behind any recent quake or forecast risk assessment.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Seismology",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Seismology",
+  },
+
+  // ===============================================================
+  //  WEATHER SYSTEMS accordion — the big one
+  // ===============================================================
+  {
+    title: "2 · Weather Systems",
+    content:
+      "The Weather Systems accordion holds all satellite imagery, radar mosaics, numerical weather predictions, and live PMD observations. Every item here is time-aware — click one and the temporal slider (bottom of the map) lights up with playable forecast frames.",
     position: "right",
     action: "openSidebarAccordion",
     actionValue: "Weather Systems",
@@ -105,9 +206,19 @@ const TOUR_STEPS = [
     targetValue: "Weather Systems",
   },
   {
-    title: "GDPS Forecast Layers",
+    title: "Radar Layers",
     content:
-      "Inside Weather Systems, this section contains multiple temporal forecast products. You can open any of these time-enabled layers from the gallery to explore changing conditions over time.",
+      "Real-time radar & satellite imagery: DWD Satellite Infrared (Meteosat IR, refreshed every 15 min) and IMERG Precipitation Rate (14 days of NASA-derived precipitation).",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Radar Layers",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Radar Layers",
+  },
+  {
+    title: "Global Deterministic Prediction System (GDPS)",
+    content:
+      "Canada's Meteorological Service GDPS provides a full suite of forecast products: humidity, precipitation type, snow density/depth, snowfall, thunderstorm probability, fog probability, and convective precipitation — each on a rolling 7-day forecast window.",
     position: "right",
     action: "openSidebarSubcategory",
     actionValue: "Global Deterministic Prediction System (GDPS)",
@@ -115,9 +226,9 @@ const TOUR_STEPS = [
     targetValue: "Global Deterministic Prediction System (GDPS)",
   },
   {
-    title: "Temporal Layer Example",
+    title: "Temporal Layer — live demo",
     content:
-      "This temporal layer is selected as an example. Activating a forecast item like this loads its time-aware visualization and controls.",
+      "As an example, we're activating 'Specific Humidity (2m Above Ground)'. Watch the map: the raster fades in and the temporal slider at the bottom populates with date labels, a play button, a legend, and per-step animation.",
     position: "right",
     action: "activateTemporalItem",
     actionValue: "Specific Humidity (2m Above Ground)",
@@ -128,13 +239,47 @@ const TOUR_STEPS = [
     target: "#temp-slider1",
     title: "Temporal Slider",
     content:
-      "This panel controls the active temporal layer. Use the drag button to move it, the resize button to adjust its size, the play and pause controls to animate the timeline, the droplet button to change layer opacity, and the speed button to control playback rate. The main slider moves between time steps, the date labels show the available frames, and the legend below explains the value range and symbology for the current layer.",
+      "This is the animation controller for the active temporal layer. Left group: the play/pause circle and the 1× speed pill (cycle through 0.5×/1×/2×/4×). Middle: the timeline with clickable date labels and the drag-handle. Right: the drag icon lets you move the whole panel. Bottom row: the trash icon removes the active layer, the layer name is shown next to it, then the colour-ramp legend explaining the values, and finally an opacity droplet on the far right.",
     position: "bottom",
   },
   {
-    title: "Flood Monitoring",
+    title: "ECMWF Weather Forecast Parameters",
     content:
-      "Flood monitoring brings together flood data, GloFAS products, rivers, and hydrologic overlays for situational awareness.",
+      "European Centre for Medium-Range Weather Forecasts products: 850 hPa Temperature, Lightning Forecast, and Tropical Cyclone Strike Probability — the go-to global model outputs for severe weather planning.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "ECMWF Weather Forecast Parameters",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "ECMWF Weather Forecast Parameters",
+  },
+  {
+    title: "Meteoblue Forecast",
+    content:
+      "Meteoblue's NEMS-based products: Weekly & Hourly Precipitation (with a snow emoji when frozen precipitation is expected), Hourly & Weekly Snowfall, CAPE (Convective Available Potential Energy) hourly & weekly, Storm Helicity (0-3 km), Precipitation Radar, and 2-m Air Temperature.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Meteoblue Forecast",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Meteoblue Forecast",
+  },
+  {
+    title: "Live Meteorological Operations",
+    content:
+      "Live PMD station observations and hazard products: NWFC Weather Observations (HTML-marker icons with weather-condition GIFs), PMD Weather Warnings (with a new 13-hazard-type checkbox filter you'll find above the toggle), and heatwave/cold-wave watch feeds. Every layer here now has a dynamic legend rendered in the Layer Info panel.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Live Meteorological Operations",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Live Meteorological Operations",
+  },
+
+  // ===============================================================
+  //  FLOOD MONITORING accordion
+  // ===============================================================
+  {
+    title: "3 · Flood Monitoring",
+    content:
+      "The Flood Monitoring accordion combines PMD glacier-related products, FFD's flood forecasting products, and the global GloFAS ensemble — the operational stack for hydrological hazard tracking.",
     position: "right",
     action: "openSidebarAccordion",
     actionValue: "Flood Monitoring",
@@ -142,9 +287,43 @@ const TOUR_STEPS = [
     targetValue: "Flood Monitoring",
   },
   {
-    title: "Air Quality",
+    title: "PMD Glaciers & GLOF",
     content:
-      "This section is focused on air quality observations, atmospheric pollutants, and forecast products for environmental monitoring.",
+      "Pakistan Meteorological Department glacier and Glacial Lake Outburst Flood (GLOF) products: Glacier Lake Inventory, GLOF Observations, and glacier-related monitoring layers — each with dynamic legends explaining what the colours and swatches mean.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "PMD Glaciers & GLOF",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "PMD Glaciers & GLOF",
+  },
+  {
+    title: "Flood Forecasting Division (FFD-Data)",
+    content:
+      "FFD's operational feeds: river gauge readings, flood-alert bulletins, and situation reports. Great context to overlay on the Hydrological Layers flood-extent polygons for an integrated picture.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Flood Forecasting Division (FFD-Data)",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Flood Forecasting Division (FFD-Data)",
+  },
+  {
+    title: "Global Flood Awareness System (GloFAS)",
+    content:
+      "The Copernicus/ECMWF GloFAS ensemble river-discharge forecast — global 25 km resolution, 30-day outlook, with return-period exceedance overlays for early warning.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Global Flood Awareness System (GloFAS)",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Global Flood Awareness System (GloFAS)",
+  },
+
+  // ===============================================================
+  //  AIR QUALITY accordion
+  // ===============================================================
+  {
+    title: "4 · Air Quality",
+    content:
+      "The Air Quality accordion covers real-time station observations, atmospheric composition products, and forecast overlays — WAQI stations, CAMS AQI, particulate matter, gases (NO₂, O₃, SO₂, CO, CH₄), aerosols, and desert-dust products.",
     position: "right",
     action: "openSidebarAccordion",
     actionValue: "Air Quality",
@@ -152,261 +331,224 @@ const TOUR_STEPS = [
     targetValue: "Air Quality",
   },
   {
-    title: "Ocean and Coastal",
+    title: "Real Time Air Quality Parameters",
     content:
-      "Ocean and coastal layers provide marine conditions, oceanographic products, and coastal monitoring context.",
+      "Live WAQI-Stations Air Quality (station-level AQI), CAMS AQI hourly & daily forecasts, plus per-pollutant products: PM2.5, PM10, NO₂, O₃, SO₂, CO, dust, methane, sulphate/biomass/sea-salt aerosols, CO₂ at surface & 850 hPa, formaldehyde, and UV Index.",
     position: "right",
-    action: "openSidebarAccordion",
-    actionValue: "Ocean & Coastal",
-    targetResolver: "accordionHeaderByTitle",
-    targetValue: "Ocean & Coastal",
+    action: "openSidebarSubcategory",
+    actionValue: "Real Time Air Quality Parameters",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Real Time Air Quality Parameters",
   },
+
+  // ===============================================================
+  //  UNIFIED RIGHT RAIL — every button, in stack order
+  // ===============================================================
   {
-    title: "Early Warning",
+    target: ".map-right-rail",
+    title: "The Unified Right Rail",
     content:
-      "Early warning includes exposure products, alert feeds, hazard monitoring, and operational warning support tools.",
-    position: "right",
-    action: "openSidebarAccordion",
-    actionValue: "Early Warning",
-    targetResolver: "accordionHeaderByTitle",
-    targetValue: "Early Warning",
-  },
-  {
-    target: ".mapboxgl-ctrl-geocoder",
-    title: "Location Search",
-    content:
-      "Search for places, coordinates, and areas of interest to move the map quickly to the right location.",
-    position: "bottom",
-  },
-  {
-    target: ".custom-user-control",
-    title: "User Panel",
-    content:
-      "This control gives access to the user panel, where account-related actions and user options are kept separate from the main map workspace.",
+      "Every action button lives here, in a single vertical stack. Buttons are organised top-to-bottom by workflow: chevron collapse → user & search → layer tools → analysis panels → map tools → view tools → utilities → zoom controls. We'll walk through each one now.",
     position: "left",
   },
   {
-    target: "#ncop-timeseries-animation-slider-div",
-    title: "Time Slider",
+    target: "#navToggleBtn",
+    title: "Rail Collapse",
     content:
-      "Temporal layers use this slider for stepping through forecasts, observations, and time-enabled datasets.",
-    position: "top",
+      "The top chevron collapses the entire rail — every other icon slides away, leaving only this toggle so you get a maximally clean map view. Click again to expand.",
+    position: "left",
   },
   {
-    target: ".custom-basemap-control",
-    title: "Basemap Control",
+    target: "#userToggle",
+    title: "User Panel",
     content:
-      "Use this button to open the basemap panel and change the overall background style of the map.",
+      "Opens the user account panel with your profile, session info, and account-related settings — kept separate from the map so it never clutters the workspace.",
+    position: "left",
+  },
+  {
+    target: "#geocoderToggle, .mapboxgl-ctrl-geocoder",
+    title: "Location Search",
+    content:
+      "Type a place, coordinates, or landmark to fly the map straight to it. Uses Mapbox's global geocoder — Islamabad, 34.1,73.2, and 'Khunjerab Pass' all work.",
+    position: "left",
+    action: "openGeocoderPanel",
+  },
+  {
+    target: "#layerOrderToggle",
+    title: "Layer Order",
+    content:
+      "Opens the Layer Order panel: every active layer in a draggable list. Drag rows up or down to change which layer draws on top — critical when combining overlays.",
+    position: "left",
+    action: "openLayerOrderPanel",
+  },
+  {
+    target: "#layerStyleToggle",
+    title: "Layer Style — Palette",
+    content:
+      "Opens the Layer Style panel where you can restyle any active vector layer — change fill colour, opacity, stroke width, and label visibility on-the-fly. Great for quickly recolouring boundaries or making a flood extent stand out.",
+    position: "left",
+    action: "openLayerStylePanel",
+  },
+  {
+    target: "#layerInfoToggle",
+    title: "Layer Info",
+    content:
+      "Opens the Layer Info panel — descriptions, metadata, and DYNAMIC LEGENDS for every active layer. Newer layers now render swatch/gradient/icon legends automatically so you can read the map without going back to the catalogue.",
+    position: "left",
+    action: "openLayerInfoPanel",
+  },
+  {
+    target: "#weatherReportToggle",
+    title: "Weather Report — new",
+    content:
+      "Opens the Weather Report panel: a slide-out card that fetches the PMD/GCOP live weather brief for the map's current centre point. Move the map and the report updates.",
+    position: "left",
+    action: "openWeatherReportPanel",
+  },
+  {
+    target: "#splitCompareToggle",
+    title: "Split Compare View — new",
+    content:
+      "Toggles the Split Compare View — the flagship new feature. The map splits vertically into Map A (left) and Map B (right), with a draggable divider, synchronised camera, two independent temporal sliders, and a bottom picker to load any temporal layer onto Map B while Map A keeps whatever you had. Perfect for A/B comparing forecasts.",
+    position: "left",
+  },
+  {
+    target: "#basemapToggle",
+    title: "Basemap",
+    content:
+      "Opens the basemap picker: switch between streets, hybrid, OSM, outdoors, satellite, day, and night styles. There's also a labels toggle inside so you can hide place names if the map is getting busy.",
     position: "left",
     action: "openBasemapPanel",
   },
   {
     target: "#basemapPanel.visible .labels-toggle",
-    title: "Labels Toggle",
+    title: "Basemap — Labels Toggle",
     content:
-      "This switch turns place labels on or off so you can either reduce clutter or keep reference names visible.",
+      "This switch inside the basemap panel turns place labels on or off — useful when you're presenting and want the map to speak for itself, or when heavy raster overlays make labels illegible.",
     position: "left",
     action: "openBasemapPanel",
   },
   {
-    target: "#basemapPanel.visible",
-    title: "Basemap Styles",
+    target: "#ncopTourToggle",
+    title: "NCOP Guided Tour",
     content:
-      "These style cards let you switch between streets, hybrid, OSM, outdoors, satellite, day, and night views.",
-    position: "left",
-    action: "openBasemapPanel",
-  },
-  {
-    target: ".custom-layer-control",
-    title: "Layer Order",
-    content:
-      "Reorder active layers here so the most important overlays stay visible above the rest.",
-    position: "left",
-    action: "openLayerOrderPanel",
-  },
-  {
-    target: "#layerOrderPanel",
-    title: "Layer Order Panel",
-    content:
-      "This panel lists active layers and lets you drag them to change their drawing order on the map.",
-    position: "left",
-    action: "openLayerOrderPanel",
-  },
-  {
-    target: ".custom-layer-info-control",
-    title: "Layer Information",
-    content:
-      "Use this panel to review descriptions, active layer details, and legends for operational interpretation.",
-    position: "left",
-    action: "openLayerInfoPanel",
-  },
-  {
-    target: "#layerInfoPanel",
-    title: "Layer Info Panel",
-    content:
-      "When layers are active, this panel shows their descriptive information and legends for interpretation.",
-    position: "left",
-    action: "openLayerInfoPanel",
-  },
-  {
-    target: ".custom-tour-control",
-    title: "Tour Control",
-    content:
-      "Use this control any time you want to restart the NCOP guided tour.",
-    position: "left",
-  },
-  {
-    target: ".mapboxgl-ctrl-scale",
-    title: "Scale Bar",
-    content:
-      "The scale bar helps estimate distance on the ground at the current zoom level.",
-    position: "top",
-  },
-  {
-    target: "#zoomIn",
-    title: "Zoom In",
-    content:
-      "Zoom in to inspect the map at a more detailed operational scale.",
-    position: "left",
-  },
-  {
-    target: "#zoomOut",
-    title: "Zoom Out",
-    content:
-      "Zoom out to recover wider regional context and compare a larger area.",
-    position: "left",
-  },
-  {
-    target: "#resetBearing",
-    title: "Reset Bearing and Tilt",
-    content:
-      "Use this to return the map to a clean default orientation after rotating or tilting the view.",
+      "This graduation-cap icon is what you just clicked to start this tour. Click it any time to restart the walkthrough — it will guide you through every element again, useful for training new operators.",
     position: "left",
   },
   {
     target: "#toggle3D",
     title: "3D Toggle",
     content:
-      "Switch between standard 2D viewing and a more terrain-focused 3D perspective.",
+      "Switches between standard 2D flat view and a tilted 3D view with terrain relief. Great for visualising mountain flooding, glacial catchments, and topographic hazard exposure.",
     position: "left",
   },
   {
     target: "#projectionSwitch",
     title: "Projection Switch",
     content:
-      "Open the projection options to switch how the world is represented on the map.",
+      "Cycles between Mercator (default flat), Globe (spherical), and other Mapbox projections. Globe mode gives you Google Earth-style rotation for a briefing look.",
     position: "left",
   },
   {
     target: "#windParticles",
-    title: "Wind Animation",
+    title: "Wind Particle Animation",
     content:
-      "This control toggles animated wind particles to visualize atmospheric flow.",
+      "Toggles GPU-accelerated wind-particle streamlines using the current wind forecast — animated arrows sweeping across the country show flow, speed, and eddies at a glance.",
     position: "left",
   },
   {
     target: "#oceanParticles",
-    title: "Ocean Currents",
+    title: "Ocean Currents Animation",
     content:
-      "This control toggles animated ocean current particles for marine context.",
+      "Toggles animated ocean-current particles for the Arabian Sea and coastal waters — pairs well with the Ocean Surface Currents / Temperature / Salinity temporal layers.",
+    position: "left",
+  },
+  {
+    target: "#geoglowsForecast",
+    title: "GeoGLOWS Forecast",
+    content:
+      "Toggles GeoGLOWS river-discharge forecast mode — click any river reach on the map to see its 15-day discharge hydrograph and ensemble spread in a chart popup.",
     position: "left",
   },
   {
     target: "#locate",
-    title: "Locate",
+    title: "Locate to Islamabad",
     content:
-      "Use this button to jump quickly to the configured working location or point of interest.",
+      "Snaps the map to Islamabad — a fast way to return to the operational headquarters view without hunting for the extent.",
     position: "left",
   },
   {
     target: "#localNews",
-    title: "Local News",
+    title: "Local News Panel",
     content:
-      "Open the local news panel to monitor operationally relevant headlines alongside the map.",
+      "Opens a scrolling panel of operationally-relevant news headlines — a background awareness ticker that runs alongside your map work.",
     position: "left",
   },
   {
     target: "#geeChat",
     title: "GEE Chatbot",
     content:
-      "Open the GEE chatbot for guided interaction and data support inside the application.",
-    position: "left",
-  },
-  {
-    target: "#osmData",
-    title: "OpenStreetMap Data",
-    content:
-      "Use this control to access OpenStreetMap-based data and supporting context layers.",
+      "Opens the Google Earth Engine chatbot — ask natural-language questions about GEE datasets and get guided suggestions for what to query.",
     position: "left",
   },
   {
     target: "#homeExtent",
-    title: "Home Extent",
+    title: "Home Extent — South Asia",
     content:
-      "Return the map quickly to the default operational extent for a consistent overview.",
+      "Zooms the map to the default South-Asia regional extent. Use it as a reset when you've drilled deep into a district and want the big picture back.",
     position: "left",
   },
   {
     target: "#storyBtn",
     title: "Story Panel",
     content:
-      "Open the story panel to run map-based narratives and guided story workflows.",
+      "Opens the story-mode panel where map-based narratives (guided walkthroughs of past events, briefings, training scenarios) can be played back turn-by-turn.",
     position: "left",
   },
   {
-    target: "#navToggleBtn",
-    title: "Navigation Toggle",
+    target: "#zoomIn",
+    title: "Zoom In",
     content:
-      "Collapse or expand the navigation controls to save space when you want a cleaner map view.",
+      "Steps the zoom level up by one — pinch/scroll works too, but this button gives a predictable increment.",
     position: "left",
   },
   {
-    target: ".mapboxgl-ctrl-zoom-in",
-    title: "Zoom Controls",
+    target: "#zoomOut",
+    title: "Zoom Out",
     content:
-      "Zoom in and out for regional overview or local detail. This works alongside mouse and touch gestures.",
+      "Steps the zoom level down by one to recover wider regional context.",
     position: "left",
   },
   {
-    target: ".mapboxgl-ctrl-compass",
-    title: "Compass and Rotation",
+    target: "#resetBearing",
+    title: "Reset Bearing & Tilt",
     content:
-      "Reset north or rotate the map orientation for different viewing angles when presenting or analyzing features.",
+      "Snaps the map back to north-up, zero-tilt — useful after rotating or tilting the view for a presentation angle.",
     position: "left",
   },
+
+  // ===============================================================
+  //  MISCELLANEOUS + WRAP-UP
+  // ===============================================================
   {
-    target: "#mapbox-gl-elevation",
-    title: "Elevation Profile",
+    target: ".mapboxgl-ctrl-scale",
+    title: "Scale Bar",
     content:
-      "Analyze terrain variation and slopes for access, route review, and topographic context.",
-    position: "left",
-  },
-  {
-    target: "#geoglowsForecast",
-    title: "GeoGLOWS Forecast Tool",
-    content:
-      "Use GeoGLOWS mode for river forecast context and hydrologic monitoring on the map.",
-    position: "left",
-  },
-  {
-    target: "#mapbox-gl-globe-projection",
-    title: "Projection Control",
-    content:
-      "Switch between flat and globe-style map perspectives depending on the view you need.",
-    position: "left",
+      "The scale bar in the bottom-left updates live with your zoom level — an at-a-glance distance reference for anything you're measuring.",
+    position: "top",
   },
   {
     target: ".ncop-container.fixed.top-3.left-3.z-50, #themeToggleBtn",
     title: "Theme Toggle",
     content:
-      "Switch the interface theme to match your working environment and improve readability.",
+      "Switches between day and night themes for the whole interface. Night mode is designed for dark operations rooms and reduces eye strain during long shifts.",
     position: "bottom",
   },
   {
-    target: ".custom-tour-control",
-    title: "NCOP Tour",
+    target: "#ncopTourToggle",
+    title: "That's the full tour",
     content:
-      "You can restart this guided walkthrough anytime from this tour control.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, and the new Geology + Seismology + expanded Hydrological Layers. Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];
@@ -436,40 +578,154 @@ function ensureTourStyles() {
       color: #fff;
     }
 
+    /* -----------------------------------------------------------------
+       Blinking outline — theme-independent + prominent.
+       Uses the highest-specificity selectors we can practically apply so
+       we beat the .map-right-rail > .rail-btn baseline in _controls.css
+       (which sets border: 1px solid var(--rail-border) !important)
+       and both day/night theme rules.
+       Colours are hard-coded (not CSS-var) so the pulse looks identical
+       in day and night themes. The will-change hint promotes the button
+       to its own layer so the box-shadow pulse stays smooth.
+       ----------------------------------------------------------------- */
+    .map-right-rail > .custom-tour-btn:not(.active),
     .custom-tour-btn:not(.active) {
-      animation: ncopTourBlink 1.8s ease-in-out infinite;
+      animation: ncopTourBlink 1.4s ease-in-out infinite !important;
+      will-change: box-shadow, border-color, transform;
+      position: relative;
+      z-index: 5;
     }
 
+    .map-right-rail > .custom-tour-btn:not(.active) svg,
     .custom-tour-btn:not(.active) svg {
-      animation: ncopTourIconBlink 1.8s ease-in-out infinite;
+      animation: ncopTourIconBlink 1.4s ease-in-out infinite !important;
     }
 
+    /* Green pulse — emerald-500 (#22c55e / rgb(34, 197, 94)) picked
+       because it reads as "start here / go" in every theme and stays
+       high-contrast against both light and dark rails.  Hard-coded RGB
+       so no CSS variable can dim it. */
     @keyframes ncopTourBlink {
       0%,
       100% {
-        border-color: rgba(255, 255, 255, 0.18);
+        border-color: rgba(34, 197, 94, 0.60) !important;
         box-shadow:
-          0 0 0 rgba(70, 178, 255, 0),
-          inset 0 0 0 rgba(70, 178, 255, 0);
+          0 0 0 0 rgba(34, 197, 94, 0.55),
+          0 0 6px rgba(34, 197, 94, 0.40),
+          inset 0 0 4px rgba(34, 197, 94, 0.22) !important;
+        transform: scale(1);
       }
       50% {
-        border-color: var(--ndma-blue-glow, rgba(70, 178, 255, 0.55));
+        border-color: rgba(34, 197, 94, 1) !important;
         box-shadow:
-          0 0 12px var(--ndma-blue-glow, rgba(70, 178, 255, 0.25)),
-          inset 0 0 8px rgba(70, 178, 255, 0.14);
+          0 0 0 4px rgba(34, 197, 94, 0.32),
+          0 0 20px rgba(34, 197, 94, 0.85),
+          inset 0 0 10px rgba(34, 197, 94, 0.45) !important;
+        transform: scale(1.06);
       }
     }
 
     @keyframes ncopTourIconBlink {
       0%,
       100% {
-        color: inherit;
-        filter: drop-shadow(0 0 0 rgba(70, 178, 255, 0));
+        color: #22c55e !important;
+        stroke: #22c55e !important;
+        filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.40));
       }
       50% {
-        color: #8fd3ff;
-        filter: drop-shadow(0 0 6px var(--ndma-blue-glow, rgba(70, 178, 255, 0.25)));
+        color: #ffffff !important;
+        stroke: #ffffff !important;
+        filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.90));
       }
+    }
+
+    /* -----------------------------------------------------------------
+       First-load floating tooltip — appears 500 ms after the button is
+       rendered, points to it from the left, auto-dismisses after 10 s
+       or on any click.  Positioned absolutely relative to the button's
+       viewport rect via inline styles set by the JS.
+       ----------------------------------------------------------------- */
+    .ncop-tour-floating-hint {
+      position: fixed;
+      z-index: 10005;
+      max-width: 260px;
+      padding: 12px 14px 12px 14px;
+      color: #f8fafc;
+      /* Green gradient so the tooltip visually reads as an extension of
+         the pulsing button it points to (both use emerald-500 rgb). */
+      background:
+        linear-gradient(135deg, rgba(22, 163, 74, 0.98), rgba(34, 197, 94, 0.98));
+      border: 1px solid rgba(255, 255, 255, 0.30);
+      border-radius: 12px;
+      box-shadow:
+        0 12px 32px rgba(2, 6, 23, 0.55),
+        0 0 24px rgba(34, 197, 94, 0.55);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12.5px;
+      font-weight: 500;
+      line-height: 1.5;
+      letter-spacing: 0.1px;
+      opacity: 0;
+      transform: translateX(8px) scale(0.95);
+      transition:
+        opacity 0.28s ease,
+        transform 0.28s ease;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .ncop-tour-floating-hint.visible {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+
+    .ncop-tour-floating-hint__title {
+      display: block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.92);
+      margin-bottom: 4px;
+    }
+
+    .ncop-tour-floating-hint__close {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      width: 18px;
+      height: 18px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.20);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ncop-tour-floating-hint__close:hover {
+      background: rgba(0, 0, 0, 0.40);
+    }
+
+    /* Arrow pointing from the tooltip's right edge to the button — CSS
+       triangle via a rotated square with the same gradient background. */
+    .ncop-tour-floating-hint::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -6px;
+      width: 12px;
+      height: 12px;
+      background: rgba(34, 197, 94, 0.98);
+      transform: translateY(-50%) rotate(45deg);
+      border-right: 1px solid rgba(255, 255, 255, 0.30);
+      border-top: 1px solid rgba(255, 255, 255, 0.30);
+      border-top-right-radius: 2px;
     }
 
     .ncop-tour-panel {
@@ -777,6 +1033,29 @@ function closeLayerInfoPanel() {
   document.getElementById("layerInfoPanel")?.classList.remove("visible");
 }
 
+// New rail-panel helpers added for the expanded tour — each mirrors the
+// existing pattern: check if the panel is already visible, otherwise
+// click its rail toggle to open it.  Closers are called from
+// cleanupStepContext when the tour moves off the corresponding step.
+function closeWeatherReportPanel() {
+  document.querySelector(".weather-report-panel")?.classList.remove("visible");
+}
+
+function closeLayerStylePanel() {
+  document.getElementById("layerStylePanel")?.classList.remove("visible");
+}
+
+// Geocoder needs both the panel AND the button's active class flipped —
+// the button owns its own "active-geocoder" flag that the app uses to
+// style the rail button + drive the "click-outside to close" behaviour
+// (see geocoder-control.js).  Toggle by clicking to keep both in sync.
+function closeGeocoderPanel() {
+  const panel = document.getElementById("geocoderPanel");
+  if (panel?.classList.contains("visible")) {
+    document.getElementById("geocoderToggle")?.click();
+  }
+}
+
 function getAccordionHeaderByTitle(title) {
   const headers = Array.from(document.querySelectorAll(".accordion-header"));
   return (
@@ -1016,6 +1295,30 @@ class NCOPTour {
         await this.waitForUISettle(180);
         break;
       }
+      case "openWeatherReportPanel": {
+        const panel = document.querySelector(".weather-report-panel");
+        if (!panel || !panel.classList.contains("visible")) {
+          document.getElementById("weatherReportToggle")?.click();
+        }
+        await this.waitForUISettle(220);
+        break;
+      }
+      case "openLayerStylePanel": {
+        const panel = document.getElementById("layerStylePanel");
+        if (panel && !panel.classList.contains("visible")) {
+          document.getElementById("layerStyleToggle")?.click();
+        }
+        await this.waitForUISettle(180);
+        break;
+      }
+      case "openGeocoderPanel": {
+        const panel = document.getElementById("geocoderPanel");
+        if (!panel || !panel.classList.contains("visible")) {
+          document.getElementById("geocoderToggle")?.click();
+        }
+        await this.waitForUISettle(220);
+        break;
+      }
       default:
         break;
     }
@@ -1038,10 +1341,26 @@ class NCOPTour {
       "openSidebarSubcategory",
       "activateTemporalItem",
     ]);
+
+    // "Sidebar section" = any step that logically belongs to the sidebar/
+    // temporal-slider walkthrough.  The temporal-slider step itself uses no
+    // `action` (it just highlights #temp-slider1), so if we relied only on
+    // `sidebarActions.has(action)` the sidebar would close between the
+    // "activateTemporalItem" step and the "#temp-slider1" step — and again
+    // when moving from #temp-slider1 to the next category step (ECMWF,
+    // Meteoblue, Live Meteorological Operations, …).  We want the sidebar
+    // to stay open through ALL of that.  It should close only when we
+    // truly leave the catalogue and head into the right-rail section.
+    const isSidebarSectionStep = (step) => {
+      if (!step) return false;
+      if (step.target === "#temp-slider1") return true;
+      if (step.action && sidebarActions.has(step.action)) return true;
+      return false;
+    };
+
     if (
-      previousStep?.action &&
-      sidebarActions.has(previousStep.action) &&
-      (!nextStep?.action || !sidebarActions.has(nextStep.action))
+      isSidebarSectionStep(previousStep) &&
+      !isSidebarSectionStep(nextStep)
     ) {
       closeSidebarPanel();
     }
@@ -1075,10 +1394,36 @@ class NCOPTour {
     }
 
     if (
+      previousStep?.action === "openWeatherReportPanel" &&
+      nextStep?.action !== "openWeatherReportPanel"
+    ) {
+      closeWeatherReportPanel();
+    }
+
+    if (
+      previousStep?.action === "openLayerStylePanel" &&
+      nextStep?.action !== "openLayerStylePanel"
+    ) {
+      closeLayerStylePanel();
+    }
+
+    if (
+      previousStep?.action === "openGeocoderPanel" &&
+      nextStep?.action !== "openGeocoderPanel"
+    ) {
+      closeGeocoderPanel();
+    }
+
+    // The demo temporal layer (Specific Humidity 2m) should stay loaded on
+    // the map for as long as we're still inside the sidebar section — that
+    // way when the user is reading the ECMWF / Meteoblue / Live Met Ops
+    // category cards, they can still see the slider + legend + animation
+    // context that step 15 introduced.  Only tear it down once we leave
+    // the sidebar section entirely.
+    if (
       (previousStep?.action === "activateTemporalItem" ||
         previousStep?.target === "#temp-slider1") &&
-      nextStep?.target !== "#temp-slider1" &&
-      nextStep?.action !== "activateTemporalItem"
+      !isSidebarSectionStep(nextStep)
     ) {
       toggleTemporalItem("Specific Humidity (2m Above Ground)", false);
     }
@@ -1369,5 +1714,74 @@ export class NCOPTourControl {
     document
       .getElementById("layerInfoToggle")
       ?.addEventListener("click", closeTourPanel);
+
+    // First-load floating hint — appears next to the tour button ~1.2s
+    // after mount (giving `buildUnifiedRightRail` time to flatten the
+    // button into `.map-right-rail`, otherwise `getBoundingClientRect`
+    // returns the wrong position).  Auto-dismisses after 10s or on any
+    // click / on start of the tour.
+    this.#scheduleFirstLoadHint();
+  }
+
+  #scheduleFirstLoadHint() {
+    setTimeout(() => this.#showFirstLoadHint(), 1200);
+  }
+
+  #showFirstLoadHint() {
+    // If the button isn't on-screen yet (e.g. rail hasn't rendered), bail.
+    const btn = document.getElementById("ncopTourToggle");
+    if (!btn || !btn.getBoundingClientRect().width) return;
+    // Never re-show once dismissed in the current session.
+    if (document.querySelector(".ncop-tour-floating-hint")) return;
+
+    const hint = document.createElement("div");
+    hint.className = "ncop-tour-floating-hint";
+    hint.innerHTML = `
+      <button class="ncop-tour-floating-hint__close" type="button" aria-label="Dismiss">&times;</button>
+      <span class="ncop-tour-floating-hint__title">New here?</span>
+      Take the guided tour to learn every control, layer, and feature of NCOP in a few minutes.
+    `;
+    document.body.appendChild(hint);
+
+    // Position: to the LEFT of the tour button, vertically centred on it.
+    const rect = btn.getBoundingClientRect();
+    // Measure the hint AFTER it's in the DOM so width/height are known.
+    const hintRect = hint.getBoundingClientRect();
+    const gap = 14;
+    let top  = rect.top + rect.height / 2 - hintRect.height / 2;
+    let left = rect.left - hintRect.width - gap;
+    // Clamp to viewport.
+    top  = Math.max(10, Math.min(top,  window.innerHeight - hintRect.height - 10));
+    left = Math.max(10, left);
+    hint.style.top  = `${top}px`;
+    hint.style.left = `${left}px`;
+
+    // Fade in.
+    requestAnimationFrame(() => hint.classList.add("visible"));
+
+    // Auto-dismiss after 10 s.
+    const autoHideId = setTimeout(() => this.#dismissFirstLoadHint(hint), 10000);
+
+    // Dismiss on close button, on tap of the hint itself, or on tour start.
+    const dismiss = () => {
+      clearTimeout(autoHideId);
+      this.#dismissFirstLoadHint(hint);
+    };
+    hint
+      .querySelector(".ncop-tour-floating-hint__close")
+      ?.addEventListener("click", (e) => { e.stopPropagation(); dismiss(); });
+    hint.addEventListener("click", () => {
+      dismiss();
+      // A click on the body of the tooltip opens the tour panel like the
+      // button itself would — a "yes, I want the tour" affordance.
+      this.button?.click();
+    });
+    this.button?.addEventListener("click", dismiss, { once: true });
+  }
+
+  #dismissFirstLoadHint(hint) {
+    if (!hint || !hint.parentElement) return;
+    hint.classList.remove("visible");
+    setTimeout(() => hint.parentElement && hint.remove(), 320);
   }
 }
