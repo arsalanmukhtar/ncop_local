@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     dashboard_view,
+    documentation_view,
     login_view,
     signup_view,
     logout_view,
@@ -42,6 +43,7 @@ from .views import (
 
 urlpatterns = [
     path("", dashboard_view, name="dashboard"),
+    path("docs/", documentation_view, name="documentation"),
 
     path("login/", login_view, name="login"),
     path("signup/", signup_view, name="signup"),

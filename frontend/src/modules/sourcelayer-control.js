@@ -418,13 +418,6 @@ export class SourceLayerControl {
         }
       }
 
-      // console.log(`🔧 Adding ${type} source:`, {
-      //   id,
-      //   type,
-      //   tileSize: sourceDefinition.tileSize,
-      //   tiles: tiles ? `${tiles.length} tile URLs` : "no tiles",
-      // });
-
       this.map.addSource(id, sourceDefinition);
       return true;
     } catch (error) {

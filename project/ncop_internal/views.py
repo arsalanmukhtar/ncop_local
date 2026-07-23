@@ -125,6 +125,17 @@ def dashboard_view(request):
     })
 
 
+# ============================================================================
+# NCOP Documentation
+# ----------------------------------------------------------------------------
+# Renders the self-contained product/technical documentation page consumed by
+# the in-app "Documentation" button on the dashboard header.  No login is
+# required — the page contains no user data, only platform documentation.
+# ============================================================================
+def documentation_view(request):
+    return render(request, "documentation.html")
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")

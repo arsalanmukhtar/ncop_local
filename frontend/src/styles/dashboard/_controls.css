@@ -363,11 +363,11 @@ button.custom-nav-btn.active-news {
    (.custom-nav-btn, .custom-user-btn, .custom-menu-btn,
    .custom-basemap-btn, .custom-layer-btn, .custom-layer-info-btn,
    .custom-tour-btn, .custom-geocoder-btn, .custom-layer-style-btn). */
-.map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report) {
+.map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report):not(.active-split-compare) {
     background: var(--primary-bg) !important;
 }
 
-[data-theme="night"] .map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report) {
+[data-theme="night"] .map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report):not(.active-split-compare) {
     background: var(--glass-highlight) !important;
 }
 

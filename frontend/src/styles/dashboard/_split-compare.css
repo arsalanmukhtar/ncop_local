@@ -1,0 +1,711 @@
+/* =========================================================================
+ * _split-compare.css
+ * -------------------------------------------------------------------------
+ * Styles for the Split Compare View feature (see
+ * frontend/src/modules/split-compare-control.js).  Every selector is
+ * namespaced under `.split-compare-*`, `.sc-*`, `#temp-slider2` or
+ * `body.split-compare-active` so nothing here can bleed into the existing
+ * right-rail, temporal slider or map chrome when compare mode is off.
+ * ========================================================================= */
+
+/* ============================================================
+ * Rail button
+ * ------------------------------------------------------------
+ * Mirrors the weather-report button's baseline (see
+ * _weather-report.css:23-58) so day/night resting fills, hover
+ * transitions, and the active-panel highlight all read
+ * identically to the neighbouring rail controls.  Without these
+ * `.map-right-rail >` scoped rules the button had no baseline
+ * background and fell through to the browser default <button>
+ * paint — visible as a light greenish tile against the rest of
+ * the rail.
+ * ============================================================ */
+.custom-split-compare-control { display: contents; }
+
+.map-right-rail > .custom-split-compare-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: var(--white) !important;
+    cursor: pointer;
+}
+
+/* Hover — matches the unified hover effect, but scoped so the
+   active-split-compare state isn't overpainted. */
+.map-right-rail > .custom-split-compare-btn:hover:not(.active-split-compare) {
+    background: var(--primary-bg) !important;
+}
+
+/* Night-mode resting — mirror the weather-report/geocoder pattern
+   so the rail stays visually homogeneous across both themes. */
+[data-theme="night"] .map-right-rail > .custom-split-compare-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="night"] .map-right-rail > .custom-split-compare-btn:hover:not(.active-split-compare) {
+    background: var(--glass-highlight) !important;
+}
+
+/* Active state — split view is on.  Uses NDMA-blue to match the
+   weather-report / geocoder / layer-style "this is on" affordance. */
+.map-right-rail > .custom-split-compare-btn.active-split-compare {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ============================================================
+ * Overlay + inner container + divider
+ * ============================================================ */
+.split-compare-overlay {
+    /* Explicit width/height (not just `inset:0`) because some Mapbox
+       basemaps set the parent #map to a container-query size context
+       that trips up inset-based sizing; measured `%` values always
+       resolve to the real container width/height. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 15;
+    pointer-events: none;
+}
+
+.split-compare-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: auto;
+    /* Mapbox needs an explicit background otherwise its WebGL canvas
+       shows the primary map through when the tile-fetch is still in
+       flight, hiding the split visually. */
+    background: #ddd;
+}
+
+.split-compare-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    margin-left: -3px;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.85) 0%,
+        rgba(255, 255, 255, 0.55) 50%,
+        rgba(255, 255, 255, 0.85) 100%
+    );
+    box-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.55),
+        0 0 6px rgba(0, 0, 0, 0.35);
+    cursor: ew-resize;
+    pointer-events: auto;
+    z-index: 20;
+}
+
+.split-compare-divider__grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 48px;
+    background: rgba(15, 23, 42, 0.92);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.split-compare-divider__grip::before,
+.split-compare-divider__grip::after {
+    content: "";
+    width: 2px;
+    height: 22px;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 1px;
+    margin: 0 3px;
+}
+
+/* ============================================================
+ * When compare mode is ACTIVE (body.split-compare-active):
+ *   - Hide the NCOP header card top-left (not useful in split view)
+ *   - Reposition the existing primary temporal slider (#temp-slider1)
+ *     from its default top-bar position to the BOTTOM-LEFT half so
+ *     Slider A + Slider B can sit side-by-side under their panes.
+ *   - Give the primary temporal slider a "Map A" badge for parity.
+ * ============================================================ */
+body.split-compare-active .ncop-container {
+    display: none !important;
+}
+
+/* Hide the entire right rail + slide-out panels while compare mode is
+   active — the ✕ button on the bottom panel is the only way out, and
+   every other rail control is irrelevant to the split view.  Restored
+   automatically the moment `split-compare-active` is removed.
+
+   IMPORTANT: the top-left hamburger menu (`.custom-menu-control` →
+   `#menuToggle`) and the sidebar it opens (`#sidebarPanel`) are
+   deliberately NOT in this list — the user needs the menu button to
+   reach Map A's layer catalogue while the split view is active. */
+body.split-compare-active .map-right-rail,
+body.split-compare-active .custom-nav-control,
+body.split-compare-active .weather-report-panel,
+body.split-compare-active .basemap-panel,
+body.split-compare-active .layer-order-panel,
+body.split-compare-active .layer-info-panel,
+body.split-compare-active .layer-style-panel {
+    display: none !important;
+}
+
+/* Belt-and-braces: force the hamburger menu to render above the split
+   overlay (z-index 15) so no future cascade change can clip it.  Only
+   applies while compare mode is on — normal state is untouched. */
+body.split-compare-active .custom-menu-control {
+    display: block !important;
+    z-index: 1500 !important;
+}
+body.split-compare-active #sidebarPanel {
+    z-index: 1600 !important;   /* above menu button + overlay */
+}
+
+body.split-compare-active #temp-slider1 {
+    /* Reposition Slider A to the TOP-LEFT half so both sliders sit
+       side-by-side above their respective panes. */
+    top: 20px !important;
+    bottom: auto !important;
+    left: 20px !important;
+    right: auto !important;
+    width: calc(50% - 40px) !important;
+    max-width: none !important;
+    z-index: 1002;
+}
+
+/* MAP A badge on Slider A */
+body.split-compare-active #temp-slider1::before {
+    content: "MAP A";
+    position: absolute;
+    top: -12px;
+    left: 12px;
+    padding: 2px 8px;
+    background: rgba(59, 130, 246, 0.95);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    border-radius: 4px;
+    z-index: 2;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* ============================================================
+ * Slider B — full replica of #temp-slider1 (mirrored styles)
+ *
+ * Most rules in _temporal.css are ID-scoped to #temp-slider1
+ * (or #playPauseButton1 / #legend-container-slider1 / #slider1 /
+ *  #tempslider-controls / #dragControlButton / #opacityControlButton),
+ * so they don't cascade to the `_b` twins.  We mirror ALL of them
+ * here — identical layout, identical measurements, identical
+ * night-mode overrides — so Slider B is pixel-for-pixel identical
+ * to Slider A other than its "MAP B" badge and colour accent.
+ *
+ * Any change to the source rules in _temporal.css must be reflected
+ * here manually — that's the trade-off for keeping this feature
+ * additive with zero touches to the primary slider CSS.
+ * ============================================================ */
+
+/* ---- shell ---- */
+#temp-slider2.sc-temp-slider-b {
+    position: absolute;
+    top: 20px;
+    left: calc(50% + 20px);
+    right: 20px;
+    padding: 0;
+    background-color: var(--primary-bg);
+    border: 1px solid var(--glass-lighter);
+    border-radius: 14px;
+    display: block;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-soft);
+    z-index: 1002;
+    box-sizing: border-box;
+    touch-action: none;
+}
+
+#temp-slider2 > .tempslider-layout {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+/* MAP B badge */
+#temp-slider2.sc-temp-slider-b::before {
+    content: "MAP B";
+    position: absolute;
+    top: -12px;
+    left: 12px;
+    padding: 2px 8px;
+    background: rgba(139, 92, 246, 0.95);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    border-radius: 4px;
+    z-index: 2;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Row 1 :: Transport panel (play / pause / speed) ---- */
+#tempslider-controls-b.ts-panel--transport {
+    flex-shrink: 0;
+    gap: 10px;
+    padding: 0 18px;
+    background: var(--overlay-bg);
+    border-right: 1px solid var(--border-dark);
+    position: static;
+    margin: 0;
+    width: auto;
+}
+
+#tempslider-controls-b button {
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    transition: all 0.2s ease;
+    border: none;
+}
+
+#playPauseButton1_b,
+#playPauseButton2_b {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--ndma-blue-opaque);
+    border: 1px solid var(--ndma-blue-light);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+#playPauseButton1_b:hover,
+#playPauseButton2_b:hover {
+    background: var(--ndma-blue);
+}
+
+/* Play glyph nudged 2px right so the triangle is optically centered
+   inside the round button (mirrors _temporal.css:116-119 which does
+   the same for #playPauseButton1). */
+#playPauseButton1_b i,
+#playPauseButton1_b svg {
+    margin-left: 2px;
+}
+
+/* Icon color + font-size only — DO NOT set width/height here.  Lucide's
+   generated <svg> declares width="24" height="24" on itself, which fills
+   the 40px round play button nicely; overriding to 16px was shrinking
+   the play triangle so it looked like a dot in the middle of the button. */
+#tempslider-controls-b button i,
+#tempslider-controls-b button svg {
+    font-size: 16px !important;
+    color: var(--white) !important;
+    margin: 0;
+}
+
+#tempslider-controls-b .speed-btn {
+    width: auto;
+    min-width: 40px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 4px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    color: var(--white);
+}
+
+#tempslider-controls-b .speed-btn:hover {
+    background: var(--hover-bg);
+}
+
+/* ---- Row 1 :: Timeline panel (year-labels + slider track) ---- */
+#temp-slider2 .year-labels1 {
+    position: relative;
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    margin-bottom: 14px;
+}
+
+#temp-slider2 .year-labels1 span {
+    position: absolute;
+    top: 0;
+    margin: 0 !important;
+    padding: 2px 8px;
+    font-size: var(--ts-label-font-size, 12px);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    transform: translateX(-50%);
+    transition: all 0.2s ease;
+}
+
+#temp-slider2 .year-labels1 span::after {
+    content: "";
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--border-light);
+    transition: all 0.2s ease;
+}
+
+#temp-slider2 .year-labels1 span:hover {
+    color: var(--text-primary);
+}
+
+#temp-slider2 .year-labels1 span.is-active {
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+#temp-slider2 .year-labels1 span.is-active::after {
+    top: calc(100% + 4px);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2.5px solid var(--ndma-blue);
+    box-shadow: 0 0 10px rgba(70, 178, 255, 0.7);
+    transform: translateX(-50%);
+}
+
+/* ---- Row 1 :: Slider track (input range) ---- */
+#slider1_b {
+    position: static;
+    top: auto;
+    left: auto;
+    margin: 0;
+}
+
+#temp-slider2 .slider1 {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--border-dark);
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+}
+#temp-slider2 .slider1:focus { outline: none; }
+#temp-slider2 .slider1::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+#temp-slider2 .slider1::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+/* ---- Row 1 :: Drag panel (disabled visual for Slider B) ---- */
+#dragControlButton_b.ts-panel--drag {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    padding: 0;
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+#dragControlButton_b.ts-panel--drag i,
+#dragControlButton_b.ts-panel--drag svg {
+    width: 20px;
+    height: 20px;
+    color: currentColor !important;
+}
+
+/* ---- Row 2 :: Legend container (mirror of #legend-container-slider1) ---- */
+#legend-container-slider1_b {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Row 2 outer legend cell reset — .sc-slider-b-legend was leftover
+   custom padding that squashed the mirrored legend.  Remove it so the
+   .ts-panel--legend padding from _temporal.css governs alone. */
+#temp-slider2 .sc-slider-b-legend { padding: 0; }
+
+/* ---- Row 2 :: Opacity panel (disabled visual for Slider B) ---- */
+#opacityControlButton_b.ts-panel--opacity {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    padding: 0;
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+#opacityControlButton_b.ts-panel--opacity i,
+#opacityControlButton_b.ts-panel--opacity svg {
+    width: 20px;
+    height: 20px;
+    color: currentColor !important;
+}
+
+/* ---- Night-mode overrides for Slider B (mirror of _temporal.css:510-523) ---- */
+[data-theme="night"] #temp-slider2 .year-labels1 span {
+    color: var(--text-secondary);
+}
+[data-theme="night"] #temp-slider2 .year-labels1 span.is-active {
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 8px rgba(70, 178, 255, 0.5);
+}
+[data-theme="night"] #temp-slider2 .year-labels1 span.is-active::after {
+    background: var(--ndma-blue);
+}
+
+/* ============================================================
+ * Baseline reset for BOTH sliders while compare mode is active.
+ *
+ * `_recomputeDateInset()` in temporal-controls.js sets a dynamic
+ * `--date-inset` + `--ts-label-font-size` on #temp-slider1 based on
+ * its measured width.  When compare mode activates, #temp-slider1
+ * suddenly narrows to 50%, but that JS only reruns on window resize
+ * — so the previously-cached wide-layout values leak in, pushing
+ * year-labels out of view.  Forcing sane fallbacks here restores
+ * visible dates + tick marks on both panes without touching the
+ * source module.
+ * ============================================================ */
+body.split-compare-active #temp-slider1 .ts-panel--timeline,
+#temp-slider2 .ts-panel--timeline {
+    --date-inset: 34px !important;
+}
+
+body.split-compare-active #temp-slider1 .year-labels1,
+#temp-slider2 .year-labels1 {
+    --ts-label-font-size: 11px !important;
+}
+
+/* ============================================================
+ * Layer-B picker panel — bottom-center, spans a comfortable width
+ * ============================================================ */
+.split-compare-panel--bottom {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1003;
+    width: min(780px, calc(100% - 40px));
+    padding: 12px 18px;
+    background: linear-gradient(180deg,
+        rgba(15, 23, 42, 0.96) 0%,
+        rgba(10, 15, 30, 0.96) 100%);
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 12px;
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(139, 92, 246, 0.18) inset;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.split-compare-panel__row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.split-compare-panel__title {
+    flex: 0 0 auto;
+    font-weight: 800;
+    letter-spacing: 0.9px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #fff;
+    padding: 6px 12px;
+    background: linear-gradient(135deg,
+        rgba(139, 92, 246, 0.55) 0%,
+        rgba(99, 102, 241, 0.55) 100%);
+    border: 1px solid rgba(167, 139, 250, 0.55);
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);
+}
+
+/* Native <select> styled to sit inline with the pill title.  The
+   custom chevron uses a data-URI SVG so the CSP stays clean and no
+   external asset is fetched. */
+.split-compare-panel__select {
+    flex: 1 1 auto;
+    padding: 8px 34px 8px 12px;
+    background:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")
+        no-repeat right 12px center,
+        rgba(30, 41, 59, 0.90);
+    color: #f1f5f9;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.split-compare-panel__select:hover {
+    background-color: rgba(30, 41, 59, 1);
+    border-color: rgba(148, 163, 184, 0.55);
+}
+
+.split-compare-panel__select:focus {
+    outline: none;
+    border-color: rgba(139, 92, 246, 0.85);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+}
+
+/* Native <optgroup> — most browsers render `label` as bold + italic;
+   we bias it toward a subtle heading tone and keep option text plain. */
+.split-compare-panel__select optgroup {
+    font-weight: 700;
+    font-style: normal;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #a78bfa;
+    background: #1e293b;
+    padding: 4px 0;
+}
+
+.split-compare-panel__select option {
+    font-weight: 500;
+    font-style: normal;
+    font-size: 13px;
+    color: #e2e8f0;
+    background: #1e293b;
+    padding: 6px 8px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.split-compare-panel__select option:disabled {
+    color: rgba(148, 163, 184, 0.55);
+}
+
+.split-compare-panel__close {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.50);
+    color: #fecaca;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.split-compare-panel__close:hover {
+    background: rgba(239, 68, 68, 0.45);
+    color: #fff;
+    border-color: rgba(239, 68, 68, 0.85);
+    transform: scale(1.06);
+}
+
+.split-compare-panel__close:active {
+    transform: scale(0.96);
+}
+
+/* ============================================================
+ * Responsive tweaks
+ * ============================================================ */
+@media (max-width: 900px) {
+    body.split-compare-active #temp-slider1 {
+        left: 12px !important;
+        width: calc(50% - 20px) !important;
+        top: 16px !important;
+    }
+    #temp-slider2.sc-temp-slider-b {
+        left: calc(50% + 8px);
+        right: 12px;
+        top: 16px;
+    }
+    .split-compare-panel--bottom {
+        bottom: 12px;
+        width: calc(100% - 24px);
+        padding: 6px 10px;
+    }
+    .split-compare-panel__row { flex-wrap: wrap; }
+    .split-compare-panel__title { font-size: 10px; }
+    .split-compare-panel__select { min-width: 160px; font-size: 11.5px; }
+}
+
+/* ============================================================
+ * Legacy panel styles retained in case an older HTML snapshot is
+ * still around during hot-reload — they'll be shadowed by the
+ * --bottom variant above.  Safe no-op when the panel is rebuilt.
+ * ============================================================ */
+.split-compare-panel:not(.split-compare-panel--bottom) {
+    display: none;
+}
