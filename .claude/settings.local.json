@@ -2,7 +2,35 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(grep -n \"return { popupId, primary, drawer, drawerTitle: \\\\\"Weather Details\\\\\" };\" frontend/src/modules/layer-attribute-popup.js)",
+      "Bash(awk '/^  #buildHtmlReport/,/^  }$/' frontend/src/modules/weather-report-control.js)",
+      "Bash(awk 'NR==1319,NR==1500 {print NR\": \"$0}' frontend/src/modules/map-layers.js)",
+      "Bash(awk 'NR>=1550 && NR<=1660 {print NR\": \"$0}' frontend/src/modules/map-layers.js)",
+      "Bash(grep -n \"\\\\`weather\\\\` property. Source: /api/pmd/nwfc/observations/\" frontend/src/modules/map-layers.js)",
+      "Bash(node -e \"import\\('./src/modules/map-layers.js'\\).then\\(m => console.log\\('OK, categories:', Object.keys\\(m.ncop_menu_items\\)\\)\\).catch\\(e => console.error\\('FAIL:', e.message\\)\\)\")",
+      "Bash(npx vite *)",
+      "Bash(python -c ' *)",
+      "Bash(npm install *)",
+      "Bash(grep -v \"//\")",
+      "Bash(rm frontend/src/modules/nwfc-lottie-icons.js)",
+      "Bash(rm \"frontend/src/assets/images/nwfc_icons/GIS Share \\(172.18.7.21\\) \\(Z\\) - Shortcut.lnk\")",
+      "Bash(grep -n 'bkn\\\\|\\\\\\\\bovc\\\\\\\\b\\\\|\\\\\\\\bsct\\\\|\\\\\\\\bfew\\\\\\\\b\\\\|\\\\\\\\bskc\\\\\\\\b\\\\|\\\\\\\\bclr\\\\\\\\b' frontend/src/modules/map-icons.js)",
+      "Bash(grep -n '\\\\\\\\bovc\\\\\\\\b\\\\|\\\\\\\\bbkn\\\\\\\\b\\\\|\\\\\\\\bsct\\\\|\\\\\\\\bfew\\\\\\\\b\\\\|\\\\\\\\bskc\\\\\\\\b\\\\|\\\\\\\\bclr\\\\\\\\b\\\\|\\\\\\\\bnsc\\\\\\\\b\\\\|\\\\\\\\bncd\\\\\\\\b' frontend/src/modules/map-icons.js)",
+      "Bash(awk '/\"nwfc_observations-symbol\"/,/\"popup\": true/' frontend/src/modules/map-layers.js)",
+      "Bash(awk '/\"Live Meteorological Operations\"/,/^    \"/' frontend/src/modules/map-layers.js)",
+      "Bash(node -e \"import\\('./frontend/src/modules/map-layers.js'\\).then\\(m => console.log\\('LOAD OK · ncop_menu_items keys:', Object.keys\\(m.ncop_menu_items\\).join\\(', '\\)\\)\\).catch\\(e => { console.error\\('LOAD FAIL:', e.message\\); process.exit\\(1\\); }\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(node --check frontend/src/modules/map-layers.js)",
+      "Bash(awk '/\"Hydrological Layers\":/,/^    \\\\}/' frontend/src/modules/map-layers.js)",
+      "Bash(awk 'NR>=868 && /^    \\\\}/{print NR\": \"$0; exit}' frontend/src/modules/map-layers.js)",
+      "Bash(awk '/\"Geology\":/,/^    \"Seismology\":/' frontend/src/modules/map-layers.js)",
+      "Bash(awk '/\"Seismology\":/,/^  weather:/' frontend/src/modules/map-layers.js)",
+      "Bash(git reset *)",
+      "Bash(node --check frontend/src/modules/split-compare-control.js)",
+      "Bash(node --check frontend/src/modules/nav-controls.js)",
+      "Bash(node -e \"const src = require\\('fs'\\).readFileSync\\('frontend/src/modules/nav-controls.js', 'utf8'\\); const startIdx = src.indexOf\\('const TOUR_STEPS = ['\\); const endIdx = src.indexOf\\('];', startIdx\\); const block = src.slice\\(startIdx, endIdx\\); const matches = block.match\\(/^\\\\s{2}\\\\{$/gm\\) || []; console.log\\('Total steps:', matches.length\\);\")",
+      "Bash(grep -n '\\\\`[^\\\\`]*\\\\`' frontend/src/modules/nav-controls.js)"
     ]
   }
 }

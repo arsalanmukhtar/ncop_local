@@ -53,7 +53,7 @@
 ### Allow Nginx to read Django static files
 	sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/project/static/dist
 ### Restart waitress service and check for logs (optional)
-sudo systemctl restart ncop-waitress.service
-sudo systemctl status  ncop-waitress.service
-sudo journalctl -u ncop-waitress.service -f
+	sudo systemctl restart ncop-waitress.service
+	sudo systemctl status  ncop-waitress.service
+	sudo journalctl -u ncop-waitress.service -f
 ### Commit the changes after final succesfull review

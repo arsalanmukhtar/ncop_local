@@ -471,6 +471,121 @@
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
 }
 
+/* ---------- PMD warn_* channel pills (Temp / Wind / Rain / Vis) ---------- */
+/* Rendered above the metric grid when any warn_* field is non-null.
+   Gives the operator an at-a-glance summary of which channels are
+   currently under a PMD colour-level advisory.  Absent entirely when
+   no channels are flagged. */
+.ncop-popup__warn-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    background: rgba(220, 38, 38, 0.10);
+    border: 1px solid rgba(220, 38, 38, 0.30);
+    border-radius: 6px;
+}
+.ncop-popup__warn-strip-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #ff9b9b;
+    flex: 0 0 auto;
+}
+.ncop-popup__warn-strip-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    flex: 1 1 auto;
+}
+.ncop-popup__warn-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border-radius: 10px;
+    color: #ffffff;
+}
+.ncop-popup__warn-pill--red    { background: #dc2626; }
+.ncop-popup__warn-pill--orange { background: #f97316; }
+.ncop-popup__warn-pill--yellow { background: #eab308; color: #1a1a1a; }
+.ncop-popup__warn-pill--blue   { background: #3b82f6; }
+
+/* ---------- PMD City Forecast — parsed fc[] table ---------- */
+.ncop-popup__fc-title {
+    margin: 10px 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #cfe4ff;
+}
+.ncop-popup__fc-empty {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    font-style: italic;
+}
+/* Horizontally + vertically scrollable so a 12-row forecast table
+   never blows the popup out of the viewport. */
+.ncop-popup__fc-scroll {
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 5px;
+    background: rgba(0,0,0,0.28);
+}
+.ncop-popup__fc-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 10.5px;
+    color: #e6ecf5;
+}
+.ncop-popup__fc-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: rgba(79,159,255,0.35);
+    color: #ffffff;
+    padding: 5px 6px;
+    text-align: left;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.20);
+    white-space: nowrap;
+}
+.ncop-popup__fc-table tbody td {
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.ncop-popup__fc-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.02);
+}
+.ncop-popup__fc-table tbody tr:last-child td { border-bottom: 0; }
+.ncop-popup__fc-time {
+    color: #cfe4ff;
+    font-weight: 600;
+    font-size: 10px;
+}
+/* Compact webkit scrollbar so the table container feels premium */
+.ncop-popup__fc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.ncop-popup__fc-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.14);
+    border-radius: 3px;
+}
+.ncop-popup__fc-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.30);
+}
+
 .ncop-popup__card {
     background: var(--popup-card-bg);
     border: 1px solid var(--popup-card-border);

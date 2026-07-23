@@ -1118,7 +1118,7 @@ export function generateGDPSRelHumLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_RelativeHumidity_2m`,
         ],
       },
       layers: [
@@ -1164,7 +1164,7 @@ export function generateGDPSSpecHumLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HU_2m`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SpecificHumidity_2m`,
         ],
       },
       layers: [
@@ -1226,7 +1226,7 @@ export function generateGDPSAccPreciLayers() {
         tileSize: 256,
         tiles: [
           // Using dayIndex for the time parameter
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_ConvectivePrecip-Accum`,
         ],
       },
       layers: [
@@ -1278,7 +1278,7 @@ export function generateGDPSPreciTypesLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.DIAG_NW_PT1H`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_PrecipType-Significant3h`,
         ],
       },
       layers: [
@@ -1316,7 +1316,7 @@ export function generateSnowDensityWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_DN.3h`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SnowDensity`,
         ],
       },
       layers: [
@@ -1351,7 +1351,7 @@ export function generateSnowDepthWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_SD`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SnowDepth`,
         ],
       },
       layers: [
@@ -1388,7 +1388,7 @@ export function generateSnowfallHourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Snow-Prob`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_Snow-Prob`,
         ],
       },
       layers: [
@@ -1425,7 +1425,7 @@ export function generateThunderstormProbability3HourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Thunderstorm-Prob`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_Thunderstorm-Prob`,
         ],
       },
       layers: [
@@ -1463,7 +1463,7 @@ export function generateLiquidFogProbability3HourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_LiquidFogVisibility`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_LiquidFogVisibility`,
         ],
       },
       layers: [
@@ -1498,7 +1498,7 @@ export function generateConvectivePrecipitationWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_ConvectivePrecip-Accum`,
         ],
       },
       layers: [

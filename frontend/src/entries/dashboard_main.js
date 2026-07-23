@@ -1,6 +1,13 @@
 import "mapbox-gl/dist/mapbox-gl.css";
 import "../styles/dashboard.css";
 
+// Patch fetch/XHR to silently drop mapbox telemetry POSTs BEFORE
+// mapbox-gl loads and fires its first telemetry request.  Ad-blockers
+// block events.mapbox.com by default which spams the console with
+// net::ERR_BLOCKED_BY_CLIENT lines — this module intercepts those
+// requests and returns a fake 204 so the console stays clean.
+import "../modules/mapbox-telemetry-mute.js";
+
 import { createIcons, icons } from "lucide";
 import mapboxgl from "mapbox-gl";
 window.mapboxgl = mapboxgl;
