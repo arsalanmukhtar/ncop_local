@@ -6536,6 +6536,13 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
         return pts
 
     def _fetch_wind(self, lat: float, lon: float) -> Optional[Dict]:
+        # Once we know the daily quota is exhausted, don't waste more
+        # requests on Open-Meteo — every subsequent call would just get
+        # HTTP 429 back and flood the terminal.  The quota resets at UTC
+        # midnight; per-instance short-circuit is enough since the same
+        # request handler owns the flag for the lifetime of one GET.
+        if self._wind_quota_exhausted:
+            return None
         _wop_limiter.wait()
         try:
             r = requests.get(
@@ -6564,6 +6571,7 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                     dirn = dir_arr[0]
 
             if spd is None or dirn is None:
+                self._wind_errors.append(f"lat={lat},lon={lon}: no current/hourly wind fields in response")
                 return None
 
             spd = float(spd)
@@ -6577,11 +6585,46 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "v": round(-math.cos(rad) * spd, 4),
                 "spd": round(spd, 2),
             }
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            body = ""
+            try:
+                body = (e.response.text or "")[:200]
+            except Exception:
+                pass
+            # HTTP 429 with "Daily API request limit exceeded" is the
+            # ONLY 429 signature Open-Meteo emits when the free-tier
+            # quota is done for the day — flip the short-circuit flag
+            # so the remaining grid cells don't each get their own
+            # rejected request + terminal line.
+            if status == 429 and "Daily API request limit exceeded" in body:
+                self._wind_quota_exhausted = True
+                # Record ONE canonical warning instead of 80 identical
+                # rows; the view will hand this to the client as
+                # meta.warning so the browser can surface it.
+                if not self._wind_errors:
+                    self._wind_errors.append(
+                        "Open-Meteo daily wind-forecast quota exhausted. "
+                        "Wind particles will resume after UTC midnight."
+                    )
+                return None
+            msg = f"HTTP {status} at lat={lat},lon={lon}"
+            if body:
+                msg += f" body={body!r}"
+            self._wind_errors.append(msg)
+            print(f"[WOP wind] {msg}")
+            return None
         except Exception as e:
-            print(f"[WOP wind] failed at lat={lat}, lon={lon}: {e}")
+            msg = f"lat={lat},lon={lon}: {type(e).__name__}: {e}"
+            self._wind_errors.append(msg)
+            print(f"[WOP wind] failed {msg}")
             return None
 
     def _fetch_ocean(self, lat: float, lon: float) -> Optional[Dict]:
+        # Same short-circuit pattern as _fetch_wind — once the marine
+        # endpoint's daily quota is done, skip the rest of the grid.
+        if self._ocean_quota_exhausted:
+            return None
         _wop_limiter.wait()
         try:
             r = requests.get(
@@ -6632,8 +6675,31 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "v": round(math.cos(rad) * spd, 4),
                 "spd": round(spd, 4),
             }
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            body = ""
+            try:
+                body = (e.response.text or "")[:200]
+            except Exception:
+                pass
+            if status == 429 and "Daily API request limit exceeded" in body:
+                self._ocean_quota_exhausted = True
+                if not self._ocean_errors:
+                    self._ocean_errors.append(
+                        "Open-Meteo daily ocean-currents quota exhausted. "
+                        "Ocean particles will resume after UTC midnight."
+                    )
+                return None
+            msg = f"HTTP {status} at lat={lat},lon={lon}"
+            if body:
+                msg += f" body={body!r}"
+            self._ocean_errors.append(msg)
+            print(f"[WOP ocean] {msg}")
+            return None
         except Exception as e:
-            print(f"[WOP ocean] failed at lat={lat}, lon={lon}: {e}")
+            msg = f"lat={lat},lon={lon}: {type(e).__name__}: {e}"
+            self._ocean_errors.append(msg)
+            print(f"[WOP ocean] failed {msg}")
             return None
 
     def get(self, request, *args, **kwargs):
@@ -6662,6 +6728,16 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
 
         wind_pts: List[Dict] = []
         ocean_pts: List[Dict] = []
+        # Diagnostic collectors — each _fetch_* appends when it returns
+        # None so the response's `meta.wind_errors` block surfaces WHY
+        # a request failed instead of forcing us to check Django's stdout.
+        self._wind_errors: List[str] = []
+        self._ocean_errors: List[str] = []
+        # Quota short-circuit flags — once flipped, remaining grid cells
+        # skip the network call entirely so we don't hammer Open-Meteo
+        # with 80+ requests that will all return HTTP 429.
+        self._wind_quota_exhausted = False
+        self._ocean_quota_exhausted = False
 
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as ex:
             wind_futs = [ex.submit(self._fetch_wind, lat, lon) for lat, lon in grid]
@@ -6683,6 +6759,27 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 except Exception as e:
                     print(f"[WOP ocean future] {e}")
 
+        # Compose a single, user-facing `warning` string when EITHER
+        # provider is out of daily quota — the frontend uses this to
+        # surface a toast + auto-toggle the button off instead of
+        # leaving it visually "on" while nothing renders.
+        warning = None
+        if self._wind_quota_exhausted and self._ocean_quota_exhausted:
+            warning = ("Wind and ocean data unavailable — Open-Meteo's daily "
+                       "quota is exhausted. Both feeds resume after UTC midnight.")
+        elif self._wind_quota_exhausted:
+            warning = ("Wind data unavailable — Open-Meteo's daily quota is "
+                       "exhausted. Wind animation resumes after UTC midnight.")
+        elif self._ocean_quota_exhausted:
+            warning = ("Ocean currents unavailable — Open-Meteo's daily quota is "
+                       "exhausted. Ocean animation resumes after UTC midnight.")
+
+        # Emit ONE terminal summary line instead of ~80 identical 429 rows.
+        if self._wind_quota_exhausted or self._ocean_quota_exhausted:
+            print(f"[WOP] quota exhausted — wind:{self._wind_quota_exhausted} "
+                  f"ocean:{self._ocean_quota_exhausted} — served "
+                  f"{len(wind_pts)} wind / {len(ocean_pts)} ocean pts from partial fetch")
+
         payload = {
             "bbox": {"s": sw_lat, "w": sw_lng, "n": ne_lat, "e": ne_lng},
             "meta": {
@@ -6692,6 +6789,15 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "wind_count": len(wind_pts),
                 "ocean_count": len(ocean_pts),
                 "empty": (len(wind_pts) == 0 and len(ocean_pts) == 0),
+                # First few failure reasons — bounded so the payload
+                # stays small even if every grid cell errored.  Client
+                # code ignores meta; this is purely for browser DevTools.
+                "wind_errors":  self._wind_errors[:5],
+                "ocean_errors": self._ocean_errors[:5],
+                # Quota flags + user-facing message.
+                "wind_quota_exhausted":  self._wind_quota_exhausted,
+                "ocean_quota_exhausted": self._ocean_quota_exhausted,
+                "warning": warning,
             },
             "wind": wind_pts,
             "ocean": ocean_pts,

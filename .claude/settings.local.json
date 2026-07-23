@@ -30,7 +30,12 @@
       "Bash(node --check frontend/src/modules/split-compare-control.js)",
       "Bash(node --check frontend/src/modules/nav-controls.js)",
       "Bash(node -e \"const src = require\\('fs'\\).readFileSync\\('frontend/src/modules/nav-controls.js', 'utf8'\\); const startIdx = src.indexOf\\('const TOUR_STEPS = ['\\); const endIdx = src.indexOf\\('];', startIdx\\); const block = src.slice\\(startIdx, endIdx\\); const matches = block.match\\(/^\\\\s{2}\\\\{$/gm\\) || []; console.log\\('Total steps:', matches.length\\);\")",
-      "Bash(grep -n '\\\\`[^\\\\`]*\\\\`' frontend/src/modules/nav-controls.js)"
+      "Bash(grep -n '\\\\`[^\\\\`]*\\\\`' frontend/src/modules/nav-controls.js)",
+      "Bash(node --check frontend/src/modules/mapbox-telemetry-mute.js)",
+      "Bash(git ls-remote *)",
+      "Bash(node --check frontend/src/modules/wind-ocean-particles.js)",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('project/ncop_internal/views.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('project/ncop_internal/views.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }
