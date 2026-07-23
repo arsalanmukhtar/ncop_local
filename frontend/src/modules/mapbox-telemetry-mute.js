@@ -43,6 +43,35 @@ function _isTelemetryUrl(url) {
   return false;
 }
 
+/**
+ * Returns a cleaned URL if the input is a `data:` URL that Mapbox v3's
+ * image loader has corrupted with a `?_cors=<timestamp>` cache-buster
+ * suffix.  Mapbox appends `?_cors=` to every image URL for CORS
+ * handling, but data URIs already carry their payload — the appended
+ * query turns them into invalid URLs and the browser throws
+ * `net::ERR_INVALID_URL`.
+ *
+ * We strip the suffix so the fetch resolves normally.  Returns `null`
+ * when the URL is fine as-is (not a data URL, or a data URL without
+ * the corrupting suffix).
+ */
+function _cleanCorruptedDataUrl(url) {
+  if (typeof url !== "string") return null;
+  if (!url.startsWith("data:")) return null;
+  // Mapbox appends `?_cors=<digits>` at the very end.  Find the LAST
+  // occurrence (data URIs can legitimately contain `?` inside base64
+  // payload, though the base64 alphabet excludes `?` — still, be defensive).
+  const marker = "?_cors=";
+  const idx = url.lastIndexOf(marker);
+  if (idx === -1) return null;
+  // Only strip if what follows `?_cors=` is digits (Mapbox's timestamp)
+  // — protects any hypothetical data URI that legitimately ends with
+  // this substring.
+  const tail = url.slice(idx + marker.length);
+  if (!/^\d+$/.test(tail)) return null;
+  return url.slice(0, idx);
+}
+
 (function installFetchPatch() {
   if (typeof window === "undefined" || !window.fetch) return;
   if (window.__mapboxTelemetryMuted) return;
@@ -54,6 +83,14 @@ function _isTelemetryUrl(url) {
       // 204 No Content — Mapbox's telemetry uploader treats any 2xx
       // as "delivered" and moves on quietly.
       return Promise.resolve(new Response(null, { status: 204, statusText: "No Content (telemetry muted)" }));
+    }
+    // Strip Mapbox's `?_cors=<timestamp>` suffix from data URLs before
+    // handing off to the real fetch — see _cleanCorruptedDataUrl.  This
+    // fires purely on string URLs (Request/URL objects can't wrap a
+    // data: URL that way).
+    if (typeof resource === "string") {
+      const cleaned = _cleanCorruptedDataUrl(resource);
+      if (cleaned) return originalFetch(cleaned, init);
     }
     return originalFetch(resource, init);
   };
@@ -73,6 +110,12 @@ function _isTelemetryUrl(url) {
       // Keep the call so the XHR object stays in a valid state, but
       // we'll intercept send() below and fake success without hitting
       // the network.
+    }
+    // Strip Mapbox's `?_cors=<timestamp>` from any data: URL opened via
+    // XHR (Mapbox falls back to XHR when fetch is unavailable / worker).
+    if (typeof url === "string") {
+      const cleaned = _cleanCorruptedDataUrl(url);
+      if (cleaned) url = cleaned;
     }
     return originalOpen.call(this, method, url, ...rest);
   };
