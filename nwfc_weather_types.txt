@@ -1,0 +1,147 @@
+NWFC Station Observations — Weather Types Reference
+=====================================================
+
+Endpoint:  /api/pmd/nwfc/observations/  (per GCOP_PMD_API_Integration.md §4.1)
+Property:  weather   (top-level string on each feature's properties)
+
+Every string the NWFC scrape has been observed to emit for the `weather`
+property is listed below, grouped by the animated icon it maps to on the
+NCOP map.  The keyword patterns (regex, case-insensitive) in the right
+column are exactly what nwfcWeatherIconId() matches against, so any new
+string containing one of those keywords will automatically land in the
+correct icon bucket without a code change.
+
+
+─────────────────────────────────────────────────────────────────
+BUCKET             ANIMATED ICON             KEYWORD PATTERN
+─────────────────────────────────────────────────────────────────
+
+▸ CLEAR / SUNNY    Rotating sun with rays    clear | sunny | fair | dry | bright
+    Clear
+    Sunny
+    Fair
+    Fair Weather
+    Bright
+    Bright Sunshine
+    Dry
+    Sunshine
+
+▸ HOT              Sun + red heat waves       hot | scorch
+    Hot
+    Very Hot
+    Extreme Heat
+    Scorching Heat
+    Heatwave
+
+▸ PARTLY CLOUDY    Small sun + cloud drift   partly cloud | part cloud
+    Partly Cloudy
+    Partly Cloudy Sky
+    Part Cloudy
+
+▸ CLOUDY           Drifting cloud            cloud
+    Cloudy
+    Mostly Cloudy
+    Some Cloudiness
+    Broken Clouds
+    Scattered Clouds
+
+▸ OVERCAST         Two darker clouds         overcast
+    Overcast
+    Overcast Sky
+    Heavy Cloud Cover
+
+▸ DRIZZLE          Sun + small drops          drizzle
+    Drizzle
+    Light Drizzle
+    Occasional Drizzle
+
+▸ RAIN             Cloud + falling drops     shower | rain
+    Rain
+    Light Rain
+    Moderate Rain
+    Heavy Rain
+    Very Heavy Rain
+    Rain Showers
+    Showers
+    Scattered Rain
+    Widespread Rain
+    Isolated Showers
+    Rain-Shower
+
+▸ THUNDERSTORM     Cloud + rain + lightning  thunder | lightning
+    Thunderstorm
+    Thunderstorms
+    Thundery
+    Thundershower
+    Thundershowers
+    Rain-Thundershower
+    Rain-Wind/Thundershower
+    Thunder & Lightning
+    Lightning
+    Isolated Thundershowers
+
+▸ SNOW             Cloud + falling flakes    snow | blizzard | sleet | hail
+    Snow
+    Snowfall
+    Light Snow
+    Heavy Snow
+    Snow Showers
+    Blizzard
+    Sleet
+    Hail
+    Freezing Rain
+
+▸ COLD             Central rotating flake    cold | freez | chill
+    Cold
+    Very Cold
+    Freezing
+    Chilly
+
+▸ FOG / MIST       Horizontal wispy lines    fog | mist | haze
+    Fog
+    Dense Fog
+    Mist
+    Haze
+    Smog
+
+▸ DUST             Amber haze + orbiting     dust | sandstorm
+                   particles
+    Dust
+    Dust Storm
+    Duststorm
+    Sandstorm
+    Blowing Dust
+    Dust in Suspension
+
+▸ WINDY            Wind streaks with arrows  gust | wind
+    Windy
+    Windy Weather
+    Gusty Winds
+    Strong Winds
+    High Winds
+    Gale
+
+▸ DEFAULT          Thermometer with pulsing  (nothing matched)
+                   red bulb
+
+
+Notes
+─────
+1. Weather strings are matched case-insensitively and via SUBSTRING —
+   e.g. "Rain-Thundershower" matches `thunder` first (thunderstorm
+   bucket) because the pattern list is evaluated top-to-bottom.
+2. Precedence order (top wins if a string could match multiple):
+     thunder / lightning  →  drizzle  →  shower / rain
+     snow / blizzard / sleet / hail  →  fog / mist / haze
+     dust / sandstorm  →  partly cloud  →  overcast  →  cloud
+     gust / wind  →  hot / scorch  →  cold / freez / chill  →  clear
+3. Empty / null / unrecognised strings fall through to the DEFAULT
+   thermometer icon rather than showing nothing.
+4. Every icon is drawn frame-by-frame in map-icons.js — no external
+   image resources, no CORS, no CSP concerns.  See NWFC_DRAWERS.
+
+Source of truth
+───────────────
+- nwfcWeatherIconId(text)          → frontend/src/modules/map-icons.js
+- nwfcWeatherEmoji(text)  (popup)  → frontend/src/modules/layer-attribute-popup.js
+- NWFC_DRAWERS  (canvas drawers)   → frontend/src/modules/map-icons.js

@@ -1,0 +1,1505 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>NCOP Documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #0f1524;
+            --bg-tertiary: #151c2e;
+            --bg-card: #1a2236;
+            --bg-hover: #232d44;
+            --border: #232d44;
+            --border-strong: #2e3a55;
+            --text-primary: #e8edf5;
+            --text-secondary: #aab3c5;
+            --text-muted: #6c7689;
+            --accent: #4f9fff;
+            --accent-soft: rgba(79, 159, 255, 0.12);
+            --success: #2dd4bf;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --code-bg: #0d1322;
+            --code-border: #1e2843;
+            --gradient: linear-gradient(135deg, #4f9fff 0%, #2dd4bf 100%);
+            --sidebar-width: 280px;
+            --rail-width: 70px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        code, pre {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 13px;
+        }
+
+        /* ---------- Top Bar ---------- */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 14, 26, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        .topbar-brand-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.5px;
+        }
+        .topbar-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+        .topbar-brand-title { font-size: 15px; font-weight: 600; }
+        .topbar-brand-subtitle { font-size: 11px; color: var(--text-muted); letter-spacing: 0.4px; text-transform: uppercase; }
+
+        .topbar-actions { display: flex; gap: 10px; align-items: center; }
+        .topbar-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 7px;
+            font-size: 12.5px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.18s ease;
+        }
+        .topbar-btn:hover { color: var(--text-primary); border-color: var(--border-strong); background: var(--bg-hover); }
+        .topbar-btn--primary { background: var(--accent); border-color: var(--accent); color: white; }
+        .topbar-btn--primary:hover { filter: brightness(1.1); }
+
+        /* ---------- Layout ---------- */
+        .layout { display: grid; grid-template-columns: var(--sidebar-width) 1fr; min-height: calc(100vh - 65px); }
+
+        /* ---------- Sidebar ---------- */
+        .sidebar {
+            position: sticky;
+            top: 65px;
+            align-self: start;
+            height: calc(100vh - 65px);
+            overflow-y: auto;
+            padding: 28px 18px 40px;
+            border-right: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+        .sidebar-section { margin-bottom: 24px; }
+        .sidebar-heading {
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-muted);
+            padding: 0 10px 8px;
+        }
+        .sidebar-link {
+            display: block;
+            padding: 7px 12px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 6px;
+            margin-bottom: 2px;
+            transition: all 0.15s ease;
+            border-left: 2px solid transparent;
+        }
+        .sidebar-link:hover { background: var(--bg-card); color: var(--text-primary); }
+        .sidebar-link.active { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); }
+
+        /* ---------- Main Content ---------- */
+        .main { padding: 40px 56px 80px; max-width: 980px; }
+
+        h1.page-title {
+            font-size: 36px;
+            font-weight: 700;
+            margin: 0 0 8px;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .page-tagline { font-size: 17px; color: var(--text-secondary); margin: 0 0 24px; }
+        .page-meta { display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+        .page-meta span { display: inline-flex; align-items: center; gap: 6px; }
+
+        section { margin-top: 64px; scroll-margin-top: 80px; }
+        section.first { margin-top: 0; }
+        h2.section-title {
+            font-size: 26px;
+            font-weight: 700;
+            margin: 0 0 10px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        h2.section-title::before {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            height: 22px;
+            background: var(--gradient);
+            border-radius: 2px;
+        }
+        h3.subsection-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 32px 0 12px;
+            color: var(--text-primary);
+        }
+        h4 { font-size: 14.5px; font-weight: 600; margin: 22px 0 8px; color: var(--text-primary); }
+        /* Body paragraphs are justified for the typical "documentation page"
+           look on long-form prose.  Short copy inside cards, callouts and
+           pills overrides this back to left so it doesn't fight the
+           tighter widths. */
+        p { color: var(--text-secondary); margin: 12px 0; text-align: justify; hyphens: auto; }
+        ul, ol { color: var(--text-secondary); padding-left: 22px; }
+        li { margin: 6px 0; text-align: justify; hyphens: auto; }
+        .card-desc, .callout-body, .page-tagline, .page-meta, td, th { text-align: left; hyphens: manual; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        strong { color: var(--text-primary); font-weight: 600; }
+
+        /* ---------- Inline elements ---------- */
+        code:not(pre code) {
+            background: var(--code-bg);
+            border: 1px solid var(--code-border);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ffa657;
+        }
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--code-border);
+            border-radius: 8px;
+            padding: 16px 18px;
+            overflow-x: auto;
+            margin: 14px 0;
+            line-height: 1.55;
+        }
+        pre code { background: transparent; border: 0; padding: 0; color: var(--text-secondary); font-size: 12.5px; }
+        .token-kw   { color: #ff7b72; }
+        .token-str  { color: #a5d6ff; }
+        .token-fn   { color: #d2a8ff; }
+        .token-com  { color: #6c7689; font-style: italic; }
+        .token-num  { color: #79c0ff; }
+
+        /* ---------- Cards ---------- */
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 20px 0; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            transition: all 0.18s ease;
+        }
+        .card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+        .card-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; font-size: 16px; font-weight: 700; }
+        .card-title { font-size: 14.5px; font-weight: 600; margin: 0 0 4px; color: var(--text-primary); }
+        .card-desc { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+
+        /* ---------- Tables ---------- */
+        .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        thead { background: var(--bg-card); }
+        th { padding: 12px 14px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+        td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: top; }
+        tbody tr:last-child td { border-bottom: 0; }
+        tbody tr:hover { background: var(--bg-card); }
+        td code { font-size: 11.5px; }
+
+        /* ---------- Callouts ---------- */
+        .callout { display: flex; gap: 14px; padding: 14px 18px; border-radius: 8px; margin: 18px 0; border: 1px solid; font-size: 13.5px; }
+        .callout-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+        .callout-body { color: var(--text-secondary); }
+        .callout-body strong { display: block; color: var(--text-primary); margin-bottom: 4px; font-size: 13.5px; }
+        .callout--info    { background: rgba(79, 159, 255, 0.05);  border-color: rgba(79, 159, 255, 0.25); }
+        .callout--info .callout-icon { color: var(--accent); }
+        .callout--warn    { background: rgba(251, 191, 36, 0.05);  border-color: rgba(251, 191, 36, 0.25); }
+        .callout--warn .callout-icon { color: var(--warning); }
+        .callout--danger  { background: rgba(248, 113, 113, 0.05); border-color: rgba(248, 113, 113, 0.25); }
+        .callout--danger .callout-icon { color: var(--danger); }
+        .callout--success { background: rgba(45, 212, 191, 0.05);  border-color: rgba(45, 212, 191, 0.25); }
+        .callout--success .callout-icon { color: var(--success); }
+
+        /* ---------- Pills ---------- */
+        .pill { display: inline-block; padding: 2px 9px; font-size: 11px; font-weight: 600; border-radius: 11px; letter-spacing: 0.3px; }
+        .pill--blue   { background: rgba(79, 159, 255, 0.15); color: #79b3ff; }
+        .pill--green  { background: rgba(45, 212, 191, 0.15); color: #5ee8d3; }
+        .pill--yellow { background: rgba(251, 191, 36, 0.15); color: #fbd968; }
+        .pill--red    { background: rgba(248, 113, 113, 0.15); color: #ff9090; }
+        .pill--gray   { background: rgba(170, 179, 197, 0.15); color: var(--text-secondary); }
+
+        /* ---------- Diagram ---------- */
+        .diagram {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+            margin: 18px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* ---------- TOC Pills on H2 anchors ---------- */
+        .section-anchor { color: var(--text-muted); margin-left: 8px; font-weight: 400; font-size: 14px; opacity: 0; transition: opacity 0.15s ease; }
+        h2.section-title:hover .section-anchor, h3.subsection-title:hover .section-anchor { opacity: 1; }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 1024px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main { padding: 24px 24px 60px; }
+            h1.page-title { font-size: 28px; }
+        }
+
+        /* ---------- Scrollbars ---------- */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <a href="/" class="topbar-brand">
+            <div class="topbar-brand-icon">NC</div>
+            <div class="topbar-brand-text">
+                <span class="topbar-brand-title">NCOP Documentation</span>
+                <span class="topbar-brand-subtitle">National Common Operating Picture</span>
+            </div>
+        </a>
+        <div class="topbar-actions">
+            <a href="https://ndma.gov.pk/" target="_blank" rel="noopener" class="topbar-btn">NDMA</a>
+            <a href="/" class="topbar-btn topbar-btn--primary">Open Dashboard</a>
+        </div>
+    </header>
+
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Overview</div>
+                <a href="#introduction" class="sidebar-link">Introduction</a>
+                <a href="#audience" class="sidebar-link">Target Users</a>
+                <a href="#capabilities" class="sidebar-link">Capabilities</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Architecture</div>
+                <a href="#tech-stack" class="sidebar-link">Tech Stack</a>
+                <a href="#system-architecture" class="sidebar-link">System Architecture</a>
+                <a href="#data-flow" class="sidebar-link">Data Flow</a>
+                <a href="#repo-layout" class="sidebar-link">Repository Layout</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Getting Started</div>
+                <a href="#prerequisites" class="sidebar-link">Prerequisites</a>
+                <a href="#installation" class="sidebar-link">Installation</a>
+                <a href="#configuration" class="sidebar-link">Configuration (.env)</a>
+                <a href="#running" class="sidebar-link">Running Locally</a>
+                <a href="#deployment" class="sidebar-link">Deployment</a>
+                <a href="#workflow" class="sidebar-link">Branch Workflow</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Data &amp; Layers</div>
+                <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
+                <a href="#data-sources" class="sidebar-link">Data Sources</a>
+                <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
+                <a href="#station-layers" class="sidebar-link">Station Layers</a>
+                <a href="#pmd-integrations" class="sidebar-link">PMD / FFD / NWFC</a>
+                <a href="#nwfc-icons" class="sidebar-link">NWFC Weather Icons</a>
+                <a href="#gdps-catalogue" class="sidebar-link">GDPS WMS Catalogue</a>
+                <a href="#geoserver" class="sidebar-link">GeoServer Boundaries</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">UI Components</div>
+                <a href="#header-overlay" class="sidebar-link">Header Overlay</a>
+                <a href="#sidebar-menu" class="sidebar-link">Sidebar Menu</a>
+                <a href="#unified-right-rail" class="sidebar-link">Right Rail</a>
+                <a href="#layer-info-panel" class="sidebar-link">Layer Info &amp; Legends</a>
+                <a href="#layer-style-config" class="sidebar-link">Layer Style</a>
+                <a href="#layer-order-panel" class="sidebar-link">Layer Order</a>
+                <a href="#temporal-slider" class="sidebar-link">Temporal Slider</a>
+                <a href="#weather-report" class="sidebar-link">Weather Report</a>
+                <a href="#popups" class="sidebar-link">Feature Popups</a>
+                <a href="#basemap-projection" class="sidebar-link">Basemaps</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Backend</div>
+                <a href="#api-reference" class="sidebar-link">REST API Reference</a>
+                <a href="#caching" class="sidebar-link">Caching Strategy</a>
+                <a href="#proxies" class="sidebar-link">Upstream Proxies</a>
+                <a href="#gee" class="sidebar-link">Google Earth Engine</a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Operations</div>
+                <a href="#environments" class="sidebar-link">Environments</a>
+                <a href="#troubleshooting" class="sidebar-link">Troubleshooting</a>
+                <a href="#glossary" class="sidebar-link">Glossary</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <h1 class="page-title">National Common Operating Picture</h1>
+            <p class="page-tagline">A unified geospatial situational-awareness platform for Pakistan&rsquo;s National Disaster Management Authority.</p>
+            <div class="page-meta">
+                <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
+                <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-23</span>
+            </div>
+
+            <!-- ============================================================ -->
+            <section id="introduction" class="first">
+                <h2 class="section-title">Introduction <span class="section-anchor">#</span></h2>
+                <p>
+                    NCOP is a <strong>real-time, multi-source geospatial dashboard</strong> built for Pakistan&rsquo;s
+                    National Disaster Management Authority (NDMA) and the National Emergency Operations Centre (NEOC).
+                    It consolidates meteorological, hydrological, air-quality, oceanic and disaster-event data from
+                    domestic and international providers into a single, professionally-themed Mapbox-based web map &mdash;
+                    enabling planners, operators and decision-makers to assess hazard exposure and operating posture from
+                    one screen.
+                </p>
+                <div class="card-grid">
+                    <div class="card">
+                        <div class="card-icon">1</div>
+                        <h4 class="card-title">Unified Picture</h4>
+                        <p class="card-desc">Bring every authoritative feed onto one map &mdash; PMD, WAQI, Meteoblue, GloFAS, GDACS, USGS, NASA EONET, GeoGlows, GEE.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">2</div>
+                        <h4 class="card-title">Temporal Awareness</h4>
+                        <p class="card-desc">Animated hourly &middot; daily &middot; weekly weather and air-quality forecasts, with frame-by-frame playback and a global temporal slider.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">3</div>
+                        <h4 class="card-title">District-Level Reporting</h4>
+                        <p class="card-desc">Per-district aggregations of active layers, with research-based thresholds, hotspot identification and click-to-fly navigation.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">4</div>
+                        <h4 class="card-title">Configurable Styling</h4>
+                        <p class="card-desc">In-app palette editor for every vector layer &mdash; colour, opacity, outline, labels &mdash; with full persistence across basemap switches.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="audience">
+                <h2 class="section-title">Target Users <span class="section-anchor">#</span></h2>
+                <div class="card-grid">
+                    <div class="card">
+                        <h4 class="card-title">NEOC Operators</h4>
+                        <p class="card-desc">Live monitoring during heatwave, monsoon, flood and earthquake events.</p>
+                    </div>
+                    <div class="card">
+                        <h4 class="card-title">Planners &amp; Analysts</h4>
+                        <p class="card-desc">Pre-event risk briefings, post-event impact narratives, infrastructure exposure mapping.</p>
+                    </div>
+                    <div class="card">
+                        <h4 class="card-title">Field Commanders</h4>
+                        <p class="card-desc">Pre-deployment situational awareness with district and tehsil-level granularity.</p>
+                    </div>
+                    <div class="card">
+                        <h4 class="card-title">Executive Leadership</h4>
+                        <p class="card-desc">Daily situational briefings synthesised through the Weather Report panel.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="capabilities">
+                <h2 class="section-title">Core Capabilities <span class="section-anchor">#</span></h2>
+                <ul>
+                    <li><strong>40+ thematic layers</strong> across weather, flood, hydrology, air quality, ocean/coastal, and early warning categories.</li>
+                    <li><strong>Animated temporal playback</strong> across hourly, daily and weekly cadences with deterministic frame pacing.</li>
+                    <li><strong>Active station integration</strong> for PMD weather stations, WAQI air-quality network and heatwave monitoring cities.</li>
+                    <li><strong>Per-district weather report</strong> with research-based alert thresholds (WHO 2021, US EPA, IMD/PMD).</li>
+                    <li><strong>Layer styling editor</strong> for fill, outline, line, point and label properties &mdash; persistent across sessions and basemap switches.</li>
+                    <li><strong>Drag-and-drop layer ordering</strong> with z-order rules enforcing popup priority for vector layers over temporal rasters.</li>
+                    <li><strong>Multi-basemap support</strong> (Mapbox styles plus third-party tile providers) with a single-click projection toggle (Globe / Mercator).</li>
+                    <li><strong>Geocoder, layer-info, layer-attribute popups</strong> with ESC-to-close UX and feature-property drawers.</li>
+                    <li><strong>Tour mode</strong> for guided onboarding and presentation of NCOP&rsquo;s feature set.</li>
+                    <li><strong>Story builder</strong> for chapter-based narrative tours of a region or event.</li>
+                    <li><strong>GEE catalogue integration</strong> with on-demand dynamic and temporal layer instantiation.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="tech-stack">
+                <h2 class="section-title">Tech Stack <span class="section-anchor">#</span></h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Frontend</strong></td><td>Mapbox GL JS, vanilla ES modules, Tailwind CDN, Vite 5</td><td>Map rendering, sidebar UI, controls, build &amp; HMR.</td></tr>
+                            <tr><td><strong>Backend</strong></td><td>Django 4+, Django REST Framework, GeoDjango (PostGIS)</td><td>Auth, dashboard view, REST proxies, Vite manifest binding.</td></tr>
+                            <tr><td><strong>Database</strong></td><td>PostgreSQL + PostGIS</td><td>User accounts; spatial data primarily served from GeoServer.</td></tr>
+                            <tr><td><strong>Tile Server</strong></td><td>GeoServer (GWC + TMS)</td><td>Administrative boundaries (national, provincial, district, tehsil), infrastructure layers.</td></tr>
+                            <tr><td><strong>Geospatial Libs</strong></td><td>shapely, geopandas, GEOS, GDAL</td><td>Backend feature parsing, geometry validation.</td></tr>
+                            <tr><td><strong>Caching</strong></td><td>django.core.cache, on-disk JSON cache</td><td>Throttle outbound calls to free-tier APIs (Open-Meteo, WAQI, Meteoblue).</td></tr>
+                            <tr><td><strong>Earth Engine</strong></td><td>Python <code>earthengine-api</code> &amp; <code>ee</code></td><td>Dynamic and temporal raster tile-URL generation.</td></tr>
+                            <tr><td><strong>Static Hosting</strong></td><td>WhiteNoise + CompressedManifest</td><td>Single-process static asset delivery for production.</td></tr>
+                            <tr><td><strong>Production</strong></td><td>Waitress (Windows) / gunicorn (Linux)</td><td>WSGI server for staging / production.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="system-architecture">
+                <h2 class="section-title">System Architecture <span class="section-anchor">#</span></h2>
+                <p>NCOP follows a <strong>thin-server, smart-client</strong> model. The browser does all map rendering; Django serves the dashboard shell and acts as an authenticated reverse proxy / cache for upstream APIs.</p>
+                <div class="diagram">┌───────────────────────────────────────────────────────────────────────┐
+│                              BROWSER                                  │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │  Mapbox GL JS  ←  ES Modules  (Vite-bundled)                    │  │
+│  │  ─ dashboard.js          ─ sourcelayer-control.js               │  │
+│  │  ─ layer-panels.js       ─ temporal-controls.js                 │  │
+│  │  ─ layer-style-config.js ─ weather-report-control.js            │  │
+│  │  ─ map-display-panels    ─ sidebar-menu.js                      │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+│           │                                                           │
+│           │ fetch (geojson, vector tiles, raster tiles)                │
+│           ▼                                                           │
+└───────────┬───────────────────────────────────────────────────────────┘
+            │
+   ┌────────┴──────────┐                  ┌──────────────────────┐
+   │   Django (WSGI)   │ ─────proxy──────►│  Upstream Providers  │
+   │  ncop_internal    │                  │  PMD / WAQI / NASA   │
+   │  ─ dashboard_view │                  │  USGS / GDACS / GEE  │
+   │  ─ API proxies    │                  │  Meteoblue / GloFAS  │
+   │  ─ Auth & CSRF    │                  │  Open-Meteo / GeoGlows│
+   └────────┬──────────┘                  └──────────────────────┘
+            │
+            ▼                              ┌──────────────────────┐
+   ┌───────────────────┐                   │  GeoServer (GWC)     │
+   │  PostGIS (users)  │                   │  Boundaries          │
+   │  Cache (heatwave) │ ◄─direct tiles────┤  Infrastructure      │
+   └───────────────────┘                   └──────────────────────┘
+</div>
+                <h3 class="subsection-title">Boundary serving</h3>
+                <p>Administrative boundaries (national, provincial, district, tehsil) and infrastructure layers are served directly to the browser as Mapbox Vector Tiles from GeoServer&rsquo;s GeoWebCache via TMS. Django is not in the hot path for boundary tiles &mdash; this keeps tile latency low and removes a hop.</p>
+                <h3 class="subsection-title">Live data flow</h3>
+                <p>Live point/polygon datasets (PMD stations, GDACS, EONET, USGS) flow as GeoJSON through Django proxies. Django provides three things on top of the upstream: <strong>schema normalisation</strong>, <strong>caching</strong> and <strong>SSL/Auth tunnelling</strong>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="data-flow">
+                <h2 class="section-title">Data Flow <span class="section-anchor">#</span></h2>
+                <h3 class="subsection-title">User toggles a layer</h3>
+                <ol>
+                    <li>Sidebar menu fires a <code>change</code> event &rarr; <code>SourceLayerControl.addLayerByKey(key)</code>.</li>
+                    <li>Control looks up the <code>ncop_menu_items</code> config in <code>map-layers.js</code>.</li>
+                    <li>If the source isn&rsquo;t already on the map, <code>addMapboxSource(config.source)</code> creates it.</li>
+                    <li>Each layer in <code>config.layers</code> is added via <code>_addLayerAtCorrectOrder()</code>, which respects the z-order rule (vector layers always above temporal rasters).</li>
+                    <li>The wrapper installed by <code>LayerStyleConfig</code> replays any persisted user overrides for that key.</li>
+                    <li>Active layer is registered in <code>SourceLayerControl.activeLayers</code> for later restore.</li>
+                </ol>
+
+                <h3 class="subsection-title">User switches the basemap</h3>
+                <ol>
+                    <li><code>map.setStyle(...)</code> tears down every layer and source.</li>
+                    <li>Mapbox fires <code>style.load</code> on the map.</li>
+                    <li><code>SourceLayerControl.handleStyleLoad()</code> iterates the saved order and re-calls <code>addLayerByKey</code> for each.</li>
+                    <li>For each re-add, <code>LayerStyleConfig.#reapplyOverridesFor(key)</code> reinstates the user&rsquo;s saved paint/layout values.</li>
+                    <li>Temporal layers, label layers, and popup handlers all rebind via their own <code>style.load</code> listeners.</li>
+                </ol>
+
+                <h3 class="subsection-title">User drags the temporal slider</h3>
+                <ol>
+                    <li>Slider <code>input</code> event &rarr; <code>setCurrentStep(index)</code>.</li>
+                    <li>The active temporal config is consulted to resolve the frame for that step.</li>
+                    <li>Old frame layers are removed; new frame layers are added at the correct z-order (below all vector layers).</li>
+                    <li>If the weather report panel is open, <code>WeatherReportControl.#scheduleRender()</code> debounces a fresh per-district sampling pass.</li>
+                </ol>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="repo-layout">
+                <h2 class="section-title">Repository Layout <span class="section-anchor">#</span></h2>
+<pre><code><span class="token-com">ncop_local/</span>
+├── .env                          <span class="token-com"># shared env (Django + Vite)</span>
+├── .env.staging
+├── manage.py-less project/
+├── frontend/
+│   ├── vite.config.js            <span class="token-com"># Vite config (dev server + build)</span>
+│   ├── package.json
+│   ├── src/
+│   │   ├── entries/              <span class="token-com"># Vite entry points</span>
+│   │   │   ├── dashboard_main.js
+│   │   │   └── auth_*.js
+│   │   ├── modules/              <span class="token-com"># All ES module logic</span>
+│   │   │   ├── dashboard.js
+│   │   │   ├── map-layers.js          <span class="token-com"># ncop_menu_items registry</span>
+│   │   │   ├── sourcelayer-control.js <span class="token-com"># add/remove/restore layers</span>
+│   │   │   ├── layer-panels.js        <span class="token-com"># layer order panel</span>
+│   │   │   ├── layer-style-config.js  <span class="token-com"># palette editor</span>
+│   │   │   ├── temporal-controls.js   <span class="token-com"># animated slider</span>
+│   │   │   ├── weather-report-control.js
+│   │   │   ├── sidebar-menu.js
+│   │   │   ├── layer-attribute-popup.js
+│   │   │   ├── map-display-panels.js  <span class="token-com"># basemap &amp; projection picker</span>
+│   │   │   ├── geocoder-control.js
+│   │   │   ├── nav-controls.js
+│   │   │   ├── navigation-panel.js
+│   │   │   └── map-icons.js
+│   │   ├── styles/dashboard/     <span class="token-com"># CSS partials</span>
+│   │   ├── assets/               <span class="token-com"># Images, icons, story JSONs</span>
+│   │   └── ...
+│   └── dist/                     <span class="token-com"># Vite build output (collectstatic source)</span>
+├── project/
+│   ├── manage.py
+│   ├── cache/                    <span class="token-com"># on-disk JSON cache (heatwave)</span>
+│   ├── templates/
+│   │   ├── dashboard.html
+│   │   ├── documentation.html    <span class="token-com"># &lt;-- this page</span>
+│   │   └── auth/
+│   ├── static/                   <span class="token-com"># collectstatic output</span>
+│   ├── ncop_internal/
+│   │   ├── views.py              <span class="token-com"># All proxy &amp; auth views</span>
+│   │   ├── urls.py
+│   │   └── ...
+│   └── ncop_project/
+│       ├── settings/
+│       │   ├── base.py
+│       │   ├── dev.py
+│       │   ├── staging.py
+│       │   └── prod.py
+│       └── urls.py
+└── requirements.txt
+</code></pre>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="prerequisites">
+                <h2 class="section-title">Prerequisites <span class="section-anchor">#</span></h2>
+                <ul>
+                    <li><strong>Python 3.11</strong> (matches <code>ncopenv311</code>).</li>
+                    <li><strong>Node.js 18+</strong> and <strong>npm</strong>.</li>
+                    <li><strong>PostgreSQL 14+ with PostGIS 3.x</strong>.</li>
+                    <li><strong>GDAL &amp; GEOS</strong> &mdash; on Windows the base settings expects <code>C:\Program Files\QGIS 3.24.3\bin\gdal304.dll</code> and <code>geos_c.dll</code>. On Linux these are auto-discovered.</li>
+                    <li><strong>Mapbox access token</strong> (provided to the browser via the dashboard view context).</li>
+                    <li><strong>Provider API keys</strong>: Meteoblue, WAQI; optional: Earth Engine service account.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="installation">
+                <h2 class="section-title">Installation <span class="section-anchor">#</span></h2>
+                <h3 class="subsection-title">1. Clone &amp; create a Python environment</h3>
+<pre><code><span class="token-kw">git</span> clone &lt;repo-url&gt; ncop_local
+<span class="token-kw">cd</span> ncop_local
+python -m venv ncopenv311
+<span class="token-com"># Windows</span>
+ncopenv311\Scripts\activate
+<span class="token-com"># macOS / Linux</span>
+source ncopenv311/bin/activate
+pip install -r requirements.txt
+</code></pre>
+                <h3 class="subsection-title">2. Install frontend dependencies</h3>
+<pre><code><span class="token-kw">cd</span> frontend
+npm install
+</code></pre>
+                <h3 class="subsection-title">3. PostgreSQL database</h3>
+<pre><code>createdb ncop
+psql -d ncop -c <span class="token-str">"CREATE EXTENSION postgis;"</span>
+</code></pre>
+                <h3 class="subsection-title">4. Apply Django migrations</h3>
+<pre><code><span class="token-kw">cd</span> project
+python manage.py migrate
+python manage.py createsuperuser
+</code></pre>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="configuration">
+                <h2 class="section-title">Configuration &mdash; .env <span class="section-anchor">#</span></h2>
+                <p>A single <code>.env</code> at the repository root is the source of truth for both Django (django-environ) and Vite (loadEnv).</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Variable</th><th>Required</th><th>Example</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>POSTGRES_DB</code></td><td>✓</td><td><code>ncop</code></td><td>PostgreSQL database name.</td></tr>
+                            <tr><td><code>POSTGRES_USER</code></td><td>✓</td><td><code>postgres</code></td><td>Database user.</td></tr>
+                            <tr><td><code>POSTGRES_PASSWORD</code></td><td>✓</td><td><code>postgres</code></td><td>Database password.</td></tr>
+                            <tr><td><code>POSTGRES_HOST</code></td><td>✓</td><td><code>localhost</code></td><td>Database host.</td></tr>
+                            <tr><td><code>POSTGRES_PORT</code></td><td>✓</td><td><code>5432</code></td><td>Database port.</td></tr>
+                            <tr><td><code>DJANGO_SECRET_KEY</code></td><td>✓</td><td><code>dev-insecure</code></td><td>Cryptographic signing key.</td></tr>
+                            <tr><td><code>DJANGO_DEBUG</code></td><td>✓</td><td><code>true</code></td><td>Toggle Django debug mode.</td></tr>
+                            <tr><td><code>DJANGO_ALLOWED_HOSTS</code></td><td>✓</td><td><code>127.0.0.1,localhost,172.18.0.5</code></td><td>Comma-separated host whitelist.</td></tr>
+                            <tr><td><code>MAPBOX_ACCESS_TOKEN</code></td><td>✓</td><td><code>pk....</code></td><td>Mapbox token (passed to the dashboard template).</td></tr>
+                            <tr><td><code>METEOBLUE_TOKEN</code></td><td>✓</td><td>&mdash;</td><td>Meteoblue temporal-layer authentication.</td></tr>
+                            <tr><td><code>WAQI_API_TOKEN</code></td><td>✓</td><td>&mdash;</td><td>WAQI air-quality network.</td></tr>
+                            <tr><td><code>VITE_DEV_MODE</code></td><td>✓</td><td><code>true</code></td><td>django-vite dev mode flag.</td></tr>
+                            <tr><td><code>VITE_DEV_SERVER_HOST</code></td><td>&mdash;</td><td><code>172.18.0.5</code></td><td>Host the browser should load Vite assets from.</td></tr>
+                            <tr><td><code>VITE_DEV_SERVER_PORT</code></td><td>&mdash;</td><td><code>5173</code></td><td>Vite dev server port.</td></tr>
+                            <tr><td><code>VITE_HMR_HOST</code></td><td>&mdash;</td><td><code>172.18.0.5</code></td><td>HMR endpoint advertised to the browser.</td></tr>
+                            <tr><td><code>GEE_PROJECT_ID</code></td><td>&mdash;</td><td><code>floodwatch-485210</code></td><td>Earth Engine GCP project.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>LAN access</strong>
+                        Set <code>VITE_DEV_SERVER_HOST</code> and <code>VITE_HMR_HOST</code> to the dev machine&rsquo;s LAN IP and add the same IP to <code>DJANGO_ALLOWED_HOSTS</code> so colleagues on the same network can load the app. The IP must be reachable from the colleague&rsquo;s machine and port 5173 must be open in Windows Firewall.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="running">
+                <h2 class="section-title">Running Locally <span class="section-anchor">#</span></h2>
+                <p>NCOP needs <strong>two processes</strong> running simultaneously in development:</p>
+                <h3 class="subsection-title">Terminal 1 &mdash; Django (port 8000)</h3>
+<pre><code><span class="token-kw">cd</span> project
+<span class="token-com"># activate the venv first</span>
+python manage.py runserver 0.0.0.0:8000 --settings=ncop_project.settings.dev
+</code></pre>
+                <h3 class="subsection-title">Terminal 2 &mdash; Vite (port 5173)</h3>
+<pre><code><span class="token-kw">cd</span> frontend
+npm run dev
+</code></pre>
+                <p>Open <a href="http://localhost:8000/">http://localhost:8000/</a> (or the LAN IP). Django renders the shell; the browser then loads ES modules and HMR assets directly from Vite at <code>:5173</code>.</p>
+                <h3 class="subsection-title">Production build (no Vite required at runtime)</h3>
+<pre><code><span class="token-kw">cd</span> frontend
+npm run build                       <span class="token-com"># produces frontend/dist + manifest.json</span>
+<span class="token-kw">cd</span> ../project
+python manage.py collectstatic --noinput
+python manage.py runserver 0.0.0.0:8000 --settings=ncop_project.settings.prod
+</code></pre>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="deployment">
+                <h2 class="section-title">Deployment <span class="section-anchor">#</span></h2>
+                <p>NCOP ships with three Django settings modules in <code>project/ncop_project/settings/</code>:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Module</th><th>Vite Mode</th><th>Static Storage</th><th>Use</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>dev.py</code></td><td>HMR-bound</td><td>STATICFILES_DIRS live</td><td>Local development with Vite dev server.</td></tr>
+                            <tr><td><code>staging.py</code></td><td>Built bundle</td><td>WhiteNoise compressed manifest</td><td>Internal staging; CORS-allowed for Waitress 8080 / Vite 5173.</td></tr>
+                            <tr><td><code>prod.py</code></td><td>Built bundle</td><td>WhiteNoise compressed manifest</td><td>Production; expects <code>DJANGO_ALLOWED_HOSTS</code> set explicitly.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="subsection-title">Recommended production pipeline</h3>
+                <ol>
+                    <li><code>git pull</code> and activate the venv.</li>
+                    <li><code>pip install -r requirements.txt</code>.</li>
+                    <li>Build the frontend: <code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code>.</li>
+                    <li>Collect static: <code>python manage.py collectstatic --noinput</code>.</li>
+                    <li>Apply migrations: <code>python manage.py migrate</code>.</li>
+                    <li>Restart the WSGI process (Waitress on Windows, gunicorn behind nginx on Linux).</li>
+                </ol>
+                <p>See <code>misc/ncop_production_deployment_guide_prod_arsalan_v_1.md</code> for the full hand-off runbook.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="workflow">
+                <h2 class="section-title">Branch Workflow &amp; Release Pipeline <span class="section-anchor">#</span></h2>
+                <p>NCOP follows a <strong>three-branch promotion model</strong>: feature work lands on <code>dev-arsalan</code>, is promoted to <code>stage-arsalan</code> for QA, then promoted to <code>prod-arsalan</code> for the production VM. Each stage runs against its own Django settings module and its own Vite output state. The commands below are the exact runbook every release follows.</p>
+
+                <h3 class="subsection-title">1. Development Mode</h3>
+                <p>Local iteration with full HMR. Backend on <code>:8000</code>, Vite on <code>:5173</code>. Two terminals.</p>
+<pre><code><span class="token-com"># Switch to the development branch</span>
+git checkout dev-arsalan
+
+<span class="token-com"># Activate the Python virtual environment</span>
+ncopenv311\Scripts\activate              <span class="token-com"># Windows</span>
+<span class="token-com"># source ncopenv311/bin/activate         # macOS / Linux</span>
+
+<span class="token-com"># Terminal 1 — Django dev server</span>
+<span class="token-kw">cd</span> project
+python manage.py runserver --settings=ncop_project.settings.dev
+
+<span class="token-com"># Terminal 2 — Vite dev server with HMR</span>
+<span class="token-kw">cd</span> frontend
+npm run dev
+</code></pre>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>LAN sharing</strong>
+                        Set <code>VITE_DEV_SERVER_HOST</code> + <code>VITE_HMR_HOST</code> in <code>.env</code> to the dev machine&rsquo;s reachable LAN IP, add the same IP to <code>DJANGO_ALLOWED_HOSTS</code>, and open port 5173 in Windows Firewall before colleagues try to load the dashboard.
+                    </div>
+                </div>
+
+                <h3 class="subsection-title">2. Staging Mode</h3>
+                <p>Validation of dev work against built artefacts on the staging branch. Served by Waitress on <code>127.0.0.1:5000</code>. Use this to confirm production-shaped behaviour (no HMR, real WhiteNoise asset pipeline) before promoting to prod.</p>
+<pre><code><span class="token-com"># Move to staging branch and merge dev work without auto-committing</span>
+git checkout stage-arsalan
+git pull origin dev-arsalan --no-commit --no-ff
+
+<span class="token-com"># Build the frontend with production-shaped Vite output</span>
+<span class="token-kw">cd</span> frontend
+npm run build
+
+<span class="token-com"># Collect static assets for staging</span>
+<span class="token-kw">cd</span> ../project
+python manage.py collectstatic --noinput --settings=ncop_project.settings.staging
+
+<span class="token-com"># Smoke-test the build under Waitress (mirrors the prod WSGI shape)</span>
+<span class="token-kw">cd</span> frontend
+npm run dev                              <span class="token-com"># still useful for any last debug toggles</span>
+
+<span class="token-kw">cd</span> ../project
+python -m waitress --port=5000 --host=127.0.0.1 ncop_project.wsgi_staging:application
+</code></pre>
+                <div class="callout callout--success">
+                    <div class="callout-icon">✓</div>
+                    <div class="callout-body">
+                        <strong>Acceptance gate</strong>
+                        Only commit and push the merge on <code>stage-arsalan</code> after the dev updates have been visually validated against the built bundle. This prevents shipping changes that work only under HMR.
+                    </div>
+                </div>
+
+                <h3 class="subsection-title">3. Production Mode</h3>
+                <p>Deploys to the production VM via Remote-SSH. Served by Waitress behind Nginx; Nginx requires read access to <code>frontend/dist</code> and <code>project/static/dist</code>.</p>
+
+                <h4>3.1 &nbsp;Connect to the production VM</h4>
+                <ol>
+                    <li>Install the <strong>Remote-SSH</strong> extension in VS Code.</li>
+                    <li>Open the command palette (<code>Ctrl + Shift + P</code>) and run <strong>Remote-SSH: Add New SSH Host</strong>.</li>
+                    <li>Use the credentials stored in the team&rsquo;s secure vault (operator <code>cladmin</code> on host <code>172.18.7.36</code>).</li>
+                    <li>Once connected, open the project at <code>ncop_local/ncop_local_prod</code>.</li>
+                </ol>
+                <div class="callout callout--danger">
+                    <div class="callout-icon">✕</div>
+                    <div class="callout-body">
+                        <strong>Do not paste credentials here</strong>
+                        Production VM credentials live in the team password manager. They must never be committed to this repository or pasted into this documentation page (the route is unauthenticated).
+                    </div>
+                </div>
+
+                <h4>3.2 &nbsp;Promote &amp; build</h4>
+<pre><code><span class="token-com"># Activate the venv on the VM</span>
+source ncopenv311/bin/activate
+
+<span class="token-com"># Promote the staging branch into production</span>
+git checkout prod-arsalan
+git pull origin stage-arsalan --no-commit --no-ff
+
+<span class="token-com"># Build the frontend bundle</span>
+<span class="token-kw">cd</span> frontend
+npm run build
+
+<span class="token-com"># Collect static assets with prod settings</span>
+<span class="token-kw">cd</span> ../project
+python manage.py collectstatic --noinput --settings=ncop_project.settings.prod
+</code></pre>
+
+                <h4>3.3 &nbsp;Permission Nginx to serve assets</h4>
+<pre><code>sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/frontend/dist
+sudo chmod -R o+rX /home/cladmin/ncop_local/ncop_local_prod/project/static/dist
+</code></pre>
+
+                <h4>3.4 &nbsp;Restart Waitress &amp; verify</h4>
+<pre><code>sudo systemctl restart ncop-waitress.service
+sudo systemctl status  ncop-waitress.service
+sudo journalctl -u ncop-waitress.service -f
+</code></pre>
+
+                <h4>3.5 &nbsp;Commit &amp; close out</h4>
+                <p>After a successful final review against the live deployment, commit the merge on <code>prod-arsalan</code>. The commit message should reference the source <code>stage-arsalan</code> commit so the promotion history is traceable.</p>
+
+                <h3 class="subsection-title">Quick Reference Matrix</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Mode</th><th>Branch</th><th>Settings Module</th><th>WSGI</th><th>Vite</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--green">Dev</span></td><td><code>dev-arsalan</code></td><td><code>settings.dev</code></td><td><code>runserver</code></td><td>HMR on <code>:5173</code></td></tr>
+                            <tr><td><span class="pill pill--yellow">Staging</span></td><td><code>stage-arsalan</code></td><td><code>settings.staging</code></td><td>Waitress <code>:5000</code></td><td>Built bundle</td></tr>
+                            <tr><td><span class="pill pill--red">Prod</span></td><td><code>prod-arsalan</code></td><td><code>settings.prod</code></td><td>Waitress (systemd) behind Nginx</td><td>Built bundle</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="layer-catalogue">
+                <h2 class="section-title">Layer Catalogue <span class="section-anchor">#</span></h2>
+                <p>The single source of truth is <code>frontend/src/modules/map-layers.js</code> &rarr; <code>ncop_menu_items</code>. Each category nests subcategories; each subcategory contains <code>toggle</code> (always-on/off vector layers), <code>temporal</code> (slider-driven raster sequences), <code>static</code> (single raster image overlays), or <code>nested</code> (further grouping).</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Category</th><th>Subcategories</th><th>Highlights</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers</td><td>National / provincial / district / tehsil boundaries; airports, hospitals, watershed.</td></tr>
+                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
+                            <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
+                            <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
+                            <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast</td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO.</td></tr>
+                            <tr><td><strong>Ocean &amp; Coastal</strong></td><td>Wind/Ocean Particles, SkyTruth Slick+</td><td>Animated particle vectors; marine oil spill detections.</td></tr>
+                            <tr><td><strong>Early Warning (DEW)</strong></td><td>API Features, Hazard Alerts (GDACS, EONET, USGS, Meteoblue early warnings)</td><td>Global disaster events, earthquakes, tropical cyclones, drought etc.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="data-sources">
+                <h2 class="section-title">Data Sources <span class="section-anchor">#</span></h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Provider</th><th>Type</th><th>Used For</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>PMD &mdash; Weather Stations</td><td>JSON</td><td>Daily rainfall / temperature / wind for national stations (merged across three product feeds).</td></tr>
+                            <tr><td>PMD &mdash; FFD (Flood Forecasting Division)</td><td>JSON &middot; GeoJSON</td><td>Waterlevels (bulletin points), river polylines, textual flood bulletins.</td></tr>
+                            <tr><td>PMD &mdash; Monitor (Live Feeds)</td><td>JSON &middot; GeoJSON</td><td>Weather-warning polygons, monsoon warnings, lightning strikes (last 1&nbsp;h), city 12-step forecast, GLOF observations, glacier lakes, public-forecast bulletins.</td></tr>
+                            <tr><td>PMD NWFC (National Weather Forecasting Centre)</td><td>JSON</td><td>Station observations (with weather &amp; temperature), 3-day daily forecast, weekly outlook, rainfall reports, max-temperature records, press-release text.</td></tr>
+                            <tr><td>MSC GeoMet (Environment Canada)</td><td>WMS</td><td>GDPS 15&nbsp;km + CAPS-WEonG 3&nbsp;km humidity, precipitation, snow, thunderstorm and fog probability rasters (14 slider-driven layers).</td></tr>
+                            <tr><td>WAQI</td><td>JSON</td><td>Real-time AQI stations.</td></tr>
+                            <tr><td>Meteoblue</td><td>Vector tiles</td><td>Forecast layers (precip, temp, snow, CAPE, helicity, AQ).</td></tr>
+                            <tr><td>GloFAS (ECMWF)</td><td>WMS</td><td>Global Flood Awareness System rasters.</td></tr>
+                            <tr><td>NASA EONET</td><td>JSON</td><td>Open natural-event tracking.</td></tr>
+                            <tr><td>USGS</td><td>JSON</td><td>Earthquake alerts, ShakeMaps.</td></tr>
+                            <tr><td>GDACS</td><td>JSON</td><td>Global Disaster Alert &amp; Coordination events.</td></tr>
+                            <tr><td>Open-Meteo</td><td>JSON</td><td>Heatwave-monitoring (now / forecast / seasonal / climate).</td></tr>
+                            <tr><td>SkyTruth</td><td>JSON</td><td>Marine oil slick footprints (Slick+).</td></tr>
+                            <tr><td>GeoGlows</td><td>JSON</td><td>River discharge forecasts &amp; historical statistics.</td></tr>
+                            <tr><td>Google Earth Engine</td><td>XYZ tiles</td><td>Catalogued imagery, dynamic and temporal layers.</td></tr>
+                            <tr><td>RainViewer</td><td>Tiles</td><td>Real-time radar &amp; satellite IR (currently hidden, pending tuning).</td></tr>
+                            <tr><td>GDELT</td><td>JSON</td><td>Real-time news event extraction.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="temporal-layers">
+                <h2 class="section-title">Temporal Layers <span class="section-anchor">#</span></h2>
+                <p>Temporal layers are animated slider-driven layer sequences. Each entry in a <code>temporal</code> block defines an <code>image</code> preview, a <code>theme</code> (<code>slider</code>), and a <code>title</code> for the slider chrome. The slider expands the layer into <code>N</code> time-stepped frames at runtime; each frame consists of one or more vector or raster Mapbox layers with matching <code>source-layer</code> hooks.</p>
+                <p>Slider behaviour and rendering live in <code>temporal-controls.js</code>. The control:</p>
+                <ul>
+                    <li>Exposes <code>window.getCurrentTemporalState()</code> &mdash; <em>{ layerKey, currentEntry, currentIndex, date }</em> &mdash; consumed by the Weather Report.</li>
+                    <li>Re-binds on <code>style.load</code> so basemap switches don&rsquo;t lose the active frame.</li>
+                    <li>Respects the z-order rule: temporal layers are always added <strong>below</strong> any normal vector layer so popups land on the user-toggleable layer rather than the temporal raster.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="station-layers">
+                <h2 class="section-title">Station Layers <span class="section-anchor">#</span></h2>
+                <p>Station feeds anchor the &ldquo;ground truth&rdquo; layer of the application. All live PMD/NWFC observations, heatwave city monitors and the WAQI air-quality network are wired through Django proxy views and rendered as vector layers on the map:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Endpoint</th><th>Drives</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>PMD Weather Stations</strong></td><td><code>/get-weather-pmdffd-data/</code></td><td>Daily rainfall, temperature, wind &mdash; merged across three product feeds, served as GeoJSON.</td></tr>
+                            <tr><td><strong>NWFC Station Observations</strong></td><td><code>/api/pmd/nwfc/observations/</code></td><td>Live surface observations w/ weather text (e.g. <em>Thunderstorm</em>, <em>Rain</em>). Rendered with animated canvas weather icons + a bold temperature label.</td></tr>
+                            <tr><td><strong>WAQI Stations</strong></td><td><code>/get-waqi-global-airquality/</code></td><td>Real-time global AQI; styled via circle layers.</td></tr>
+                            <tr><td><strong>Heatwave Monitoring</strong></td><td><code>/get-heatwave-monitoring/</code></td><td>40 major Pakistani cities with live temperature; detailed drilldown via <code>/get-heatwave-detail/</code>.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="pmd-integrations">
+                <h2 class="section-title">PMD / FFD / NWFC Integrations <span class="section-anchor">#</span></h2>
+                <p>The full complement of Pakistan Meteorological Department data feeds is proxied through Django and consumed by both the map and the Weather Report panel. All routes are namespaced under <code>/api/pmd/</code>, all responses are JSON, and every response is cached in-memory with an in-flight request coalesced against duplicate concurrent calls (see <a href="#caching">Caching</a>).</p>
+                <p>The full field-level contract is captured in <code>GCOP_PMD_API_Integration.md</code> at the repo root.</p>
+
+                <h3 class="subsection-title">Flood Forecasting Division (FFD)</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Endpoint</th><th>Purpose</th><th>Renders as</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>/api/pmd/ffd/waterlevels/</code></td><td>Bulletin stations with river, current level, danger level, trend.</td><td>Vector points (FFD Data toggle) with a Chart.js waterlevel popup.</td></tr>
+                            <tr><td><code>/api/pmd/ffd/rivers/</code></td><td>River polylines classified by threat category.</td><td>Vector lines (FFD Rivers, companion toggle to FFD Data).</td></tr>
+                            <tr><td><code>/api/pmd/ffd/bulletins/</code></td><td>Textual flood bulletins.</td><td>Weather Report drill-down (<em>FFD Bulletins</em> sub-view).</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">PMD Monitor (Live Feeds)</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Endpoint</th><th>Purpose</th><th>Renders as</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>/api/pmd/monitor/stations/</code></td><td>Real-time station overlay used by the PMD Weather Stations toggle.</td><td>Vector points w/ enriched popup (station code, type, visibility, warning badges).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/warnings/</code></td><td>Live weather-warning polygons across Pakistan.</td><td>Fill polygons (PMD Weather Warnings toggle) &mdash; ticking any of the 13 hazard-type checkboxes in the sidebar filter card above the toggle both auto-enables the layer and narrows the map to matching warnings only (see <code>pmd-warnings-filter.js</code>).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/monsoon/</code></td><td>Monsoon advisories.</td><td>Fill polygons (Monsoon Warnings toggle).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/lightning/</code></td><td>Lightning strikes in the last hour.</td><td>Point symbols (Lightning Strikes toggle).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/city-forecast/</code></td><td>12-step short-term forecast per city.</td><td>City-Forecast toggle with a forecast-strip popup.</td></tr>
+                            <tr><td><code>/api/pmd/monitor/glof/</code></td><td>GLOF (Glacial Lake Outburst Flood) observation stations.</td><td>Points (PMD GLOF Observations toggle).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/glacier-lakes/</code></td><td>Catalogued glacier lakes.</td><td>Points (glacier-lakes toggle).</td></tr>
+                            <tr><td><code>/api/pmd/monitor/public-forecast/</code></td><td>Public-forecast bulletins.</td><td>Weather Report drill-down.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">NWFC (National Weather Forecasting Centre)</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Endpoint</th><th>Purpose</th><th>Renders as</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>/api/pmd/nwfc/observations/</code></td><td>Live surface observations with a <code>weather</code> text property.</td><td>Animated canvas weather icons + temperature label (NWFC Station Observations toggle). Popup uses a Chart.js bar chart for Humidity / Rain 3h / Rain 24h / Wind.</td></tr>
+                            <tr><td><code>/api/pmd/nwfc/forecast/</code></td><td>Multi-day daily forecast per station.</td><td>Weather Report &mdash; NWFC Daily Forecast section (Wed/Thu/Fri/&hellip; range with weather emojis).</td></tr>
+                            <tr><td><code>/api/pmd/nwfc/reports/</code></td><td>Rainfall reports.</td><td>Weather Report drill-down (<em>Rainfall Reports</em>).</td></tr>
+                            <tr><td><code>/api/pmd/nwfc/weekly-outlook/</code></td><td>Weekly weather outlook.</td><td>Weather Report drill-down (<em>Weekly Outlook</em>).</td></tr>
+                            <tr><td><code>/api/pmd/nwfc/press-release-text/</code></td><td>Latest NWFC press-release text.</td><td>Weather Report drill-down (<em>Press Releases</em>).</td></tr>
+                            <tr><td><code>/api/pmd/nwfc/max-temperatures/</code></td><td>Station-wise historical max-temperature records.</td><td>Weather Report drill-down (<em>Max Temp Records</em>) with dynamic column discovery.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="mini-note" style="margin-top: 18px; color: var(--text-muted); font-size: 12.5px;">Two debug endpoints from the original API document are intentionally skipped. All other 19 endpoints are live in production; each has a Django cache helper in <code>project/ncop_internal/views.py</code> and a JS getter in <code>frontend/src/modules/gcop-monitor-integration.js</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="nwfc-icons">
+                <h2 class="section-title">NWFC Weather Icons (HTML markers) <span class="section-anchor">#</span></h2>
+                <p>The <strong>NWFC Station Observations</strong> layer renders each feature as an HTML <code>mapboxgl.Marker</code> — same architecture GCOP&rsquo;s own live NCOP uses. Each marker is a plain <code>&lt;div&gt;</code> containing an <code>&lt;img&gt;</code> for the weather icon (browser handles GIF animation natively) plus a <code>&lt;div&gt;</code> temperature label below it. No JavaScript animation loop, no <code>StyleImageInterface</code> dance.</p>
+                <p><strong>Why HTML markers?</strong> Every attempt at a data-driven Mapbox symbol layer for this data silently fell through to the fallback sprite. Mapbox v3&rsquo;s GeoJSON tile encoder was dropping properties added by mutating features after fetch — <code>querySourceFeatures</code> and <code>queryRenderedFeatures</code> both still showed the properties, but the tile-encoded form that layer <code>["get", …]</code> expressions read from did not. Rather than fight the tile encoder, we bypass it: JS dispatcher picks the icon, HTML marker renders it directly.</p>
+                <ul>
+                    <li><strong>Marker module:</strong> <code>frontend/src/modules/nwfc-html-markers.js</code> — <code>NwfcHtmlMarkerManager</code> listens for <code>sourcedata</code> / <code>style.load</code> on the <code>nwfc_observations-source</code>, reconciles markers per feature, tears them down on layer toggle-off and basemap swap.</li>
+                    <li><strong>Icon assets:</strong> 13 GIF/PNG files in <code>frontend/src/assets/images/nwfc_icons/</code> — one per bucket. URLs surfaced via <code>NWFC_WEATHER_ICON_URLS</code> in <code>nwfc-weather-icons.js</code>.</li>
+                    <li><strong>14 buckets</strong> — 13 with a real asset (thunderstorm, rain, drizzle, snow, fog, dust, overcast, cloudy, partly_cloudy, clear, windy, hot, cold) plus a Default thermometer 🌡 emoji for anything unrecognised (empty string, <em>Smoke</em>, <em>N/A</em>, etc.).</li>
+                    <li><strong>Icon dispatcher:</strong> <code>nwfcWeatherBucket(text)</code> in <code>map-icons.js</code> — case-insensitive substring match with a defined precedence: <code>thunder / lightning</code> &rarr; <code>drizzle</code> &rarr; <code>shower / rain</code> &rarr; <code>snow / blizzard / sleet / hail</code> &rarr; <code>fog / mist / haze</code> &rarr; <code>dust / sandstorm</code> &rarr; <code>partly cloud</code> &rarr; <code>overcast</code> &rarr; METAR codes (<code>ovc</code>, <code>bkn</code>, <code>sct</code>, <code>few</code>, <code>skc</code>, <code>clr</code>, <code>nsc</code>, <code>ncd</code>) &rarr; <code>cloud</code> &rarr; <code>gust / wind</code> &rarr; <code>hot / scorch</code> &rarr; <code>cold / freez / chill</code> &rarr; <code>clear / sunny / fair</code> &rarr; <em>default</em>.</li>
+                    <li><strong>METAR support:</strong> PMD&rsquo;s NWFC scrape often returns aviation cloud-cover codes like <code>SCT at 4000 feet</code>, <code>BKN at 3500 feet</code>, <code>OVC at 3000 feet</code>. These are resolved before the generic <code>cloud</code> fallback: <code>SCT</code>/<code>FEW</code> &rarr; partly_cloudy, <code>BKN</code> &rarr; cloudy, <code>OVC</code> &rarr; overcast, <code>SKC</code>/<code>CLR</code>/<code>NSC</code>/<code>NCD</code> &rarr; clear.</li>
+                    <li><strong>Fixed 36 CSS-pixel size</strong> at every zoom, matching GCOP&rsquo;s pattern — no clutter build-up at low zoom.</li>
+                    <li><strong>Click routing:</strong> the Mapbox layer <code>nwfc_observations-click</code> is a zero-opacity circle (radius 18&nbsp;px) that serves as the popup click target. Marker clicks re-fire a <code>map.fire("click", …)</code> at the feature&rsquo;s lng/lat which the existing NWFC popup dispatcher in <code>layer-attribute-popup.js</code> catches unchanged.</li>
+                    <li>The full string-&rarr;bucket catalogue is documented in <code>nwfc_weather_types.txt</code> at repo root.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="gdps-catalogue">
+                <h2 class="section-title">GDPS WMS Catalogue <span class="section-anchor">#</span></h2>
+                <p>The Global Deterministic Prediction System temporal layers hit MSC GeoMet (Environment Canada) as WMS-1.1.1 requests. The <em>layer-name</em> catalogue was migrated to the current names in <code>frontend/src/modules/time-functions.js</code>. Every generator now targets one of two naming families:</p>
+                <ul>
+                    <li><code>GDPS_15km_*</code> &mdash; 15&nbsp;km global GDPS model.</li>
+                    <li><code>CAPS-WEonG_3km_*</code> &mdash; 3&nbsp;km CAPS / WEonG regional nowcast.</li>
+                </ul>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>WMS <code>layers=</code></th><th>Optional <code>styles=</code></th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Weekly Specific Humidity (2&nbsp;m)</td><td><code>GDPS_15km_SpecificHumidity_2m</code></td><td>&mdash;</td></tr>
+                            <tr><td>Weekly Relative Humidity (2&nbsp;m)</td><td><code>GDPS_15km_RelativeHumidity_2m</code></td><td>&mdash;</td></tr>
+                            <tr><td>Weekly Precipitation Accumulation</td><td><code>GDPS_15km_ConvectivePrecip-Accum</code></td><td>&mdash;</td></tr>
+                            <tr><td>Weekly Snow Density</td><td><code>GDPS_15km_SnowDensity</code></td><td>&mdash;</td></tr>
+                            <tr><td>Weekly Snow Depth</td><td><code>GDPS_15km_SnowDepth</code></td><td>&mdash;</td></tr>
+                            <tr><td>Precipitation Type Forecast (3&nbsp;h)</td><td><code>GDPS_15km_PrecipType-Significant3h</code></td><td>&mdash;</td></tr>
+                            <tr><td>Snow Fall Probability</td><td><code>CAPS-WEonG_3km_Snow-Prob</code></td><td>&mdash;</td></tr>
+                            <tr><td>Thunderstorm Probability</td><td><code>CAPS-WEonG_3km_Thunderstorm-Prob</code></td><td>&mdash;</td></tr>
+                            <tr><td>Liquid-Fog Visibility</td><td><code>CAPS-WEonG_3km_LiquidFogVisibility</code></td><td>&mdash;</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="mini-note" style="margin-top: 18px; color: var(--text-muted); font-size: 12.5px;">The sidebar exposes 14 GDPS toggles; 9 of them are wired to generator functions today. A further 5 (Total Precipitation Intensity, Instantaneous Precip Rate, Precipitation Character, Total Cloud Cover, Water Runoff) each require a matching <code>styles=</code> parameter and can be added as new generator functions when needed &mdash; the WMS names and styles are documented in <code>time-functions.js</code> above their respective generators.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="geoserver">
+                <h2 class="section-title">GeoServer Boundaries <span class="section-anchor">#</span></h2>
+                <p>Administrative and infrastructure boundary layers are served as vector tiles from a self-hosted GeoServer instance via GWC TMS:</p>
+<pre><code>http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/
+  gcop:national_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:provincial_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:district_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:tehsil_boundary@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+  gcop:airports@EPSG:900913@pbf/{z}/{x}/{y}.pbf
+</code></pre>
+                <p>The browser hits GeoServer directly &mdash; Django is not in the tile path. This requires that the GeoServer host be reachable from each client&rsquo;s network.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="header-overlay">
+                <h2 class="section-title">Header Overlay <span class="section-anchor">#</span></h2>
+                <p>The branded card at the top-left contains the NDMA logo, the application name, a sun/moon day-mode toggle, and the <strong>Documentation</strong> button that opened this page.</p>
+                <p>Implementation lives in <code>project/templates/dashboard.html</code> (the markup) and per-component CSS partials under <code>frontend/src/styles/dashboard/</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="sidebar-menu">
+                <h2 class="section-title">Sidebar Menu <span class="section-anchor">#</span></h2>
+                <p>The expandable sidebar on the left renders categories from <code>ncop_menu_items</code>. Each category becomes a collapsible accordion with a custom icon. Search filters across all layers in real time.</p>
+                <p>Adding a new layer is a single-file change: add a key under the appropriate subcategory in <code>map-layers.js</code> with a <code>label</code>, <code>source</code>, <code>layers</code> array and (optional) <code>popup</code>, <code>information</code>, <code>theme</code>. The sidebar auto-discovers it.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="unified-right-rail">
+                <h2 class="section-title">Right Rail <span class="section-anchor">#</span></h2>
+                <p>The vertical rail on the right is built by <code>buildUnifiedRightRail()</code> and hosts every floating panel button:</p>
+                <ul>
+                    <li>User profile</li>
+                    <li>Geocoder (search)</li>
+                    <li>Layer Order panel</li>
+                    <li>Layer Style panel</li>
+                    <li>Layer Info panel</li>
+                    <li>Projection toggle (Globe / Mercator)</li>
+                    <li>Basemap picker</li>
+                    <li>Wind / Ocean particles</li>
+                    <li>Weather Report panel</li>
+                    <li>Tour panel</li>
+                    <li>Story builder</li>
+                </ul>
+                <p>Each button toggles its corresponding right-side panel. Only one panel is open at a time &mdash; clicking one closes any other rail panel.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="layer-info-panel">
+                <h2 class="section-title">Layer Info &amp; Legends <span class="section-anchor">#</span></h2>
+                <p>The <strong>Layer Info</strong> panel (info button on the right rail) lists every currently-active layer with a description drawn from the layer&rsquo;s <code>information</code> field in <code>map-layers.js</code>. Each entry can optionally surface a legend via a <strong>&ldquo;Show Legend&rdquo;</strong> toggle button.</p>
+                <p>Two legend shapes are supported side-by-side on any layer config:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Shape</th><th>Config keys</th><th>Renders as</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Static image</strong></td>
+                                <td><code>legend: true</code> + <code>legendPath: "…/img.webp"</code></td>
+                                <td>Single <code>&lt;img&gt;</code> below the description. Uses a WebP legend bundled under <code>frontend/src/assets/images/layer_legends/</code>. Original mechanism &mdash; still active for every layer that already had it.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Dynamic (declarative)</strong></td>
+                                <td><code>dynamicLegend: { title?, entries: [ &hellip; ], note? }</code></td>
+                                <td>Rendered inline as a compact grid of colored / iconified rows. No image file needed.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="subsection-title">Dynamic-legend entry types</h3>
+                <p>Each entry in <code>dynamicLegend.entries[]</code> auto-detects its swatch style:</p>
+                <ul>
+                    <li><code>{ swatch: "#dc2626", shape: "circle"|"square"|"line", label }</code> &mdash; a coloured chip; shape defaults to circle.</li>
+                    <li><code>{ iconUrl: "&hellip;.gif", label }</code> &mdash; an inline <code>&lt;img&gt;</code> (works with any GIF / PNG / WebP; browser handles native GIF playback).</li>
+                    <li><code>{ icon: "&#9749;", label }</code> &mdash; an emoji glyph.</li>
+                </ul>
+                <p>When both a static <code>legendPath</code> and a <code>dynamicLegend</code> are declared on the same layer, the dynamic legend wins. The &ldquo;Show Legend&rdquo; button toggles whichever is present, and per-layer visibility state persists in the panel&rsquo;s <code>#legendsVisible</code> Map during the session.</p>
+                <h3 class="subsection-title">Layers currently shipping dynamic legends</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Legend content</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>PMD Weather Stations</td><td>&#9728;&#65039; base marker + &#127783;&#65039; rain overlay swatch</td></tr>
+                            <tr><td>Heatwave Monitoring</td><td>6-stop temperature ramp (20 &rarr; 46&nbsp;&deg;C, blue&rarr;dark red circles)</td></tr>
+                            <tr><td>PMD Weather Warnings</td><td>6 severity swatches (Red / Orange / Yellow / Blue + Purple gust + Magenta t-storm)</td></tr>
+                            <tr><td>Monsoon Warnings</td><td>5 level swatches (Red / Orange / Yellow / Blue + Cyan default)</td></tr>
+                            <tr><td>Lightning Strikes</td><td>Yellow circle swatch + 60-minute-window note</td></tr>
+                            <tr><td>City 12-Step Forecast</td><td>5-stop temperature ramp (0 &rarr; 40&nbsp;&deg;C)</td></tr>
+                            <tr><td>NWFC Station Observations</td><td>All 13 GIF/PNG weather icons rendered inline (same URLs the map markers use) + 🌡 default</td></tr>
+                            <tr><td>GLOF Observations</td><td>4 alert-level circle swatches (Normal &rarr; Emergency)</td></tr>
+                            <tr><td>Glacier Lake Inventory</td><td>Fixed cyan + 3 area-based sizing example rows</td></tr>
+                            <tr><td>FFD Data</td><td>7 flood-status circle swatches (Normal flow &rarr; Exceptionally high + Unknown)</td></tr>
+                            <tr><td>Weekly Precipitation (2&nbsp;m Above Ground)</td><td>Snow-inclusive intensity legend: snow.gif icon + 5 precipitation-band swatches (mm)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>Rendering helper: <code>LayerInfoPanel.#renderDynamicLegend</code> in <code>frontend/src/modules/layer-panels.js</code>. Styles: <code>frontend/src/styles/dashboard/_layer-panels.css</code> &rarr; the <code>.dynamic-legend-*</code> class block.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="layer-style-config">
+                <h2 class="section-title">Layer Style (palette) <span class="section-anchor">#</span></h2>
+                <p>The Layer Style panel lets the user restyle any active vector layer:</p>
+                <ul>
+                    <li><strong>Polygon</strong> &mdash; fill color, fill opacity, outline color, outline width, outline opacity.</li>
+                    <li><strong>Line</strong> &mdash; width, color, opacity, dash pattern, cap, join, blur, gap, offset.</li>
+                    <li><strong>Point</strong> &mdash; radius, fill color, fill opacity, stroke color/width/opacity, blur.</li>
+                    <li><strong>Labels</strong> &mdash; field picker, size, color, opacity, transform, halo color/width/blur.</li>
+                </ul>
+                <p>All edits persist via the <code>#userOverrides</code> Map and are re-applied after every basemap switch via the wrapper installed on <code>SourceLayerControl.addLayerByKey()</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="layer-order-panel">
+                <h2 class="section-title">Layer Order <span class="section-anchor">#</span></h2>
+                <p>The Layer Order panel shows every active layer in stacking order, with drag handles. Reordering walks each layer&rsquo;s live paint/layout snapshot before removal so user-customised styling is preserved across the rebuild.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="temporal-slider">
+                <h2 class="section-title">Temporal Slider <span class="section-anchor">#</span></h2>
+                <p>The temporal slider docks below the map when a temporal layer is enabled. It exposes:</p>
+                <ul>
+                    <li>Play / Pause toggle (Lucide icons).</li>
+                    <li>Step labels at deterministic positions.</li>
+                    <li>Active-frame highlight.</li>
+                    <li>Programmatic registry: <code>window.__ncop_temporal_registry</code> tracks every temporal layer added so the z-order helper can recognise them.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="weather-report">
+                <h2 class="section-title">Weather Report Panel <span class="section-anchor">#</span></h2>
+                <p>The Weather Report is a two-tab panel that renders a dynamic situational summary of everything currently on the map. The default <strong>Overview</strong> tab handles temporal Meteoblue layers and station networks. The new <strong>PMD Overview</strong> tab is a dedicated console for the PMD / FFD / NWFC ecosystem.</p>
+
+                <h3 class="subsection-title">Overview tab &mdash; render pipeline</h3>
+                <ol>
+                    <li>Read <code>getCurrentTemporalState()</code> for the active layer key + step.</li>
+                    <li>Verify District Boundary &amp; Provincial Boundary layers are toggled on.</li>
+                    <li><code>queryRenderedFeatures</code> on the district fill layer in the viewport.</li>
+                    <li>Sample the temporal frame at each district&rsquo;s centroid (or compute station readings via bbox containment).</li>
+                    <li>Group rows by province; compute kind-aware aggregates (mean for most; max for CAPE / helicity).</li>
+                    <li>Render summary stats, hotspot card, threshold pill, and per-province cards with click-to-fly bbox attributes.</li>
+                </ol>
+
+                <h3 class="subsection-title">PMD Overview tab</h3>
+                <p>The PMD Overview tab tracks eight PMD/FFD/NWFC layers via <code>PMD_TAB_TRACKED_LAYERS</code>. Each active layer surfaces as an accent-coded card in the <em>Active Layers</em> block and unlocks its own drill-down. Colour keys:</p>
+                <ul>
+                    <li><span style="color:#86efac;"><strong>FFD</strong></span> &middot; green &middot; flood-forecasting layers</li>
+                    <li><span style="color:#93c5fd;"><strong>PMD Stations</strong></span> &middot; blue &middot; the station overlay</li>
+                    <li><span style="color:#7dd3fc;"><strong>NWFC</strong></span> &middot; cyan &middot; national forecast centre feeds</li>
+                    <li><span style="color:#67e8f9;"><strong>GLOF</strong></span> &middot; teal &middot; glacial-lake observation stations</li>
+                    <li><span style="color:#fca5a5;"><strong>Warnings</strong></span> &middot; red &middot; live weather warnings</li>
+                    <li><span style="color:#fde68a;"><strong>Lightning</strong></span> &middot; amber &middot; last-hour strikes</li>
+                    <li><span style="color:#c4b5fd;"><strong>City Forecast</strong></span> &middot; violet &middot; 12-step short-term forecast</li>
+                </ul>
+                <p>Sections are collapsible (<code>&lt;details&gt;</code> shells) and each drill-down opens a full-panel sub-view with a &laquo; Back button. Six drill-down views exist: <em>Daily Forecast</em>, <em>Rainfall Reports</em>, <em>Max Temp Records</em>, <em>Press Releases</em>, <em>Weekly Outlook</em> and <em>FFD Bulletins</em>. All are backed by dynamic field discovery (case- and separator-insensitive column matching) so schema drift in the upstream API doesn&rsquo;t break the panel.</p>
+
+                <h3 class="subsection-title">Situational HTML / CSV report</h3>
+                <p>The panel can generate a downloadable NCOP-themed situational report in either HTML or CSV. The HTML build includes:</p>
+                <ul>
+                    <li>Cover / executive summary / TOC.</li>
+                    <li>An <em>Active Layers</em> block that maps every tracked-layer accent colour to its live feature count.</li>
+                    <li>All PMD sections with <strong>all features and all properties</strong> (no silent slice at 20); each section gets its own vertical scroll wrapper and sticky header.</li>
+                    <li>Per-section analysis: <em>Hotspots &middot; Meaning &middot; Forecast &middot; Mitigation</em>, driven by threshold rules.</li>
+                    <li>Colour-coded chips (<em>Normal &middot; Low &middot; Medium &middot; High &middot; Very&nbsp;High &middot; Extreme &middot; Watch &middot; Warning &middot; Emergency</em>).</li>
+                    <li>Threshold-highlighted cells &mdash; e.g. <code>wrp-pmd-x-extreme-hot</code>, <code>wrp-pmd-heavy-rain</code>, <code>wrp-pmd-strong-wind</code> &mdash; sourced from WHO 2021, US&nbsp;EPA and IMD/PMD thresholds.</li>
+                </ul>
+
+                <h3 class="subsection-title">Performance gates</h3>
+                <ul>
+                    <li>150&nbsp;ms render throttle (<code>#scheduleRender</code>) with state fingerprinting.</li>
+                    <li>Listeners only attach while the panel is open.</li>
+                    <li>Animations restricted to opacity + transform (GPU-only).</li>
+                    <li>MutationObserver scoped narrowly to <code>temp-slider1</code> attributes.</li>
+                    <li>Envelope-aware value unwrapping (<code>#unwrapValue</code>, <code>#reportFormatValue</code>) eliminates <code>[object Object]</code> leaks when APIs return <code>{value:&nbsp;X}</code> wrappers.</li>
+                </ul>
+
+                <h3 class="subsection-title">Alert thresholds</h3>
+                <p>Thresholds live in the <code>T</code> constant block of <code>weather-report-control.js</code> and are sourced from WHO&nbsp;2021 AQ guidelines, US&nbsp;EPA AQI breakpoints, IMD/PMD precipitation classifications and PMD heat advisories.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="popups">
+                <h2 class="section-title">Feature Popups <span class="section-anchor">#</span></h2>
+                <p><code>LayerAttributePopup</code> binds a single click handler to the map and delegates per-layer popup rendering based on the source/layer id of the clicked feature. Popups present a primary card plus an optional drawer with the full property table. Close behaviour: <strong>ESC key</strong> dismisses the popup (close buttons were intentionally removed for cleaner chrome).</p>
+                <h3 class="subsection-title">Specialised popup builders</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Builder</th><th>Highlights</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>NWFC Observations</td><td><code>buildNwfcPopupContent</code> + <code>createNwfcChart</code></td><td>Sleek dashboard header (station, weather emoji, temperature) plus a Chart.js vertical bar chart for Humidity / Rain 3h / Rain 24h / Wind. Bars are severity-tinted; chart instances are cached in <code>nwfcChartInstances</code> to avoid churn on rebind.</td></tr>
+                            <tr><td>PMD Weather Stations</td><td><code>buildPmdPopupContent</code></td><td>Station code, type, visibility and warning badges alongside the normal reading grid.</td></tr>
+                            <tr><td>PMD City Forecast</td><td><code>buildPmdCityForecastPopupContent</code></td><td>Parses the <code>fc[]</code> array into a 12-step forecast strip (temperature + weather emoji per step).</td></tr>
+                            <tr><td>FFD Data (waterlevels)</td><td><code>normalizeFfdProps</code> + waterlevel chart</td><td>Unwraps the <code>gauges</code> JSON-string blob so the popup can plot current-vs-danger levels.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="subsection-title">Value normalisation</h3>
+                <ul>
+                    <li><code>formatPMDValue</code> treats <code>null</code>, <code>undefined</code> and empty strings as <em>N/A</em> rather than dropping them from the property table.</li>
+                    <li>Envelope-object unwrapping probes <code>label / name / title / value / text / description / summary</code> before falling back to <code>JSON.stringify</code> &mdash; this eliminates <code>[object Object]</code> leaks from PMD API wrappers.</li>
+                    <li>Weather text is mapped to an emoji via <code>nwfcWeatherEmoji(text)</code>, kept locally in <code>layer-attribute-popup.js</code> for consistency between map icons and popup chrome.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="basemap-projection">
+                <h2 class="section-title">Basemaps &amp; Projection <span class="section-anchor">#</span></h2>
+                <p>Basemap selection and projection toggle live in <code>map-display-panels.js</code>. Supported basemaps include Mapbox Streets, Light, Dark, Satellite, Navigation Day/Night plus CARTO Positron and dark-matter. Switching basemaps preserves every active layer and its user-applied styling via the SourceLayerControl/LayerStyleConfig pipeline.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="api-reference">
+                <h2 class="section-title">REST API Reference <span class="section-anchor">#</span></h2>
+                <p>All routes are mounted at the project root via <code>project/ncop_internal/urls.py</code>.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/</code></td><td>Dashboard (auth required).</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/docs/</code></td><td>This documentation page.</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/login/</code> &middot; <code>/signup/</code> &middot; <code>/logout/</code></td><td>Auth views.</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/password-reset/</code></td><td>Password reset flow.</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/stories/</code> &middot; <code>/stories/&lt;slug&gt;/</code></td><td>Story tour index &amp; detail.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-weather-pmdffd-data/</code></td><td>PMD weather station merger (rainfall + temp + wind).</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-waqi-global-airquality/</code></td><td>WAQI worldwide AQI feed.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-heatwave-monitoring/</code></td><td>40 Pakistani cities &times; live temperature.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-heatwave-detail/?lat&amp;lon&amp;type&amp;name</code></td><td>Open-Meteo forecast / seasonal / climate detail.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-gdacs-events/&lt;slug&gt;/</code></td><td>GDACS event list per type.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-gdacs-event-details/&lt;type&gt;/&lt;id&gt;/[&lt;ep&gt;/]</code></td><td>Per-event normalised impact summary.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-nasa-eonet-events/&lt;category&gt;/</code></td><td>NASA Earth Observatory natural events.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/get-usgs-earthquake-alerts/</code></td><td>Live USGS earthquake feed.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-usgs-earthquake-detail/&lt;event_id&gt;/</code></td><td>Earthquake details.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-usgs-shakemap-content/</code></td><td>ShakeMap content proxy.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-geoglows-riverid/</code></td><td>River ID lookup by lat/lon.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-geoglows-forecast/&lt;river_id&gt;/</code></td><td>15-day river discharge forecast.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-geoglows-forecaststats/&lt;river_id&gt;/</code></td><td>Forecast statistics.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-geoglows-daily/monthly/annual-averages/&lt;river_id&gt;/</code></td><td>Climatology averages.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/slick-plus/</code></td><td>SkyTruth marine oil slick polygons.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/get-gdelt-news-events/</code></td><td>GDELT news event extraction.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/wind-ocean-particles/</code></td><td>Wind / ocean current particle field source.</td></tr>
+                            <tr><td><span class="pill pill--yellow">GEE</span></td><td><code>/api/gee/catalog/</code></td><td>Catalogue of supported GEE datasets.</td></tr>
+                            <tr><td><span class="pill pill--yellow">GEE</span></td><td><code>/api/gee/dynamic-layer/</code></td><td>Instantiate an on-demand GEE composite as XYZ tiles.</td></tr>
+                            <tr><td><span class="pill pill--yellow">GEE</span></td><td><code>/api/gee/temporal-layer/</code></td><td>Build a slider-ready temporal GEE layer.</td></tr>
+                            <tr><td><span class="pill pill--yellow">GEE</span></td><td><code>/api/gee/legend/</code></td><td>Generate a PNG legend for a GEE layer.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title" style="margin-top: 32px;">PMD / FFD / NWFC endpoints</h3>
+                <p>Added in the 2026-Q3 integration pass. All are JSON GET, all are cached with an in-flight-request coalesce; each maps 1:1 to a getter in <code>frontend/src/modules/gcop-monitor-integration.js</code>. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the map-side wiring.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/ffd/waterlevels/</code></td><td>FFD bulletin waterlevel stations.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/ffd/rivers/</code></td><td>River polylines classified by threat category.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/ffd/bulletins/</code></td><td>Textual flood bulletins.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/stations/</code></td><td>PMD Monitor live station overlay.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/warnings/</code></td><td>PMD weather-warning polygons.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/monsoon/</code></td><td>Monsoon advisories.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/lightning/</code></td><td>Lightning strikes (last 1&nbsp;h).</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/city-forecast/</code></td><td>City 12-step short-term forecast.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/glof/</code></td><td>GLOF observation stations.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/monitor/glacier-lakes/</code></td><td>Catalogued glacier lakes.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/monitor/public-forecast/</code></td><td>Public-forecast bulletins.</td></tr>
+                            <tr><td><span class="pill pill--green">GeoJSON</span></td><td><code>/api/pmd/nwfc/observations/</code></td><td>Live surface observations (drives the animated NWFC layer).</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/forecast/</code></td><td>Multi-day daily forecast per station.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/reports/</code></td><td>Rainfall reports.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/weekly-outlook/</code></td><td>Weekly outlook.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/press-release-text/</code></td><td>Latest NWFC press-release text.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/max-temperatures/</code></td><td>Station-wise max-temperature records.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="caching">
+                <h2 class="section-title">Caching Strategy <span class="section-anchor">#</span></h2>
+                <ul>
+                    <li><strong>PMD FFD weather:</strong> 5-minute in-memory class cache (rainfall/temperature/wind merger).</li>
+                    <li><strong>PMD / FFD / NWFC endpoints (2026-Q3 integration):</strong> TTL cache with an in-flight request coalesce &mdash; duplicate concurrent calls share the same upstream request instead of stampeding PMD Monitor. The 19 live endpoints are cached at the Python layer in <code>views.py</code> and again on the JS side via the getters in <code>gcop-monitor-integration.js</code>.</li>
+                    <li><strong>Heatwave Monitoring:</strong> on-disk JSON cache at <code>project/cache/heatwave/</code> with a TTL janitor.</li>
+                    <li><strong>GDACS / USGS / EONET:</strong> shorter in-process TTL plus retry/backoff on upstream failure.</li>
+                    <li><strong>GEE tiles:</strong> URL-based tile cache through GEE itself; Django merely returns the tile-URL template.</li>
+                </ul>
+                <p>The on-disk cache directory is <strong>git-ignored</strong> (<code>project/cache/</code>) so cached snapshots don&rsquo;t pollute history.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="proxies">
+                <h2 class="section-title">Upstream Proxies <span class="section-anchor">#</span></h2>
+                <p>Every external feed flows through a Django view for three reasons:</p>
+                <ol>
+                    <li><strong>CORS</strong> &mdash; the browser can&rsquo;t directly hit most upstream endpoints.</li>
+                    <li><strong>SSL</strong> &mdash; some PMD endpoints use self-signed certificates; the proxy disables verification server-side only.</li>
+                    <li><strong>Schema</strong> &mdash; the proxy normalises three product feeds into a single station merge (PMD), or unwraps awkward JSON envelopes (EONET, GDACS).</li>
+                </ol>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="gee">
+                <h2 class="section-title">Google Earth Engine <span class="section-anchor">#</span></h2>
+                <p>NCOP integrates Earth Engine through a curated catalogue (<code>/api/gee/catalog/</code>). The client requests a specific dataset; Django authenticates with Earth Engine using the configured service account, applies the dataset&rsquo;s visualisation parameters, and returns an XYZ tile-URL template that Mapbox consumes directly.</p>
+                <p>Temporal GEE layers return an array of frame definitions consumable by the temporal slider.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="environments">
+                <h2 class="section-title">Environments <span class="section-anchor">#</span></h2>
+                <div class="card-grid">
+                    <div class="card">
+                        <h4 class="card-title">Development</h4>
+                        <p class="card-desc">Vite dev server + Django runserver. <code>DJANGO_DEBUG=true</code>, HMR enabled, all static dirs live.</p>
+                    </div>
+                    <div class="card">
+                        <h4 class="card-title">Staging</h4>
+                        <p class="card-desc">Waitress on 8080 + Vite build artefacts. CORS open for the dev IP range.</p>
+                    </div>
+                    <div class="card">
+                        <h4 class="card-title">Production</h4>
+                        <p class="card-desc"><code>DJANGO_DEBUG=false</code>, WhiteNoise compressed manifest storage, explicit <code>DJANGO_ALLOWED_HOSTS</code>.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="troubleshooting">
+                <h2 class="section-title">Troubleshooting <span class="section-anchor">#</span></h2>
+                <div class="callout callout--warn">
+                    <div class="callout-icon">⚠</div>
+                    <div class="callout-body">
+                        <strong>Assets don&rsquo;t load on another machine</strong>
+                        Check <code>VITE_DEV_SERVER_HOST</code>/<code>VITE_HMR_HOST</code>. They&rsquo;re embedded into the rendered HTML &mdash; the browser tries to fetch JS from that exact host. Add the dev machine&rsquo;s reachable IP to both, and open port 5173 in Windows Firewall. CORS is wide-open in dev (<code>CORS_ALLOW_ALL_ORIGINS=True</code>) so the typical failure mode is &ldquo;connection refused&rdquo; not CORS.
+                    </div>
+                </div>
+                <div class="callout callout--warn">
+                    <div class="callout-icon">⚠</div>
+                    <div class="callout-body">
+                        <strong>Layer style resets after switching the basemap</strong>
+                        This is fixed &mdash; <code>LayerStyleConfig</code> persists user overrides into <code>#userOverrides</code> and replays them on every <code>SourceLayerControl.addLayerByKey()</code> call. If you ever see this regress, verify the wrapper is still installed in <code>#hookSourceLayerControl()</code>.
+                    </div>
+                </div>
+                <div class="callout callout--danger">
+                    <div class="callout-icon">✕</div>
+                    <div class="callout-body">
+                        <strong>PMD station endpoint returns fewer points than expected</strong>
+                        The view merges three product feeds keyed by station name. Whitespace-different names (<code>"Khairpur "</code> vs <code>"Khairpur"</code>) won&rsquo;t collide but also won&rsquo;t merge &mdash; you&rsquo;ll see two markers at the same place. Normalise upstream or apply <code>.strip()</code> in the merge.
+                    </div>
+                </div>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>Mapbox token errors</strong>
+                        Confirm <code>MAPBOX_ACCESS_TOKEN</code> is set in <code>.env</code>; the dashboard view injects it into <code>window.MAPBOX_ACCESS_TOKEN</code> at template render. Restart the Django process after changing the env file.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="glossary">
+                <h2 class="section-title">Glossary <span class="section-anchor">#</span></h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+                        <tbody>
+                            <tr><td><strong>NCOP</strong></td><td>National Common Operating Picture.</td></tr>
+                            <tr><td><strong>NDMA</strong></td><td>National Disaster Management Authority (Pakistan).</td></tr>
+                            <tr><td><strong>NEOC</strong></td><td>National Emergency Operations Centre.</td></tr>
+                            <tr><td><strong>PMD</strong></td><td>Pakistan Meteorological Department.</td></tr>
+                            <tr><td><strong>WAQI</strong></td><td>World Air Quality Index.</td></tr>
+                            <tr><td><strong>GloFAS</strong></td><td>Global Flood Awareness System (ECMWF).</td></tr>
+                            <tr><td><strong>GDACS</strong></td><td>Global Disaster Alert &amp; Coordination System.</td></tr>
+                            <tr><td><strong>EONET</strong></td><td>Earth Observatory Natural Event Tracker (NASA).</td></tr>
+                            <tr><td><strong>CAMS</strong></td><td>Copernicus Atmosphere Monitoring Service.</td></tr>
+                            <tr><td><strong>CAPE</strong></td><td>Convective Available Potential Energy (J/kg).</td></tr>
+                            <tr><td><strong>AOD</strong></td><td>Aerosol Optical Depth.</td></tr>
+                            <tr><td><strong>AQI</strong></td><td>Air Quality Index (US EPA scale).</td></tr>
+                            <tr><td><strong>FFD</strong></td><td>Flood Forecasting Division (PMD).</td></tr>
+                            <tr><td><strong>NWFC</strong></td><td>National Weather Forecasting Centre (PMD).</td></tr>
+                            <tr><td><strong>PMD Monitor</strong></td><td>PMD&rsquo;s live-feeds console: stations, warnings, monsoon, lightning, city forecast, GLOF, glacier lakes, public forecast.</td></tr>
+                            <tr><td><strong>GLOF</strong></td><td>Glacial Lake Outburst Flood &mdash; catastrophic drainage of a proglacial lake, monitored via observation stations.</td></tr>
+                            <tr><td><strong>GDPS</strong></td><td>Global Deterministic Prediction System (Environment Canada, 15&nbsp;km grid).</td></tr>
+                            <tr><td><strong>CAPS-WEonG</strong></td><td>3&nbsp;km CAPS / WEonG regional nowcast (Environment Canada).</td></tr>
+                            <tr><td><strong>MSC GeoMet</strong></td><td>Meteorological Service of Canada&rsquo;s WMS gateway for GDPS &amp; CAPS-WEonG.</td></tr>
+                            <tr><td><strong>GEE</strong></td><td>Google Earth Engine.</td></tr>
+                            <tr><td><strong>GWC / TMS</strong></td><td>GeoWebCache / Tile Map Service.</td></tr>
+                            <tr><td><strong>HMR</strong></td><td>Hot Module Replacement (Vite).</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin-top: 40px; text-align: center; color: var(--text-muted); font-size: 12.5px;">
+                    NCOP Documentation &middot; Built for NDMA / NEOC operations &middot; &copy; 2026
+                </p>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Highlight active sidebar link based on scroll position.
+        const links = document.querySelectorAll('.sidebar-link');
+        const sections = Array.from(document.querySelectorAll('section[id]'));
+        const linkById = new Map();
+        links.forEach((a) => linkById.set(a.getAttribute('href').slice(1), a));
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                const id = entry.target.id;
+                const link = linkById.get(id);
+                if (!link) return;
+                links.forEach((l) => l.classList.remove('active'));
+                link.classList.add('active');
+            });
+        }, { rootMargin: '-25% 0px -65% 0px' });
+
+        sections.forEach((s) => observer.observe(s));
+    </script>
+</body>
+</html>

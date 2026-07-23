@@ -182,6 +182,97 @@ export class LayerInfoPanel {
     infoPanel?.classList.remove("visible");
   }
 
+  // ------------------------------------------------------------------
+  // Legend rendering — supports two shapes on the layer config:
+  //
+  //   1. Static image legend (existing behaviour, unchanged):
+  //      `{ legend: true, legendPath: "…/img.webp" }`
+  //
+  //   2. Dynamic in-panel legend (new):
+  //      `{ dynamicLegend: { title?, entries: [ {swatch|iconUrl|icon, label} ] } }`
+  //      Each entry renders as one row in a compact grid — swatch = a
+  //      color chip; iconUrl = an <img> for GIF/PNG icons; icon = an
+  //      emoji or short glyph.  No image file needed.
+  //
+  // When BOTH are configured, the dynamic legend is preferred.  The
+  // "Show Legend" button toggles whichever is present.
+  // ------------------------------------------------------------------
+  #buildLegendHtml(
+    layerKey,
+    label,
+    hasLegend,
+    legendPath,
+    dynamicLegend,
+    isLegendVisible
+  ) {
+    const hasDynamic = dynamicLegend && Array.isArray(dynamicLegend.entries) && dynamicLegend.entries.length > 0;
+    const hasImage   = hasLegend === true && !!legendPath;
+    if (!hasDynamic && !hasImage) return "";
+
+    const buttonText = isLegendVisible ? "Hide Legend" : "Show Legend";
+    let body = "";
+    if (isLegendVisible) {
+      if (hasDynamic) {
+        body = this.#renderDynamicLegend(dynamicLegend);
+      } else {
+        body = `
+          <div class="legend-image-container">
+            <img src="${legendPath}" alt="Legend for ${label}" class="legend-image" />
+          </div>`;
+      }
+    }
+    return `
+      <button class="legend-toggle-btn" data-layer-key="${layerKey}">${buttonText}</button>
+      ${body}`;
+  }
+
+  #renderDynamicLegend(dynamicLegend) {
+    const escape = (s) =>
+      String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    const title = dynamicLegend.title
+      ? `<div class="dynamic-legend-title">${escape(dynamicLegend.title)}</div>`
+      : "";
+
+    const rows = dynamicLegend.entries.map((entry) => {
+      if (!entry) return "";
+      let swatchHtml = "";
+      if (entry.iconUrl) {
+        swatchHtml = `<span class="dynamic-legend-swatch dynamic-legend-swatch--img">
+          <img src="${escape(entry.iconUrl)}" alt="" />
+        </span>`;
+      } else if (entry.icon) {
+        swatchHtml = `<span class="dynamic-legend-swatch dynamic-legend-swatch--emoji">${escape(entry.icon)}</span>`;
+      } else if (entry.swatch) {
+        // Support optional entry.shape ("circle" | "square" | "line")
+        const shape = entry.shape === "line" ? "dynamic-legend-swatch--line"
+                    : entry.shape === "square" ? "dynamic-legend-swatch--square"
+                    : "dynamic-legend-swatch--circle";
+        swatchHtml = `<span class="dynamic-legend-swatch ${shape}" style="background:${escape(entry.swatch)};"></span>`;
+      } else {
+        swatchHtml = `<span class="dynamic-legend-swatch dynamic-legend-swatch--none"></span>`;
+      }
+      return `
+        <div class="dynamic-legend-row">
+          ${swatchHtml}
+          <span class="dynamic-legend-label">${escape(entry.label || "")}</span>
+        </div>`;
+    }).join("");
+
+    const note = dynamicLegend.note
+      ? `<div class="dynamic-legend-note">${escape(dynamicLegend.note)}</div>`
+      : "";
+
+    return `
+      <div class="legend-image-container dynamic-legend-container">
+        ${title}
+        <div class="dynamic-legend-rows">${rows}</div>
+        ${note}
+      </div>`;
+  }
+
   toggleLegend(layerKey) {
     const currentState = this.#legendsVisible.get(layerKey) || false;
     this.#legendsVisible.set(layerKey, !currentState);
@@ -274,28 +365,17 @@ export class LayerInfoPanel {
         layerInfo?.config?.information || "No information available.";
       const hasLegend = layerInfo?.config?.legend === true;
       const legendPath = layerInfo?.config?.legendPath || null;
+      const dynamicLegend = layerInfo?.config?.dynamicLegend || null;
       const isLegendVisible = this.#legendsVisible.get(layerKey) || false;
 
-      let legendHtml = "";
-      if (hasLegend && legendPath) {
-        const legendButtonText = isLegendVisible
-          ? "Hide Legend"
-          : "Show Legend";
-        legendHtml = `
-                    <button class="legend-toggle-btn" data-layer-key="${layerKey}">
-                        ${legendButtonText}
-                    </button>
-                    ${
-                      isLegendVisible
-                        ? `
-                        <div class="legend-image-container">
-                            <img src="${legendPath}" alt="Legend for ${label}" class="legend-image" />
-                        </div>
-                    `
-                        : ""
-                    }
-                `;
-      }
+      const legendHtml = this.#buildLegendHtml(
+        layerKey,
+        label,
+        hasLegend,
+        legendPath,
+        dynamicLegend,
+        isLegendVisible
+      );
 
       htmlItems.push(`
                 <div class="layer-info-item" data-layer-key="${layerKey}">
@@ -312,28 +392,17 @@ export class LayerInfoPanel {
       const info = config?.information || "No information available.";
       const hasLegend = config?.legend === true;
       const legendPath = config?.legendPath || null;
+      const dynamicLegend = config?.dynamicLegend || null;
       const isLegendVisible = this.#legendsVisible.get(layerKey) || false;
 
-      let legendHtml = "";
-      if (hasLegend && legendPath) {
-        const legendButtonText = isLegendVisible
-          ? "Hide Legend"
-          : "Show Legend";
-        legendHtml = `
-                    <button class="legend-toggle-btn" data-layer-key="${layerKey}">
-                        ${legendButtonText}
-                    </button>
-                    ${
-                      isLegendVisible
-                        ? `
-                        <div class="legend-image-container">
-                            <img src="${legendPath}" alt="Legend for ${label}" class="legend-image" />
-                        </div>
-                    `
-                        : ""
-                    }
-                `;
-      }
+      const legendHtml = this.#buildLegendHtml(
+        layerKey,
+        label,
+        hasLegend,
+        legendPath,
+        dynamicLegend,
+        isLegendVisible
+      );
 
       htmlItems.push(`
                 <div class="layer-info-item temporal-layer" data-layer-key="${layerKey}">

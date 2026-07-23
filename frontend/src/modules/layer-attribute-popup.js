@@ -21,6 +21,18 @@ function prettyAttributeName(key) {
     .replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
+// HTML-escape a value for safe injection into an innerHTML template.
+// Kept local so nothing else in this module has to depend on an
+// external helper.
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const HIDDEN_KEYS = new Set();
 
 // ========== PERFORMANCE OPTIMIZATION CONSTANTS ==========
@@ -421,8 +433,39 @@ function buildWaqiPopupContent(props) {
 // ========== FFD-SPECIFIC CONSTANTS & HELPERS ==========
 const ffdChartInstances = {};
 const pmdChartInstances = {};
+const nwfcChartInstances = {};
 
-function buildFfdPopupContent(props) {
+/**
+ * Normalise an FFD feature's `properties` from the GCOP-backend schema
+ * (`gauges` is a JSON string, `discharge` is top-level, etc — see
+ * GCOP_PMD_API_Integration.md §2.1) into the flat shape the popup
+ * builder + chart renderer already consume.  Idempotent: if the
+ * expected flat keys are already present (older schema), they win.
+ */
+function normalizeFfdProps(raw) {
+  const p = { ...(raw || {}) };
+  let gauges = [];
+  if (Array.isArray(p.gauges)) {
+    gauges = p.gauges;
+  } else if (typeof p.gauges === "string" && p.gauges.trim().startsWith("[")) {
+    try { gauges = JSON.parse(p.gauges); } catch { gauges = []; }
+  }
+  const findByType = (t) =>
+    gauges.find((g) => String(g?.type || "").toUpperCase() === t) || {};
+  const outflow = findByType("OUTFLOW");
+  const inflow  = findByType("INFLOW");
+  return {
+    ...p,
+    outflow_discharge: p.outflow_discharge ?? outflow.discharge ?? p.discharge ?? "n/a",
+    outflow_trend:     p.outflow_trend     ?? outflow.trend     ?? "—",
+    outflow_time:      p.outflow_time      ?? p.recording_time  ?? "—",
+    inflow_discharge:  p.inflow_discharge  ?? inflow.discharge  ?? "n/a",
+    inflow_trend:      p.inflow_trend      ?? inflow.trend      ?? "—",
+  };
+}
+
+function buildFfdPopupContent(rawProps) {
+  const props = normalizeFfdProps(rawProps);
   const popupId = `ffd-${props.name}-${Math.random()
     .toString(36)
     .substr(2, 9)}`;
@@ -454,7 +497,13 @@ function buildFfdPopupContent(props) {
       </div>
     </div>
     <div class="ncop-popup__actions">
-      <button class="ncop-popup__button ncop-popup__button--primary show-ffd-graph" data-popup-id="${popupId}">Show Graph</button>
+      <button class="ncop-popup__button ncop-popup__button--primary show-ffd-graph"
+              data-popup-id="${popupId}"
+              data-station="${(props.name ?? "").toString().replace(/"/g, "&quot;")}"
+              data-outflow="${props.outflow_discharge ?? ""}"
+              data-inflow="${props.inflow_discharge ?? ""}"
+              data-outflow-trend="${(props.outflow_trend ?? "").toString().replace(/"/g, "&quot;")}"
+              data-inflow-trend="${(props.inflow_trend ?? "").toString().replace(/"/g, "&quot;")}">Show Graph</button>
     </div>
   `;
 
@@ -571,19 +620,20 @@ function handleFfdPopupClick(e) {
     setTimeout(() => (chartContainer.style.opacity = "1"), 10);
     infoContainer.style.display = "none";
 
-    const popupContainer = graphButton.closest("div");
-    const headerDiv = popupContainer.querySelector(
-      "div[style*='background:black']"
-    );
-    const headerText = headerDiv.textContent;
-    const parts = headerText.split(" - ");
-    const stationName = parts[0].trim();
-
-    const tableRows = popupContainer.querySelectorAll("table tr");
-    const outflow = tableRows[0]?.cells[1]?.textContent.split(" ")[0] || "0";
-    const inflow = tableRows[1]?.cells[1]?.textContent.split(" ")[0] || "0";
-    const outflowTrend = tableRows[2]?.cells[1]?.textContent || "";
-    const inflowTrend = tableRows[3]?.cells[1]?.textContent || "";
+    // Values now live as data-* attributes on the button itself — set in
+    // buildFfdPopupContent().  This replaces the fragile DOM walk that
+    // parsed an old <table>/<div style="background:black"> layout and
+    // threw a null-reference against the current paragraph-row popup.
+    const stationName  = graphButton.dataset.station      || "Station";
+    const rawOutflow   = graphButton.dataset.outflow      || "0";
+    const rawInflow    = graphButton.dataset.inflow       || "0";
+    const outflowTrend = graphButton.dataset.outflowTrend || "";
+    const inflowTrend  = graphButton.dataset.inflowTrend  || "";
+    // Discharge values arrive comma-formatted from GCOP (e.g. "49,500");
+    // strip commas so parseFloat inside createFfdChart parses cleanly.
+    const stripCommas = (v) => String(v).replace(/,/g, "");
+    const outflow = rawOutflow === "n/a" ? "n/a" : stripCommas(rawOutflow);
+    const inflow  = rawInflow  === "n/a" ? "n/a" : stripCommas(rawInflow);
 
     createFfdChart(
       canvas,
@@ -607,6 +657,9 @@ function handleFfdPopupClick(e) {
 // ========== END FFD-SPECIFIC CODE ==========
 
 function formatPMDValue(value, digits = 1) {
+  // null / undefined / "" → N/A (never lie with 0.0).  Only bona-fide
+  // finite numbers get formatted.
+  if (value == null || value === "") return "N/A";
   const num = Number(value);
   if (!Number.isFinite(num)) return "N/A";
   return num.toFixed(digits);
@@ -617,49 +670,393 @@ function formatPMDDateTime(date, time) {
   return [date, time].filter(Boolean).join(" ");
 }
 
+// PMD Monitor warn_* fields are `null` or one of blue|yellow|orange|red.
+// Render as a coloured pill row that gives the operator an at-a-glance
+// summary of every channel-level advisory active at this station.
+function renderPmdWarnBadges(props) {
+  const channels = [
+    { key: "warn_temp", label: "Temp" },
+    { key: "warn_wind", label: "Wind" },
+    { key: "warn_rain", label: "Rain" },
+    { key: "warn_vis",  label: "Vis"  },
+  ];
+  const active = channels.filter((c) => {
+    const v = props[c.key];
+    return typeof v === "string" && v.length > 0;
+  });
+  if (!active.length) return "";
+  const pills = active.map((c) => {
+    const level = String(props[c.key]).toLowerCase();
+    return `<span class="ncop-popup__warn-pill ncop-popup__warn-pill--${level}"
+                  title="${c.label} advisory: ${level}">${c.label}</span>`;
+  }).join("");
+  return `<div class="ncop-popup__warn-strip">
+            <span class="ncop-popup__warn-strip-label">Active Advisories</span>
+            <div class="ncop-popup__warn-strip-pills">${pills}</div>
+          </div>`;
+}
+
 function buildPmdPopupContent(props) {
   const popupId = `pmd-${String(props.name || "station")
     .replace(/\s+/g, "-")
     .toLowerCase()}-${Math.random().toString(36).slice(2, 9)}`;
-  const rainfall = Number(props.rainfall || 0);
+  // Use raw rainfall for the "wet/dry" badge — null counts as dry.
+  const rainfall = props.rainfall == null ? 0 : Number(props.rainfall) || 0;
   const rainfallState = rainfall > 0 ? "Rain observed" : "Dry conditions";
-  const rainVariant = rainfall > 0 ? "rain-wet" : "rain-dry";
+  const rainVariant   = rainfall > 0 ? "rain-wet" : "rain-dry";
+
+  // Subtitle now surfaces the station code + type so operators can
+  // cross-reference against PMD's raw feeds (§3.1 gives us both).
+  const code = props.code ? escapeHtml(String(props.code)) : "";
+  const stationType = props.station_type
+    ? escapeHtml(String(props.station_type).toUpperCase())
+    : "";
+  const subtitleBits = ["Pakistan Meteorological Department"];
+  if (code || stationType) {
+    subtitleBits.push([code, stationType].filter(Boolean).join(" · "));
+  }
+  const subtitle = subtitleBits.join(" • ");
 
   const primary = `
     <div class="ncop-popup__header">
       <div class="ncop-popup__title-block">
-        <div class="ncop-popup__title">${props.name || "PMD Station"}</div>
-        <div class="ncop-popup__subtitle">Pakistan Meteorological Department</div>
+        <div class="ncop-popup__title">${escapeHtml(props.name || "PMD Station")}</div>
+        <div class="ncop-popup__subtitle">${subtitle}</div>
       </div>
       <div class="ncop-popup__header-aside">
         <span class="ncop-popup__badge ncop-popup__badge--${rainVariant}">${rainfallState}</span>
-        <button class="ncop-popup__close pmd-popup-close" type="button" aria-label="Close">×</button>
       </div>
     </div>
   `;
 
   const drawer = `
+    ${renderPmdWarnBadges(props)}
     <div class="ncop-popup__grid">
       <div class="ncop-popup__card"><div class="ncop-popup__card-label">Temperature</div><div class="ncop-popup__card-value">${formatPMDValue(props.temperature)} °C</div></div>
-      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Rainfall</div><div class="ncop-popup__card-value">${formatPMDValue(props.rainfall)} mm</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Rain 24h</div><div class="ncop-popup__card-value">${formatPMDValue(props.rainfall ?? props.rain_24h)} mm</div></div>
       <div class="ncop-popup__card"><div class="ncop-popup__card-label">Humidity</div><div class="ncop-popup__card-value">${formatPMDValue(props.humidity)} %</div></div>
       <div class="ncop-popup__card"><div class="ncop-popup__card-label">Wind</div><div class="ncop-popup__card-value">${formatPMDValue(props.windSpeed)} kt</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Visibility</div><div class="ncop-popup__card-value">${formatPMDValue(props.visibility)} km</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Pressure</div><div class="ncop-popup__card-value">${formatPMDValue(props.pressure, 0)} hPa</div></div>
     </div>
     <div class="ncop-popup__chart">
       <div class="ncop-popup__chart-title">Station Metrics</div>
       <canvas id="pmd-chart-canvas-${popupId}" style="width:280px;height:190px;max-width:100%;"></canvas>
     </div>
     <div class="ncop-popup__info">
-      <p class="ncop-popup__info-row"><strong>Dew Point:</strong> ${formatPMDValue(props.dewPoint)} °C</p>
-      <p class="ncop-popup__info-row"><strong>Pressure:</strong> ${formatPMDValue(props.pressure)} hPa</p>
+      <p class="ncop-popup__info-row"><strong>Rain (1h):</strong> ${formatPMDValue(props.rain_1h)} mm</p>
+      <p class="ncop-popup__info-row"><strong>Rain (6h):</strong> ${formatPMDValue(props.rain_6h)} mm</p>
       <p class="ncop-popup__info-row"><strong>Wind Direction:</strong> ${formatPMDValue(props.windDirection, 0)}°</p>
-      <p class="ncop-popup__info-row"><strong>Temp Updated:</strong> ${formatPMDDateTime(props.temp_date, props.temp_time)}</p>
-      <p class="ncop-popup__info-row"><strong>Wind Updated:</strong> ${formatPMDDateTime(props.wind_date, props.wind_time)}</p>
-      <p class="ncop-popup__info-row"><strong>Rain Updated:</strong> ${formatPMDDateTime(props.rainfall_date, props.rainfall_time)}</p>
+      <p class="ncop-popup__info-row"><strong>Dew Point:</strong> ${formatPMDValue(props.dewPoint)} °C</p>
+      <p class="ncop-popup__info-row"><strong>Observed:</strong> ${formatPMDDateTime(props.temp_date, props.temp_time)}</p>
     </div>
   `;
 
   return { popupId, primary, drawer, drawerTitle: "Weather Details" };
+}
+
+// ---------------------------------------------------------------------------
+// PMD City 12-Step Forecast popup
+// ---------------------------------------------------------------------------
+// §3.7 of the integration doc: each feature has a `fc` field which is a
+// JSON *string* — parse it before rendering.  Each step is shaped:
+//   { ft, tem, tmax, tmin, rhu, wspd, wdir, wdesc, pre, pre24, prs,
+//     vis, tcc, wx }
+// (see MD).  Fields with the 9999.0 / 999.0 sentinel value mean "no
+// data" per MD §1.2 and are rendered as "—".
+
+const FC_SENTINELS = new Set([9999, -9999, 999, -999]);
+
+function parsePmdForecastSteps(fc) {
+  if (fc == null) return [];
+  if (Array.isArray(fc)) return fc;
+  if (typeof fc === "string") {
+    const s = fc.trim();
+    if (!s || (s[0] !== "[" && s[0] !== "{")) return [];
+    try {
+      const parsed = JSON.parse(s);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }
+  return [];
+}
+
+function formatFcCell(v, digits = 1) {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (FC_SENTINELS.has(n)) return "—"; // upstream "no data" sentinel
+  return n.toFixed(digits);
+}
+
+function buildPmdForecastStepsTable(steps) {
+  const body = steps.map((s) => `
+    <tr>
+      <td class="ncop-popup__fc-time">${escapeHtml(s?.ft ?? "")}</td>
+      <td>${formatFcCell(s?.tem)}</td>
+      <td>${escapeHtml(String(s?.wx ?? ""))}</td>
+      <td>${formatFcCell(s?.rhu, 0)}</td>
+      <td>${formatFcCell(s?.wspd)}</td>
+      <td>${escapeHtml(String(s?.wdir ?? ""))}</td>
+      <td>${formatFcCell(s?.pre)}</td>
+    </tr>
+  `).join("");
+  return `
+    <table class="ncop-popup__fc-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>T °C</th>
+          <th>Wx</th>
+          <th>RH %</th>
+          <th>Wind m/s</th>
+          <th>Dir</th>
+          <th>Precip mm</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+
+function buildPmdCityForecastPopupContent(props) {
+  const city = props.name || props.city || "City";
+  const steps = parsePmdForecastSteps(props.fc);
+
+  const primary = `
+    <div class="ncop-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${escapeHtml(String(city))}</div>
+        <div class="ncop-popup__subtitle">${escapeHtml(String(props.weather ?? "PMD Monitor · City Forecast"))}</div>
+      </div>
+      <div class="ncop-popup__header-aside">
+        <span class="ncop-popup__badge ncop-popup__badge--status-active">
+          ${steps.length}-step
+        </span>
+      </div>
+    </div>
+  `;
+
+  const currentGrid = `
+    <div class="ncop-popup__grid">
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Now</div><div class="ncop-popup__card-value">${formatPMDValue(props.temp)} °C</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Max / Min</div><div class="ncop-popup__card-value">${formatPMDValue(props.temp_max, 0)} / ${formatPMDValue(props.temp_min, 0)} °C</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">RH</div><div class="ncop-popup__card-value">${formatPMDValue(props.humidity, 0)} %</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Wind</div><div class="ncop-popup__card-value">${formatPMDValue(props.wind_speed)} m/s ${escapeHtml(String(props.wind_dir ?? ""))}</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Pressure</div><div class="ncop-popup__card-value">${formatPMDValue(props.pressure, 0)} hPa</div></div>
+      <div class="ncop-popup__card"><div class="ncop-popup__card-label">Visibility</div><div class="ncop-popup__card-value">${formatPMDValue(props.visibility)} km</div></div>
+    </div>
+  `;
+
+  const forecastBlock = steps.length ? `
+    <div class="ncop-popup__fc-title">${steps.length}-Step Forecast</div>
+    <div class="ncop-popup__fc-scroll">
+      ${buildPmdForecastStepsTable(steps)}
+    </div>
+  ` : `<p class="ncop-popup__fc-empty">No forecast steps available.</p>`;
+
+  const drawer = currentGrid + forecastBlock;
+
+  return { primary, drawer, drawerTitle: "City Forecast Details" };
+}
+
+// ---------------------------------------------------------------------------
+// NWFC Observations popup — sleek dashboard-style layout + Chart.js
+// live-metrics bar chart.  Consumes the properties surfaced by
+// `/api/pmd/nwfc/observations/` (temperature / humidity / pressure /
+// wind_speed / wind_direction / rain_3h / rain_24h / weather /
+// sea_level_pressure / obs_time / max_temperature).
+// ---------------------------------------------------------------------------
+
+// Emoji lookup for the NWFC weather description — same ladder the
+// map's icon dispatcher uses, kept local so this popup module doesn't
+// have to import from map-icons.js.
+function nwfcWeatherEmoji(text) {
+  if (text == null) return "🌡️";
+  const s = String(text).toLowerCase().trim();
+  if (!s) return "🌡️";
+  if (/thunder|lightning/.test(s))          return "⛈️";
+  if (/drizzle/.test(s))                    return "🌦️";
+  if (/shower|rain/.test(s))                return "🌧️";
+  if (/snow|blizzard|sleet|hail/.test(s))   return "❄️";
+  if (/fog|mist|haze/.test(s))              return "🌫️";
+  if (/dust|sandstorm/.test(s))             return "🌪️";
+  if (/partl?y.*cloud|part.*cloud/.test(s)) return "⛅";
+  if (/overcast/.test(s))                   return "☁️";
+  if (/cloud/.test(s))                      return "🌥️";
+  if (/gust|wind/.test(s))                  return "💨";
+  if (/clear|sunny|fair|dry|bright/.test(s)) return "☀️";
+  return "🌡️";
+}
+
+function buildNwfcPopupContent(props) {
+  const popupId = `nwfc-${String(props.name || "station")
+    .replace(/\s+/g, "-")
+    .toLowerCase()}-${Math.random().toString(36).slice(2, 9)}`;
+
+  const weatherText = props.weather ?? props.wx ?? "";
+  const emoji = nwfcWeatherEmoji(weatherText);
+  const subtitleBits = ["NWFC Observation"];
+  if (props.code) subtitleBits.push(`Code ${escapeHtml(String(props.code))}`);
+
+  const primary = `
+    <div class="ncop-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${escapeHtml(props.name || "NWFC Station")}</div>
+        <div class="ncop-popup__subtitle">${subtitleBits.join(" · ")}</div>
+      </div>
+      <div class="ncop-popup__header-aside">
+        <span class="ncop-popup__badge ncop-popup__badge--status-active"
+              title="${escapeHtml(String(weatherText || "—"))}">
+          ${emoji} ${escapeHtml(String(weatherText || "Weather"))}
+        </span>
+      </div>
+    </div>
+  `;
+
+  const drawer = `
+    <div class="ncop-popup__grid">
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Temperature</div>
+        <div class="ncop-popup__card-value">${formatPMDValue(props.temperature)} °C</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Humidity</div>
+        <div class="ncop-popup__card-value">${formatPMDValue(props.humidity, 0)} %</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Rain 24h</div>
+        <div class="ncop-popup__card-value">${formatPMDValue(props.rain_24h, 0)} mm</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Wind</div>
+        <div class="ncop-popup__card-value">${formatPMDValue(props.wind_speed, 1)} m/s</div>
+      </div>
+    </div>
+    <div class="ncop-popup__chart">
+      <div class="ncop-popup__chart-title">Live Weather Metrics</div>
+      <canvas id="nwfc-chart-canvas-${popupId}" style="width:280px;height:200px;max-width:100%;"></canvas>
+    </div>
+    <div class="ncop-popup__info">
+      <p class="ncop-popup__info-row"><strong>Rain (3h):</strong> ${formatPMDValue(props.rain_3h, 0)} mm</p>
+      <p class="ncop-popup__info-row"><strong>Pressure:</strong> ${formatPMDValue(props.pressure, 0)} hPa</p>
+      <p class="ncop-popup__info-row"><strong>Sea Level Pressure:</strong> ${formatPMDValue(props.sea_level_pressure, 1)} hPa</p>
+      <p class="ncop-popup__info-row"><strong>Wind Direction:</strong> ${formatPMDValue(props.wind_direction, 0)}°</p>
+      <p class="ncop-popup__info-row"><strong>Max Temperature:</strong> ${formatPMDValue(props.max_temperature)} °C</p>
+      <p class="ncop-popup__info-row"><strong>Dew Point:</strong> ${formatPMDValue(props.dew_point)} °C</p>
+      <p class="ncop-popup__info-row"><strong>Observed:</strong> ${escapeHtml(String(props.obs_time || props.date_time || "—"))}</p>
+    </div>
+  `;
+
+  return { popupId, primary, drawer, drawerTitle: "Station Metrics" };
+}
+
+function createNwfcChart(canvas, props) {
+  const ctx = canvas.getContext("2d");
+  const chartId = canvas.id;
+
+  if (nwfcChartInstances[chartId]) {
+    nwfcChartInstances[chartId].destroy();
+  }
+  pruneCacheMap(nwfcChartInstances, MAX_FFD_CHARTS, (chart) => {
+    if (chart && typeof chart.destroy === "function") chart.destroy();
+  });
+
+  // Numeric coalesce with a null-preserving fallback (Number("") === 0
+  // is a lie for missing rain readings, but we want the bar to still
+  // draw a base tick so the chart doesn't collapse — 0 is fine for
+  // display and callback labels distinguish 0 vs missing).
+  const num = (v) => {
+    if (v == null || v === "") return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const humidity = num(props.humidity);
+  const rain3    = num(props.rain_3h);
+  const rain24   = num(props.rain_24h);
+  const wind     = num(props.wind_speed);
+
+  // Colour ramps per metric so the operator can see severity at a
+  // glance — cyan intensifies with humidity, blue → orange → red with
+  // rainfall totals, green → yellow → red with wind speed.
+  const humidityColor =
+    humidity >= 90 ? "#0891b2"
+    : humidity >= 70 ? "#22d3ee"
+    : "#7dd3fc";
+  const rainColor24 =
+    rain24 >= 50 ? "#dc2626"
+    : rain24 >= 10 ? "#f97316"
+    : rain24 > 0  ? "#3b82f6"
+    : "#94a3b8";
+  const rainColor3 =
+    rain3 >= 25 ? "#dc2626"
+    : rain3 >= 10 ? "#f97316"
+    : rain3 > 0  ? "#3b82f6"
+    : "#94a3b8";
+  const windColor =
+    wind >= 15 ? "#dc2626"
+    : wind >= 8  ? "#f97316"
+    : wind >= 3  ? "#facc15"
+    : "#22c55e";
+
+  nwfcChartInstances[chartId] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Humidity %", "Rain 3h mm", "Rain 24h mm", "Wind m/s"],
+      datasets: [{
+        label: "Reading",
+        data: [humidity, rain3, rain24, wind],
+        backgroundColor: [humidityColor, rainColor3, rainColor24, windColor],
+        borderColor:     [humidityColor, rainColor3, rainColor24, windColor],
+        borderWidth: 1,
+        borderRadius: 4,
+        maxBarThickness: 42,
+      }],
+    },
+    options: {
+      responsive: false,
+      maintainAspectRatio: false,
+      animation: { duration: 900, easing: "easeOutQuart" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(15, 23, 42, 0.95)",
+          titleColor: "#fff",
+          bodyColor: "#fff",
+          borderColor: "rgba(255,255,255,0.15)",
+          borderWidth: 1,
+          padding: 8,
+          callbacks: {
+            label: (item) => `${item.label}: ${item.raw}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#e6ecf5",
+            font: { size: 10, weight: "600" },
+            maxRotation: 0,
+            autoSkip: false,
+          },
+          grid: { display: false, drawBorder: false },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "#94a3b8",
+            font: { size: 9 },
+            precision: 0,
+          },
+          grid: {
+            color: "rgba(255,255,255,0.06)",
+            drawBorder: false,
+          },
+        }
+      }
+    }
+  });
 }
 
 function createPmdChart(canvas, props) {
@@ -2821,6 +3218,52 @@ export default class LayerAttributePopup {
           const canvas = document.getElementById(`pmd-chart-canvas-${popupId}`);
           if (canvas) {
             createPmdChart(canvas, properties);
+          }
+        });
+        return;
+      }
+
+      // SPECIAL HANDLING FOR PMD CITY 12-STEP FORECAST LAYER
+      // The `fc` field is a JSON string per §3.7; render it as a proper
+      // scrollable forecast table rather than the [object Object] leak
+      // the generic popup path used to produce.
+      if (
+        layerId?.includes("pmd_city_forecast") ||
+        sourceId === "pmd_city_forecast-source"
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const { primary, drawer, drawerTitle } =
+          buildPmdCityForecastPopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        return;
+      }
+
+      // SPECIAL HANDLING FOR NWFC OBSERVATIONS LAYER
+      // Sleek dashboard-style popup for /api/pmd/nwfc/observations/
+      // — station metrics grid + Chart.js live-metrics bar chart +
+      // full info drawer.  Replaces the generic attribute-table dump
+      // that was previously rendered for these features.
+      if (
+        layerId?.includes("nwfc_observations") ||
+        sourceId === "nwfc_observations-source"
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const { popupId, primary, drawer, drawerTitle } =
+          buildNwfcPopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+
+        requestAnimationFrame(() => {
+          const canvas = document.getElementById(`nwfc-chart-canvas-${popupId}`);
+          if (canvas) {
+            createNwfcChart(canvas, properties);
           }
         });
         return;

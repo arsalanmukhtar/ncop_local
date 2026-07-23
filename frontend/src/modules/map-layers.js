@@ -6,6 +6,7 @@ import {
   EONET_ICON_IDS,
   USGS_ICON_IDS,
 } from "./map-icons.js";
+import { NWFC_WEATHER_ICON_URLS } from "./nwfc-weather-icons.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -381,11 +382,14 @@ function validCoord(lon, lat) {
   );
 }
 ///
-// This call BLOCKS until the JSON is fetched + converted.
-// After this line, __FFD_GEOJSON__ is a real FeatureCollection.
-const __FFD_GEOJSON__ = jsonUrlToGeoJsonSync(
-  "https://raw.githubusercontent.com/Ibrahom1/hydrosituation/main/latest.json"
-);
+// FFD Data now sources from the GCOP backend
+// (`http://172.18.7.21:8000/get-ffd-waterlevels/` — see
+// GCOP_PMD_API_Integration.md §2.1).  We ship an empty FeatureCollection
+// as the source's initial `data` so map construction stays synchronous,
+// then hydrate it via gcop-api-cache.js the first time the layer is
+// added.  This removes the blocking sync-XHR that used to fire at
+// module-load time against a GitHub raw URL.
+const __FFD_GEOJSON__ = emptyFC();
 //Meteoblue Layers constants
 const metbluT = window.metbluT;
 const model = "NEMSIN";
@@ -844,43 +848,815 @@ export const ncop_menu_items = {
         // },
       },
     },
+    // =====================================================================
+    // Hydrological Layers — proxied from GeoServer at
+    //   http://172.18.7.21:8080/geoserver
+    // Workspace: `hydrological_global` · GWC TMS 1.0.0 · PBF vector tiles.
+    //
+    // Every layer's `source-layer` (inside the vector tile) matches its
+    // GeoServer layer name 1:1, and every layer uses:
+    //   scheme: "tms"     — GWC serves TMS row-order (bottom-up), not XYZ
+    //   EPSG:900913       — same as EPSG:3857, GeoServer's old alias
+    // Both are mandatory; changing either breaks tile placement.
+    //
+    // Flood-extent severity colours are fixed across every river system so
+    // the 3-colour key (High / Medium / Low) applies uniformly to the map:
+    //   High   → #C70039 (dark red)
+    //   Medium → #FF5733 (orange-red)
+    //   Low    → #FFC300 (amber)
+    // =====================================================================
     "Hydrological Layers": {
       toggle: {
-        rsc_exceptionally_high_zone: {
-          label: "RSC Exceptionally High Zone",
-          type: "geojson",
+        // ------------------------------- RIVERS ---------------------------
+        major_rivers: {
+          label: "Major Rivers",
           theme: null,
-          geometry: null,
+          geometry: "line",
+          source: {
+            id: "major_rivers-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:major_rivers@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "major_rivers-line",
+              type: "line",
+              source: "major_rivers-source",
+              "source-layer": "major_rivers",
+              paint: { "line-color": "#1e6feb", "line-width": 2 },
+            },
+            {
+              id: "major_rivers-label",
+              type: "symbol",
+              source: "major_rivers-source",
+              "source-layer": "major_rivers",
+              minzoom: 6,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 12,
+                "symbol-placement": "line",
+              },
+              paint: {
+                "text-color": "#0b3d91",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.4,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Major river network for Pakistan, sourced from the GeoServer `hydrological_global` workspace. Labelled with each river's name; drawn in blue.",
+          dynamicLegend: {
+            title: "Major Rivers",
+            entries: [{ swatch: "#1e6feb", shape: "line", label: "Major river network" }],
+          },
         },
-        rsc_very_high_zone: {
-          label: "RSC Very High Zone",
-          type: "geojson",
+        minor_rivers: {
+          label: "Minor Rivers",
           theme: null,
-          geometry: null,
+          geometry: "line",
+          source: {
+            id: "minor_rivers-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:minor_rivers@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "minor_rivers-line",
+              type: "line",
+              source: "minor_rivers-source",
+              "source-layer": "minor_rivers",
+              paint: { "line-color": "#3b82f6", "line-width": 1 },
+            },
+            {
+              id: "minor_rivers-label",
+              type: "symbol",
+              source: "minor_rivers-source",
+              "source-layer": "minor_rivers",
+              minzoom: 8.5,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+                "text-size": 10.5,
+                "symbol-placement": "line",
+              },
+              paint: {
+                "text-color": "#0b3d91",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.2,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Minor river tributaries. Labels start appearing at zoom 8.5 to keep the country-wide view uncluttered.",
+          dynamicLegend: {
+            title: "Minor Rivers",
+            entries: [{ swatch: "#3b82f6", shape: "line", label: "Minor tributaries (labels ≥ z8.5)" }],
+          },
         },
-        rsc_high_zone: {
-          label: "RSC High Zone",
-          type: "geojson",
+
+        // ---------------------------- WATER BODIES ------------------------
+        reservoirs: {
+          label: "Reservoirs",
           theme: null,
-          geometry: null,
+          geometry: "polygon",
+          source: {
+            id: "reservoirs-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:reservoirs@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "reservoirs-fill",
+              type: "fill",
+              source: "reservoirs-source",
+              "source-layer": "reservoirs",
+              paint: { "fill-color": "#60a5fa", "fill-opacity": 0.3 },
+            },
+            {
+              id: "reservoirs-outline",
+              type: "line",
+              source: "reservoirs-source",
+              "source-layer": "reservoirs",
+              paint: { "line-color": "#1e6feb", "line-width": 1.2 },
+            },
+            {
+              id: "reservoirs-label",
+              type: "symbol",
+              source: "reservoirs-source",
+              "source-layer": "reservoirs",
+              minzoom: 8,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 11,
+              },
+              paint: {
+                "text-color": "#0b3d91",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.4,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Reservoir footprints for Pakistan. Blue outline plus a semi-transparent fill; names label at zoom 8+.",
+          dynamicLegend: {
+            title: "Reservoirs",
+            entries: [
+              { swatch: "#60a5fa", shape: "square", label: "Reservoir surface (30 % fill)" },
+              { swatch: "#1e6feb", shape: "line",   label: "Reservoir outline" },
+            ],
+          },
         },
-        rsc_medium_zone: {
-          label: "RSC Medium Zone",
-          type: "geojson",
+        water_shed: {
+          label: "Watershed Catchment",
           theme: null,
-          geometry: null,
+          geometry: "polygon",
+          source: {
+            id: "water_shed-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:water_shed@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "water_shed-fill",
+              type: "fill",
+              source: "water_shed-source",
+              "source-layer": "water_shed",
+              paint: {
+                // Data-driven fill keyed by catchment `name` — mirrors GCOP.
+                "fill-color": [
+                  "match", ["get", "name"],
+                  "Kabul Catchment",   "#EECE00",
+                  "Mangla Catchment",  "#EECE00",
+                  "Tarbela Catchment", "#487B00",
+                  "Chenab Catchment",  "#AD00FF",
+                  "Ravi Catchment",    "#FFE400",
+                  "Sutlej Catchment",  "#AB0000",
+                  "#ffffff",
+                ],
+                "fill-opacity": 0.25,
+              },
+            },
+            {
+              id: "water_shed-outline",
+              type: "line",
+              source: "water_shed-source",
+              "source-layer": "water_shed",
+              paint: { "line-color": "#000000", "line-width": 1 },
+            },
+            {
+              id: "water_shed-label",
+              type: "symbol",
+              source: "water_shed-source",
+              "source-layer": "water_shed",
+              minzoom: 7,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 11.5,
+              },
+              paint: {
+                "text-color": "#0f172a",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.6,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Watershed (catchment) boundaries. Fill colour is data-driven off the catchment name — see the legend for the per-name palette.",
+          dynamicLegend: {
+            title: "Watershed Catchments",
+            entries: [
+              { swatch: "#EECE00", shape: "square", label: "Kabul + Mangla catchments" },
+              { swatch: "#487B00", shape: "square", label: "Tarbela catchment" },
+              { swatch: "#AD00FF", shape: "square", label: "Chenab catchment" },
+              { swatch: "#FFE400", shape: "square", label: "Ravi catchment" },
+              { swatch: "#AB0000", shape: "square", label: "Sutlej catchment" },
+              { swatch: "#ffffff", shape: "square", label: "Other / unnamed catchments" },
+            ],
+            note: "Kabul & Mangla share a colour in the upstream source data — kept as-is for parity with GCOP.",
+          },
         },
-        rsc_low_zone: {
-          label: "RSC Low Zone",
-          type: "geojson",
+
+        // -------------------------------- DAMS ----------------------------
+        major_dams: {
+          label: "Major Dams",
           theme: null,
-          geometry: null,
+          geometry: "point",
+          source: {
+            id: "major_dams-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:major_dams@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "major_dams-circle",
+              type: "circle",
+              source: "major_dams-source",
+              "source-layer": "major_dams",
+              paint: {
+                "circle-color": "#1e6feb",
+                "circle-radius": 7,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 2,
+              },
+            },
+            {
+              id: "major_dams-label",
+              type: "symbol",
+              source: "major_dams-source",
+              "source-layer": "major_dams",
+              minzoom: 7,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 12,
+                "text-anchor": "left",
+                "text-offset": [0.8, 0],
+              },
+              paint: {
+                "text-color": "#0b3d91",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.4,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Major dams of Pakistan (Tarbela, Mangla, Warsak, etc.). Labels appear from zoom 7.",
+          dynamicLegend: {
+            title: "Major Dams",
+            entries: [{ swatch: "#1e6feb", shape: "circle", label: "Major dam (larger marker)" }],
+          },
         },
-        watershed_boundaries: {
-          label: "Watershed Boundaries",
-          type: "geojson",
+        minor_dams: {
+          label: "Minor Dams",
           theme: null,
-          geometry: null,
+          geometry: "point",
+          source: {
+            id: "minor_dams-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:minor_dams@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "minor_dams-circle",
+              type: "circle",
+              source: "minor_dams-source",
+              "source-layer": "minor_dams",
+              paint: {
+                "circle-color": "#1e6feb",
+                "circle-radius": 3,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 1.5,
+              },
+            },
+            {
+              id: "minor_dams-label",
+              type: "symbol",
+              source: "minor_dams-source",
+              "source-layer": "minor_dams",
+              minzoom: 8,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+                "text-size": 10,
+                "text-anchor": "left",
+                "text-offset": [0.6, 0],
+              },
+              paint: {
+                "text-color": "#0b3d91",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.2,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Smaller / secondary dams and barrages. Labels appear from zoom 8.",
+          dynamicLegend: {
+            title: "Minor Dams",
+            entries: [{ swatch: "#1e6feb", shape: "circle", label: "Minor dam (smaller marker)" }],
+          },
+        },
+
+        // -------------------- FLOOD EXTENTS (20 layers) -------------------
+        // River-system prefix + severity letter (h/m/l) + `fex`.
+        // Jhelum is the one system without a Medium band.
+        // Colours are fixed across every river: H=#C70039, M=#FF5733, L=#FFC300.
+        // ------------------------------------------------------------------
+        ...(function buildFloodExtents() {
+          const SEVERITY = { h: { color: "#C70039", label: "High"   },
+                             m: { color: "#FF5733", label: "Medium" },
+                             l: { color: "#FFC300", label: "Low"    } };
+          const RIVERS = [
+            { prefix: "ui", name: "Upper Indus", severities: ["h", "m", "l"] },
+            { prefix: "li", name: "Lower Indus", severities: ["h", "m", "l"] },
+            { prefix: "j",  name: "Jhelum",      severities: ["h", "l"]      },
+            { prefix: "c",  name: "Chenab",      severities: ["h", "m", "l"] },
+            { prefix: "r",  name: "Ravi",        severities: ["h", "m", "l"] },
+            { prefix: "s",  name: "Sutlej",      severities: ["h", "m", "l"] },
+            { prefix: "k",  name: "Kabul",       severities: ["h", "m", "l"] },
+          ];
+          const out = {};
+          for (const r of RIVERS) {
+            for (const sev of r.severities) {
+              const key   = `${r.prefix}${sev}fex`;
+              const color = SEVERITY[sev].color;
+              const sevLbl = SEVERITY[sev].label;
+              out[key] = {
+                label: `${r.name} — ${sevLbl} Flood Extent`,
+                theme: null,
+                geometry: "polygon",
+                source: {
+                  id: `${key}-source`,
+                  type: "vector",
+                  scheme: "tms",
+                  tiles: [
+                    `http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/hydrological_global:${key}@EPSG:900913@pbf/{z}/{x}/{y}.pbf`,
+                  ],
+                  maxzoom: 22,
+                },
+                layers: [
+                  {
+                    id: `${key}-fill`,
+                    type: "fill",
+                    source: `${key}-source`,
+                    "source-layer": key,
+                    paint: { "fill-color": color, "fill-opacity": 0.3 },
+                  },
+                  {
+                    id: `${key}-outline`,
+                    type: "line",
+                    source: `${key}-source`,
+                    "source-layer": key,
+                    paint: { "line-color": color, "line-width": 1.2 },
+                  },
+                ],
+                popup: true,
+                information:
+                  `Pre-computed ${sevLbl.toLowerCase()}-severity flood extent for the ${r.name} river system. Solid outline plus a 30% fill; no labels. Sourced from the GeoServer \`hydrological_global\` workspace.`,
+                dynamicLegend: {
+                  title: `${r.name} — Flood Extent`,
+                  entries: [
+                    { swatch: color, shape: "square", label: `${sevLbl} severity (${color})` },
+                  ],
+                  note: "Severity colour key is uniform across every river system on the map.",
+                },
+              };
+            }
+          }
+          return out;
+        })(),
+      },
+    },
+
+    // =====================================================================
+    // Geology (GeoServer workspace: `geological_global`)
+    // Same TMS 1.0.0 / PBF wiring as the Hydrology block above — just a
+    // different workspace name in the URL.  Both layers use fills that
+    // are data-driven off a feature property (`name` → 40 formation types
+    // for geology, `pga` → 5 severity zones for pga_zones).
+    // =====================================================================
+    "Geology": {
+      toggle: {
+        geology: {
+          label: "Geological Formations",
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: "geology-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/geological_global:geology@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "geology-fill",
+              type: "fill",
+              source: "geology-source",
+              "source-layer": "geology",
+              paint: {
+                // 40-formation RdYlBu diverging ramp (red → blue).  Every
+                // formation name maps to its own hex, unmatched → black.
+                "fill-color": [
+                  "match", ["get", "name"],
+                  "Alluvium",                                                                 "#d7191c",
+                  "Alluvium and Extrusive Mud",                                               "#db2823",
+                  "Bedrock",                                                                  "#df382a",
+                  "Carboniferous Rocks",                                                      "#e34731",
+                  "Chatti Mudstone of Pliocene age",                                          "#e75638",
+                  "Cretaceous",                                                               "#ea653f",
+                  "Cretaceous Sedimentary and Volcanic Rocks",                                "#ee7546",
+                  "Deltaic flood-plain deposits",                                             "#f2844e",
+                  "Deposits of Extinct Streams",                                              "#f69355",
+                  "Devonian and Silurian Rocks",                                              "#faa35c",
+                  "Early Tertiaty Rocks",                                                     "#fdb063",
+                  "Eocene and Paleocene Sedimentary Rocks",                                   "#fdb86d",
+                  "Eocene Sedimentary Rocks",                                                 "#fdc177",
+                  "Eolian Sand",                                                              "#fec980",
+                  "Igneous, Metamorphic and Mafic Intrusive Rocks",                           "#fed18a",
+                  "Jurassic Sedimentary Rocks",                                               "#feda94",
+                  "Loess and flood-plain deposits of the middle terrace",                     "#fee29d",
+                  "Mesozoic Rocks",                                                           "#feeaa7",
+                  "Miocene and Oligocene Sedimentary Rocks",                                  "#fff3b1",
+                  "Miocene Sedimentary Rocks",                                                "#fffbba",
+                  "No",                                                                       "#fbfdbe",
+                  "Older Eolian Deposits",                                                    "#f2fabb",
+                  "Oligocene and Eocene Sedimentary Rocks",                                   "#e9f6b8",
+                  "Pab Sandstone",                                                            "#e1f3b5",
+                  "Paleocene Sedimentary Rocks",                                              "#d8efb3",
+                  "Paleozoic Rocks",                                                          "#d0ecb0",
+                  "Parh Limestone",                                                           "#c7e8ad",
+                  "Permian Rocks",                                                            "#bee5aa",
+                  "Permian Sedimentary Rocks",                                                "#b6e1a7",
+                  "Piedmont Deposits",                                                        "#addea5",
+                  "Pleistocene and Pliocene Sedimentary Rocks",                               "#a1d6a6",
+                  "Pleistocene Sedimentary Rocks",                                            "#94cda8",
+                  "Pliocene and Miocene Sedimentary Rocks",                                   "#87c4aa",
+                  "Sheetflood and flood-plain deposits of braided streams",                   "#7abaac",
+                  "Stream Deposits",                                                          "#6db1af",
+                  "Streambed and Meander-belt deposits",                                      "#60a8b1",
+                  "Tidal delta marsh deposits and deltaic flood-plain deposits undivided",    "#529fb3",
+                  "Triassic",                                                                 "#4595b5",
+                  "Undivided Cretaceous and Jurassic Rocks",                                  "#388cb8",
+                  "Valley Fill",                                                              "#2b83ba",
+                  "#000000",
+                ],
+                "fill-opacity": 0.8,
+              },
+            },
+            {
+              // Outline is intentionally invisible per GCOP styling —
+              // kept as a hit-testable slot so popups can still fire on
+              // formation edges without a visible ring.
+              id: "geology-outline",
+              type: "line",
+              source: "geology-source",
+              "source-layer": "geology",
+              paint: { "line-color": "#000000", "line-opacity": 0 },
+            },
+            {
+              id: "geology-label",
+              type: "symbol",
+              source: "geology-source",
+              "source-layer": "geology",
+              minzoom: 10,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 11,
+                "text-max-width": 8,
+              },
+              paint: {
+                "text-color": "#0f172a",
+                "text-halo-color": "rgba(255,255,255,0.9)",
+                "text-halo-width": 1.4,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Geological formation polygons across Pakistan, coloured by rock/deposit type. Formation names label from zoom 10.",
+          dynamicLegend: {
+            title: "Geological Formations · RdYlBu ramp",
+            entries: [
+              { swatch: "#d7191c", shape: "square", label: "Alluvium & recent deposits (red end)" },
+              { swatch: "#fdae61", shape: "square", label: "Eocene / Tertiary sediments (orange)" },
+              { swatch: "#ffffbf", shape: "square", label: "Miocene / Paleogene (yellow — mid)" },
+              { swatch: "#abdda4", shape: "square", label: "Permian / Paleozoic (green)" },
+              { swatch: "#2b83ba", shape: "square", label: "Cretaceous / Triassic (blue end)" },
+              { swatch: "#000000", shape: "square", label: "Unmapped / unmatched formation" },
+            ],
+            note: "40 formation types mapped along a single ColorBrewer RdYlBu diverging ramp. See feature popup for the exact formation name.",
+          },
+        },
+        pga_zones: {
+          label: "PGA Zones (Peak Ground Acceleration)",
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: "pga_zones-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/geological_global:pga_zones@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "pga_zones-fill",
+              type: "fill",
+              source: "pga_zones-source",
+              "source-layer": "pga_zones",
+              paint: {
+                "fill-color": [
+                  "match", ["get", "pga"],
+                  "Zone 1",  "#2b83ba",
+                  "Zone 2A", "#abdda4",
+                  "Zone 2B", "#ffffbf",
+                  "Zone 3",  "#fdae61",
+                  "Zone 4",  "#d7191c",
+                  "#000000",
+                ],
+                "fill-opacity": 0.6,
+              },
+            },
+            {
+              // Invisible outline — preserved as a click target per GCOP.
+              id: "pga_zones-outline",
+              type: "line",
+              source: "pga_zones-source",
+              "source-layer": "pga_zones",
+              paint: { "line-color": "#000000", "line-opacity": 0 },
+            },
+          ],
+          popup: true,
+          information:
+            "Building-code Peak Ground Acceleration (PGA) seismic zones (Zone 1 → Zone 4). Same blue-to-red severity ramp as the Seismic Hazard Map layer.",
+          dynamicLegend: {
+            title: "PGA Zones (property `pga`)",
+            entries: [
+              { swatch: "#2b83ba", shape: "square", label: "Zone 1 — lowest hazard" },
+              { swatch: "#abdda4", shape: "square", label: "Zone 2A" },
+              { swatch: "#ffffbf", shape: "square", label: "Zone 2B" },
+              { swatch: "#fdae61", shape: "square", label: "Zone 3" },
+              { swatch: "#d7191c", shape: "square", label: "Zone 4 — highest hazard" },
+              { swatch: "#000000", shape: "square", label: "Unmapped / unknown zone" },
+            ],
+          },
+        },
+      },
+    },
+
+    // =====================================================================
+    // Seismology (GeoServer workspace: `seismological_global`)
+    // Faultlines are data-driven by `status`; source-zones use an
+    // invisible fill so only the outline reads; the hazard map is fully
+    // opaque and keyed by an integer `gridcode` on the same 5-step
+    // blue → red ramp used by the PGA Zones above.
+    // =====================================================================
+    "Seismology": {
+      toggle: {
+        faultlines: {
+          label: "Fault Lines",
+          theme: null,
+          geometry: "line",
+          source: {
+            id: "faultlines-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/seismological_global:faultlines@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "faultlines-line",
+              type: "line",
+              source: "faultlines-source",
+              "source-layer": "faultlines",
+              paint: {
+                "line-color": [
+                  "match", ["get", "status"],
+                  "active",     "#DC0822",
+                  "non-active", "#FF8800",
+                  "#000000",
+                ],
+                "line-width": 2,
+                "line-dasharray": [2, 2],
+              },
+            },
+            {
+              id: "faultlines-label",
+              type: "symbol",
+              source: "faultlines-source",
+              "source-layer": "faultlines",
+              minzoom: 7,
+              layout: {
+                "text-field": ["coalesce", ["get", "name"], ""],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+                "text-size": 11,
+                "symbol-placement": "line",
+              },
+              paint: {
+                // Label text colour mirrors the line's status colour so
+                // active / non-active status reads on both the geometry
+                // and the text.
+                "text-color": [
+                  "match", ["get", "status"],
+                  "active",     "#DC0822",
+                  "non-active", "#FF8800",
+                  "#000000",
+                ],
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 1.4,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Tectonic fault lines across Pakistan. Dashed lines; colour indicates activity status (red = active, orange = non-active). Labels appear at zoom 7+.",
+          dynamicLegend: {
+            title: "Fault Line Status",
+            entries: [
+              { swatch: "#DC0822", shape: "line", label: "Active fault" },
+              { swatch: "#FF8800", shape: "line", label: "Non-active fault" },
+              { swatch: "#000000", shape: "line", label: "Unclassified / unknown status" },
+            ],
+            note: "Line dash: 2 px on / 2 px off. Label text colour matches the line colour per feature.",
+          },
+        },
+        seismic_source_zones: {
+          label: "Seismic Source Zones",
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: "seismic_source_zones-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/seismological_global:seismic_source_zones@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              // Fill is intentionally invisible per GCOP styling — kept
+              // so click-target hit-testing on the polygon interior
+              // still works for popups.
+              id: "seismic_source_zones-fill",
+              type: "fill",
+              source: "seismic_source_zones-source",
+              "source-layer": "seismic_source_zones",
+              paint: { "fill-color": "#000000", "fill-opacity": 0 },
+            },
+            {
+              id: "seismic_source_zones-outline",
+              type: "line",
+              source: "seismic_source_zones-source",
+              "source-layer": "seismic_source_zones",
+              paint: { "line-color": "red", "line-width": 2 },
+            },
+            {
+              id: "seismic_source_zones-label",
+              type: "symbol",
+              source: "seismic_source_zones-source",
+              "source-layer": "seismic_source_zones",
+              layout: {
+                // NOTE: this layer's label property is `zone_name`,
+                // not `name` like the other seismic/geology layers.
+                "text-field": ["coalesce", ["get", "zone_name"], ""],
+                "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+                "text-size": 11,
+              },
+              paint: {
+                "text-color": "#000000",
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Named seismic source zones — polygon outlines only (fills are transparent to keep other layers visible underneath). Labels use the `zone_name` property.",
+          dynamicLegend: {
+            title: "Seismic Source Zones",
+            entries: [
+              { swatch: "red", shape: "line", label: "Zone boundary outline" },
+              { swatch: "#000000", shape: "square", label: "Fill deliberately transparent (0 % opacity)" },
+            ],
+            note: "Fill preserved as an invisible layer for click-target hit-testing on popups.",
+          },
+        },
+        seismic_hazard_map: {
+          label: "Seismic Hazard Map",
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: "seismic_hazard_map-source",
+            type: "vector",
+            scheme: "tms",
+            tiles: [
+              "http://172.18.7.21:8080/geoserver/gwc/service/tms/1.0.0/seismological_global:seismic_hazard_map@EPSG:900913@pbf/{z}/{x}/{y}.pbf",
+            ],
+            maxzoom: 22,
+          },
+          layers: [
+            {
+              id: "seismic_hazard_map-fill",
+              type: "fill",
+              source: "seismic_hazard_map-source",
+              "source-layer": "seismic_hazard_map",
+              paint: {
+                "fill-color": [
+                  "match", ["to-number", ["coalesce", ["get", "gridcode"], 0]],
+                  1, "#2b83ba",
+                  2, "#abdda4",
+                  3, "#ffffbf",
+                  4, "#fdae61",
+                  5, "#d7191c",
+                  "#000000",
+                ],
+                "fill-opacity": 1,
+              },
+            },
+            {
+              // Invisible outline — preserved as a click target per GCOP.
+              id: "seismic_hazard_map-outline",
+              type: "line",
+              source: "seismic_hazard_map-source",
+              "source-layer": "seismic_hazard_map",
+              paint: { "line-color": "#000000", "line-opacity": 0 },
+            },
+          ],
+          popup: true,
+          information:
+            "National seismic hazard raster reclassified to 5 gridcode bands. Fully opaque fill — best used alone or beneath the fault-lines layer. Same colour ramp as PGA Zones.",
+          dynamicLegend: {
+            title: "Seismic Hazard (property `gridcode`)",
+            entries: [
+              { swatch: "#2b83ba", shape: "square", label: "1 — lowest hazard" },
+              { swatch: "#abdda4", shape: "square", label: "2" },
+              { swatch: "#ffffbf", shape: "square", label: "3" },
+              { swatch: "#fdae61", shape: "square", label: "4" },
+              { swatch: "#d7191c", shape: "square", label: "5 — highest hazard" },
+              { swatch: "#000000", shape: "square", label: "Unmapped / no gridcode" },
+            ],
+            note: "Same 5-step severity palette as the PGA Zones layer above.",
+          },
         },
       },
     },
@@ -1055,6 +1831,18 @@ export const ncop_menu_items = {
           theme: "slider",
           geometry: null,
           information:"The Weekly Precipitation (2m Above Ground) layer displays the total precipitation accumulated over the past week at 2 meters above ground level. This layer is essential for understanding weekly rainfall patterns and their impact on the environment.",
+          dynamicLegend: {
+            title: "Weekly Precipitation (mm)",
+            entries: [
+              { iconUrl: NWFC_WEATHER_ICON_URLS.snow, label: "Includes snow, rain, drizzle & mixed precipitation" },
+              { swatch: "#e0f2fe", shape: "square", label: "Very light (< 5 mm)" },
+              { swatch: "#7dd3fc", shape: "square", label: "Light (5 – 25 mm)" },
+              { swatch: "#0284c7", shape: "square", label: "Moderate (25 – 100 mm)" },
+              { swatch: "#075985", shape: "square", label: "Heavy (100 – 250 mm)" },
+              { swatch: "#0c4a6e", shape: "square", label: "Very heavy (> 250 mm)" },
+            ],
+            note: "Meteoblue NEMS model — total precipitation over 7 forecast days. Bands are approximate; the on-map colour ramp is continuous, not stepped.",
+          },
         },
         hourly_precipitation_2m_above_ground: {
           label: "Hourly Precipitation (2m Above Ground)",
@@ -1123,7 +1911,7 @@ export const ncop_menu_items = {
         },
       },
     },
-    "MET Monitoring": {
+    "Live Meteorological Operations": {
       toggle: {
         pmd_weather_stations: {
           label: "PMD Weather Stations",
@@ -1131,7 +1919,10 @@ export const ncop_menu_items = {
           source: {
             id: "pmd_weather_stations-source",
             type: "geojson",
-            data: `${baseUrl}/get-weather-pmdffd-data/`,
+            // Empty seed FC — hydrated live from the GCOP backend
+            // (`/api/pmd/monitor/stations/` — see
+            // GCOP_PMD_API_Integration.md §3.1) via gcop-pmd-integration.js.
+            data: { type: "FeatureCollection", features: [] },
             maxzoom: 22,
           },
           layers: [
@@ -1190,6 +1981,14 @@ export const ncop_menu_items = {
           popup: true,
           information:
             "The PMD Weather Stations layer displays the locations (with daily data) of weather stations managed by the MET Monitoring. This layer is essential for monitoring real-time weather conditions and collecting meteorological data across the country.",
+          dynamicLegend: {
+            title: "PMD Weather Stations",
+            entries: [
+              { icon: "☀️",  label: "Every station (base marker)" },
+              { icon: "🌧️", label: "Currently receiving rainfall (> 0 mm)" },
+            ],
+            note: "Rain icon overlays the sun marker when the latest reading has non-zero rainfall.",
+          },
         },
         heatwave_monitoring: {
           label: "Heatwave Monitoring",
@@ -1307,11 +2106,377 @@ export const ncop_menu_items = {
           popup: true,
           information:
             "The Heatwave Monitoring layer plots current air temperature for major Pakistani cities, sized and colored by intensity. Click a city to open a stats panel with the 16-day forecast, 6-month seasonal outlook, and a multi-year climate-change trend (powered by Open-Meteo).",
+          dynamicLegend: {
+            title: "Temperature (°C)",
+            entries: [
+              { swatch: "#2563eb", shape: "circle", label: "≤ 20 °C — cool" },
+              { swatch: "#22c55e", shape: "circle", label: "≈ 28 °C — mild" },
+              { swatch: "#facc15", shape: "circle", label: "≈ 34 °C — warm" },
+              { swatch: "#f97316", shape: "circle", label: "≈ 38 °C — hot" },
+              { swatch: "#ef4444", shape: "circle", label: "≈ 42 °C — very hot" },
+              { swatch: "#7f1d1d", shape: "circle", label: "≥ 46 °C — extreme" },
+            ],
+            note: "Circle size scales with temperature at every zoom level.",
+          },
+        },
+        // ------------------------------------------------------
+        // The following layers were previously in a separate
+        // "PMD Monitor Live Feeds" subcategory.  Consolidated here
+        // so every real-time observation, forecast, and advisory
+        // from PMD Monitor + PMD NWFC lives under one accordion.
+        // ------------------------------------------------------
+        pmd_warnings: {
+          label: "PMD Weather Warnings",
+          theme: null,
+          source: {
+            id: "pmd_warnings-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_warnings-fill",
+              type: "fill",
+              source: "pmd_warnings-source",
+              paint: {
+                "fill-color": [
+                  "match", ["get", "level"],
+                  "red", "#dc2626",
+                  "orange", "#f97316",
+                  "yellow", "#eab308",
+                  "blue", "#3b82f6",
+                  "gust", "#7c3aed",
+                  "thunderstorm", "#a21caf",
+                  "#6b7280",
+                ],
+                "fill-opacity": 0.35,
+              },
+            },
+            {
+              id: "pmd_warnings-outline",
+              type: "line",
+              source: "pmd_warnings-source",
+              paint: { "line-color": "#000000", "line-width": 1 },
+            },
+          ],
+          popup: true,
+          information:
+            "Live PMD early-warning polygons (rainstorm, heatwave, fog, dust, thunderstorm, gust). Colored by severity level (blue → red). Source: /api/pmd/monitor/warnings/.",
+          dynamicLegend: {
+            title: "Warning Severity",
+            entries: [
+              { swatch: "#dc2626", shape: "square", label: "Red — extreme" },
+              { swatch: "#f97316", shape: "square", label: "Orange — severe" },
+              { swatch: "#eab308", shape: "square", label: "Yellow — moderate" },
+              { swatch: "#3b82f6", shape: "square", label: "Blue — low / advisory" },
+              { swatch: "#7c3aed", shape: "square", label: "Purple — gust event" },
+              { swatch: "#a21caf", shape: "square", label: "Magenta — thunderstorm event" },
+            ],
+            note: "Polygon fill = severity level. Black outline separates neighbouring zones.",
+          },
+        },
+        pmd_monsoon: {
+          label: "Monsoon Warnings",
+          theme: null,
+          source: {
+            id: "pmd_monsoon-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_monsoon-fill",
+              type: "fill",
+              source: "pmd_monsoon-source",
+              paint: {
+                "fill-color": [
+                  "match", ["get", "level"],
+                  "red", "#dc2626",
+                  "orange", "#f97316",
+                  "yellow", "#eab308",
+                  "blue", "#3b82f6",
+                  "#0ea5e9",
+                ],
+                "fill-opacity": 0.4,
+              },
+            },
+            {
+              id: "pmd_monsoon-outline",
+              type: "line",
+              source: "pmd_monsoon-source",
+              paint: { "line-color": "#0f172a", "line-width": 1.2 },
+            },
+          ],
+          popup: true,
+          information:
+            "Monsoon-season warnings: province, level, 24-hour rainfall reading and short forecast. Source: /api/pmd/monitor/monsoon/.",
+          dynamicLegend: {
+            title: "Monsoon Level",
+            entries: [
+              { swatch: "#dc2626", shape: "square", label: "Red — severe" },
+              { swatch: "#f97316", shape: "square", label: "Orange — heavy" },
+              { swatch: "#eab308", shape: "square", label: "Yellow — moderate" },
+              { swatch: "#3b82f6", shape: "square", label: "Blue — light / advisory" },
+              { swatch: "#0ea5e9", shape: "square", label: "Cyan — unlevelled / default" },
+            ],
+          },
+        },
+        pmd_lightning: {
+          label: "Lightning Strikes (last 1h)",
+          theme: null,
+          source: {
+            id: "pmd_lightning-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_lightning-circle",
+              type: "circle",
+              source: "pmd_lightning-source",
+              paint: {
+                "circle-color": "#facc15",
+                "circle-radius": 5,
+                "circle-stroke-color": "#000000",
+                "circle-stroke-width": 1,
+                "circle-opacity": 0.9,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Recent lightning strikes across Pakistan within the last 1 hour. Frequently empty — no active storms is the normal case. Source: /api/pmd/monitor/lightning/.",
+          dynamicLegend: {
+            title: "Lightning",
+            entries: [
+              { swatch: "#facc15", shape: "circle", label: "Strike location (last 1 h)" },
+            ],
+            note: "Each dot is one detected cloud-to-ground strike. Window is a rolling 60-minute view.",
+          },
+        },
+        pmd_city_forecast: {
+          label: "City 12-Step Forecast",
+          theme: null,
+          source: {
+            id: "pmd_city_forecast-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_city_forecast-circle",
+              type: "circle",
+              source: "pmd_city_forecast-source",
+              paint: {
+                "circle-color": [
+                  "interpolate", ["linear"],
+                  ["coalesce", ["to-number", ["get", "temp"]], 0],
+                  0,  "#2563eb",
+                  15, "#22c55e",
+                  25, "#facc15",
+                  32, "#f97316",
+                  40, "#ef4444",
+                ],
+                "circle-radius": 8,
+                "circle-stroke-color": "#ffffff",
+                "circle-stroke-width": 1.5,
+                "circle-opacity": 0.9,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Current conditions + 12-step (~36 h) forecast for major cities from PMD Monitor. Circle color = current temperature. Source: /api/pmd/monitor/city-forecast/.",
+          dynamicLegend: {
+            title: "Current Temperature (°C)",
+            entries: [
+              { swatch: "#2563eb", shape: "circle", label: "≤ 0 °C — freezing" },
+              { swatch: "#22c55e", shape: "circle", label: "≈ 15 °C — mild" },
+              { swatch: "#facc15", shape: "circle", label: "≈ 25 °C — warm" },
+              { swatch: "#f97316", shape: "circle", label: "≈ 32 °C — hot" },
+              { swatch: "#ef4444", shape: "circle", label: "≥ 40 °C — extreme" },
+            ],
+            note: "Click a city to see the 12-step (~36 h) forecast breakdown.",
+          },
+        },
+        nwfc_observations: {
+          label: "NWFC Station Observations",
+          theme: null,
+          source: {
+            id: "nwfc_observations-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            // Halo circle sits under the emoji so the marker still
+            // reads on very-light basemaps where a naked emoji's
+            // outline can blend into the background.  Small radius,
+            // low opacity — just enough for contrast.
+            // Halo circle removed on purpose — the Lottie icon + halo-ed
+            // temperature label carry the visual weight on their own, and
+            // dropping the extra circle keeps the map free of a fourth
+            // ring at every station.
+            //
+            // Weather-emoji symbol.  `wx_icon` is stamped onto every
+            // feature by gcop-monitor-integration.js's normaliser
+            // (Thunderstorm → "nwfc-wx-thunderstorm", Rain →
+            // "nwfc-wx-rain", Clear → "nwfc-wx-clear", ...).  The
+            // full icon fleet is registered at map load / style.load
+            // time by initGcopMonitorIntegration → registerNwfcWeatherIcons.
+            //
+            // Same layer also carries the temperature label below the
+            // icon — bold white text with a strong black halo so the
+            // reading stays legible on every basemap (light streets,
+            // dark navigation, satellite).  The label auto-fades out
+            // below zoom 4 so the country-wide view stays uncluttered.
+            // -----------------------------------------------------------
+            // NWFC layer — INVISIBLE CLICK-TARGET only.
+            //
+            // The visible weather icons and temperature labels for this
+            // layer are rendered by `mapboxgl.Marker` DOM overlays in
+            // nwfc-html-markers.js — same architecture GCOP's own live
+            // NCOP uses, and it sidesteps the Mapbox v3 GeoJSON tile
+            // encoder's habit of dropping JS-mutated feature properties
+            // that broke every attempt at a data-driven icon-image.
+            //
+            // This layer is a zero-opacity circle so `queryRenderedFeatures`
+            // still finds each station under a click — the popup
+            // dispatcher in layer-attribute-popup.js checks
+            // `layerId.includes("nwfc_observations")`, so the id below
+            // still routes to the NWFC popup builder.  The HTML marker's
+            // own click handler re-fires `map.fire("click", …)` at the
+            // station's lng/lat which hits this invisible circle.
+            // -----------------------------------------------------------
+            {
+              id: "nwfc_observations-click",
+              type: "circle",
+              source: "nwfc_observations-source",
+              paint: {
+                "circle-radius": 18,
+                "circle-opacity": 0,
+                "circle-stroke-opacity": 0,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Live station observations from PMD's National Weather Forecasting Centre. Each station renders as a weather icon driven by the feature's `weather` property. Source: /api/pmd/nwfc/observations/.",
+          dynamicLegend: {
+            title: "Weather Icons (per station `weather` property)",
+            entries: [
+              { iconUrl: NWFC_WEATHER_ICON_URLS.thunderstorm,  label: "Thunderstorm / lightning" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.rain,          label: "Rain / shower" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.drizzle,       label: "Drizzle" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.snow,          label: "Snow / sleet / hail" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.fog,           label: "Fog / mist / haze" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.dust,          label: "Dust / sandstorm" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.overcast,      label: "Overcast / OVC" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.cloudy,        label: "Cloudy / BKN" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.partly_cloudy, label: "Partly Cloudy / SCT / FEW" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.clear,         label: "Clear / Sunny / SKC / CLR" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.windy,         label: "Windy / gale" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.hot,           label: "Hot / scorching / heatwave" },
+              { iconUrl: NWFC_WEATHER_ICON_URLS.cold,          label: "Cold / freezing / chill" },
+              { icon: "🌡",                                     label: "Default — unrecognised text (N/A, empty, etc.)" },
+            ],
+            note: "Icon dispatched via nwfcWeatherBucket() — case-insensitive substring match on the `weather` property. Handles METAR codes (SCT/FEW/BKN/OVC/SKC/CLR).",
+          },
         },
       },
     },
   },
   flood: {
+    // ==========================================================
+    // PMD GLOF & Glacier Lake Inventory — hydrated via gcop-monitor-integration.js
+    // ==========================================================
+    "PMD Glaciers & GLOF": {
+      toggle: {
+        pmd_glof_obs: {
+          label: "GLOF Observations",
+          theme: null,
+          source: {
+            id: "pmd_glof_obs-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_glof_obs-circle",
+              type: "circle",
+              source: "pmd_glof_obs-source",
+              paint: {
+                "circle-color": [
+                  "match", ["to-number", ["coalesce", ["get", "alert_level"], 0]],
+                  60, "#dc2626",
+                  40, "#f97316",
+                  20, "#eab308",
+                  "#22c55e",
+                ],
+                "circle-radius": 6,
+                "circle-stroke-color": "#0f172a",
+                "circle-stroke-width": 1,
+                "circle-opacity": 0.9,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "GLOF (Glacial Lake Outburst Flood) monitoring stations across Pakistan's northern belt. Circle color = alert level (green normal, yellow watch, orange warning, red emergency). Source: /api/pmd/monitor/glof-obs/.",
+          dynamicLegend: {
+            title: "GLOF Alert Level",
+            entries: [
+              { swatch: "#22c55e", shape: "circle", label: "Normal (0) — no anomaly" },
+              { swatch: "#eab308", shape: "circle", label: "Watch (20) — elevated risk" },
+              { swatch: "#f97316", shape: "circle", label: "Warning (40) — imminent threat" },
+              { swatch: "#dc2626", shape: "circle", label: "Emergency (60) — outburst possible" },
+            ],
+            note: "Alert level is a numeric flag from the ARG / AWS / DG / WL-R station telemetry.",
+          },
+        },
+        pmd_glacier_lakes: {
+          label: "Glacier Lake Inventory",
+          theme: null,
+          source: {
+            id: "pmd_glacier_lakes-source",
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
+          layers: [
+            {
+              id: "pmd_glacier_lakes-circle",
+              type: "circle",
+              source: "pmd_glacier_lakes-source",
+              paint: {
+                "circle-color": "#0ea5e9",
+                "circle-radius": [
+                  "interpolate", ["linear"],
+                  ["coalesce", ["to-number", ["get", "area_km2"]], 0],
+                  0,   3,
+                  1,   6,
+                  5,   9,
+                  20,  12,
+                ],
+                "circle-stroke-color": "#0369a1",
+                "circle-stroke-width": 1,
+                "circle-opacity": 0.75,
+              },
+            },
+          ],
+          popup: true,
+          information:
+            "Static 2018–2021 satellite survey of glacier lakes in Pakistan. Circle size scales with lake area (km²). Source: /api/pmd/monitor/glacier-lakes/.",
+          dynamicLegend: {
+            title: "Glacier Lake Area (km²)",
+            entries: [
+              { swatch: "#0ea5e9", shape: "circle", label: "≤ 1 km² — small lake (smallest dot)" },
+              { swatch: "#0ea5e9", shape: "circle", label: "≈ 5 km² — medium lake" },
+              { swatch: "#0ea5e9", shape: "circle", label: "≥ 20 km² — large lake (largest dot)" },
+            ],
+            note: "All lakes share the same cyan fill (#0ea5e9); only the circle radius scales with area.",
+          },
+        },
+      },
+    },
     "Flood Forecasting Division (FFD-Data)": {
       toggle: {
         ffd_data: {
@@ -1376,7 +2541,7 @@ export const ncop_menu_items = {
               type: "symbol",
               source: "ffd_data-source",
               layout: {
-                "text-field": "{name} \n {outflow_discharge}",
+                "text-field": "{name}\n{discharge}",
                 "text-size": 12,
                 "text-offset": [0, -0.5],
                 "text-anchor": "bottom",
@@ -1392,6 +2557,19 @@ export const ncop_menu_items = {
           popup: true,
           information:
             "The FFD Data layer displays real-time flood monitoring data from the Flood Forecasting Division (FFD). This layer is crucial for flood risk assessment and management, providing vital information on water levels and flood status across various locations.",
+          dynamicLegend: {
+            title: "Flood Status",
+            entries: [
+              { swatch: "#28a745", shape: "circle", label: "Normal flow" },
+              { swatch: "#17a2b8", shape: "circle", label: "Low flood" },
+              { swatch: "#ffc107", shape: "circle", label: "Medium flood" },
+              { swatch: "#fd7e14", shape: "circle", label: "High flood" },
+              { swatch: "#dc3545", shape: "circle", label: "Very high flood" },
+              { swatch: "#6f42c1", shape: "circle", label: "Exceptionally high flood" },
+              { swatch: "#999999", shape: "circle", label: "Unknown / unclassified status" },
+            ],
+            note: "Circle fill = current status. Each point carries its station name + latest discharge (label below the marker).",
+          },
         },
       },
     },

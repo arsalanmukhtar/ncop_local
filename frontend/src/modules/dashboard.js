@@ -34,6 +34,10 @@ import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
 import { WeatherReportControl } from "./weather-report-control.js";
+import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
+import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
+import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
+import { initPmdWarningsFilter } from "./pmd-warnings-filter.js";
 
 
 // ---- Mapbox token handling ----
@@ -104,6 +108,26 @@ class DashboardManager {
     this.#map.on("load", this.#onMapLoad.bind(this));
     this.#map.on("error", this.#handleMapError.bind(this));
 
+    // FFD integration — live hydration of the ffd_data-source waterlevels
+    // + auto-add/remove of the FFD rivers companion layer whenever the
+    // ffd_data sidebar toggle flips.  All glue is centralised in
+    // gcop-ffd-integration.js; dashboard.js just installs the hook.
+    initGcopFfdIntegration(this.#map, this.#sourceLayerControl);
+
+    // PMD Weather Stations integration — hydrate the empty
+    // pmd_weather_stations-source with the GCOP-normalised feed and map
+    // the upstream property names into the flat aliases the popup /
+    // weather report / rain-symbol filter already consume.  See
+    // gcop-pmd-integration.js for the full transform.
+    initGcopPmdIntegration(this.#map);
+
+    // PMD Monitor / NWFC live feeds — hydrates every additional GCOP
+    // spatial layer (warnings, monsoon, glof-obs, lightning, city
+    // forecast, WFS forecast polygons, glacier lakes, NWFC
+    // observations) through the shared TTL cache.  Dispatch table in
+    // gcop-monitor-integration.js is the source of truth.
+    initGcopMonitorIntegration(this.#map);
+
     this.#mapControls = new MapControls(this.#map);
 
     const projectionPanel = new ProjectionPanel(this.#map, this.#mapControls);
@@ -123,6 +147,12 @@ class DashboardManager {
     new WeatherReportControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
+
+    // Hazard-type pre-filter for the PMD Weather Warnings layer.  Waits
+    // for the sidebar's pmd_warnings toggle row to render (via a short
+    // MutationObserver) and injects the 13-row filter card directly
+    // above it — see pmd-warnings-filter.js.
+    initPmdWarningsFilter(this.#map);
 
     // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
     waitForEl("#story-root")
@@ -484,7 +514,12 @@ function buildUnifiedRightRail() {
     // marked between the two arrow icons in the design.
     push(mapWrapper.querySelector(".custom-layer-btn"));
     push(document.querySelector(".custom-layer-style-btn"));
-    push(mapWrapper.querySelector(".custom-layer-info-btn"));
+    // LayerInfoPanel.render() gives its button class="custom-layer-btn"
+    // (same as the layer-order button), so a class selector would collide
+    // with the layer-order button already picked above.  Grab it by its
+    // unique id instead — restores the info button in the rail without
+    // touching LayerInfoPanel or any other core logic.
+    push(document.getElementById("layerInfoToggle"));
     // Weather Report sits with the data/info controls so it's adjacent to
     // the temporal slider's natural cohort (style + info). Wrapper div is
     // injected by WeatherReportControl in init().

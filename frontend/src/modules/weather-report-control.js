@@ -1,4 +1,15 @@
 // weather-report-control.js
+import {
+  getFfdBulletins,
+  getNwfcWeeklyOutlook,
+  getNwfcReports,
+  getNwfcMaxTemperatures,
+  getPmdPublicForecast,
+  getNwfcForecast,
+  getNwfcPressReleaseText,
+} from "./gcop-api-cache.js";
+import { pmdWarningsFilter } from "./pmd-warnings-filter.js";
+
 // =========================================================================
 // District-level Weather Report
 // -------------------------------------------------------------------------
@@ -21,6 +32,202 @@
 
 const PANEL_ID = "weatherReportPanel";
 const BTN_ID = "weatherReportToggle";
+
+// =========================================================================
+// PMD Overview — tracked layers config
+// -------------------------------------------------------------------------
+// One entry per toggleable layer we surface as its own "Active Layer"
+// card inside the PMD Overview tab.  `primaryLayerId` is the Mapbox
+// layer id we use to detect toggle-on state; `sourceId` is where we
+// pull the source's cached FeatureCollection from.  `columns` describes
+// the flat data table underneath the legend.
+// =========================================================================
+// Accent-colour language mirrors GCOP §2 so operators can pattern-match
+// on category by dot colour without reading labels:
+//   FFD River Telemetries       — green   #86efac
+//   Pakistan Weather / Monitor  — blue    #93c5fd
+//   NWFC Observations           — cyan    #7dd3fc
+//   GLOF Stations               — teal    #67e8f9
+//   PMD Monitor Warnings        — red     #fca5a5
+//   Lightning                   — amber   #fde68a
+//   City Forecast               — violet  #c4b5fd
+const PMD_TAB_TRACKED_LAYERS = {
+  ffd_data: {
+    label: "FFD River Telemetries",
+    primaryLayerId: "ffd_data-circle",
+    sourceId: "ffd_data-source",
+    icon: { shape: "circle", color: "#86efac" },
+    legend: [
+      { label: "Normal",    color: "#28a745" },
+      { label: "Low",       color: "#17a2b8" },
+      { label: "Medium",    color: "#ffc107" },
+      { label: "High",      color: "#fd7e14" },
+      { label: "Very High", color: "#dc3545" },
+      { label: "Ex High",   color: "#6f42c1" },
+    ],
+    // §2.1 schema: name, area_name (river), height, status (Normal /
+    // Low / Medium / High / Very High / Exceptionally High), discharge
+    // (comma-formatted cusecs string), recording_time (PKT).
+    columns: [
+      { key: "name",           label: "Gauge" },
+      { key: "area_name",      label: "River" },
+      { key: "status",         label: "Status", chip: "status" },
+      { key: "discharge",      label: "Discharge" },
+      { key: "recording_time", label: "Time" },
+    ],
+    maxRows: 15,
+    emptyText: "No FFD gauges loaded yet.",
+  },
+  pmd_weather_stations: {
+    label: "PMD Weather Stations",
+    primaryLayerId: "pmd_weather_stations-sun-symbol",
+    sourceId: "pmd_weather_stations-source",
+    icon: { shape: "circle", color: "#93c5fd" },
+    legend: [
+      { label: "Blue",   color: "#3b82f6" },
+      { label: "Yellow", color: "#eab308" },
+      { label: "Orange", color: "#f97316" },
+      { label: "Red",    color: "#dc2626" },
+    ],
+    // Columns match the §3.1 schema.  All measurement fields are
+    // nullable — the normaliser preserves null for "no sensor / no
+    // reading" instead of coercing to 0.
+    columns: [
+      { key: "name",         label: "Station" },
+      { key: "station_type", label: "Type",  chip: "kind" },
+      { key: "temperature",  label: "T",     unit: "°C", numeric: 1 },
+      { key: "rainfall",     fallback: "rain_24h", label: "Rain 24h", unit: "mm", numeric: 1 },
+      { key: "windSpeed",    label: "Wind",  unit: "kt", numeric: 1 },
+      { key: "visibility",   label: "Vis",   unit: "km", numeric: 1 },
+    ],
+    maxRows: 15,
+    emptyText: "No station features loaded yet.",
+  },
+  pmd_warnings: {
+    label: "PMD Weather Warnings",
+    primaryLayerId: "pmd_warnings-fill",
+    sourceId: "pmd_warnings-source",
+    icon: { shape: "square", color: "#fca5a5" },
+    legend: [
+      { label: "Red",     color: "#dc2626" },
+      { label: "Orange",  color: "#f97316" },
+      { label: "Yellow",  color: "#eab308" },
+      { label: "Blue",    color: "#3b82f6" },
+      { label: "T-storm", color: "#a21caf" },
+      { label: "Gust",    color: "#7c3aed" },
+    ],
+    columns: [
+      { key: "element_label", fallback: "element",     label: "Type" },
+      { key: "level",         label: "Level",          chip: "level" },
+      { key: "area_km2",      label: "Area", unit: "km²", numeric: 0 },
+      { key: "forecast_time", fallback: "data_time",   label: "Valid" },
+    ],
+    maxRows: 15,
+    emptyText: "No active warnings.",
+  },
+  pmd_monsoon: {
+    label: "Monsoon Warnings",
+    primaryLayerId: "pmd_monsoon-fill",
+    sourceId: "pmd_monsoon-source",
+    icon: { shape: "square", color: "#0ea5e9" },
+    legend: [
+      { label: "Red",    color: "#dc2626" },
+      { label: "Orange", color: "#f97316" },
+      { label: "Yellow", color: "#eab308" },
+      { label: "Blue",   color: "#3b82f6" },
+    ],
+    columns: [
+      { key: "province",      label: "Province" },
+      { key: "level",         label: "Level", chip: "level" },
+      { key: "type",          label: "Type" },
+      { key: "rain_24h",      label: "24h",   unit: "mm", numeric: 1 },
+      { key: "rain_forecast", label: "Fcst",  unit: "mm", numeric: 1 },
+    ],
+    maxRows: 15,
+    emptyText: "No monsoon warnings issued.",
+  },
+  pmd_lightning: {
+    label: "Lightning Strikes",
+    primaryLayerId: "pmd_lightning-circle",
+    sourceId: "pmd_lightning-source",
+    icon: { shape: "circle", color: "#fde68a" },
+    legend: [],
+    columns: [
+      { key: "time",       fallback: "obs_time", label: "Time" },
+      { key: "intensity",  fallback: "value",    label: "Intensity", numeric: 0 },
+      { key: "type",       label: "Type" },
+    ],
+    maxRows: 15,
+    emptyText: "No lightning strikes in the last hour.",
+  },
+  pmd_city_forecast: {
+    label: "City 12-Step Forecast",
+    primaryLayerId: "pmd_city_forecast-circle",
+    sourceId: "pmd_city_forecast-source",
+    icon: { shape: "circle", color: "#c4b5fd" },
+    legend: [
+      { label: "<15°",   color: "#2563eb" },
+      { label: "15-25°", color: "#22c55e" },
+      { label: "25-32°", color: "#facc15" },
+      { label: "32-40°", color: "#f97316" },
+      { label: "40°+",   color: "#ef4444" },
+    ],
+    columns: [
+      { key: "name",       fallback: "city", label: "City" },
+      { key: "temp",       label: "T",       unit: "°C", numeric: 1 },
+      { key: "weather",    label: "Wx" },
+      { key: "humidity",   label: "RH",      unit: "%",   numeric: 0 },
+      { key: "wind_speed", label: "Wind",    unit: "m/s", numeric: 1 },
+    ],
+    maxRows: 15,
+    emptyText: "No city forecast features loaded yet.",
+  },
+  nwfc_observations: {
+    label: "NWFC Station Observations",
+    primaryLayerId: "nwfc_observations-click",
+    sourceId: "nwfc_observations-source",
+    icon: { shape: "circle", color: "#7dd3fc" },
+    legend: [],
+    // NWFC §4.1 exposes rain_3h and rain_24h — surface both since
+    // stations can be reporting on either window.
+    columns: [
+      { key: "name",         label: "Station" },
+      { key: "temperature",  label: "T",     unit: "°C", numeric: 1 },
+      { key: "rain_24h",     label: "24h",   unit: "mm", numeric: 1 },
+      { key: "rain_3h",      label: "3h",    unit: "mm", numeric: 1 },
+      { key: "weather",      label: "Wx" },
+    ],
+    maxRows: 15,
+    emptyText: "No NWFC observations loaded yet.",
+  },
+  pmd_glof_obs: {
+    label: "GLOF Stations",
+    primaryLayerId: "pmd_glof_obs-circle",
+    sourceId: "pmd_glof_obs-source",
+    icon: { shape: "circle", color: "#67e8f9" },
+    legend: [
+      { label: "Normal",    color: "#22c55e" },
+      { label: "Watch",     color: "#facc15" },
+      { label: "Warning",   color: "#f97316" },
+      { label: "Emergency", color: "#dc2626" },
+    ],
+    // §3.5 schema: id, name, city, province, station_type, obs_time,
+    // water_level (m), flow (m³/s), rainfall (mm), rain_intensity,
+    // alert_level (0/20/40/60), alert_label (NORMAL / WATCH /
+    // WARNING / EMERGENCY), connectivity (OK / OFFLINE /
+    // SENSOR_FAULT), has_water_level_sensor, stale.
+    columns: [
+      { key: "name",         label: "Station" },
+      { key: "city",         label: "City" },
+      { key: "alert_label",  label: "Alert", chip: "alert" },
+      { key: "water_level",  label: "WL",    unit: "m",     numeric: 2 },
+      { key: "rainfall",     label: "Rain",  unit: "mm",    numeric: 1 },
+      { key: "connectivity", label: "Link",  chip: "kind" },
+    ],
+    maxRows: 15,
+    emptyText: "No GLOF stations loaded yet.",
+  },
+};
 
 // =========================================================================
 // Researched thresholds (single source of truth)
@@ -292,6 +499,44 @@ export class WeatherReportControl {
   #thresholdEl = null;
   #thresholdValueEl = null;
 
+  // Tab machinery.  #activeTab tracks which panel body is currently
+  // shown ("dynamic" = the district-level dynamic report, "pmd" = the
+  // static PMD Overview built from the GCOP cache helpers).
+  // #pmdContentEl is the second body container we lazily populate the
+  // first time the PMD tab is opened; #pmdLoaded avoids re-fetching
+  // when the user toggles back and forth within the cache windows.
+  #tabsEl = null;
+  #pmdContentEl = null;
+  #activeTab = "dynamic";
+  #pmdLoaded = false;
+  #pmdLoading = false;
+
+  // Container for the auto-updating "Active Layers" block inside the
+  // PMD Overview tab.  Rewritten whenever a tracked layer's toggle
+  // changes or its source loads new data.
+  #activeLayersEl = null;
+  #activeLayersTimerId = null;
+  #activeLayersFingerprint = "";
+
+  // Snapshot of every endpoint result from the last PMD Overview
+  // render — the Download HTML / CSV buttons pull from here so the
+  // exported report is exactly what the operator is looking at.
+  // Individual entries may be null if that endpoint failed.
+  #pmdRawData = {
+    outlook: null,
+    bulletins: null,
+    reports: null,
+    maxTemps: null,
+    publicFc: null,
+    nwfcFc: null,
+  };
+  #pmdClickBound = false;
+
+  // §3.4 drill-down state — "overview" is the default multi-section
+  // scroll; the other values are the dedicated full-content sub-views
+  // reached via the drill button strip.
+  #pmdView = "overview";
+
   // Throttle bookkeeping. `#renderTimerId` covers both rAF and setTimeout
   // ids so we have a single "is a render queued" flag to check.
   #renderTimerId = null;
@@ -361,17 +606,35 @@ export class WeatherReportControl {
           <i data-lucide="x"></i>
         </button>
       </div>
-      <div class="wrp-body" id="weatherReportBody"></div>
+      <div class="wrp-tabs" role="tablist">
+        <button class="wrp-tab is-active" type="button" role="tab"
+                data-tab="dynamic" aria-selected="true">Dynamic Report</button>
+        <button class="wrp-tab" type="button" role="tab"
+                data-tab="pmd" aria-selected="false">PMD Overview</button>
+      </div>
+      <div class="wrp-body" id="weatherReportBody" data-tab-content="dynamic"></div>
+      <div class="wrp-body wrp-body--pmd" id="weatherReportPmdBody"
+           data-tab-content="pmd" hidden></div>
       <div class="wrp-footer" id="weatherReportFooter"></div>
     `;
     mapContainer.appendChild(panel);
     this.#panelEl = panel;
     this.#contentEl = panel.querySelector("#weatherReportBody");
+    this.#pmdContentEl = panel.querySelector("#weatherReportPmdBody");
+    this.#tabsEl = panel.querySelector(".wrp-tabs");
     this.#footerEl = panel.querySelector("#weatherReportFooter");
     this.#titleEl = panel.querySelector(".wrp-title");
     this.#subtitleEl = panel.querySelector(".wrp-subtitle");
     this.#thresholdEl = panel.querySelector(".wrp-threshold");
     this.#thresholdValueEl = panel.querySelector(".wrp-threshold-value");
+
+    // Tab click delegation — single listener on the strip, dispatches
+    // on the clicked <button>'s data-tab.
+    this.#tabsEl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-tab]");
+      if (!btn) return;
+      this.#switchTab(btn.getAttribute("data-tab"));
+    });
 
     // Lucide icons get rendered by the global init pass; nudge it in case
     // we're mounted after the initial pass.
@@ -407,6 +670,33 @@ export class WeatherReportControl {
     };
     this.#contentEl.addEventListener("click", flyHandler);
     this.#contentEl.addEventListener("keydown", flyHandler);
+
+    // Auto-refresh of the PMD-tab "Active Layers" block on any layer
+    // toggle or tracked-source hydration.  Both are cheap (early-return
+    // when the PMD tab isn't visible), and the refresh itself is
+    // throttled + fingerprinted, so a rapid tempo of source events
+    // collapses into a single DOM write.
+    this.#map.on("styledata", () => this.#scheduleActiveLayersRefresh());
+    this.#map.on("sourcedata", (e) => {
+      if (!e || !e.sourceId) return;
+      // Only bounce the refresh for sources we actually surface.
+      for (const cfg of Object.values(PMD_TAB_TRACKED_LAYERS)) {
+        if (cfg.sourceId === e.sourceId) {
+          this.#scheduleActiveLayersRefresh();
+          return;
+        }
+      }
+    });
+
+    // Ticking a checkbox on the sidebar's PMD Weather Warnings
+    // pre-filter narrows the feature set the report shows for the
+    // pmd_warnings section.  Re-render both the Active Layers block
+    // and the full PMD Overview tab so hotspot / meaning / mitigation
+    // strings recompute against the filtered subset.
+    window.addEventListener("pmd-warnings-filter-changed", () => {
+      this.#scheduleActiveLayersRefresh();
+      this.#scheduleRender();
+    });
   }
 
   #wireToggle() {
@@ -1504,6 +1794,2983 @@ export class WeatherReportControl {
     if (window.lucide?.createIcons) {
       try { window.lucide.createIcons(); } catch {}
     }
+  }
+
+  // -------------------------------------------------------------- tab machinery
+  // Swap the visible body based on the tab requested.  Dynamic tab
+  // keeps its listener lifecycle attached (map-driven).  PMD tab is
+  // static — data pulled once through the cache, no map listeners
+  // needed while it's on top.  Redundant switches are no-ops.
+  #switchTab(tab) {
+    if (tab !== "dynamic" && tab !== "pmd") return;
+    if (this.#activeTab === tab) return;
+    this.#activeTab = tab;
+
+    // Tab button visual state
+    for (const btn of this.#tabsEl.querySelectorAll(".wrp-tab")) {
+      const on = btn.getAttribute("data-tab") === tab;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    }
+
+    // Body swap
+    this.#contentEl.hidden = tab !== "dynamic";
+    this.#pmdContentEl.hidden = tab !== "pmd";
+
+    // Header contextual state — the alert threshold pill is a
+    // Dynamic-tab-only artefact (there is no active layer concept on
+    // the PMD Overview), and the subtitle text changes.
+    if (tab === "pmd") {
+      this.#thresholdEl.hidden = true;
+      this.#subtitleEl.textContent = "Live PMD data feeds — bulletins, outlook, records";
+      // Always land the PMD tab on the overview, even if the user
+      // was inside a drill-down last time.  Force a re-render so
+      // any layer toggles that happened while the Dynamic tab was
+      // on top get picked up.
+      this.#pmdView = "overview";
+      this.#pmdLoaded = false;
+      this.#renderPmdOverviewTab();
+      this.#activeLayersFingerprint = "";
+      this.#refreshActiveLayers();
+    } else {
+      // Re-run the dynamic renderer so the panel reflects any changes
+      // that happened while the PMD tab was on top.
+      this.#lastFingerprint = ""; // force full re-render
+      this.#scheduleRender();
+    }
+  }
+
+  // -------------------------------------------------------------- PMD Overview
+  // Fetches every non-spatial GCOP endpoint in parallel via the shared
+  // TTL cache, then renders labelled sections.  Idempotent: after the
+  // first successful render, subsequent tab switches within the cache
+  // windows show the same result without a network hit.
+  async #renderPmdOverviewTab() {
+    // Loading skeleton on first entry
+    if (!this.#pmdLoaded && !this.#pmdLoading) {
+      this.#pmdContentEl.innerHTML = `
+        <div class="wrp-loading" role="status" aria-live="polite">
+          <div class="wrp-loader" aria-hidden="true"></div>
+          <div class="wrp-loading-text">Loading PMD data…</div>
+        </div>
+      `;
+      this.#pmdLoading = true;
+    } else if (this.#pmdLoaded) {
+      // Already rendered — no work.  (Cache still guarantees fresh data
+      // via the underlying getX helpers if TTL expired.)
+      return;
+    }
+
+    // Fetch every section in parallel; tolerate individual failures.
+    const [
+      outlookRes,
+      bulletinsRes,
+      reportsRes,
+      maxTempsRes,
+      publicFcRes,
+      nwfcFcRes,
+    ] = await Promise.allSettled([
+      getNwfcWeeklyOutlook(),
+      getFfdBulletins(),
+      getNwfcReports(),
+      getNwfcMaxTemperatures(),
+      getPmdPublicForecast(),
+      getNwfcForecast(),
+    ]);
+
+    this.#pmdLoading = false;
+    this.#pmdLoaded = true;
+
+    // Snapshot the raw payloads so Download HTML/CSV can rebuild the
+    // report without a second network round-trip.
+    this.#pmdRawData = {
+      outlook:   outlookRes.status   === "fulfilled" ? outlookRes.value   : null,
+      bulletins: bulletinsRes.status === "fulfilled" ? bulletinsRes.value : null,
+      reports:   reportsRes.status   === "fulfilled" ? reportsRes.value   : null,
+      maxTemps:  maxTempsRes.status  === "fulfilled" ? maxTempsRes.value  : null,
+      publicFc:  publicFcRes.status  === "fulfilled" ? publicFcRes.value  : null,
+      nwfcFc:    nwfcFcRes.status    === "fulfilled" ? nwfcFcRes.value    : null,
+    };
+
+    const sections = [];
+    sections.push(this.#renderOutlookSection(outlookRes));
+    sections.push(this.#renderNwfcForecastSection(nwfcFcRes));
+    sections.push(this.#renderBulletinsSection(bulletinsRes));
+    sections.push(this.#renderRainfallReportsSection(reportsRes));
+    sections.push(this.#renderPressReleasesSection(reportsRes));
+    sections.push(this.#renderMaxTempsSection(maxTempsRes));
+    sections.push(this.#renderPublicForecastSection(publicFcRes));
+
+    this.#pmdContentEl.innerHTML = `
+      <div class="wrp-fixed">
+        <div class="wrp-pmd-hero">
+          <div class="wrp-pmd-hero-badge">GCOP · Live</div>
+          <div class="wrp-pmd-hero-title">Pakistan Meteorological Department</div>
+          <div class="wrp-pmd-hero-sub">Cached feeds from PMD Monitor + NWFC + FFD (Section 6, integration doc)</div>
+        </div>
+        ${this.#renderDrillStrip()}
+      </div>
+      <div class="wrp-scroll wrp-pmd-scroll">
+        <div class="wrp-pmd-active-layers" id="weatherReportActiveLayers"></div>
+        ${sections.filter(Boolean).join("")}
+        ${this.#renderDownloadStrip()}
+      </div>
+    `;
+    this.#activeLayersEl = this.#pmdContentEl.querySelector("#weatherReportActiveLayers");
+    // First pass — force fingerprint refresh so we always paint on entry
+    this.#activeLayersFingerprint = "";
+    this.#refreshActiveLayers();
+
+    // Wire delegation on the PMD content once — every Read / Download
+    // button uses `data-pmd-action` so the handler stays generic.
+    // innerHTML rewrites don't drop listeners on the parent, so this
+    // survives every subsequent tab render.
+    if (!this.#pmdClickBound) {
+      this.#pmdContentEl.addEventListener("click", (ev) => this.#onPmdClick(ev));
+      this.#pmdClickBound = true;
+    }
+
+    // Footer breadcrumb — mirrors the Dynamic tab's convention
+    const generated = new Date().toLocaleTimeString([], {
+      hour: "2-digit", minute: "2-digit",
+    });
+    if (this.#footerEl) {
+      this.#footerEl.innerHTML = `PMD Overview · Generated ${escapeHtml(generated)}`;
+      this.#footerEl.classList.add("is-visible");
+    }
+    if (window.lucide?.createIcons) {
+      try { window.lucide.createIcons(); } catch {}
+    }
+  }
+
+  // ---- individual section renderers -----------------------------------
+  // `opts.collapsed: true` renders the section as a native <details>
+  // element that starts collapsed — user has to click the header to
+  // open.  Used for verbose / secondary sections (Bulletins, Rainfall
+  // Reports, Press Releases, PMD Public Forecast) so the tab lands on
+  // the important sections first (Outlook, Daily Forecast, Max Temps,
+  // Active Layers) without a wall of link rows shoving everything
+  // else offscreen.
+  #pmdSectionShell(title, body, iconName = "circle", opts = {}) {
+    const collapsed = opts && opts.collapsed === true;
+    if (collapsed) {
+      return `
+        <details class="wrp-pmd-section wrp-pmd-section--collapsible">
+          <summary class="wrp-pmd-section-head wrp-pmd-section-head--summary">
+            <i data-lucide="${iconName}" class="wrp-pmd-section-icon"></i>
+            <h4 class="wrp-pmd-section-title">${escapeHtml(title)}</h4>
+            <span class="wrp-pmd-section-chevron" aria-hidden="true">▸</span>
+          </summary>
+          <div class="wrp-pmd-section-body">${body}</div>
+        </details>
+      `;
+    }
+    return `
+      <section class="wrp-pmd-section">
+        <header class="wrp-pmd-section-head">
+          <i data-lucide="${iconName}" class="wrp-pmd-section-icon"></i>
+          <h4 class="wrp-pmd-section-title">${escapeHtml(title)}</h4>
+        </header>
+        <div class="wrp-pmd-section-body">${body}</div>
+      </section>
+    `;
+  }
+
+  #pmdErrorBody(reason) {
+    return `<p class="wrp-pmd-empty">Unavailable · ${escapeHtml(String(reason || "no response"))}</p>`;
+  }
+
+  #pmdEmptyBody(text) {
+    return `<p class="wrp-pmd-empty">${escapeHtml(text)}</p>`;
+  }
+
+  #renderOutlookSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("Weekly Outlook", this.#pmdErrorBody(res.reason), "calendar-days");
+    }
+    const data = res.value || {};
+    const days = Array.isArray(data.days) ? data.days.slice(0, 7) : [];
+    if (!days.length) {
+      return this.#pmdSectionShell("Weekly Outlook", this.#pmdEmptyBody("No outlook published."), "calendar-days");
+    }
+    const items = days.map((d) => `
+      <li class="wrp-pmd-outlook-item">
+        <div class="wrp-pmd-outlook-date">${escapeHtml(d?.date || "—")}</div>
+        <div class="wrp-pmd-outlook-body">${this.#highlightHazards(d?.outlook || "")}</div>
+      </li>
+    `).join("");
+    return this.#pmdSectionShell(
+      `Weekly Outlook${data.issue_date ? ` · issued ${escapeHtml(data.issue_date)}` : ""}`,
+      `<ul class="wrp-pmd-outlook">${items}</ul>`,
+      "calendar-days"
+    );
+  }
+
+  #renderBulletinsSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("Latest FFD Bulletins", this.#pmdErrorBody(res.reason), "file-warning", { collapsed: true });
+    }
+    const items = (res.value?.items || []).slice(0, 6);
+    if (!items.length) {
+      return this.#pmdSectionShell("Latest FFD Bulletins", this.#pmdEmptyBody("No bulletins."), "file-warning", { collapsed: true });
+    }
+    const rows = items.map((it) => `
+      <a class="wrp-pmd-link-row" href="${escapeHtml(it?.download_url || "#")}"
+         target="_blank" rel="noopener">
+        <span class="wrp-pmd-link-kind wrp-pmd-link-kind--${(it?.kind || "").toLowerCase() === "advisory" ? "advisory" : "bulletin"}">
+          ${escapeHtml(it?.kind || "PDF")}
+        </span>
+        <span class="wrp-pmd-link-body">
+          <span class="wrp-pmd-link-title">${escapeHtml(it?.title || "Untitled")}</span>
+          <span class="wrp-pmd-link-meta">${escapeHtml(it?.issued || "")}</span>
+        </span>
+        <i data-lucide="external-link" class="wrp-pmd-link-icon"></i>
+      </a>
+    `).join("");
+    return this.#pmdSectionShell("Latest FFD Bulletins", rows, "file-warning", { collapsed: true });
+  }
+
+  // Split the merged reports payload into rainfall vs press-release
+  // buckets.  Server may return several shapes:
+  //   { rainfall_reports: [...], press_releases: [...] }
+  //   { items: [{kind:"Daily Rainfall"|"Press Release", ...}, ...] }
+  //   [ ...raw array... ]
+  // We probe every shape defensively so field-name drift doesn't blank
+  // a section that actually has data.
+  #splitReportItems(data) {
+    const empty = { rainfall: [], press: [] };
+    if (!data) return empty;
+    if (Array.isArray(data?.rainfall_reports) || Array.isArray(data?.press_releases)) {
+      return {
+        rainfall: data.rainfall_reports || [],
+        press:    data.press_releases   || [],
+      };
+    }
+    const all = Array.isArray(data?.items) ? data.items
+      : Array.isArray(data?.reports)       ? data.reports
+      : Array.isArray(data)                ? data
+      : [];
+    const kindMatch = (it, k) => String(it?.kind || "").toLowerCase().includes(k);
+    return {
+      rainfall: all.filter((it) => kindMatch(it, "rain")),
+      press:    all.filter((it) => kindMatch(it, "press") || kindMatch(it, "release")),
+    };
+  }
+
+  #renderRainfallReportsSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("NWFC Daily Rainfall Reports", this.#pmdErrorBody(res.reason), "cloud-rain", { collapsed: true });
+    }
+    const { rainfall } = this.#splitReportItems(res.value);
+    const items = rainfall.slice(0, 6);
+    if (!items.length) {
+      return this.#pmdSectionShell("NWFC Daily Rainfall Reports", this.#pmdEmptyBody("No rainfall reports."), "cloud-rain", { collapsed: true });
+    }
+    const rows = items.map((it) => this.#reportLinkRow(it, "report")).join("");
+    return this.#pmdSectionShell("NWFC Daily Rainfall Reports", rows, "cloud-rain", { collapsed: true });
+  }
+
+  #renderPressReleasesSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("NWFC Press Releases", this.#pmdErrorBody(res.reason), "megaphone", { collapsed: true });
+    }
+    const { press } = this.#splitReportItems(res.value);
+    const items = press.slice(0, 6);
+    if (!items.length) {
+      return this.#pmdSectionShell("NWFC Press Releases", this.#pmdEmptyBody("No recent press releases."), "megaphone", { collapsed: true });
+    }
+    // Press-release rows get an extra "Read" button that lazy-loads the
+    // extracted PDF text via /api/pmd/nwfc/press-release-text/ on click.
+    // Only URLs on weather.gov.pk are accepted by the backend — hide
+    // the Read button for anything else so the user isn't dead-ended.
+    const rows = items.map((it, idx) => {
+      const url = it?.url || it?.download_url || it?.link || "";
+      const canRead = typeof url === "string" && url.startsWith("https://weather.gov.pk/");
+      const readId = `wrp-pr-${idx}-${Math.random().toString(36).slice(2, 7)}`;
+      const linkRow = this.#reportLinkRow(it, "release", canRead ? {
+        readAttr: `data-pmd-action="read-pr" data-pmd-pr-url="${escapeHtml(url)}" data-pmd-pr-target="${readId}"`,
+      } : null);
+      return `
+        ${linkRow}
+        <div class="wrp-pmd-read-panel" id="${readId}" hidden></div>
+      `;
+    }).join("");
+    return this.#pmdSectionShell("NWFC Press Releases", rows, "megaphone", { collapsed: true });
+  }
+
+  // Shared link-row builder used by bulletins / rainfall / press
+  // sections.  `opts.readAttr` (optional) injects a "Read" button that
+  // the delegated click handler picks up.
+  #reportLinkRow(it, kindClass, opts) {
+    const url    = it?.url || it?.download_url || it?.link || "#";
+    const title  = it?.title || it?.name || it?.subject || "PDF";
+    const issued = it?.issued || it?.date || it?.published || "";
+    const kindLabel = kindClass === "release" ? "RELEASE"
+                    : kindClass === "report"  ? "PDF"
+                    : "PDF";
+    return `
+      <div class="wrp-pmd-link-row">
+        <span class="wrp-pmd-link-kind wrp-pmd-link-kind--${kindClass}">${kindLabel}</span>
+        <span class="wrp-pmd-link-body">
+          <span class="wrp-pmd-link-title">${escapeHtml(title)}</span>
+          <span class="wrp-pmd-link-meta">${escapeHtml(issued)}</span>
+        </span>
+        ${opts?.readAttr ? `
+          <button class="wrp-pmd-read-btn" type="button" ${opts.readAttr} title="Extract PDF text inline">
+            <i data-lucide="book-open-text"></i>
+            <span>Read</span>
+          </button>
+        ` : ""}
+        <a class="wrp-pmd-link-open" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="Open PDF in new tab">
+          <i data-lucide="external-link"></i>
+        </a>
+      </div>
+    `;
+  }
+
+  // NWFC daily forecast table (§4.2).  The upstream response shape is
+  // NOT tightly documented, so instead of hard-coding a field-name
+  // guess (which was producing empty cells when the schema differed),
+  // we discover the fields that are actually present on each item via
+  // `#discoverForecastColumns` (shared with the HTML export builder so
+  // both surfaces stay in lock-step).  On top of the dynamic table we
+  // add:
+  //   - a weather / temperature emoji next to each city name
+  //   - documented-threshold highlighting on temp / humidity / wind /
+  //     rain cells (see #thresholdClass for the ladders).
+  #renderNwfcForecastSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("NWFC Daily Forecast", this.#pmdErrorBody(res.reason), "cloud-sun-rain");
+    }
+    const cities = this.#extractItemArray(res.value, ["cities", "forecast", "items", "data", "stations", "records", "results"]);
+    if (!cities.length) {
+      return this.#pmdSectionShell("NWFC Daily Forecast", this.#pmdEmptyBody("No forecast published."), "cloud-sun-rain");
+    }
+
+    const { cols, nameKeys } = this.#discoverForecastColumns(cities);
+
+    // Fallback if we STILL have no columns (all values were empty) —
+    // dump a per-city "key: value" list so operators can at least see
+    // what came back instead of a table of dashes.
+    if (!cols.length) {
+      const dump = cities.slice(0, 8).map((c) => {
+        const name = nameKeys.map((k) => c?.[k]).find((v) => v != null && v !== "") || "—";
+        const pairs = Object.entries(c || {})
+          .filter(([k, v]) => !nameKeys.includes(k) && v != null && v !== "")
+          .slice(0, 6)
+          .map(([k, v]) => `<b>${escapeHtml(this.#prettyLabel(k))}:</b> ${this.#formatLayerCell(v, {})}`)
+          .join(" · ");
+        return `<li class="wrp-pmd-outlook-item">
+                  <div class="wrp-pmd-outlook-date">${escapeHtml(String(name))}</div>
+                  <div class="wrp-pmd-outlook-body">${pairs || "—"}</div>
+                </li>`;
+      }).join("");
+      return this.#pmdSectionShell("NWFC Daily Forecast",
+        `<ul class="wrp-pmd-outlook">${dump}</ul>`, "cloud-sun-rain");
+    }
+
+    // Pick the "Max" / temperature column (if any) to drive the
+    // per-city emoji chip beside the city name.
+    const tempCol = cols.find((x) => /max|temp|°c/i.test(x.label)) || null;
+    const wxCol   = cols.find((x) => /weather|wx|condition/i.test(x.label)) || null;
+
+    // Recognise weekday-suffixed columns (e.g. "Wednesday°C") so each
+    // day cell can carry its own rain / sun / cloud emoji derived
+    // from the day's weather field (or its temperature as fallback).
+    const isDayCol = (label) =>
+      /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(String(label));
+
+    const rows = cities.slice(0, 14).map((c) => {
+      if (!c || typeof c !== "object") return "";
+      const nameKey = nameKeys.find((k) => c[k] != null && c[k] !== "");
+      const name = nameKey ? c[nameKey] : "—";
+
+      // City-row emoji: probe the weather column if present, otherwise
+      // fall back to the temperature column.  Both go through the
+      // envelope-aware helpers so `{value: 39}` and `{weather:"Rain"}`
+      // work as well as raw scalars.
+      const wxRaw   = wxCol ? c[wxCol.key] : null;
+      const tempRaw = tempCol ? c[tempCol.key] : null;
+      const wxStr   = this.#extractWeather(wxRaw)
+                   || this.#extractWeather(tempRaw);
+      const tempVal = this.#parseTempRange(tempRaw);
+      const emoji   = this.#weatherEmoji(wxStr) || this.#tempEmoji(tempVal);
+
+      const cells = cols.map((col) => {
+        const raw = c[col.key];
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        let dayEmoji = "";
+        if (isDayCol(col.label)) {
+          const dayWx = this.#extractWeather(raw);
+          dayEmoji = this.#weatherEmoji(dayWx)
+                  || this.#tempEmoji(this.#parseTempRange(raw));
+        }
+        const content = this.#formatLayerCell(raw, {});
+        const inner = dayEmoji
+          ? `<span class="wrp-pmd-cell-emoji" aria-hidden="true">${dayEmoji}</span> ${content}`
+          : content;
+        return `<td${cls ? ` class="${cls}"` : ""}>${inner}</td>`;
+      }).join("");
+
+      return `<tr>
+        <td class="wrp-pmd-fc-time">
+          <span class="wrp-pmd-city-emoji" aria-hidden="true">${emoji}</span>
+          <span class="wrp-pmd-city-name">${escapeHtml(String(name))}</span>
+        </td>
+        ${cells}
+      </tr>`;
+    }).filter(Boolean).join("");
+
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const table = `
+      <table class="wrp-pmd-fc-table">
+        <thead><tr><th>City</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${this.#renderExtremeLegend()}
+    `;
+    return this.#pmdSectionShell("NWFC Daily Forecast", table, "cloud-sun-rain");
+  }
+
+  // ---- Shared: field discovery for NWFC-style city forecast ----
+  // Returns { cols: [{label, key}, ...], nameKeys: [...] } so the
+  // caller can render city name + N discovered columns.
+  #discoverForecastColumns(cities) {
+    const nameKeys = ["name", "city", "station", "station_name", "location", "title"];
+    const priority = [
+      { label: "Max °C",  keys: ["max_temp", "max_temperature", "temp_max", "tmax", "day_max", "high", "temperatureMax", "max", "max_c"] },
+      { label: "Min °C",  keys: ["min_temp", "min_temperature", "temp_min", "tmin", "day_min", "low", "temperatureMin", "min", "min_c"] },
+      { label: "Weather", keys: ["weather", "wx", "description", "forecast", "condition", "text", "wx_description", "summary"] },
+      { label: "Rain",    keys: ["rain", "rainfall", "precipitation", "precip", "prec_mm", "rain_mm"] },
+      { label: "Wind",    keys: ["wind_speed", "wind", "wspd", "wind_km", "wind_ms", "wind_kt", "wind_kmh"] },
+      { label: "RH %",    keys: ["humidity", "rhu", "rh"] },
+    ];
+    const MAX_COLS = 6;
+
+    const allFields = new Set();
+    for (const c of cities.slice(0, 40)) {
+      if (c && typeof c === "object") for (const k of Object.keys(c)) allFields.add(k);
+    }
+    const cols = [];
+    const usedKeys = new Set(nameKeys);
+    for (const p of priority) {
+      if (cols.length >= MAX_COLS) break;
+      const found = p.keys.find((k) => allFields.has(k));
+      if (found) { cols.push({ label: p.label, key: found }); usedKeys.add(found); }
+    }
+    if (cols.length < MAX_COLS) {
+      for (const k of allFields) {
+        if (cols.length >= MAX_COLS) break;
+        if (usedKeys.has(k)) continue;
+        if (/^(id|pk|_.+)$/i.test(k)) continue;
+        cols.push({ label: this.#prettyLabel(k), key: k });
+        usedKeys.add(k);
+      }
+    }
+    return { cols, nameKeys };
+  }
+
+  // ---- Documented extreme-value thresholds ----
+  // Temperature classes follow WMO / PMD heat-advisory ladders (≥45 °C
+  // extreme, ≥40 °C very hot, ≥35 °C hot; ≤0 °C freezing, ≤5 °C cold).
+  // Humidity classes follow generic comfort ladders (≥90 % oppressive,
+  // ≤20 % very dry).  Wind follows Beaufort-adjacent ladders (≥60 km/h
+  // strong, ≥40 km/h moderate).  Rain follows PMD/IMD daily rain
+  // classifications (≥25 mm heavy, ≥10 mm moderate).
+  #thresholdClass(value, label) {
+    const n = Number.isFinite(value) ? value : this.#parseTempRange(value);
+    if (!Number.isFinite(n)) return "";
+    const l = String(label).toLowerCase();
+    if (l.includes("temp") || l.includes("°c") || /(max|min)\b/.test(l)) {
+      if (n >= 45) return "wrp-pmd-x-extreme-hot";
+      if (n >= 40) return "wrp-pmd-x-very-hot";
+      if (n >= 35) return "wrp-pmd-x-hot";
+      if (n <= 0)  return "wrp-pmd-x-freezing";
+      if (n <= 5)  return "wrp-pmd-x-cold";
+      return "";
+    }
+    if (l.includes("humidity") || l.includes("rh") || l === "rh %" || l.includes("%")) {
+      if (n >= 90) return "wrp-pmd-x-humid";
+      if (n <= 20) return "wrp-pmd-x-dry";
+      return "";
+    }
+    if (l.includes("wind")) {
+      if (n >= 60) return "wrp-pmd-x-strong-wind";
+      if (n >= 40) return "wrp-pmd-x-mod-wind";
+      return "";
+    }
+    if (l.includes("rain") || l.includes("precip")) {
+      if (n >= 25) return "wrp-pmd-x-heavy-rain";
+      if (n >= 10) return "wrp-pmd-x-mod-rain";
+      return "";
+    }
+    return "";
+  }
+
+  // "24-26" → 26 (uses the higher of the range); "37.5" → 37.5;
+  // {value: 28} → 28.  Unwraps envelope objects up front — endpoints
+  // frequently deliver day-forecast cells as `{value, unit}` or
+  // `{range, weather}` rather than raw scalars, and without this
+  // unwrap the emoji and threshold pipelines were seeing NaN for
+  // every value (the panel showed the default 🏙️ for every city).
+  #parseTempRange(v) {
+    v = this.#unwrapValue(v);
+    if (v == null) return NaN;
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    if (typeof v !== "string") {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : NaN;
+    }
+    const s = v.trim();
+    if (!s) return NaN;
+    // Range doesn't require ^/$ anchors so we also match strings like
+    // "24-26 °C" that carry a trailing unit.
+    const range = s.match(/(-?\d+(?:\.\d+)?)\s*[-–]\s*(-?\d+(?:\.\d+)?)/);
+    if (range) return Math.max(Number(range[1]), Number(range[2]));
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  // Extract the primitive value from a "value-envelope" object, so
+  // downstream string / number logic (parseTempRange, thresholdClass,
+  // weatherEmoji) doesn't have to duplicate the fallback ladder.
+  // Returns the value untouched if it's already primitive.
+  #unwrapValue(v) {
+    if (v == null) return null;
+    if (typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.length ? v[0] : null;
+    return v.value
+        ?? v.max
+        ?? v.temperature
+        ?? v.temp
+        ?? v.range
+        ?? v.text
+        ?? v.label
+        ?? v.title
+        ?? v.name
+        ?? v.description
+        ?? null;
+  }
+
+  // Pull a weather-description string out of an object (if any) so
+  // per-day cells can render a matching rain / sun / storm emoji even
+  // when the top-level column is a temperature range.
+  #extractWeather(v) {
+    if (v == null) return "";
+    if (typeof v === "string") return v;
+    if (typeof v === "object") {
+      return String(
+        v.weather
+        ?? v.wx
+        ?? v.description
+        ?? v.condition
+        ?? v.summary
+        ?? v.wdesc
+        ?? ""
+      );
+    }
+    return "";
+  }
+
+  // Temperature-based fallback emoji (used when no weather text field
+  // is present in the response).
+  #tempEmoji(t) {
+    if (!Number.isFinite(t)) return "🏙️";
+    if (t >= 45) return "🥵";
+    if (t >= 40) return "🔥";
+    if (t >= 35) return "☀️";
+    if (t >= 25) return "🌤️";
+    if (t >= 15) return "🌥️";
+    if (t >= 5)  return "🌦️";
+    return "❄️";
+  }
+
+  // Weather-description emoji (preferred over temp emoji when the
+  // response includes a `weather` / `wx` string).  Accepts either a
+  // plain string or an object envelope — extracts the weather field
+  // from the envelope before pattern matching.
+  #weatherEmoji(text) {
+    if (text == null) return "";
+    if (typeof text === "object") text = this.#extractWeather(text);
+    const s = String(text).toLowerCase();
+    if (!s.trim()) return "";
+    if (/thunder|lightning/.test(s)) return "⛈️";
+    if (/rain|shower|drizzle/.test(s)) return "🌧️";
+    if (/snow|blizzard/.test(s)) return "❄️";
+    if (/fog|mist/.test(s)) return "🌫️";
+    if (/dust|sandstorm/.test(s)) return "🌪️";
+    if (/partl?y.*cloud|part.*cloud/.test(s)) return "⛅";
+    if (/overcast|cloud/.test(s)) return "☁️";
+    if (/wind|gust/.test(s)) return "💨";
+    if (/clear|sunny|dry|fair/.test(s)) return "☀️";
+    return "";
+  }
+
+  // Small legend strip explaining the threshold color chips.
+  #renderExtremeLegend() {
+    return `
+      <div class="wrp-pmd-x-legend" title="Documented meteorological thresholds">
+        <span class="wrp-pmd-x-legend-swatch wrp-pmd-x-extreme-hot">≥45°</span>
+        <span class="wrp-pmd-x-legend-swatch wrp-pmd-x-very-hot">≥40°</span>
+        <span class="wrp-pmd-x-legend-swatch wrp-pmd-x-hot">≥35°</span>
+        <span class="wrp-pmd-x-legend-swatch wrp-pmd-x-humid">RH ≥90%</span>
+        <span class="wrp-pmd-x-legend-swatch wrp-pmd-x-dry">RH ≤20%</span>
+      </div>
+    `;
+  }
+
+  // Neat structured-table fallback for datasets that don't map to a
+  // known schema.  Discovers every property key across the sample,
+  // renders every row as a table with those keys as columns.  Temp /
+  // humidity / wind / rain-looking columns get threshold-coloured
+  // backgrounds; level / status / alert / severity-looking columns
+  // get coloured severity pills.  Used by both the panel section and
+  // the sub-view so the fallback presentation stays consistent.
+  #buildFallbackTable(source, opts = {}) {
+    const maxRows = opts.maxRows ?? 40;
+    if (!Array.isArray(source) || !source.length) return "";
+
+    // Union of every property across up to 40 rows so the header
+    // matches what's actually present.  Skip obvious internal ids.
+    const allKeys = new Map();  // preserve insertion order
+    for (const r of source.slice(0, 40)) {
+      if (r && typeof r === "object") {
+        for (const k of Object.keys(r)) {
+          if (/^(id|pk|_.+)$/i.test(k)) continue;
+          if (!allKeys.has(k)) allKeys.set(k, this.#prettyLabel(k));
+        }
+      }
+    }
+    const cols = Array.from(allKeys.entries()).map(([key, label]) => ({ key, label }));
+    if (!cols.length) return "";
+
+    // Chip / threshold detection uses the pretty label so the same
+    // regex works whether the raw key is "Max Temp C" or "max_temp_c".
+    const isChipCol = (label) => this.#reportLooksLikeChipField(label)
+      || /^level$|^status$|^alert$|^severity$/i.test(String(label).replace(/\s+/g, ""));
+
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const rows = source.slice(0, maxRows).map((r) => {
+      if (!r || typeof r !== "object") return "";
+      const cells = cols.map((col) => {
+        const raw = r[col.key];
+        const text = this.#reportFormatValue(raw);
+        if (raw == null || raw === "") {
+          return `<td><span class="wrp-pmd-cell-empty">—</span></td>`;
+        }
+        // Chip render (severity/level/status pill)
+        if (isChipCol(col.label)) {
+          const lvl = String(text).toLowerCase()
+            .replace(/\bexceptionally\s+high\b/g, "ex-high")
+            .replace(/\bex[_\s-]*high\b/g, "ex-high")
+            .replace(/\bvery\s+high\b/g, "very-high")
+            .replace(/[\s_]+/g, "-");
+          return `<td><span class="wrp-pmd-level-chip wrp-pmd-level-chip--${escapeHtml(lvl)}">${escapeHtml(text)}</span></td>`;
+        }
+        // Threshold-coloured background for numeric metric cells.
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        return `<td${cls ? ` class="${cls}"` : ""}>${escapeHtml(text)}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    }).filter(Boolean).join("");
+
+    return `
+      <table class="wrp-pmd-fc-table wrp-pmd-fc-table--full">
+        <thead><tr>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${this.#renderExtremeLegend()}
+    `;
+  }
+
+  // Utility: dig an array of item objects out of any of the common
+  // envelopes upstream APIs use (raw array, {items}, {data}, ...).
+  #extractItemArray(data, keys = []) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return [];
+    for (const k of keys) {
+      if (Array.isArray(data[k])) return data[k];
+    }
+    return [];
+  }
+
+  // camelCase / snake_case → Title Case, e.g. `max_temp_c` → `Max Temp C`.
+  #prettyLabel(key) {
+    return String(key)
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/_/g, " ")
+      .trim()
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
+  // Highlight PMD hazard keywords in a plain-text narrative.  Called
+  // once per outlook day.  Regex operates on already-escaped text, so
+  // no XSS risk.  Word-boundary anchors + <mark> insertion means
+  // subsequent matches never mis-fire inside earlier marks (the
+  // inserted `<mark class="...">` uses non-word characters).
+  #highlightHazards(text) {
+    if (typeof text !== "string" || !text) return "";
+    const escaped = escapeHtml(text);
+    const pattern = /\b(heavy|very heavy|intense|severe|extreme|heatwave|heat wave|rain(?:s|fall)?|shower(?:s)?|drizzle|precipitation|thunder\w*|lightning|thunderstorm(?:s)?|storm(?:s)?|windstorm(?:s)?|dust storm(?:s)?|gust(?:s|y)?|winds?|flood(?:s|ing)?|flash flood(?:s)?|warning(?:s)?|advisor(?:y|ies)|alert(?:s)?|fog|haze|dust|snow(?:fall)?)\b/gi;
+    return escaped.replace(pattern, (m) => `<mark class="wrp-pmd-hz">${m}</mark>`);
+  }
+
+  // §3.4 — drill-down button strip.  Each button swaps the entire
+  // PMD tab body for a dedicated sub-view (see #renderPmdSubView).
+  // Uses the delegated PMD click handler (data-pmd-action="drill").
+  #renderDrillStrip() {
+    const btn = (view, label, icon) => `
+      <button class="wrp-pmd-drill-btn" type="button"
+              data-pmd-action="drill" data-pmd-view="${escapeHtml(view)}">
+        <i data-lucide="${icon}" class="wrp-pmd-drill-icon"></i>
+        <span>${escapeHtml(label)}</span>
+      </button>
+    `;
+    return `
+      <div class="wrp-pmd-drill-strip" role="group" aria-label="PMD Data Panels">
+        ${btn("forecast",  "Daily Forecast",   "cloud-sun-rain")}
+        ${btn("rainfall",  "Rainfall Reports", "cloud-rain")}
+        ${btn("max-temps", "Max Temp Records", "thermometer-sun")}
+        ${btn("releases",  "Press Releases",   "megaphone")}
+        ${btn("outlook",   "Weekly Outlook",   "calendar-days")}
+        ${btn("bulletins", "FFD Bulletins",    "file-warning")}
+      </div>
+    `;
+  }
+
+  // Sub-view metadata table.  Each entry supplies the header title,
+  // source attribution (per §3.4), the Lucide icon for the crown, and
+  // the class-method name that builds the body.
+  #pmdSubViewMeta(view) {
+    switch (view) {
+      case "forecast":  return { title: "NWFC Daily Forecast",       source: "PMD NWFC · weather.gov.pk",  icon: "cloud-sun-rain" };
+      case "rainfall":  return { title: "NWFC Daily Rainfall Reports", source: "PMD NWFC · weather.gov.pk", icon: "cloud-rain" };
+      case "max-temps": return { title: "Max Temp Records",           source: "PMD NWFC · weather.gov.pk", icon: "thermometer-sun" };
+      case "releases":  return { title: "NWFC Press Releases",        source: "PMD NWFC · weather.gov.pk", icon: "megaphone" };
+      case "outlook":   return { title: "Weekly Outlook",             source: "PMD NWFC · weather.gov.pk", icon: "calendar-days" };
+      case "bulletins": return { title: "FFD Bulletins",              source: "FFD · ffd.pmd.gov.pk",       icon: "file-warning" };
+      default: return null;
+    }
+  }
+
+  // §3.4 sub-view render — full-content swap.  Header carries a
+  // ← Back button, the title, and the source attribution; body is
+  // the view's bespoke renderer.  Data is pulled from the
+  // #pmdRawData snapshot so this is always instant (no re-fetch);
+  // if the endpoint failed at render time the sub-view surfaces
+  // the error inline instead of blanking.
+  #renderPmdSubView(view) {
+    const meta = this.#pmdSubViewMeta(view);
+    if (!meta) { this.#pmdView = "overview"; this.#renderPmdOverviewTab(); return; }
+    this.#pmdView = view;
+
+    let body = "";
+    try {
+      switch (view) {
+        case "forecast":  body = this.#buildForecastFullView();  break;
+        case "rainfall":  body = this.#buildRainfallFullView();  break;
+        case "max-temps": body = this.#buildMaxTempsFullView();  break;
+        case "releases":  body = this.#buildReleasesFullView();  break;
+        case "outlook":   body = this.#buildOutlookFullView();   break;
+        case "bulletins": body = this.#buildBulletinsFullView(); break;
+      }
+    } catch (err) {
+      body = `<div class="wrp-pmd-subview-error">Error: ${escapeHtml(String(err?.message || err))}</div>`;
+    }
+
+    this.#pmdContentEl.innerHTML = `
+      <div class="wrp-fixed">
+        <div class="wrp-pmd-subview-head">
+          <button class="wrp-pmd-back-btn" type="button" data-pmd-action="back" title="Back to overview">
+            <i data-lucide="arrow-left"></i>
+            <span>Back</span>
+          </button>
+          <div class="wrp-pmd-subview-titlewrap">
+            <i data-lucide="${meta.icon}" class="wrp-pmd-subview-icon"></i>
+            <h3 class="wrp-pmd-subview-title">${escapeHtml(meta.title)}</h3>
+          </div>
+          <div class="wrp-pmd-subview-source">${escapeHtml(meta.source)}</div>
+        </div>
+      </div>
+      <div class="wrp-scroll wrp-pmd-subview-body">
+        ${body}
+      </div>
+    `;
+    this.#activeLayersEl = null;
+    if (this.#footerEl) {
+      this.#footerEl.innerHTML = `${escapeHtml(meta.title)} · ${escapeHtml(meta.source)}`;
+      this.#footerEl.classList.add("is-visible");
+    }
+    if (window.lucide?.createIcons) { try { window.lucide.createIcons(); } catch {} }
+  }
+
+  // ---- Sub-view body builders (all pull from #pmdRawData snapshot) ----
+
+  #buildForecastFullView() {
+    const cities = this.#extractItemArray(this.#pmdRawData?.nwfcFc,
+      ["cities", "forecast", "items", "data", "stations", "records", "results"]);
+    if (!cities.length) return `<p class="wrp-pmd-empty">No forecast published.</p>`;
+
+    const { cols, nameKeys } = this.#discoverForecastColumns(cities);
+    if (!cols.length) return `<p class="wrp-pmd-empty">Response has no discoverable columns.</p>`;
+
+    const tempCol = cols.find((x) => /max|temp|°c/i.test(x.label)) || null;
+    const wxCol   = cols.find((x) => /weather|wx|condition/i.test(x.label)) || null;
+    const isDayCol = (label) =>
+      /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(String(label));
+
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const rows = cities.map((c) => {
+      if (!c || typeof c !== "object") return "";
+      const nameKey = nameKeys.find((k) => c[k] != null && c[k] !== "");
+      const name = nameKey ? c[nameKey] : "—";
+      const wxRaw   = wxCol ? c[wxCol.key] : null;
+      const tempRaw = tempCol ? c[tempCol.key] : null;
+      const wxStr   = this.#extractWeather(wxRaw) || this.#extractWeather(tempRaw);
+      const tempVal = this.#parseTempRange(tempRaw);
+      const emoji   = this.#weatherEmoji(wxStr) || this.#tempEmoji(tempVal);
+      const cells = cols.map((col) => {
+        const raw = c[col.key];
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        let dayEmoji = "";
+        if (isDayCol(col.label)) {
+          const dayWx = this.#extractWeather(raw);
+          dayEmoji = this.#weatherEmoji(dayWx) || this.#tempEmoji(this.#parseTempRange(raw));
+        }
+        const content = this.#formatLayerCell(raw, {});
+        const inner = dayEmoji
+          ? `<span class="wrp-pmd-cell-emoji" aria-hidden="true">${dayEmoji}</span> ${content}`
+          : content;
+        return `<td${cls ? ` class="${cls}"` : ""}>${inner}</td>`;
+      }).join("");
+      return `<tr>
+        <td class="wrp-pmd-fc-time">
+          <span class="wrp-pmd-city-emoji" aria-hidden="true">${emoji}</span>
+          <span class="wrp-pmd-city-name">${escapeHtml(String(name))}</span>
+        </td>
+        ${cells}
+      </tr>`;
+    }).filter(Boolean).join("");
+
+    return `
+      <table class="wrp-pmd-fc-table wrp-pmd-fc-table--full">
+        <thead><tr><th>City</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${this.#renderExtremeLegend()}
+    `;
+  }
+
+  #buildRainfallFullView() {
+    const { rainfall } = this.#splitReportItems(this.#pmdRawData?.reports);
+    if (!rainfall.length) return `<p class="wrp-pmd-empty">No rainfall reports.</p>`;
+    return rainfall.map((it) => this.#reportLinkRow(it, "report")).join("");
+  }
+
+  // §4 "Max Temp Records" panel — feeds from `/api/pmd/nwfc/max-temperatures/`.
+  // Rebuilt on top of the same dynamic-column discovery + emoji + threshold
+  // pipeline as the NWFC Daily Forecast sub-view so the two surfaces read
+  // as one visual system.  Records sorted hottest-first so the extreme heat
+  // sits at the top of the ranking.
+  #buildMaxTempsFullView() {
+    // Deep extraction — the endpoint sometimes nests the row array under
+    // `provinces` / `by_station` envelopes rather than a top-level `items`.
+    let source = this.#extractItemArray(this.#pmdRawData?.maxTemps,
+      ["items", "data", "stations", "records", "results", "max_temperatures", "max_temps", "list", "rows"]);
+    if (!source.length) source = this.#deepFindItemArray(this.#pmdRawData?.maxTemps);
+    if (!source.length) {
+      return `<p class="wrp-pmd-empty">No records available.</p>`;
+    }
+
+    const { cols, nameKeys } = this.#discoverMaxTempsColumns(source);
+
+    // If nothing recognisable, fall through to the shared table
+    // fallback so the operator sees a proper columned view (with
+    // threshold highlighting and severity chips) instead of the ugly
+    // key: value · key: value dump we used to render.
+    if (!cols.length) {
+      return `
+        <div class="wrp-pmd-subview-issued">
+          ${source.length} record${source.length === 1 ? "" : "s"} returned; standard schema didn't match — every field shown below with automatic column discovery.
+        </div>
+        ${this.#buildFallbackTable(source, { maxRows: source.length })}
+      `;
+    }
+
+    // Pick the temperature column — used both for the row-level emoji
+    // chip and for sorting hottest → coolest.
+    const tempCol = cols.find((x) => /max|temp|°c|record/i.test(x.label)) || null;
+
+    // Sort by max temp desc when a temp column is present so the ranking
+    // reads as "hottest records first" (matches the NWFC page ordering).
+    let ranked = source;
+    if (tempCol) {
+      ranked = [...source].sort((a, b) => {
+        const av = this.#parseTempRange(a?.[tempCol.key]);
+        const bv = this.#parseTempRange(b?.[tempCol.key]);
+        if (!Number.isFinite(bv)) return -1;
+        if (!Number.isFinite(av)) return 1;
+        return bv - av;
+      });
+    }
+
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const rows = ranked.map((r) => {
+      if (!r || typeof r !== "object") return "";
+      const nameKey = nameKeys.find((k) => r[k] != null && r[k] !== "");
+      const name = nameKey ? this.#unwrapValue(r[nameKey]) ?? r[nameKey] : "—";
+
+      // Row-level station emoji comes from the temperature column
+      // (weather description isn't part of a max-record row).
+      const tempRaw = tempCol ? r[tempCol.key] : null;
+      const tempVal = this.#parseTempRange(tempRaw);
+      const emoji   = this.#tempEmoji(tempVal);
+
+      const cells = cols.map((col) => {
+        const raw = r[col.key];
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        const content = this.#formatLayerCell(raw, {});
+        return `<td${cls ? ` class="${cls}"` : ""}>${content}</td>`;
+      }).join("");
+
+      return `<tr>
+        <td class="wrp-pmd-fc-time">
+          <span class="wrp-pmd-city-emoji" aria-hidden="true">${emoji}</span>
+          <span class="wrp-pmd-city-name">${escapeHtml(String(name))}</span>
+        </td>
+        ${cells}
+      </tr>`;
+    }).filter(Boolean).join("");
+
+    return `
+      <div class="wrp-pmd-subview-issued">
+        Source · <code>/api/pmd/nwfc/max-temperatures/</code> · ${ranked.length} record${ranked.length === 1 ? "" : "s"}${tempCol ? ` · sorted hottest first` : ""}.
+      </div>
+      <table class="wrp-pmd-fc-table wrp-pmd-fc-table--full">
+        <thead><tr><th>Station</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${this.#renderExtremeLegend()}
+    `;
+  }
+
+  // Field-discovery for `/api/pmd/nwfc/max-temperatures/`.  Priority
+  // ladder places record temperature first, then date/year, then any
+  // useful contextual field the response happens to carry (province,
+  // elevation, ...).  Fields we don't recognise fill the remaining
+  // slots via #prettyLabel so the operator still sees them.
+  // Normalise a field name for case/space/underscore-insensitive matching.
+  // "Max Temp C" / "max_temp_c" / "MaxTempC" all collapse to "maxtempc"
+  // so the same probe entry covers every casing/separator convention
+  // scrapers use.  Also strips a trailing "°C" / "°F" / "%" unit so a
+  // header like "Max Temp °C" still matches a probe of "max_temp_c".
+  #normFieldKey(k) {
+    return String(k)
+      .toLowerCase()
+      .replace(/[\s_\-.]+/g, "")
+      .replace(/°[cf]$|percent$|%$/g, "");
+  }
+
+  #discoverMaxTempsColumns(items) {
+    const nameKeys = [
+      "name", "station", "station_name", "stationname",
+      "city", "location", "site", "place", "observatory",
+    ];
+    const priority = [
+      { label: "Max °C",   keys: ["max_temp_c", "temperature", "max_temperature", "max_temp",
+                                  "maxTemp", "max", "record_max", "record_temp", "record",
+                                  "ever_max", "all_time_max", "all_time", "historical_max",
+                                  "absolute_max", "absolute_high", "hottest", "peak", "peak_temp",
+                                  "high", "temp", "tmax", "tmax_c", "max_c", "value"] },
+      { label: "Date",     keys: ["date", "recorded_on", "record_date", "when", "at", "observed_on"] },
+      { label: "Year",     keys: ["year", "year_of_record", "recorded_year", "record_year"] },
+      { label: "Province", keys: ["province", "state", "region", "district"] },
+      { label: "Elev m",   keys: ["elevation", "altitude", "elev", "elev_m", "altitude_m"] },
+    ];
+    const MAX_COLS = 5;
+
+    // Build a normalised → original-key map across the sample so probes
+    // stay agnostic to the scraper's casing/separator choices.
+    const fieldsMap = new Map();
+    for (const c of items.slice(0, 40)) {
+      if (c && typeof c === "object") {
+        for (const k of Object.keys(c)) {
+          const n = this.#normFieldKey(k);
+          if (!fieldsMap.has(n)) fieldsMap.set(n, k);
+        }
+      }
+    }
+
+    const usedKeys = new Set();
+    // Reserve the actual name-column keys so they don't fill leftover slots.
+    const discoveredNameKeys = [];
+    for (const nk of nameKeys) {
+      const found = fieldsMap.get(this.#normFieldKey(nk));
+      if (found && !discoveredNameKeys.includes(found)) {
+        discoveredNameKeys.push(found);
+        usedKeys.add(found);
+      }
+    }
+    if (!discoveredNameKeys.length) discoveredNameKeys.push(...nameKeys);
+
+    const cols = [];
+    for (const p of priority) {
+      if (cols.length >= MAX_COLS) break;
+      let foundKey = null;
+      for (const probe of p.keys) {
+        const actual = fieldsMap.get(this.#normFieldKey(probe));
+        if (actual && !usedKeys.has(actual)) { foundKey = actual; break; }
+      }
+      if (foundKey) { cols.push({ label: p.label, key: foundKey }); usedKeys.add(foundKey); }
+    }
+    if (cols.length < MAX_COLS) {
+      for (const originalKey of fieldsMap.values()) {
+        if (cols.length >= MAX_COLS) break;
+        if (usedKeys.has(originalKey)) continue;
+        if (/^(id|pk|_.+)$/i.test(originalKey)) continue;
+        cols.push({ label: this.#prettyLabel(originalKey), key: originalKey });
+        usedKeys.add(originalKey);
+      }
+    }
+    return { cols, nameKeys: discoveredNameKeys };
+  }
+
+  // Walk an object one level deep looking for the first array of
+  // objects.  Used when the standard shallow key list misses because
+  // the endpoint wraps the row list under a category envelope (e.g.
+  // `{by_province: {sindh: [...], punjab: [...]}}`).
+  #deepFindItemArray(data) {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return [];
+    // Level 1 — direct properties.
+    for (const v of Object.values(data)) {
+      if (Array.isArray(v) && v.length && v.some((x) => x && typeof x === "object")) {
+        return v.filter((x) => x && typeof x === "object");
+      }
+    }
+    // Level 2 — nested one deeper.  Flatten arrays and array-valued
+    // properties as we go so category maps also unfold.
+    const flat = [];
+    for (const v of Object.values(data)) {
+      if (!v || typeof v !== "object") continue;
+      if (Array.isArray(v)) {
+        for (const child of v) {
+          if (child && typeof child === "object") {
+            const inner = this.#deepFindItemArray(child);
+            flat.push(...inner);
+          }
+        }
+        continue;
+      }
+      for (const nested of Object.values(v)) {
+        if (Array.isArray(nested)) {
+          for (const item of nested) {
+            if (item && typeof item === "object") flat.push(item);
+          }
+        }
+      }
+    }
+    return flat;
+  }
+
+  #buildReleasesFullView() {
+    const { press } = this.#splitReportItems(this.#pmdRawData?.reports);
+    if (!press.length) return `<p class="wrp-pmd-empty">No recent press releases.</p>`;
+    return press.map((it, idx) => {
+      const url = it?.url || it?.download_url || it?.link || "";
+      const canRead = typeof url === "string" && url.startsWith("https://weather.gov.pk/");
+      const readId = `wrp-sv-pr-${idx}-${Math.random().toString(36).slice(2, 7)}`;
+      const linkRow = this.#reportLinkRow(it, "release", canRead ? {
+        readAttr: `data-pmd-action="read-pr" data-pmd-pr-url="${escapeHtml(url)}" data-pmd-pr-target="${readId}"`,
+      } : null);
+      return `${linkRow}<div class="wrp-pmd-read-panel" id="${readId}" hidden></div>`;
+    }).join("");
+  }
+
+  #buildOutlookFullView() {
+    const data = this.#pmdRawData?.outlook || {};
+    const days = Array.isArray(data.days) ? data.days : [];
+    if (!days.length) return `<p class="wrp-pmd-empty">No outlook published.</p>`;
+
+    const issued = data.issue_date ? `<div class="wrp-pmd-subview-issued">Issued: ${escapeHtml(String(data.issue_date))}</div>` : "";
+    const items = days.map((d) => `
+      <li class="wrp-pmd-outlook-item wrp-pmd-outlook-item--full">
+        <div class="wrp-pmd-outlook-date">${escapeHtml(String(d?.date || "—"))}</div>
+        <div class="wrp-pmd-outlook-body">${this.#highlightHazards(String(d?.outlook || ""))}</div>
+      </li>
+    `).join("");
+    return `${issued}<ul class="wrp-pmd-outlook">${items}</ul>`;
+  }
+
+  #buildBulletinsFullView() {
+    const items = this.#pmdRawData?.bulletins?.items || [];
+    if (!items.length) return `<p class="wrp-pmd-empty">No bulletins.</p>`;
+    return items.map((it) => this.#reportLinkRow(it, (it?.kind || "").toLowerCase() === "advisory" ? "release" : "bulletin")).join("");
+  }
+
+  // Bottom-of-tab chrome strip with two download buttons.  Uses the
+  // #pmdRawData snapshot cached during the last render so a click is
+  // instant and doesn't re-fetch.
+  #renderDownloadStrip() {
+    return `
+      <div class="wrp-pmd-download-strip">
+        <div class="wrp-pmd-download-label">Export Situational Report</div>
+        <div class="wrp-pmd-download-buttons">
+          <button class="wrp-pmd-download-btn" type="button"
+                  data-pmd-action="download-html"
+                  title="Full NCOP-themed HTML report with analysis and active layers">
+            <i data-lucide="file-code-2"></i>
+            <span>HTML</span>
+          </button>
+          <button class="wrp-pmd-download-btn" type="button"
+                  data-pmd-action="download-csv"
+                  title="Excel-friendly CSV with every section">
+            <i data-lucide="sheet"></i>
+            <span>CSV</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // -------------------------------------------------------------- PMD click delegation
+  async #onPmdClick(ev) {
+    const target = ev.target.closest("[data-pmd-action]");
+    if (!target) return;
+    const action = target.getAttribute("data-pmd-action");
+
+    // §3.4 drill-down navigation
+    if (action === "drill") {
+      ev.preventDefault();
+      const view = target.getAttribute("data-pmd-view");
+      if (view) this.#renderPmdSubView(view);
+      return;
+    }
+    if (action === "back") {
+      ev.preventDefault();
+      this.#pmdView = "overview";
+      // Force overview to re-render (data still cached, so this is instant).
+      this.#pmdLoaded = false;
+      this.#renderPmdOverviewTab();
+      return;
+    }
+
+    if (action === "read-pr") {
+      ev.preventDefault();
+      const url = target.getAttribute("data-pmd-pr-url");
+      const targetId = target.getAttribute("data-pmd-pr-target");
+      if (!url || !targetId) return;
+      const panel = document.getElementById(targetId);
+      if (!panel) return;
+      // Toggle collapse if already open
+      if (!panel.hasAttribute("hidden") && panel.dataset.loaded === "1") {
+        panel.hidden = true;
+        target.querySelector("span").textContent = "Read";
+        return;
+      }
+      if (panel.dataset.loaded === "1") {
+        panel.hidden = false;
+        target.querySelector("span").textContent = "Hide";
+        return;
+      }
+      // Fresh load
+      target.disabled = true;
+      target.querySelector("span").textContent = "Loading…";
+      panel.hidden = false;
+      panel.innerHTML = `<div class="wrp-pmd-read-loading">
+        <div class="wrp-loader" aria-hidden="true"></div>
+        <span>Extracting PDF text…</span>
+      </div>`;
+      try {
+        const data = await getNwfcPressReleaseText(url);
+        const text = typeof data === "string" ? data
+                   : typeof data?.text === "string" ? data.text
+                   : typeof data?.content === "string" ? data.content
+                   : "";
+        const err = data?.error;
+        if (err) {
+          panel.innerHTML = `<div class="wrp-pmd-read-error">${escapeHtml(String(err))}</div>`;
+        } else if (!text.trim()) {
+          panel.innerHTML = `<div class="wrp-pmd-read-error">Empty response.</div>`;
+        } else {
+          panel.innerHTML = `<pre class="wrp-pmd-read-text">${escapeHtml(text)}</pre>`;
+        }
+        panel.dataset.loaded = "1";
+        target.disabled = false;
+        target.querySelector("span").textContent = "Hide";
+      } catch (e) {
+        panel.innerHTML = `<div class="wrp-pmd-read-error">Failed: ${escapeHtml(String(e?.message || e))}</div>`;
+        target.disabled = false;
+        target.querySelector("span").textContent = "Read";
+      }
+      return;
+    }
+
+    if (action === "download-html") {
+      this.#triggerDownload(this.#buildHtmlReport(), `pmd-report-${this.#stampFilename()}.html`, "text/html;charset=utf-8");
+      return;
+    }
+    if (action === "download-csv") {
+      // UTF-8 BOM so Excel renders °/³/em-dash correctly.
+      this.#triggerDownload("﻿" + this.#buildCsvReport(), `pmd-report-${this.#stampFilename()}.csv`, "text/csv;charset=utf-8");
+      return;
+    }
+  }
+
+  #stampFilename() {
+    // Avoid Date.now-only naming so multiple downloads in a session
+    // stay distinguishable; use HH-MM-SS component.
+    try {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    } catch { return "snapshot"; }
+  }
+
+  #triggerDownload(content, filename, mime) {
+    try {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      console.warn("[PMD Report] download failed:", e);
+    }
+  }
+
+  // ---- Export builders (share source: #pmdRawData snapshot) -------------
+  #buildCsvReport() {
+    const raw = this.#pmdRawData || {};
+    const lines = [];
+    const esc = (v) => {
+      if (v == null) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\r\n]/.test(s) ? `"${s}"` : s;
+    };
+    const section = (title, header, rows) => {
+      lines.push(`=== SECTION: ${title} ===`);
+      lines.push(header.join(","));
+      for (const r of rows) lines.push(r.map(esc).join(","));
+      lines.push("");
+    };
+
+    lines.push("=== REPORT ===");
+    lines.push(`Generated,${new Date().toISOString()}`);
+    lines.push(`Source,GCOP PMD Monitor + NWFC + FFD`);
+    lines.push(`Classification,Restricted operational use — verify before operational use`);
+    lines.push("");
+
+    // Weekly Outlook
+    const outlookDays = Array.isArray(raw.outlook?.days) ? raw.outlook.days : [];
+    if (outlookDays.length) {
+      section("Weekly Outlook", ["Date", "Outlook"],
+        outlookDays.map((d) => [d?.date || "", d?.outlook || ""]));
+    }
+
+    // NWFC Daily Forecast
+    // CSV NWFC Daily Forecast — dynamic discovery to match the panel
+    // and the HTML export, and route every value through
+    // #reportFormatValue so object cells become their `.value / .text`
+    // summary rather than "[object Object]".
+    const nwfcCities = this.#extractItemArray(raw.nwfcFc, ["cities", "forecast", "items", "data", "stations", "records", "results"]);
+    if (nwfcCities.length) {
+      const { cols, nameKeys } = this.#discoverForecastColumns(nwfcCities);
+      if (cols.length) {
+        const header = ["City", ...cols.map((c) => c.label)];
+        section("NWFC Daily Forecast", header,
+          nwfcCities.map((c) => {
+            const nameKey = nameKeys.find((k) => c?.[k] != null && c[k] !== "");
+            const name = nameKey ? this.#reportFormatValue(c[nameKey]) : "";
+            return [name, ...cols.map((col) => this.#reportFormatValue(c?.[col.key]))];
+          }));
+      }
+    }
+
+    // FFD Bulletins
+    const bulletins = Array.isArray(raw.bulletins?.items) ? raw.bulletins.items : [];
+    if (bulletins.length) {
+      section("FFD Bulletins", ["Kind", "Title", "Issued", "URL"],
+        bulletins.map((b) => [
+          this.#reportFormatValue(b?.kind),
+          this.#reportFormatValue(b?.title),
+          this.#reportFormatValue(b?.issued),
+          this.#reportFormatValue(b?.download_url),
+        ]));
+    }
+
+    // NWFC Reports (split)
+    const splitReports = this.#splitReportItems(raw.reports);
+    if (splitReports.rainfall.length) {
+      section("NWFC Daily Rainfall Reports", ["Title", "Date", "URL"],
+        splitReports.rainfall.map((r) => [
+          this.#reportFormatValue(r?.title ?? r?.name),
+          this.#reportFormatValue(r?.issued ?? r?.date),
+          this.#reportFormatValue(r?.url ?? r?.download_url),
+        ]));
+    }
+    if (splitReports.press.length) {
+      section("NWFC Press Releases", ["Title", "Date", "URL"],
+        splitReports.press.map((r) => [
+          this.#reportFormatValue(r?.title ?? r?.name),
+          this.#reportFormatValue(r?.issued ?? r?.date),
+          this.#reportFormatValue(r?.url ?? r?.download_url),
+        ]));
+    }
+
+    // Max Temperatures
+    const mtRaw = raw.maxTemps;
+    const mtSource = Array.isArray(mtRaw) ? mtRaw
+      : Array.isArray(mtRaw?.items) ? mtRaw.items
+      : Array.isArray(mtRaw?.data)  ? mtRaw.data
+      : Array.isArray(mtRaw?.stations) ? mtRaw.stations
+      : [];
+    if (mtSource.length) {
+      section("Historical Record Max Temperatures", ["Station", "Max °C", "Date"],
+        mtSource.map((r) => [
+          this.#reportFormatValue(r?.name ?? r?.station ?? r?.city),
+          this.#reportFormatValue(r?.temperature ?? r?.max_temperature ?? r?.max_temp ?? r?.value),
+          this.#reportFormatValue(r?.date ?? r?.recorded_on),
+        ]));
+    }
+
+    return lines.join("\r\n");
+  }
+
+  // Extract a printable plain-text value from anything the endpoints
+  // might return.  Used by both the HTML and CSV exports so nested
+  // objects (`{"value": "24-26"}`, `{"text": "Rain"}`) don't leak as
+  // "[object Object]" and arrays don't leak as "[Object,Object,...]".
+  // Returns UNESCAPED text — the caller is responsible for esc/CSV
+  // quoting because escaping rules differ between the two formats.
+  #reportFormatValue(v) {
+    if (v == null || v === "") return "";
+    if (typeof v === "object") {
+      if (Array.isArray(v)) {
+        // Try to summarise an array of primitives inline; fall back to
+        // "N items" for arrays of objects.
+        if (v.every((x) => x == null || typeof x !== "object")) {
+          const joined = v.filter((x) => x != null && x !== "").join(", ");
+          return joined || `${v.length} items`;
+        }
+        return `${v.length} items`;
+      }
+      // Probe common label fields
+      const s = v.label ?? v.name ?? v.title ?? v.value ?? v.text ?? v.description ?? v.summary;
+      if (s != null && s !== "" && typeof s !== "object") return String(s);
+      try {
+        const j = JSON.stringify(v);
+        return j.length > 80 ? j.slice(0, 77) + "…" : j;
+      } catch { return String(v); }
+    }
+    return String(v);
+  }
+
+  // Chip colour palette for level / status / alert values encountered
+  // across the tracked layers.  Same mapping used by the panel CSS
+  // (.wrp-pmd-level-chip--*) so the report reads as the same alert
+  // system.  Returns "" for values not on any severity ladder.
+  #reportChipStyle(raw) {
+    if (raw == null || raw === "") return "";
+    const v = String(raw).toLowerCase()
+      .replace(/\bexceptionally\s+high\b/g, "ex-high")
+      .replace(/\bex[_\s-]*high\b/g, "ex-high")
+      .replace(/\bvery\s+high\b/g, "very-high")
+      .replace(/[\s_]+/g, "-");
+    const palette = {
+      // PMD Monitor warning colour names
+      red:          "background:#dc2626;color:#ffffff",
+      orange:       "background:#f97316;color:#ffffff",
+      yellow:       "background:#eab308;color:#1a1a1a",
+      blue:         "background:#3b82f6;color:#ffffff",
+      gust:         "background:#7c3aed;color:#ffffff",
+      thunderstorm: "background:#7c3aed;color:#ffffff",
+      // FFD flood classification
+      normal:       "background:#16a34a;color:#ffffff",
+      low:          "background:#0891b2;color:#ffffff",
+      medium:       "background:#eab308;color:#1a1a1a",
+      high:         "background:#f97316;color:#ffffff",
+      "very-high":  "background:#dc2626;color:#ffffff",
+      "ex-high":    "background:#6f42c1;color:#ffffff",
+      // GLOF alert-label ladder
+      watch:        "background:#facc15;color:#1a1a1a",
+      warning:      "background:#f97316;color:#ffffff",
+      emergency:    "background:#dc2626;color:#ffffff",
+      // Connectivity states (neutral)
+      ok:            "background:#e2e8f0;color:#0f172a",
+      offline:       "background:#94a3b8;color:#ffffff",
+      "sensor-fault":"background:#f59e0b;color:#1a1a1a",
+    };
+    return palette[v] || "";
+  }
+
+  // Wrap a table in a scrollable container with a sticky header so the
+  // exported HTML has one scrollbar per section rather than one giant
+  // document scroll.  `maxHeight` caps the visible viewport per table;
+  // rows beyond it scroll inside their own frame.
+  #reportScrollWrap(tableHtml, maxHeight = 420) {
+    return `
+      <div class="scroll-wrap" style="max-height:${maxHeight}px;overflow:auto;border:1px solid var(--line);border-radius:4px;margin:8px 0;background:var(--paper)">
+        ${tableHtml}
+      </div>
+    `;
+  }
+
+  // Detect whether a column looks like a "chip"-styled severity /
+  // status / alert field so we can apply the coloured pill even when
+  // the cell comes from a source that didn't declare a chip in cfg.
+  #reportLooksLikeChipField(label) {
+    return /^(level|status|alert|alert_label|connectivity|state|severity)$/i.test(
+      String(label).replace(/\s+/g, "_"));
+  }
+
+  // Inline-style palette mirroring the panel's threshold classes
+  // (see _weather-report.css .wrp-pmd-x-*).  Colours are tuned for a
+  // WHITE background — the HTML export is a standalone doc, so it
+  // can't share the dark-theme stylesheet.  Returned string is a
+  // partial CSS declaration list ready to drop into a `style=""`.
+  #reportThresholdStyle(cls) {
+    switch (cls) {
+      case "wrp-pmd-x-extreme-hot": return "background:#7f1d1d;color:#ffffff;font-weight:700";
+      case "wrp-pmd-x-very-hot":    return "background:#dc2626;color:#ffffff;font-weight:700";
+      case "wrp-pmd-x-hot":         return "background:#f97316;color:#ffffff;font-weight:600";
+      case "wrp-pmd-x-cold":        return "background:#93c5fd;color:#111827;font-weight:600";
+      case "wrp-pmd-x-freezing":    return "background:#3b82f6;color:#ffffff;font-weight:700";
+      case "wrp-pmd-x-humid":       return "background:#67e8f9;color:#111827;font-weight:600";
+      case "wrp-pmd-x-dry":         return "background:#fde68a;color:#111827;font-weight:600";
+      case "wrp-pmd-x-strong-wind": return "background:#a78bfa;color:#ffffff;font-weight:700";
+      case "wrp-pmd-x-mod-wind":    return "background:#c4b5fd;color:#111827";
+      case "wrp-pmd-x-heavy-rain":  return "background:#06b6d4;color:#ffffff;font-weight:700";
+      case "wrp-pmd-x-mod-rain":    return "background:#67e8f9;color:#111827";
+      default: return "";
+    }
+  }
+
+  // ============================================================
+  // Full-fledged NCOP-themed Situational Report (HTML export)
+  // ------------------------------------------------------------
+  // Consumes:
+  //   - Every cached endpoint in #pmdRawData (Weekly Outlook, NWFC
+  //     Forecast, FFD Bulletins, Rainfall Reports, Press Releases,
+  //     Max Temp records, PMD Public Forecast).
+  //   - Every currently-toggled tracked layer (§7 of the API doc —
+  //     FFD waterlevels / rivers, PMD Monitor stations / warnings /
+  //     monsoon / GLOF / lightning / city forecast / glacier lakes,
+  //     NWFC observations) read straight off the map so the report
+  //     mirrors the operator's live situational picture.
+  //
+  // For every section the report also generates a small analytical
+  // block: HOTSPOTS (what stands out), WHAT THIS MEANS (interpretation),
+  // FORECAST IMPLICATIONS (what to watch), and MITIGATION guidance
+  // (documented NDMA / PMD / IMD protocols keyed to the hazard).
+  // ============================================================
+  #buildHtmlReport() {
+    const raw = this.#pmdRawData || {};
+    const esc = (v) => escapeHtml(v ?? "");
+    const generated = new Date();
+    const genIso = generated.toISOString();
+    const genPretty = generated.toLocaleString("en-GB", {
+      dateStyle: "full", timeStyle: "medium",
+    });
+    const parts = [];
+    const sections = [];  // TOC entries
+    const addSection = (id, title, iconChar, contentHtml) => {
+      sections.push({ id, title });
+      parts.push(`
+        <section id="${id}" class="report-section">
+          <h2><span class="section-icon">${iconChar}</span> ${esc(title)}</h2>
+          ${contentHtml || `<p class="empty">No data available for this section.</p>`}
+        </section>
+      `);
+    };
+
+    // ---- NCOP-themed head + cover -----------------------------------
+    parts.push(`<!DOCTYPE html><html lang="en"><head>
+      <meta charset="utf-8">
+      <title>NCOP Situational Report — ${esc(genIso.slice(0, 10))}</title>
+      <style>
+        :root {
+          --ncop-navy: #0b1e3f;
+          --ncop-navy-2: #14294d;
+          --ncop-blue: #1e40af;
+          --ncop-accent: #0891b2;
+          --ncop-cyan: #06b6d4;
+          --ncop-teal: #14b8a6;
+          --ink: #0f172a;
+          --ink-2: #1e293b;
+          --muted: #64748b;
+          --line: #e2e8f0;
+          --paper: #ffffff;
+          --paper-alt: #f8fafc;
+          --warn: #dc2626;
+          --caution: #f97316;
+          --advisory: #eab308;
+          --safe: #16a34a;
+        }
+        * { box-sizing: border-box; }
+        body {
+          font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+          margin: 0; padding: 0; background: var(--paper-alt); color: var(--ink);
+          line-height: 1.55;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 32px 40px 60px; background: var(--paper); }
+        /* Cover */
+        .cover {
+          margin: -32px -40px 32px;
+          padding: 44px 40px 34px;
+          background: linear-gradient(135deg, var(--ncop-navy) 0%, var(--ncop-blue) 55%, var(--ncop-accent) 100%);
+          color: white;
+          border-bottom: 4px solid var(--ncop-cyan);
+        }
+        .cover .brand {
+          display: inline-block;
+          font-size: 10px; font-weight: 800; letter-spacing: 4px;
+          padding: 5px 12px; background: rgba(255,255,255,0.14);
+          border-radius: 3px; margin-bottom: 12px;
+        }
+        .cover h1 { margin: 4px 0 6px; font-size: 30px; font-weight: 700; letter-spacing: 0.2px; }
+        .cover .sub { font-size: 14px; opacity: 0.85; margin-bottom: 22px; }
+        .cover .meta-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 12px; font-size: 12px;
+          padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.18);
+        }
+        .cover .meta-grid strong { display: block; font-size: 10px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+        .classification { display:inline-block; margin-top:10px; padding: 3px 10px; border: 1px solid rgba(255,255,255,0.35); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+        /* Executive summary */
+        .exec {
+          margin: 18px 0 26px;
+          padding: 18px 20px;
+          background: linear-gradient(135deg, #eef2ff, #f0fdfa);
+          border: 1px solid var(--line);
+          border-left: 4px solid var(--ncop-accent);
+          border-radius: 6px;
+        }
+        .exec h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ncop-blue); }
+        .exec .stat-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+        .exec .stat { padding: 10px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 5px; min-width: 130px; }
+        .exec .stat-value { font-size: 22px; font-weight: 700; color: var(--ncop-navy); }
+        .exec .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+        /* TOC */
+        .toc { margin: 22px 0 26px; padding: 14px 18px; background: var(--paper-alt); border-left: 4px solid var(--ncop-teal); border-radius: 4px; }
+        .toc h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ncop-blue); }
+        .toc ol { margin: 0; padding-left: 20px; font-size: 13px; column-count: 2; column-gap: 24px; }
+        .toc li { margin: 3px 0; break-inside: avoid; }
+        .toc a { color: var(--ncop-blue); text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        /* Section */
+        .report-section { margin: 32px 0; }
+        h2 { margin: 0 0 12px; padding: 8px 14px; background: var(--paper-alt); border-left: 5px solid var(--ncop-accent); color: var(--ncop-navy); font-size: 18px; font-weight: 700; }
+        .section-icon { display: inline-block; margin-right: 6px; font-size: 16px; vertical-align: -2px; }
+        /* Tables */
+        table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
+        th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+        th { background: var(--ncop-navy); color: white; font-weight: 700; letter-spacing: 0.3px; font-size: 11px; text-transform: uppercase; }
+        tr:nth-child(even) td { background: var(--paper-alt); }
+        /* Per-section scroll containers — sticky header stays pinned as
+           rows scroll underneath.  Solid navy background on the header
+           cells is essential so scrolling rows don't bleed through the
+           translucent cell edges. */
+        .scroll-wrap { background: var(--paper); }
+        .scroll-wrap table thead th {
+          background: var(--ncop-navy) !important;
+          box-shadow: 0 1px 0 rgba(0,0,0,0.15);
+        }
+        .scroll-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
+        .scroll-wrap::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; border: 2px solid var(--paper-alt); }
+        .scroll-wrap::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .scroll-wrap::-webkit-scrollbar-track { background: var(--paper-alt); }
+        code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; background: #eef2ff; padding: 1px 5px; border-radius: 3px; color: var(--ncop-blue); }
+        .empty { color: var(--muted); font-style: italic; }
+        /* Analysis block */
+        .analysis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 4px; }
+        .analysis-card { padding: 12px 14px; border: 1px solid var(--line); border-left: 4px solid var(--ncop-teal); background: var(--paper-alt); border-radius: 4px; }
+        .analysis-card.hotspot { border-left-color: var(--warn); background: #fef2f2; }
+        .analysis-card.meaning { border-left-color: var(--ncop-blue); }
+        .analysis-card.forecast { border-left-color: var(--caution); background: #fff7ed; }
+        .analysis-card.mitigation { border-left-color: var(--safe); background: #f0fdf4; }
+        .analysis-card h4 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-2); }
+        .analysis-card ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+        .analysis-card p { margin: 4px 0; font-size: 12px; }
+        /* Layer badges */
+        .layer-badge { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: white; border-radius: 3px; margin-right: 6px; }
+        .layer-badge.ffd { background: #16a34a; }
+        .layer-badge.pmd { background: var(--ncop-blue); }
+        .layer-badge.nwfc { background: var(--ncop-cyan); color: white; }
+        /* Recommendations */
+        .rec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+        .rec { padding: 12px 14px; border-radius: 5px; background: var(--paper); border: 1px solid var(--line); border-top: 3px solid var(--ncop-accent); }
+        .rec h4 { margin: 0 0 6px; font-size: 13px; color: var(--ncop-navy); }
+        .rec ul { margin: 4px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--ink-2); }
+        /* Footer */
+        .footer { margin-top: 44px; padding: 18px 20px; background: var(--ncop-navy); color: rgba(255,255,255,0.85); font-size: 11px; border-radius: 4px; }
+        .footer .cite { color: rgba(255,255,255,0.6); font-family: 'JetBrains Mono', monospace; }
+        @media print {
+          body { background: white; }
+          .container { max-width: none; padding: 20px 24px; }
+          .cover { margin: -20px -24px 24px; }
+          h2 { page-break-after: avoid; }
+          .report-section { page-break-inside: avoid; }
+          .analysis { page-break-inside: avoid; }
+        }
+      </style>
+    </head><body><div class="container">`);
+
+    // ---- Cover ------------------------------------------------------
+    parts.push(`
+      <div class="cover">
+        <div class="brand">NCOP · NDMA</div>
+        <h1>Pakistan Meteorological Situational Report</h1>
+        <div class="sub">Consolidated feeds from PMD Monitor, PMD NWFC, and FFD (per GCOP integration §7)</div>
+        <div class="meta-grid">
+          <div><strong>Generated</strong>${esc(genPretty)}</div>
+          <div><strong>ISO Timestamp</strong>${esc(genIso)}</div>
+          <div><strong>Prepared By</strong>NCOP Weather Report · Operator Console</div>
+        </div>
+        <div class="classification">Restricted operational use — verify before dispatch</div>
+      </div>
+    `);
+
+    // ---- Executive Summary + hotspot rollup -------------------------
+    const summary = this.#reportComputeSummary(raw);
+    parts.push(`
+      <div class="exec">
+        <h3>Executive Summary</h3>
+        <p>${summary.narrative}</p>
+        <div class="stat-strip">
+          <div class="stat"><div class="stat-value">${summary.activeLayers}</div><div class="stat-label">Live Layers</div></div>
+          <div class="stat"><div class="stat-value">${summary.forecastHotCount}</div><div class="stat-label">Cities ≥40 °C Forecast</div></div>
+          <div class="stat"><div class="stat-value">${summary.warningCount}</div><div class="stat-label">Active Warnings</div></div>
+          <div class="stat"><div class="stat-value">${summary.glofAlerts}</div><div class="stat-label">GLOF Alerts</div></div>
+          <div class="stat"><div class="stat-value">${summary.recordExtremes}</div><div class="stat-label">Records ≥45 °C</div></div>
+        </div>
+      </div>
+    `);
+
+    // TOC placeholder — filled after all sections are declared.
+    const tocIdx = parts.length;
+    parts.push("__TOC__");
+
+    // ---- 1. Active Layers Snapshot ----------------------------------
+    const activeSnap = this.#reportActiveLayerSnapshot();
+    if (activeSnap.length) {
+      const blocks = activeSnap.map((s) => this.#reportRenderActiveLayerBlock(s)).join("");
+      addSection("active-layers", "Active Data Layers Snapshot", "🛰️",
+        `<p style="font-size:12px;color:${"var(--muted)"};margin:0 0 12px">
+           Currently-toggled operator layers, sampled at report generation time.
+           Feature counts and hotspots reflect the live map state.
+         </p>${blocks}`);
+    } else {
+      addSection("active-layers", "Active Data Layers Snapshot", "🛰️",
+        `<p class="empty">No PMD Monitor / FFD / NWFC layers are currently toggled on the operator map. Toggle any tracked layer to include its live snapshot in the report.</p>`);
+    }
+
+    // ---- 2. NWFC Weekly Outlook -------------------------------------
+    const outlookDays = Array.isArray(raw.outlook?.days) ? raw.outlook.days : [];
+    if (outlookDays.length) {
+      const rows = outlookDays.map((d) => `
+        <tr>
+          <td style="width:190px;white-space:nowrap"><b>${esc(this.#reportFormatValue(d?.date))}</b></td>
+          <td>${esc(this.#reportFormatValue(d?.outlook))}</td>
+        </tr>
+      `).join("");
+      const analysis = this.#reportAnalyseOutlook(outlookDays);
+      const table = `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>Date</th><th>Outlook</th></tr></thead><tbody>${rows}</tbody></table>`;
+      addSection("outlook", "Weekly Outlook", "📅",
+        `${this.#reportScrollWrap(table, 380)}
+         ${this.#reportAnalysisBlock(analysis)}`);
+    } else {
+      addSection("outlook", "Weekly Outlook", "📅", "");
+    }
+
+    // ---- 3. NWFC Daily Forecast -------------------------------------
+    const nwfcCities = this.#extractItemArray(raw.nwfcFc, ["cities", "forecast", "items", "data", "stations", "records", "results"]);
+    if (nwfcCities.length) {
+      const forecastHtml = this.#reportBuildForecastTable(nwfcCities);
+      const analysis = this.#reportAnalyseForecast(nwfcCities);
+      addSection("nwfc-fc", "NWFC Daily Forecast", "🌤️",
+        `${forecastHtml}${this.#reportAnalysisBlock(analysis)}`);
+    } else {
+      addSection("nwfc-fc", "NWFC Daily Forecast", "🌤️", "");
+    }
+
+    // ---- 4. Historical Record Max Temperatures ----------------------
+    let mtSource = this.#extractItemArray(raw.maxTemps, ["items", "data", "stations", "records", "results", "max_temperatures", "max_temps", "list", "rows"]);
+    if (!mtSource.length) mtSource = this.#deepFindItemArray(raw.maxTemps);
+    if (mtSource.length) {
+      const mtHtml = this.#reportBuildMaxTempsTable(mtSource);
+      const analysis = this.#reportAnalyseMaxTemps(mtSource);
+      addSection("maxtemps", "Historical Record Max Temperatures", "🌡️",
+        `${mtHtml}${this.#reportAnalysisBlock(analysis)}`);
+    } else {
+      addSection("maxtemps", "Historical Record Max Temperatures", "🌡️", "");
+    }
+
+    // ---- 5. FFD Bulletins -------------------------------------------
+    const bulletins = Array.isArray(raw.bulletins?.items) ? raw.bulletins.items : [];
+    if (bulletins.length) {
+      const rows = bulletins.map((b) => `<tr>
+        <td><span class="layer-badge ffd">${esc(this.#reportFormatValue(b?.kind) || "PDF")}</span></td>
+        <td>${esc(this.#reportFormatValue(b?.title))}</td>
+        <td>${esc(this.#reportFormatValue(b?.issued))}</td>
+        <td><a href="${esc(this.#reportFormatValue(b?.download_url))}">Open PDF</a></td>
+      </tr>`).join("");
+      const table = `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>Kind</th><th>Title</th><th>Issued</th><th>Link</th></tr></thead><tbody>${rows}</tbody></table>`;
+      addSection("bulletins", "FFD Bulletins", "📄",
+        `${this.#reportScrollWrap(table, 380)}
+         <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/get-ffd-bulletins/</code> · Flood Forecasting Division · ffd.pmd.gov.pk · showing all ${bulletins.length} items.</p>`);
+    } else {
+      addSection("bulletins", "FFD Bulletins", "📄", "");
+    }
+
+    // ---- 6. Reports split (Rainfall + Press) ------------------------
+    const splitReports = this.#splitReportItems(raw.reports);
+    const renderLinkTable = (rows, badgeClass) => {
+      const trs = rows.map((r) => `<tr>
+        <td><span class="layer-badge ${badgeClass}">PDF</span></td>
+        <td>${esc(this.#reportFormatValue(r?.title ?? r?.name))}</td>
+        <td>${esc(this.#reportFormatValue(r?.issued ?? r?.date))}</td>
+        <td><a href="${esc(this.#reportFormatValue(r?.url ?? r?.download_url))}">Open PDF</a></td>
+      </tr>`).join("");
+      return `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>Type</th><th>Title</th><th>Date</th><th>Link</th></tr></thead><tbody>${trs}</tbody></table>`;
+    };
+    if (splitReports.rainfall.length) {
+      addSection("rainfall", "NWFC Daily Rainfall Reports", "🌧️",
+        `${this.#reportScrollWrap(renderLinkTable(splitReports.rainfall, "nwfc"), 380)}
+         <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/api/pmd/nwfc/reports/</code> filtered to Daily Rainfall · weather.gov.pk · showing all ${splitReports.rainfall.length} items.</p>`);
+    } else {
+      addSection("rainfall", "NWFC Daily Rainfall Reports", "🌧️", "");
+    }
+    if (splitReports.press.length) {
+      addSection("press", "NWFC Press Releases", "📣",
+        `${this.#reportScrollWrap(renderLinkTable(splitReports.press, "nwfc"), 380)}
+         <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/api/pmd/nwfc/reports/</code> filtered to Press Release · weather.gov.pk · showing all ${splitReports.press.length} items.</p>`);
+    } else {
+      addSection("press", "NWFC Press Releases", "📣", "");
+    }
+
+    // ---- 7. PMD Public Forecast -------------------------------------
+    const publicFcDaily = Array.isArray(raw.publicFc?.daily) ? raw.publicFc.daily : null;
+    if (publicFcDaily && publicFcDaily.length) {
+      const rows = publicFcDaily.map((d) => `<tr>
+        <td><b>${esc(this.#reportFormatValue(d?.today_date))}</b></td>
+        <td>${esc(this.#reportFormatValue(d?.today_forecast_eng))}</td>
+        <td><b>${esc(this.#reportFormatValue(d?.tomorrow_date))}</b></td>
+        <td>${esc(this.#reportFormatValue(d?.tomorrow_forecast_eng))}</td>
+      </tr>`).join("");
+      const table = `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>Today (Date)</th><th>Today Forecast</th><th>Tomorrow (Date)</th><th>Tomorrow Forecast</th></tr></thead><tbody>${rows}</tbody></table>`;
+      addSection("public-fc", "PMD Public Forecast", "🌥️",
+        `${this.#reportScrollWrap(table, 380)}
+         <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/api/pmd/public-forecast/</code> · pmd.gov.pk</p>`);
+    } else {
+      addSection("public-fc", "PMD Public Forecast", "🌥️", "");
+    }
+
+    // ---- 8. Recommendations & Mitigation ----------------------------
+    parts.push(`
+      <section id="mitigation" class="report-section">
+        <h2><span class="section-icon">🛡️</span> Recommendations & Mitigation Guidelines</h2>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+          Guidance below is drawn from published NDMA / PMD / IMD protocols and is not a substitute for
+          on-scene professional judgement. Confirm before dispatch.
+        </p>
+        <div class="rec-grid">
+          ${this.#reportMitigationCards(summary)}
+        </div>
+      </section>
+    `);
+    sections.push({ id: "mitigation", title: "Recommendations & Mitigation" });
+
+    // ---- TOC (fill placeholder) -------------------------------------
+    const tocHtml = `
+      <div class="toc">
+        <h3>Contents</h3>
+        <ol>${sections.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join("")}</ol>
+      </div>
+    `;
+    parts[tocIdx] = tocHtml;
+
+    // ---- Footer ------------------------------------------------------
+    parts.push(`
+      <div class="footer">
+        <div><strong>Classification:</strong> Restricted operational use — verify before dispatch.</div>
+        <div style="margin-top:6px">Generated by NCOP · National Common Operating Picture · NDMA.</div>
+        <div class="cite" style="margin-top:6px">
+          Source endpoints per <em>GCOP_PMD_API_Integration.md §7</em>:
+          get-ffd-waterlevels · get-ffd-rivers · get-ffd-bulletins ·
+          /api/pmd/monitor/stations · warnings · monsoon · glof-obs · lightning · city-forecast · glacier-lakes ·
+          /api/pmd/public-forecast ·
+          /api/pmd/nwfc/observations · forecast · reports · weekly-outlook · max-temperatures.
+        </div>
+      </div>
+    `);
+    parts.push(`</div></body></html>`);
+    return parts.join("");
+  }
+
+  // ---- Report subroutines --------------------------------------------
+
+  // Snapshot every currently-toggled tracked layer for the report.
+  // Returns [{ key, label, cfg, features, tag }] where tag is "ffd" /
+  // "pmd" / "nwfc" so downstream renderers can colour-code badges.
+  #reportActiveLayerSnapshot() {
+    const out = [];
+    for (const [key, cfg] of Object.entries(PMD_TAB_TRACKED_LAYERS)) {
+      if (!this.#isTrackedKeyActive(key, cfg)) continue;
+      const features = this.#extractFeatures(cfg.sourceId);
+      const tag = key.startsWith("ffd_") ? "ffd"
+                : key.startsWith("nwfc_") ? "nwfc"
+                : "pmd";
+      out.push({ key, label: cfg.label, cfg, features, tag });
+    }
+    return out;
+  }
+
+  #reportRenderActiveLayerBlock(snap) {
+    const { key, label, cfg, features, tag } = snap;
+    const count = features.length;
+    const analysis = this.#reportAnalyseLayer(key, cfg, features);
+    // Show ALL features + ALL properties inside a per-section scroll
+    // container.  No slice, no column cap — the report is the artefact
+    // the operator escalates upward, so completeness matters.
+    const table = features.length
+      ? this.#reportScrollWrap(this.#reportBuildGenericLayerTable(cfg, features), 460)
+      : `<p class="empty">Source has no features at report time.</p>`;
+    return `
+      <div style="margin:16px 0 22px;padding:16px 18px;background:var(--paper);border:1px solid var(--line);border-radius:6px">
+        <h3 style="margin:0 0 6px;font-size:14px;color:var(--ncop-navy)">
+          <span class="layer-badge ${tag}">${tag.toUpperCase()}</span>
+          ${escapeHtml(label)}
+          <span style="float:right;font-size:11px;color:var(--muted);font-weight:400">${count} feature${count === 1 ? "" : "s"}</span>
+        </h3>
+        <p style="font-size:11px;color:var(--muted);margin:0 0 8px">
+          Source: <code>${escapeHtml(cfg.sourceId)}</code> · showing all ${count} feature${count === 1 ? "" : "s"} — scroll within table for the full set.
+        </p>
+        ${table}
+        ${this.#reportAnalysisBlock(analysis)}
+      </div>
+    `;
+  }
+
+  // Show ALL features + ALL properties, not just the configured column
+  // set — the report is the analytical artefact, not a compact panel
+  // widget.  The configured columns from cfg.columns come first (so the
+  // operator's mental model of the layer is preserved), then any
+  // remaining properties fill out the row.  Cells run through the same
+  // threshold-class + chip-style palette so the report reads as one
+  // system with the panel.
+  #reportBuildGenericLayerTable(cfg, features) {
+    if (!features.length) return "";
+
+    // Union of every property key present on any feature.
+    const allFields = new Set();
+    for (const f of features) {
+      if (f?.properties && typeof f.properties === "object") {
+        for (const k of Object.keys(f.properties)) allFields.add(k);
+      }
+    }
+
+    // Configured columns first (preserve operator-facing order + labels),
+    // then any remaining properties as extra columns.  Skip obvious
+    // internal identifiers.
+    const cols = [];
+    const usedKeys = new Set();
+    for (const c of cfg.columns || []) {
+      const key = allFields.has(c.key) ? c.key
+                : (c.fallback && allFields.has(c.fallback) ? c.fallback : null);
+      if (!key) continue;
+      cols.push({ ...c, key });
+      usedKeys.add(key);
+    }
+    for (const k of allFields) {
+      if (usedKeys.has(k)) continue;
+      if (/^(id|pk|_.+)$/i.test(k)) continue;
+      cols.push({ key: k, label: this.#prettyLabel(k) });
+      usedKeys.add(k);
+    }
+    if (!cols.length) return "";
+
+    const headers = cols
+      .map((c) => `<th>${escapeHtml(c.label)}</th>`)
+      .join("");
+    const rows = features.map((f) => {
+      const p = f?.properties || {};
+      const cells = cols.map((col) => {
+        const raw = this.#firstDefined(p, col.key, col.fallback);
+        const text = this.#reportFormatValue(raw);
+
+        // Chip render — applied when the column is explicitly a
+        // level/status/alert chip OR when the column NAME looks like
+        // one (defensive so passthrough sources with `level` /
+        // `status` / `alert_label` fields still get coloured).
+        const isChip = col.chip === "level" || col.chip === "status" || col.chip === "alert"
+                    || this.#reportLooksLikeChipField(col.label);
+        if (isChip) {
+          const chip = this.#reportChipStyle(text);
+          if (chip) {
+            return `<td><span style="${chip};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.4px">${escapeHtml(text)}</span></td>`;
+          }
+        }
+
+        // Threshold-coloured background for numeric fields (temp,
+        // humidity, wind, rain) — same ladder as the panel.
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        const style = this.#reportThresholdStyle(cls);
+        return `<td${style ? ` style="${style}"` : ""}>${escapeHtml(text)}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+
+    return `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // Build the daily forecast HTML fragment (table + threshold legend)
+  // for the exported doc — same visual language as the panel version.
+  #reportBuildForecastTable(nwfcCities) {
+    const { cols, nameKeys } = this.#discoverForecastColumns(nwfcCities);
+    if (!cols.length) return `<p class="empty">Response has no discoverable columns.</p>`;
+    const tempCol = cols.find((x) => /max|temp|°c/i.test(x.label)) || null;
+    const wxCol   = cols.find((x) => /weather|wx|condition/i.test(x.label)) || null;
+    const isDayCol = (label) => /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(String(label));
+
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const rows = nwfcCities.map((c) => {
+      if (!c || typeof c !== "object") return "";
+      const nameKey = nameKeys.find((k) => c[k] != null && c[k] !== "");
+      const name = nameKey ? c[nameKey] : "";
+      const wxRaw = wxCol ? c[wxCol.key] : null;
+      const tempRaw = tempCol ? c[tempCol.key] : null;
+      const wxStr = this.#extractWeather(wxRaw) || this.#extractWeather(tempRaw);
+      const tempVal = this.#parseTempRange(tempRaw);
+      const emoji = this.#weatherEmoji(wxStr) || this.#tempEmoji(tempVal);
+      const cells = cols.map((col) => {
+        const raw = c[col.key];
+        const text = this.#reportFormatValue(raw);
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        const style = this.#reportThresholdStyle(cls);
+        let dayEmoji = "";
+        if (isDayCol(col.label)) {
+          const dayWx = this.#extractWeather(raw);
+          dayEmoji = this.#weatherEmoji(dayWx) || this.#tempEmoji(this.#parseTempRange(raw));
+        }
+        const emojiHtml = dayEmoji ? `<span style="margin-right:4px">${dayEmoji}</span>` : "";
+        return `<td${style ? ` style="${style}"` : ""}>${emojiHtml}${escapeHtml(text)}</td>`;
+      }).join("");
+      return `<tr>
+        <td><span style="margin-right:6px;font-size:1.15em">${emoji}</span><b>${escapeHtml(String(name))}</b></td>
+        ${cells}
+      </tr>`;
+    }).filter(Boolean).join("");
+
+    const legend = `
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+        <b>Thresholds:</b>
+        <span style="${this.#reportThresholdStyle("wrp-pmd-x-extreme-hot")};padding:2px 6px;border-radius:3px;margin-left:4px">≥45°</span>
+        <span style="${this.#reportThresholdStyle("wrp-pmd-x-very-hot")};padding:2px 6px;border-radius:3px;margin-left:2px">≥40°</span>
+        <span style="${this.#reportThresholdStyle("wrp-pmd-x-hot")};padding:2px 6px;border-radius:3px;margin-left:2px">≥35°</span>
+        <span style="${this.#reportThresholdStyle("wrp-pmd-x-humid")};padding:2px 6px;border-radius:3px;margin-left:2px">RH ≥90%</span>
+        <span style="${this.#reportThresholdStyle("wrp-pmd-x-dry")};padding:2px 6px;border-radius:3px;margin-left:2px">RH ≤20%</span>
+      </div>
+    `;
+    const table = `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>City</th>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+    return `${this.#reportScrollWrap(table, 460)}${legend}
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/api/pmd/nwfc/forecast/</code> · weather.gov.pk · showing all ${nwfcCities.length} cities.</p>`;
+  }
+
+  // Build the max-temperatures HTML fragment for the exported doc.
+  #reportBuildMaxTempsTable(mtSource) {
+    const { cols, nameKeys } = this.#discoverMaxTempsColumns(mtSource);
+    if (!cols.length) return `<p class="empty">Response has no discoverable columns.</p>`;
+    const tempCol = cols.find((x) => /max|temp|°c|record/i.test(x.label)) || null;
+    let ranked = mtSource;
+    if (tempCol) {
+      ranked = [...mtSource].sort((a, b) => {
+        const av = this.#parseTempRange(a?.[tempCol.key]);
+        const bv = this.#parseTempRange(b?.[tempCol.key]);
+        if (!Number.isFinite(bv)) return -1;
+        if (!Number.isFinite(av)) return 1;
+        return bv - av;
+      });
+    }
+    const headers = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const rows = ranked.map((r) => {
+      if (!r || typeof r !== "object") return "";
+      const nameKey = nameKeys.find((k) => r[k] != null && r[k] !== "");
+      const name = nameKey ? this.#unwrapValue(r[nameKey]) ?? r[nameKey] : "";
+      const tempRaw = tempCol ? r[tempCol.key] : null;
+      const emoji = this.#tempEmoji(this.#parseTempRange(tempRaw));
+      const cells = cols.map((col) => {
+        const raw = r[col.key];
+        const text = this.#reportFormatValue(raw);
+        const cls = this.#thresholdClass(this.#parseTempRange(raw), col.label);
+        const style = this.#reportThresholdStyle(cls);
+        return `<td${style ? ` style="${style}"` : ""}>${escapeHtml(text)}</td>`;
+      }).join("");
+      return `<tr>
+        <td><span style="margin-right:6px;font-size:1.15em">${emoji}</span><b>${escapeHtml(String(name))}</b></td>
+        ${cells}
+      </tr>`;
+    }).filter(Boolean).join("");
+    const table = `<table style="margin:0"><thead style="position:sticky;top:0;z-index:1"><tr><th>Station</th>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+    return `${this.#reportScrollWrap(table, 460)}
+      <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Source: <code>/api/pmd/nwfc/max-temperatures/</code> · weather.gov.pk · showing all ${ranked.length} records.</p>`;
+  }
+
+  // ---- Analysis engines ----------------------------------------------
+
+  // Executive-summary rollup — sums across every dataset for the
+  // stat strip at the top of the report.
+  #reportComputeSummary(raw) {
+    const snap = this.#reportActiveLayerSnapshot();
+    const activeLayers = snap.length;
+
+    // Forecast: how many cities have Max Temp ≥ 40 °C?
+    let forecastHotCount = 0;
+    const cities = this.#extractItemArray(raw.nwfcFc, ["cities", "forecast", "items", "data", "stations", "records", "results"]);
+    if (cities.length) {
+      const { cols } = this.#discoverForecastColumns(cities);
+      const tempCol = cols.find((x) => /max|temp|°c/i.test(x.label));
+      if (tempCol) {
+        for (const c of cities) {
+          const v = this.#parseTempRange(c?.[tempCol.key]);
+          if (Number.isFinite(v) && v >= T.STATION_TEMP_HOT) forecastHotCount++;
+        }
+      }
+    }
+    // Warnings on the map
+    const wSnap = snap.find((s) => s.key === "pmd_warnings");
+    const warningCount = wSnap ? wSnap.features.length : 0;
+    // GLOF alerts
+    const gSnap = snap.find((s) => s.key === "pmd_glof_obs");
+    let glofAlerts = 0;
+    if (gSnap) {
+      for (const f of gSnap.features) {
+        const lvl = Number(f?.properties?.alert_level);
+        if (Number.isFinite(lvl) && lvl >= 20) glofAlerts++;
+      }
+    }
+    // Historical records above 45 °C
+    let mtSource = this.#extractItemArray(raw.maxTemps, ["items", "data", "stations", "records", "results", "max_temperatures", "max_temps", "list", "rows"]);
+    if (!mtSource.length) mtSource = this.#deepFindItemArray(raw.maxTemps);
+    let recordExtremes = 0;
+    for (const r of mtSource) {
+      const { cols } = this.#discoverMaxTempsColumns([r]);
+      const tempCol = cols.find((x) => /max|temp|°c|record/i.test(x.label));
+      if (tempCol) {
+        const v = this.#parseTempRange(r?.[tempCol.key]);
+        if (Number.isFinite(v) && v >= 45) recordExtremes++;
+      }
+    }
+    // Narrative — pieces the numbers together into a paragraph.
+    const bits = [];
+    if (activeLayers > 0) bits.push(`${activeLayers} operator layer${activeLayers === 1 ? "" : "s"} live on the map`);
+    if (forecastHotCount > 0) bits.push(`${forecastHotCount} city forecast${forecastHotCount === 1 ? "" : "s"} at or above the ${T.STATION_TEMP_HOT} °C heat-advisory threshold`);
+    if (warningCount > 0) bits.push(`${warningCount} active PMD warning zone${warningCount === 1 ? "" : "s"}`);
+    if (glofAlerts > 0) bits.push(`${glofAlerts} GLOF station${glofAlerts === 1 ? "" : "s"} at or above Watch`);
+    if (recordExtremes > 0) bits.push(`${recordExtremes} historical record${recordExtremes === 1 ? "" : "s"} at 45 °C or above in scope`);
+    const narrative = bits.length
+      ? `Situational summary at report time: ${bits.join("; ")}.`
+      : `No hazard-threshold indicators surfaced in current data. Continue routine monitoring.`;
+    return {
+      activeLayers, forecastHotCount, warningCount, glofAlerts, recordExtremes, narrative,
+    };
+  }
+
+  #reportAnalyseForecast(cities) {
+    const { cols } = this.#discoverForecastColumns(cities);
+    const tempCol = cols.find((x) => /max|temp|°c/i.test(x.label));
+    const hotspots = [];
+    if (tempCol) {
+      for (const c of cities) {
+        const v = this.#parseTempRange(c?.[tempCol.key]);
+        if (!Number.isFinite(v)) continue;
+        const name = c?.name ?? c?.city ?? "—";
+        if (v >= 45) hotspots.push({ label: `${name} — ${v.toFixed(0)}°C (EXTREME)` });
+        else if (v >= 40) hotspots.push({ label: `${name} — ${v.toFixed(0)}°C (Very Hot)` });
+        else if (v >= 35) hotspots.push({ label: `${name} — ${v.toFixed(0)}°C (Hot)` });
+      }
+      hotspots.sort((a, b) => {
+        const av = Number(a.label.match(/—\s*(\d+)/)?.[1]) || 0;
+        const bv = Number(b.label.match(/—\s*(\d+)/)?.[1]) || 0;
+        return bv - av;
+      });
+    }
+    return {
+      hotspots: hotspots.slice(0, 8),
+      meaning: hotspots.length
+        ? `Forecast shows ${hotspots.length} station${hotspots.length === 1 ? "" : "s"} at or above the 35 °C hot threshold. The highest are listed above; anything at or above ${T.STATION_TEMP_HOT} °C triggers PMD's heat advisory ladder.`
+        : `Forecast is within normal temperature range across monitored cities. No heat-advisory triggers.`,
+      forecast: hotspots.length
+        ? `Watch for compounding humidity in the same rows (a Humid ≥ 90% flag combined with ≥ 35 °C markedly raises the effective heat index).`
+        : `Continue monitoring — schedule next check-in per operator cadence.`,
+      mitigation: hotspots.length
+        ? `Coordinate with PMD for confirmatory advisories; pre-position cooling and hydration resources in the flagged districts; brief field teams on heat-illness triage.`
+        : `Routine posture: no additional actions required at this time.`,
+    };
+  }
+
+  #reportAnalyseOutlook(days) {
+    // Count hazard keywords across the week's prose.
+    const buckets = { rain: 0, thunder: 0, wind: 0, heavy: 0, flood: 0, heat: 0, snow: 0 };
+    for (const d of days) {
+      const s = String(d?.outlook || "").toLowerCase();
+      if (/heavy|very\s+heavy/.test(s)) buckets.heavy++;
+      if (/rain|shower/.test(s)) buckets.rain++;
+      if (/thunder|lightning/.test(s)) buckets.thunder++;
+      if (/wind|gust/.test(s)) buckets.wind++;
+      if (/flood/.test(s)) buckets.flood++;
+      if (/heatwave|heat wave/.test(s)) buckets.heat++;
+      if (/snow/.test(s)) buckets.snow++;
+    }
+    const hotspots = Object.entries(buckets)
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => ({ label: `${k[0].toUpperCase() + k.slice(1)} referenced across ${n} day${n === 1 ? "" : "s"}` }));
+    const active = hotspots.length > 0;
+    return {
+      hotspots,
+      meaning: active
+        ? `The week's outlook narrative highlights ${hotspots.length} distinct hazard type${hotspots.length === 1 ? "" : "s"}. Frequency reflects PMD's per-day emphasis.`
+        : `Outlook narrative does not reference standard hazard categories in this window.`,
+      forecast: buckets.heavy > 0
+        ? `Heavy or very-heavy modifiers appear on ${buckets.heavy} day${buckets.heavy === 1 ? "" : "s"} — treat as elevated risk periods and align flood / drainage readiness.`
+        : `No heavy-modifier language — hazards described are lighter-tier.`,
+      mitigation: (buckets.rain + buckets.flood) > 0
+        ? `Confirm river-level thresholds against FFD waterlevels feed; verify drainage capacity in low-lying districts; keep evacuation routes reviewed.`
+        : (buckets.thunder + buckets.wind > 0
+            ? `Advise field teams on lightning-safe posture and secure loose infrastructure ahead of high-wind windows.`
+            : `Routine monitoring cadence sufficient.`),
+    };
+  }
+
+  #reportAnalyseMaxTemps(mtSource) {
+    const { cols } = this.#discoverMaxTempsColumns(mtSource);
+    const tempCol = cols.find((x) => /max|temp|°c|record/i.test(x.label));
+    const nameKey = ["name", "station", "station_name", "city", "location"].find((k) =>
+      mtSource.some((r) => r?.[k] != null && r[k] !== ""));
+    const hotspots = [];
+    if (tempCol && nameKey) {
+      for (const r of mtSource) {
+        const v = this.#parseTempRange(r?.[tempCol.key]);
+        if (!Number.isFinite(v)) continue;
+        const name = String(this.#unwrapValue(r[nameKey]) ?? r[nameKey]);
+        if (v >= 50) hotspots.push({ label: `${name} — ${v.toFixed(1)}°C (EXTREME HISTORICAL RECORD)` });
+        else if (v >= 47) hotspots.push({ label: `${name} — ${v.toFixed(1)}°C (near-country-max)` });
+      }
+      hotspots.sort((a, b) => {
+        const av = Number(a.label.match(/—\s*([\d.]+)/)?.[1]) || 0;
+        const bv = Number(b.label.match(/—\s*([\d.]+)/)?.[1]) || 0;
+        return bv - av;
+      });
+    }
+    return {
+      hotspots: hotspots.slice(0, 8),
+      meaning: hotspots.length
+        ? `${hotspots.length} station${hotspots.length === 1 ? "" : "s"} carry all-time records at or above 47 °C. These sit on Pakistan's historical extreme-heat envelope.`
+        : `No stations with recorded ≥ 47 °C surface in the current dataset.`,
+      forecast: hotspots.length
+        ? `Compare current NWFC daily forecast for these stations to the record: an approach within 3 °C is a leading indicator for a heat event.`
+        : `Historical context for reference only; not a live forecast.`,
+      mitigation: hotspots.length
+        ? `For districts hosting the flagged stations, verify cooling-centre readiness; coordinate outreach to vulnerable groups; ensure water supply resilience.`
+        : `No immediate action from historical records alone.`,
+    };
+  }
+
+  #reportAnalyseLayer(key, cfg, features) {
+    if (!features.length) {
+      return {
+        hotspots: [],
+        meaning: `Layer is active but source currently has no features. Monitor for hydration.`,
+        forecast: `No inference from empty feature set.`,
+        mitigation: `Reload layer / check backend cache warmth if this is unexpected.`,
+      };
+    }
+    const props = (f) => f?.properties || {};
+    switch (key) {
+      case "pmd_warnings": {
+        const bySeverity = { red: 0, orange: 0, yellow: 0, blue: 0, gust: 0, thunderstorm: 0 };
+        for (const f of features) {
+          const l = String(props(f).level || "").toLowerCase();
+          if (l in bySeverity) bySeverity[l]++;
+        }
+        const hotspots = Object.entries(bySeverity).filter(([, n]) => n > 0)
+          .map(([lvl, n]) => ({ label: `${lvl[0].toUpperCase() + lvl.slice(1)} · ${n} zone${n === 1 ? "" : "s"}` }));
+        const hi = bySeverity.red + bySeverity.orange;
+        return {
+          hotspots,
+          meaning: hi > 0
+            ? `${hi} high-severity warning zone${hi === 1 ? "" : "s"} (Orange or Red) currently in force.`
+            : `Warnings are at Yellow / Blue advisory level — no critical zones.`,
+          forecast: `Cross-reference the polygon extents against district populations and infrastructure.`,
+          mitigation: hi > 0
+            ? `Activate NDMA coordination for the affected districts; brief field commanders on the specific element (rainstorm / heatwave / etc).`
+            : `Continue routine posture; escalate if any zone upgrades severity.`,
+        };
+      }
+      case "pmd_weather_stations":
+      case "nwfc_observations": {
+        // Find the hottest, wettest, windiest stations from live obs.
+        let hottest = null, wettest = null;
+        for (const f of features) {
+          const p = props(f);
+          const t = Number(p.temperature); if (Number.isFinite(t) && (!hottest || t > hottest.v)) hottest = { name: p.name || "—", v: t };
+          const r = Number(p.rainfall ?? p.rain_24h);
+          if (Number.isFinite(r) && (!wettest || r > wettest.v)) wettest = { name: p.name || "—", v: r };
+        }
+        const hs = [];
+        if (hottest) hs.push({ label: `Hottest: ${hottest.name} — ${hottest.v.toFixed(1)}°C` });
+        if (wettest && wettest.v > 0) hs.push({ label: `Wettest: ${wettest.name} — ${wettest.v.toFixed(1)} mm (24h)` });
+        return {
+          hotspots: hs,
+          meaning: hottest && hottest.v >= T.STATION_TEMP_HOT
+            ? `At least one station is currently reporting at or above the ${T.STATION_TEMP_HOT} °C heat threshold.`
+            : `No station currently over the heat-advisory threshold; conditions within normal band.`,
+          forecast: `Compare station readings to the NWFC daily forecast section for divergence — a bigger gap suggests forecast bias to investigate.`,
+          mitigation: hottest && hottest.v >= T.STATION_TEMP_HOT
+            ? `Confirm forecast alignment; pre-position hydration and cooling assets in the flagged district.`
+            : `Routine posture; recheck at next update cycle.`,
+        };
+      }
+      case "pmd_glof_obs": {
+        const byAlert = { normal: 0, watch: 0, warning: 0, emergency: 0 };
+        for (const f of features) {
+          const lbl = String(props(f).alert_label || "").toLowerCase();
+          if (lbl in byAlert) byAlert[lbl]++;
+        }
+        const hs = Object.entries(byAlert).filter(([, n]) => n > 0)
+          .map(([lvl, n]) => ({ label: `${lvl[0].toUpperCase() + lvl.slice(1)} · ${n} station${n === 1 ? "" : "s"}` }));
+        const critical = byAlert.warning + byAlert.emergency;
+        return {
+          hotspots: hs,
+          meaning: critical > 0
+            ? `${critical} GLOF station${critical === 1 ? "" : "s"} at Warning or Emergency alert.`
+            : `GLOF network in Normal or Watch state — no critical outlets.`,
+          forecast: `Correlate with upstream rainfall and glacier-lake area for burst risk.`,
+          mitigation: critical > 0
+            ? `Notify local administration in the affected valley; verify downstream evacuation triggers with FFD.`
+            : `Continue routine GLOF monitoring.`,
+        };
+      }
+      case "pmd_lightning": {
+        return {
+          hotspots: features.length ? [{ label: `${features.length} strike${features.length === 1 ? "" : "s"} in the last hour` }] : [],
+          meaning: features.length ? `Active convection somewhere in the window.` : `Quiet electrical activity in the last hour.`,
+          forecast: `Correlate strike locations with the warnings polygon layer to identify affected districts.`,
+          mitigation: `Advise field teams on lightning-safe posture near strike clusters.`,
+        };
+      }
+      case "pmd_city_forecast": {
+        return {
+          hotspots: features.slice(0, 6).map((f) => {
+            const p = props(f);
+            const t = Number(p.temp);
+            return { label: `${p.name || p.city || "—"} — now ${Number.isFinite(t) ? t.toFixed(0) : "?"} °C · ${p.weather || ""}` };
+          }),
+          meaning: `Live city snapshot — driven by PMD Monitor 12-step forecast per station.`,
+          forecast: `Full 12-step forecast is available in the popup / PMD Overview drilldown.`,
+          mitigation: `Use for planning-window queries against the operator's ROI.`,
+        };
+      }
+      case "ffd_data": {
+        const byStatus = {};
+        for (const f of features) {
+          const s = String(props(f).status || "").toLowerCase();
+          byStatus[s] = (byStatus[s] || 0) + 1;
+        }
+        const hs = Object.entries(byStatus).filter(([, n]) => n > 0)
+          .map(([lvl, n]) => ({ label: `${lvl.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} · ${n} gauge${n === 1 ? "" : "s"}` }));
+        const risk = (byStatus["high"] || 0) + (byStatus["very high"] || 0) + (byStatus["very_high"] || 0) + (byStatus["exceptionally high"] || 0) + (byStatus["ex_high"] || 0);
+        return {
+          hotspots: hs,
+          meaning: risk > 0
+            ? `${risk} river gauge${risk === 1 ? "" : "s"} currently at High or above.`
+            : `River telemetries in Normal / Low band.`,
+          forecast: `Compare inflow / outflow trends over the next 24 h using upstream lag hours.`,
+          mitigation: risk > 0
+            ? `Coordinate with FFD for downstream advisories; verify embankment / evacuation posture on the affected reach.`
+            : `Routine monitoring cadence.`,
+        };
+      }
+      case "pmd_monsoon": {
+        return {
+          hotspots: features.slice(0, 6).map((f) => ({ label: `${props(f).province || "—"} · ${props(f).level || ""}` })),
+          meaning: `Monsoon-specific warning envelope from PMD Monitor.`,
+          forecast: `Overlay with FFD waterlevels to derive flash-flood exposure.`,
+          mitigation: `Follow monsoon SOP: pre-emptive drainage clearance, road-closure staging.`,
+        };
+      }
+      default: {
+        return {
+          hotspots: [],
+          meaning: `Live layer with ${features.length} feature${features.length === 1 ? "" : "s"}.`,
+          forecast: `Refer to source documentation for interpretation.`,
+          mitigation: `Follow standing SOP for this data category.`,
+        };
+      }
+    }
+  }
+
+  // Wrap an { hotspots, meaning, forecast, mitigation } object into
+  // the 4-card analysis grid used across the report.
+  #reportAnalysisBlock(a) {
+    if (!a) return "";
+    const hotspotHtml = a.hotspots?.length
+      ? `<ul>${a.hotspots.map((h) => `<li>${escapeHtml(h.label || h)}</li>`).join("")}</ul>`
+      : `<p style="color:var(--muted);font-style:italic;margin:0">None flagged in current data.</p>`;
+    return `
+      <div class="analysis">
+        <div class="analysis-card hotspot">
+          <h4>Hotspots</h4>
+          ${hotspotHtml}
+        </div>
+        <div class="analysis-card meaning">
+          <h4>What This Means</h4>
+          <p>${escapeHtml(a.meaning || "—")}</p>
+        </div>
+        <div class="analysis-card forecast">
+          <h4>Forecast Implications</h4>
+          <p>${escapeHtml(a.forecast || "—")}</p>
+        </div>
+        <div class="analysis-card mitigation">
+          <h4>Mitigation / Actions</h4>
+          <p>${escapeHtml(a.mitigation || "—")}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Mitigation cards keyed off the exec-summary signal counts — always
+  // includes the general NDMA / PMD / FFD standing guidance, and
+  // conditionally surfaces hazard-specific cards when the numbers
+  // trip a threshold.
+  #reportMitigationCards(summary) {
+    const cards = [];
+    // Standing NDMA guidance — always visible.
+    cards.push(`
+      <div class="rec">
+        <h4>NDMA Standing Guidance</h4>
+        <ul>
+          <li>Maintain 24×7 NEOC watch officer coverage across all active hazards.</li>
+          <li>Verify communication trees quarterly; test SAT link on rotation.</li>
+          <li>Log all advisories in the NCOP incident channel with timestamp + source.</li>
+        </ul>
+      </div>
+    `);
+    if (summary.forecastHotCount > 0 || summary.recordExtremes > 0) {
+      cards.push(`
+        <div class="rec">
+          <h4>Heat Response (PMD Advisory Ladder)</h4>
+          <ul>
+            <li>≥ 35 °C — issue caution; brief outdoor labour supervisors.</li>
+            <li>≥ 40 °C — issue advisory; open cooling shelters in urban centres.</li>
+            <li>≥ 45 °C — heat-emergency posture; suspend non-essential outdoor work; coordinate with health authorities.</li>
+            <li>Hydration and shade guidance to be disseminated on PMD press-release cadence.</li>
+          </ul>
+        </div>
+      `);
+    }
+    if (summary.warningCount > 0) {
+      cards.push(`
+        <div class="rec">
+          <h4>Active-Warning Coordination</h4>
+          <ul>
+            <li>Identify districts intersecting each Orange / Red polygon and notify local admin.</li>
+            <li>Cross-reference the warning element (rainstorm, gust, thunderstorm) with the operator SOP.</li>
+            <li>Verify field teams are outside the affected extent or wearing appropriate PPE.</li>
+          </ul>
+        </div>
+      `);
+    }
+    if (summary.glofAlerts > 0) {
+      cards.push(`
+        <div class="rec">
+          <h4>GLOF Watch Response</h4>
+          <ul>
+            <li>Watch → notify downstream valley administration and monitor for escalation.</li>
+            <li>Warning → coordinate with FFD to pre-clear evacuation routes.</li>
+            <li>Emergency → activate valley-level evacuation triggers per SOP.</li>
+          </ul>
+        </div>
+      `);
+    }
+    // Always include a generic flood / FFD guidance card.
+    cards.push(`
+      <div class="rec">
+        <h4>Flood / Waterlevel Coordination</h4>
+        <ul>
+          <li>Cross-check FFD waterlevels feed against gauge routing (upstream point, lag hours).</li>
+          <li>Confirm embankment condition against latest FFD bulletin.</li>
+          <li>Escalate any gauge at "Exceptionally High" per FFD SOP.</li>
+        </ul>
+      </div>
+    `);
+    return cards.join("");
+  }
+
+  #renderMaxTempsSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("Historical Record Max Temperatures", this.#pmdErrorBody(res.reason), "thermometer-sun");
+    }
+    // Deep extraction — see #deepFindItemArray for the fallback path.
+    let source = this.#extractItemArray(res.value, ["items", "data", "stations", "records", "results", "max_temperatures", "max_temps", "list", "rows"]);
+    if (!source.length) source = this.#deepFindItemArray(res.value);
+    if (!source.length) {
+      return this.#pmdSectionShell("Historical Record Max Temperatures", this.#pmdEmptyBody("No records available."), "thermometer-sun");
+    }
+
+    // Broadened alias sets (same rationale as #buildMaxTempsFullView).
+    const nameKeys = ["name", "station", "station_name", "stationname", "city", "location", "site", "place", "observatory"];
+    const valueKeys = [
+      "temperature", "max_temperature", "max_temp", "maxTemp", "max", "value",
+      "record", "record_max", "record_temp", "ever_max", "all_time_max",
+      "all_time", "historical_max", "absolute_max", "absolute_high",
+      "hottest", "peak", "peak_temp", "high", "temp", "tmax", "tmax_c", "max_c",
+    ];
+    const dateKeys = [
+      "date", "recorded_on", "record_date", "when", "at", "observed_on",
+      "year", "year_of_record", "recorded_year", "record_year",
+    ];
+
+    // Case/separator-insensitive key resolution — the scraper writes
+    // "Station" / "Max Temp C" / "Date", the probe list is lowercase +
+    // snake_case; without this normalisation the row loop always
+    // dropped into the fallback rendering path.
+    const findCI = (obj, candidates) => {
+      if (!obj || typeof obj !== "object") return null;
+      const keys = Object.keys(obj);
+      const map = new Map(keys.map((k) => [this.#normFieldKey(k), k]));
+      for (const c of candidates) {
+        const actual = map.get(this.#normFieldKey(c));
+        if (actual != null && obj[actual] != null && obj[actual] !== "") return actual;
+      }
+      return null;
+    };
+    const rows = [];
+    for (const r of source) {
+      if (!r || typeof r !== "object") continue;
+      const nameKey = findCI(r, nameKeys);
+      const valKey  = findCI(r, valueKeys);
+      if (!nameKey || !valKey) continue;
+      const num = this.#parseTempRange(r[valKey]);
+      if (!Number.isFinite(num)) continue;
+      const dateKey = findCI(r, dateKeys);
+      rows.push({
+        name:  String(this.#unwrapValue(r[nameKey]) ?? r[nameKey]),
+        value: num,
+        date:  dateKey ? String(this.#unwrapValue(r[dateKey]) ?? r[dateKey]) : "",
+      });
+    }
+    if (!rows.length) {
+      // Fallback — render a clean table using whatever fields the
+      // response actually carries.  Every temperature-looking cell
+      // gets a threshold background, every level/status/alert-looking
+      // cell gets a coloured pill.  Column order is stable across
+      // rows because we discover the field union once.
+      const raw = this.#buildFallbackTable(source, { maxRows: 40 });
+      return this.#pmdSectionShell(
+        "Historical Record Max Temperatures",
+        raw || this.#pmdEmptyBody("No records available."),
+        "thermometer-sun"
+      );
+    }
+    rows.sort((a, b) => b.value - a.value);
+    const top = rows.slice(0, 10);
+    const list = top.map((r) => `
+      <li class="wrp-pmd-record-row">
+        <span class="wrp-pmd-record-name">${escapeHtml(r.name)}</span>
+        <span class="wrp-pmd-record-meta">${escapeHtml(r.date)}</span>
+        <span class="wrp-pmd-record-value">${r.value.toFixed(1)} °C</span>
+      </li>
+    `).join("");
+    return this.#pmdSectionShell(
+      "Historical Record Max Temperatures",
+      `<ul class="wrp-pmd-records">${list}</ul>`,
+      "thermometer-sun"
+    );
+  }
+
+  #renderPublicForecastSection(res) {
+    if (res.status !== "fulfilled") {
+      return this.#pmdSectionShell("PMD Public Forecast", this.#pmdErrorBody(res.reason), "cloud-sun", { collapsed: true });
+    }
+    const data = res.value;
+    if (!data) {
+      return this.#pmdSectionShell("PMD Public Forecast", this.#pmdEmptyBody("No forecast available."), "cloud-sun", { collapsed: true });
+    }
+
+    const daily = Array.isArray(data?.daily) ? data.daily : null;
+
+    // Expected upstream shape is `{ daily: [ { type, today_date, ... } ] }`.
+    // If that's what we got, render each entry as a proper table with
+    // a distinct header, Today/Tomorrow sub-columns for the paired
+    // fields, and full-width rows for the narrative fields.
+    if (daily && daily.length) {
+      const body = daily.map((entry) => this.#buildForecastTable(entry)).join("");
+      return this.#pmdSectionShell("PMD Public Forecast", body, "cloud-sun", { collapsed: true });
+    }
+
+    // Fallback — schema drifted or empty; drop back to a JSON preview
+    // so operators can still see something landed instead of an
+    // "unavailable" state that hides a real payload.
+    let preview = "";
+    try {
+      preview = JSON.stringify(data, null, 2);
+      if (preview.length > 1200) preview = preview.slice(0, 1200) + "\n… (truncated)";
+    } catch { preview = String(data); }
+    return this.#pmdSectionShell(
+      "PMD Public Forecast (raw)",
+      `<pre class="wrp-pmd-pre">${escapeHtml(preview)}</pre>`,
+      "cloud-sun",
+      { collapsed: true }
+    );
+  }
+
+  // Build a single 3-column table for one `daily[]` entry.  Layout:
+  //   ┌──────────────────────────────────────────────────────────┐
+  //   │  EVENING FORECAST                          <- title row  │
+  //   ├──────────┬─────────────────┬─────────────────────────────┤
+  //   │          │ Today  15 Jun   │ Tomorrow  16 Jun            │
+  //   ├──────────┼─────────────────┼─────────────────────────────┤
+  //   │ Forecast │ ...today text...│ ...tomorrow text...         │
+  //   ├──────────┼─────────────────┴─────────────────────────────┤
+  //   │ Past 24h │ ... narrative spans both columns ...          │
+  //   │ Synoptic │ ...                                           │
+  //   │ Warning  │ ...  (only rendered when non-empty)           │
+  //   │ Updated  │ 15 Jun 2026, 12:39                            │
+  //   └──────────┴───────────────────────────────────────────────┘
+  #buildForecastTable(entry) {
+    const type = String(entry?.type || "Forecast").trim();
+    const typeLabel = type
+      ? type.replace(/\b\w/g, (c) => c.toUpperCase())
+      : "Forecast";
+    const todayDate    = entry?.today_date || "";
+    const tomorrowDate = entry?.tomorrow_date || "";
+    const todayFc      = this.#decodePmdText(entry?.today_forecast_eng);
+    const tomorrowFc   = this.#decodePmdText(entry?.tomorrow_forecast_eng);
+    const past24       = this.#decodePmdText(entry?.past_24_weather);
+    const synoptic     = this.#decodePmdText(entry?.synoptic_situation_eng);
+    const warning      = this.#decodePmdText(entry?.warning_eng);
+    const updated      = this.#formatUnixTs(entry?.last_updated);
+
+    const fullRow = (label, text) => text
+      ? `<tr class="wrp-pmd-forecast-full">
+           <th scope="row">${escapeHtml(label)}</th>
+           <td colspan="2">${escapeHtml(text)}</td>
+         </tr>`
+      : "";
+
+    return `
+      <table class="wrp-pmd-forecast-table">
+        <thead>
+          <tr>
+            <th colspan="3" class="wrp-pmd-forecast-title">${escapeHtml(typeLabel)} Forecast</th>
+          </tr>
+          <tr class="wrp-pmd-forecast-subhead">
+            <th scope="col"></th>
+            <th scope="col">Today<span class="wrp-pmd-forecast-date">${escapeHtml(todayDate)}</span></th>
+            <th scope="col">Tomorrow<span class="wrp-pmd-forecast-date">${escapeHtml(tomorrowDate)}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="wrp-pmd-forecast-split">
+            <th scope="row">Forecast</th>
+            <td>${escapeHtml(todayFc) || "—"}</td>
+            <td>${escapeHtml(tomorrowFc) || "—"}</td>
+          </tr>
+          ${fullRow("Past 24h", past24)}
+          ${fullRow("Synoptic", synoptic)}
+          ${fullRow("Warning", warning)}
+          ${fullRow("Updated", updated)}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // Decode PMD's HTML-entity-escaped narrative fields into plain text
+  // with real newlines.  PMD stores `<br>` as `&lt;br&gt;` inside the
+  // JSON string, and sprinkles `&nbsp;` freely — both need normalising
+  // before rendering.  Any other HTML tags are stripped as a defensive
+  // XSS guard.
+  #decodePmdText(s) {
+    if (typeof s !== "string" || !s) return "";
+    const decoded = s
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    return decoded
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .trim();
+  }
+
+  // Format a `last_updated` unix timestamp (seconds or ms).
+  #formatUnixTs(ts) {
+    if (ts == null || ts === "") return "";
+    const n = Number(ts);
+    if (!Number.isFinite(n)) return String(ts);
+    try {
+      const ms = n < 1e11 ? n * 1000 : n;
+      return new Date(ms).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return String(ts);
+    }
+  }
+
+  // -------------------------------------------------------------- Active-Layers block
+  // Throttled refresh — coalesces bursts of `sourcedata` / `styledata`
+  // into a single DOM write per 150 ms window.  Cheap no-op when the
+  // PMD tab isn't currently visible.
+  #scheduleActiveLayersRefresh() {
+    if (this.#activeTab !== "pmd") return;
+    if (!this.#activeLayersEl) return;
+    if (this.#activeLayersTimerId != null) return;
+    this.#activeLayersTimerId = setTimeout(() => {
+      this.#activeLayersTimerId = null;
+      this.#refreshActiveLayers();
+    }, 150);
+  }
+
+  #refreshActiveLayers() {
+    if (!this.#activeLayersEl) return;
+    if (this.#activeTab !== "pmd") return;
+
+    // Build a fingerprint of (active key + feature count) so a
+    // sourcedata tick that doesn't change anything is a free re-render.
+    const activeEntries = [];
+    for (const [key, cfg] of Object.entries(PMD_TAB_TRACKED_LAYERS)) {
+      if (!this.#isTrackedKeyActive(key, cfg)) continue;
+      const features = this.#extractFeatures(cfg.sourceId);
+      activeEntries.push({ key, cfg, features });
+    }
+    const fp = activeEntries
+      .map((e) => `${e.key}:${e.features.length}`)
+      .join("|");
+    if (fp === this.#activeLayersFingerprint) return;
+    this.#activeLayersFingerprint = fp;
+
+    if (!activeEntries.length) {
+      this.#activeLayersEl.innerHTML = `
+        <div class="wrp-pmd-active-empty">
+          <i data-lucide="layers" class="wrp-pmd-active-empty-icon"></i>
+          <div class="wrp-pmd-active-empty-text">
+            No live layers on the map yet.  Toggle any layer under
+            <b>PMD Monitor Live Feeds</b> or <b>PMD Weather Stations</b>
+            in the sidebar to see its data here.
+          </div>
+        </div>
+      `;
+    } else {
+      this.#activeLayersEl.innerHTML = activeEntries
+        .map(({ key, cfg, features }) => this.#buildLayerSection(key, cfg, features))
+        .join("");
+    }
+    if (window.lucide?.createIcons) {
+      try { window.lucide.createIcons(); } catch {}
+    }
+  }
+
+  #extractFeatures(sourceId) {
+    let features = [];
+    try {
+      const src = this.#map.getSource(sourceId);
+      if (src) {
+        const data = src._data;
+        if (data && Array.isArray(data.features)) features = data.features;
+      }
+    } catch {}
+    if (features.length === 0) {
+      try { features = this.#map.querySourceFeatures(sourceId) || []; }
+      catch { features = []; }
+    }
+    // Honour the pmd_warnings hazard-type pre-filter (sidebar checkbox
+    // table above the master toggle) if it's currently narrowing the
+    // set.  Empty selection → filterFeatures() is pass-through, so this
+    // call is a no-op when the user hasn't ticked anything.
+    if (sourceId === "pmd_warnings-source" && pmdWarningsFilter?.filterFeatures) {
+      try { features = pmdWarningsFilter.filterFeatures(features); } catch (_) {}
+    }
+    return features;
+  }
+
+  // Detect whether a tracked layer key is currently toggled on.  We
+  // used to hard-code a single `primaryLayerId` (e.g. "ffd_data-circle")
+  // — but if that specific layer id ever gets renamed / dropped /
+  // suffixed by a downstream helper, the section vanishes even though
+  // the layer is clearly on the map (this bit the FFD River
+  // Telemetries case).  Broader detection: match the explicit primary
+  // AND fall back to "any layer id starting with `${key}-`" so
+  // companion layers (labels, rivers-fill, sun-symbol, ...) also count
+  // as evidence the toggle is on.  Trailing `-` prevents a longer key
+  // from accidentally shadowing a shorter one.
+  #isTrackedKeyActive(key, cfg) {
+    const ids = Array.isArray(cfg.primaryLayerId)
+      ? cfg.primaryLayerId
+      : [cfg.primaryLayerId];
+    for (const id of ids) {
+      if (id && this.#map.getLayer(id)) return true;
+    }
+    // Fallback: any style layer with the key prefix.
+    try {
+      const style = this.#map.getStyle();
+      if (!style || !Array.isArray(style.layers)) return false;
+      const prefix = `${key}-`;
+      for (const l of style.layers) {
+        if (typeof l.id === "string" && l.id.startsWith(prefix)) return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  #buildLayerSection(key, cfg, features) {
+    const count = features.length;
+    const rows = features.slice(0, cfg.maxRows || 15);
+
+    const iconClass = cfg.icon?.shape === "square"
+      ? "wrp-pmd-layer-icon wrp-pmd-layer-icon--square"
+      : "wrp-pmd-layer-icon wrp-pmd-layer-icon--circle";
+    const iconHtml = `<span class="${iconClass}" style="background:${cfg.icon?.color || "#7280"}"></span>`;
+
+    const legendHtml = cfg.legend?.length
+      ? `<div class="wrp-pmd-layer-legend">
+           ${cfg.legend.map((l) => `
+             <span class="wrp-pmd-legend-chip">
+               <span class="wrp-pmd-legend-swatch" style="background:${l.color}"></span>
+               <span class="wrp-pmd-legend-label">${escapeHtml(l.label)}</span>
+             </span>
+           `).join("")}
+         </div>`
+      : "";
+
+    let bodyContent;
+    if (!rows.length) {
+      bodyContent = `<p class="wrp-pmd-empty">${escapeHtml(cfg.emptyText || "No features in current data.")}</p>`;
+    } else if (key === "pmd_city_forecast") {
+      // City forecast gets a bespoke body: the summary table on top,
+      // then a per-city accordion revealing that city's parsed 12-step
+      // forecast table.  The `fc` field arrives as a JSON string per
+      // §3.7 — parse before rendering.
+      bodyContent = this.#buildLayerTable(cfg, rows, count) +
+        this.#buildCityForecastAccordions(rows);
+    } else {
+      bodyContent = this.#buildLayerTable(cfg, rows, count);
+    }
+
+    return `
+      <section class="wrp-pmd-section wrp-pmd-layer-section" data-layer-key="${escapeHtml(key)}">
+        <header class="wrp-pmd-section-head wrp-pmd-layer-head">
+          ${iconHtml}
+          <h4 class="wrp-pmd-section-title">${escapeHtml(cfg.label)}</h4>
+          <span class="wrp-pmd-layer-count">${count} feature${count === 1 ? "" : "s"}</span>
+        </header>
+        <div class="wrp-pmd-section-body wrp-pmd-layer-body">
+          ${legendHtml}
+          ${bodyContent}
+        </div>
+      </section>
+    `;
+  }
+
+  // ---- city-forecast per-city drilldowns (fc[] parsed) ----
+  #buildCityForecastAccordions(features) {
+    const cards = features.map((f) => {
+      const p = f?.properties || {};
+      const city  = p.name || p.city || "City";
+      const steps = this.#parseFcSteps(p.fc);
+      if (!steps.length) return "";
+      return `
+        <details class="wrp-pmd-city-drill">
+          <summary class="wrp-pmd-city-drill-head">
+            <span class="wrp-pmd-city-drill-name">${escapeHtml(String(city))}</span>
+            <span class="wrp-pmd-city-drill-meta">${steps.length}-step forecast</span>
+            <span class="wrp-pmd-city-drill-chevron" aria-hidden="true">▸</span>
+          </summary>
+          <div class="wrp-pmd-city-drill-body">
+            ${this.#buildFcStepsTable(steps)}
+          </div>
+        </details>
+      `;
+    }).filter(Boolean).join("");
+    if (!cards) return "";
+    return `<div class="wrp-pmd-city-drills">
+              <div class="wrp-pmd-city-drills-title">Per-city 12-Step Forecast</div>
+              ${cards}
+            </div>`;
+  }
+
+  #parseFcSteps(fc) {
+    if (fc == null) return [];
+    if (Array.isArray(fc)) return fc;
+    if (typeof fc === "string") {
+      const s = fc.trim();
+      if (!s || (s[0] !== "[" && s[0] !== "{")) return [];
+      try {
+        const parsed = JSON.parse(s);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch { return []; }
+    }
+    return [];
+  }
+
+  #buildFcStepsTable(steps) {
+    const SENT = new Set([9999, -9999, 999, -999]);
+    const fmt = (v, digits = 1) => {
+      if (v == null || v === "") return "—";
+      const n = Number(v);
+      if (!Number.isFinite(n) || SENT.has(n)) return "—";
+      return n.toFixed(digits);
+    };
+    const rows = steps.map((s) => `
+      <tr>
+        <td class="wrp-pmd-fc-time">${escapeHtml(String(s?.ft ?? ""))}</td>
+        <td>${fmt(s?.tem)}</td>
+        <td>${escapeHtml(String(s?.wx ?? ""))}</td>
+        <td>${fmt(s?.rhu, 0)}</td>
+        <td>${fmt(s?.wspd)}</td>
+        <td>${escapeHtml(String(s?.wdir ?? ""))}</td>
+        <td>${fmt(s?.pre)}</td>
+      </tr>
+    `).join("");
+    return `
+      <table class="wrp-pmd-fc-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>T °C</th>
+            <th>Wx</th>
+            <th>RH %</th>
+            <th>Wind</th>
+            <th>Dir</th>
+            <th>Precip</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  #buildLayerTable(cfg, features, totalCount) {
+    const cols = cfg.columns || [];
+    const headerHtml = cols.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("");
+    const bodyHtml = features.map((f) => {
+      const p = f?.properties || {};
+      const cells = cols.map((c) => {
+        const raw = this.#firstDefined(p, c.key, c.fallback);
+        return `<td>${this.#formatLayerCell(raw, c)}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+
+    const caption = features.length < totalCount
+      ? `<caption class="wrp-pmd-layer-caption">Showing first ${features.length} of ${totalCount}</caption>`
+      : "";
+
+    return `
+      <table class="wrp-pmd-layer-table">
+        ${caption}
+        <thead><tr>${headerHtml}</tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    `;
+  }
+
+  #formatLayerCell(raw, col) {
+    // Missing/empty → dash (never lie with a fake 0).
+    if (raw == null || raw === "") {
+      return `<span class="wrp-pmd-cell-empty">—</span>`;
+    }
+
+    // Some upstream fields are JSON strings (see MD §1.2: gauges,
+    // lag_hours, elements, fc).  Parse before rendering so we don't
+    // dump `[{"ft":"..."}]` into a table cell.
+    let value = raw;
+    if (typeof value === "string") {
+      const s = value.trim();
+      if ((s.startsWith("[") || s.startsWith("{")) && s.length > 2) {
+        try { value = JSON.parse(s); } catch { /* keep as string */ }
+      }
+    }
+
+    // Arrays → count summary (e.g. "12 items") with title tooltip
+    // showing the first entry.  Prevents "[object Object], ..." leaks
+    // when a column happens to point at gauges / fc / elements.
+    if (Array.isArray(value)) {
+      const first = value[0];
+      const tip = first && typeof first === "object"
+        ? Object.keys(first).slice(0, 4).join(", ")
+        : String(first ?? "");
+      const label = `${value.length} item${value.length === 1 ? "" : "s"}`;
+      return `<span class="wrp-pmd-cell-array" title="${escapeHtml(tip)}">${label}</span>`;
+    }
+
+    // Plain objects → try to extract a human-readable summary.
+    if (typeof value === "object") {
+      const summary = value.label ?? value.name ?? value.title
+        ?? value.value ?? value.text ?? value.description;
+      if (summary != null && summary !== "") {
+        return escapeHtml(String(summary).slice(0, 60));
+      }
+      try {
+        const s = JSON.stringify(value);
+        return `<span class="wrp-pmd-cell-array" title="${escapeHtml(s)}">${escapeHtml(s.length > 40 ? s.slice(0, 37) + "…" : s)}</span>`;
+      } catch { return escapeHtml(String(value)); }
+    }
+
+    // Level / status / alert chip — all three funnel to the same
+    // .wrp-pmd-level-chip class family.  Normalise the value into a
+    // safe class-name slug (spaces/underscores → dashes; "Exceptionally
+    // High" → "ex-high"; "VERY_HIGH" → "very-high"; etc.) so the CSS
+    // colour ramp resolves regardless of whether the upstream uses
+    // canonical or abbreviated severity names.
+    if (col.chip === "level" || col.chip === "status" || col.chip === "alert") {
+      const raw = String(value);
+      const lvl = raw.toLowerCase()
+        .replace(/\bexceptionally\s+high\b/g, "ex-high")
+        .replace(/\bex[_\s-]*high\b/g, "ex-high")
+        .replace(/\bvery\s+high\b/g, "very-high")
+        .replace(/[\s_]+/g, "-");
+      return `<span class="wrp-pmd-level-chip wrp-pmd-level-chip--${escapeHtml(lvl)}">${escapeHtml(raw)}</span>`;
+    }
+    // Kind chip (grey pill for station_type etc)
+    if (col.chip === "kind") {
+      return `<span class="wrp-pmd-kind-chip">${escapeHtml(String(value).toUpperCase())}</span>`;
+    }
+
+    // Numeric with unit — after the object/array bail-outs so we only
+    // hit this for scalar values.
+    if (col.numeric != null) {
+      const n = Number(value);
+      if (Number.isFinite(n)) {
+        const digits = Math.max(0, Number(col.numeric) || 0);
+        return `${n.toFixed(digits)}${col.unit ? ` <span class="wrp-pmd-unit">${escapeHtml(col.unit)}</span>` : ""}`;
+      }
+    }
+
+    // Long strings — truncate so a single 400-char forecast doesn't
+    // blow the row height out.
+    const str = String(value);
+    if (str.length > 80) {
+      return `<span title="${escapeHtml(str)}">${escapeHtml(str.slice(0, 77) + "…")}</span>`;
+    }
+    return escapeHtml(str);
+  }
+
+  #firstDefined(obj, key, fallback) {
+    if (obj[key] != null && obj[key] !== "") return obj[key];
+    if (fallback && obj[fallback] != null && obj[fallback] !== "") return obj[fallback];
+    return null;
   }
 
   // -------------------------------------------------------------- destroy
