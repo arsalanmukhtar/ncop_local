@@ -719,11 +719,113 @@ export async function wopFetchData() {
 
     _wopBakeAll();
     _wopSpawnAll();
+
+    // Quota-exhaustion handling — if the backend reports Open-Meteo is
+    // out of daily requests for wind and/or ocean, show a user-facing
+    // toast AND turn OFF the affected toggle so the button doesn't sit
+    // in its "active" state while nothing can render.  Prevents the
+    // silent-failure UX the user saw where the wind icon was highlighted
+    // blue but no particles ever appeared.
+    const meta = data && data.meta ? data.meta : null;
+    if (meta && meta.warning) {
+      _wopShowWarning(meta.warning);
+    }
+    if (meta && meta.wind_quota_exhausted && _wopWindOn) {
+      _wopWindOn = false;
+      _wopWCtx?.clearRect(0, 0, _wopMapRect.width, _wopMapRect.height);
+      document
+        .getElementById("windParticles")
+        ?.classList.remove("active-wind");
+    }
+    if (meta && meta.ocean_quota_exhausted && _wopOceanOn) {
+      _wopOceanOn = false;
+      _wopOCtx?.clearRect(0, 0, _wopMapRect.width, _wopMapRect.height);
+      document
+        .getElementById("oceanParticles")
+        ?.classList.remove("active-ocean");
+    }
   } catch (e) {
     console.warn("[WOP] fetch failed:", e);
   } finally {
     if (seq === _wopFetchSeq) _wopFetching = false;
   }
+}
+
+// ---------------------------------------------------------------------
+// Warning toast — self-contained (no dependency on any global toast
+// system).  De-duplicates repeat messages so a 700 ms debounced re-
+// fetch after a map pan doesn't stack duplicate banners.  Auto-dismisses
+// after 8 s; can also be closed manually.
+// ---------------------------------------------------------------------
+let _wopLastWarning = "";
+let _wopWarningHideId = null;
+function _wopShowWarning(message) {
+  if (!message || typeof document === "undefined") return;
+  if (message === _wopLastWarning && document.getElementById("wop-warning-toast")) {
+    // Refresh the auto-hide timer on repeat, but don't rebuild the toast.
+    if (_wopWarningHideId) clearTimeout(_wopWarningHideId);
+    _wopWarningHideId = setTimeout(_wopDismissWarning, 8000);
+    return;
+  }
+  _wopLastWarning = message;
+  _wopDismissWarning();
+
+  const toast = document.createElement("div");
+  toast.id = "wop-warning-toast";
+  toast.setAttribute("role", "alert");
+  toast.style.cssText = [
+    "position:fixed",
+    "top:20px",
+    "left:50%",
+    "transform:translateX(-50%) translateY(-8px)",
+    "z-index:10010",
+    "max-width:520px",
+    "padding:12px 42px 12px 16px",
+    "font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif",
+    "font-size:13px",
+    "font-weight:500",
+    "line-height:1.5",
+    "color:#fef3c7",
+    "background:linear-gradient(135deg,rgba(146,64,14,0.96),rgba(180,83,9,0.96))",
+    "border:1px solid rgba(251,191,36,0.55)",
+    "border-radius:10px",
+    "box-shadow:0 12px 32px rgba(2,6,23,0.55),0 0 24px rgba(251,191,36,0.35)",
+    "opacity:0",
+    "transition:opacity 0.28s ease,transform 0.28s ease",
+    "backdrop-filter:blur(8px)",
+    "-webkit-backdrop-filter:blur(8px)",
+  ].join(";");
+  toast.innerHTML = `
+    <span style="display:inline-block;margin-right:8px;">⚠️</span>
+    <span style="vertical-align:middle;">${message}</span>
+    <button type="button" aria-label="Dismiss"
+      style="position:absolute;top:6px;right:8px;width:22px;height:22px;
+             border:none;border-radius:50%;background:rgba(0,0,0,0.22);
+             color:#fff;font-size:14px;line-height:1;cursor:pointer;
+             padding:0;display:flex;align-items:center;justify-content:center;">&times;</button>
+  `;
+  document.body.appendChild(toast);
+  toast.querySelector("button")?.addEventListener("click", _wopDismissWarning);
+  requestAnimationFrame(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(-50%) translateY(0)";
+  });
+
+  if (_wopWarningHideId) clearTimeout(_wopWarningHideId);
+  _wopWarningHideId = setTimeout(_wopDismissWarning, 8000);
+}
+
+function _wopDismissWarning() {
+  if (_wopWarningHideId) {
+    clearTimeout(_wopWarningHideId);
+    _wopWarningHideId = null;
+  }
+  const el = document.getElementById("wop-warning-toast");
+  if (!el) return;
+  el.style.opacity = "0";
+  el.style.transform = "translateX(-50%) translateY(-8px)";
+  setTimeout(() => el.parentElement && el.remove(), 320);
+  _wopLastWarning = "";
 }
 
 export function wopSetSpinning(spinning) {
@@ -858,4 +960,68 @@ function _wopInit() {
       _wopSpawnAll();
     }
   });
+}
+
+// -------------------------------------------------------------------
+// Diagnostic snapshot — safe read-only inspection helper.  When the
+// wind toggle appears to "do nothing" (data fetched but nothing on
+// screen), run  window.__wopStatus()  in the browser console.  The
+// object returned reports every gate that could silently drop a
+// frame: engine readiness, on/off flags, movement state, canvas
+// dimensions / DOM presence, wind & ocean field validity, whether
+// the gridBounds have been baked yet, particle counts, and the
+// map's own z-index / rect so container-layout issues are obvious.
+// Does not run any drawing / mutate state — pure snapshot.
+// -------------------------------------------------------------------
+if (typeof window !== "undefined") {
+  window.__wopStatus = function __wopStatus() {
+    const cnv = (el) =>
+      el
+        ? {
+            inDOM: !!el.parentElement,
+            cssWidth: el.style.width,
+            cssHeight: el.style.height,
+            width: el.width,
+            height: el.height,
+            zIndex: el.style.zIndex,
+            transform: el.style.transform || "",
+            display: getComputedStyle(el).display,
+            visibility: getComputedStyle(el).visibility,
+          }
+        : null;
+    const mapEl = document.getElementById("map");
+    const mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
+    const m = _wopMap();
+    return {
+      engine: {
+        ready:       _wopReady,
+        windOn:      _wopWindOn,
+        oceanOn:     _wopOceanOn,
+        fetching:    _wopFetching,
+        moving:      _wopMoving,
+        spinning:    _wopSpinning,
+        styleReloading: _wopStyleReloading,
+        hasGridBounds:  !!_wopGridBounds,
+      },
+      field: {
+        windOk:    _wopWF.ok,
+        windPts:   _wopWF.pts.length,
+        oceanOk:   _wopOF.ok,
+        oceanPts:  _wopOF.pts.length,
+        visOcean:  _wopVisOcean.length,
+      },
+      particles: {
+        wind:  _wopWParts.length,
+        ocean: _wopOParts.length,
+      },
+      canvases: {
+        wind:  cnv(_wopWCnv),
+        ocean: cnv(_wopOCnv),
+      },
+      mapRect: mapRect
+        ? { x: mapRect.left, y: mapRect.top, w: mapRect.width, h: mapRect.height }
+        : null,
+      mapZoom: m ? m.getZoom() : null,
+    };
+  };
 }
