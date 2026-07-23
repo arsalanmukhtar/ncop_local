@@ -2032,6 +2032,7 @@ export class NavigationPanel {
   #initializeNewsModal() {
     const socialBtn = document.getElementById("toggle-social-btn");
     const regularBtn = document.getElementById("fetch-regular-btn");
+    const refreshBtn = document.getElementById("refresh-news-btn");
 
     if (!socialBtn || !regularBtn) {
       console.warn("⚠️ News modal buttons not found");
@@ -2054,6 +2055,23 @@ export class NavigationPanel {
       this.#includeSocialMedia = false;
       this.#fetchNews(false);
       this.#updateNewsButtonStates(regularBtn, socialBtn);
+    });
+
+    // Refresh Button Click — re-runs the current mode.  We reuse the
+    // existing #fetchNews path so all the loading + error handling
+    // stays identical.  While the request is in flight the icon spins
+    // (`.is-spinning` triggers the CSS keyframe) and the button is
+    // disabled to prevent stacking parallel fetches.
+    refreshBtn?.addEventListener("click", async () => {
+      if (refreshBtn.disabled) return;
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add("is-spinning");
+      try {
+        await this.#fetchNews(this.#includeSocialMedia);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove("is-spinning");
+      }
     });
 
     // Both start inactive
@@ -2105,7 +2123,20 @@ export class NavigationPanel {
             this.#baseUrl
           }/get-gdelt-news-events/?include_social_media=false&days=7`;
 
-      const res = await fetch(url);
+      // Client-side hard deadline — a few seconds longer than the
+      // backend's 50s budget (GDELTClient.fetch_articles) so the
+      // server has room to finish serialization + travel back to us
+      // before we abort.  Well inside nginx's 60s proxy_read_timeout
+      // so a normal-latency response always makes it.
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), 58000);
+
+      let res;
+      try {
+        res = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(abortTimer);
+      }
 
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -2120,6 +2151,40 @@ export class NavigationPanel {
       }
 
       container.classList.remove("is-loading");
+
+      // Two graceful states from the backend that shouldn't wipe the
+      // panel:
+      //   1. metadata.stale === true  — real data but from the LKG cache
+      //   2. metadata.error === true  — upstream (GDELT) was rate-
+      //      limited AND we have no LKG.  Features array will be empty.
+      //      Keep the previous cards on-screen if we have them, else
+      //      render a friendly explanation.
+      const isStale = !!(geojson.metadata && geojson.metadata.stale);
+      const isBackendError = !!(geojson.metadata && geojson.metadata.error);
+      if (isStale) {
+        console.warn("[news] serving stale data:", geojson.metadata.stale_reason);
+      }
+      if (isBackendError) {
+        const hasExistingCards = container.querySelector(".news-box") != null;
+        const reason = geojson.metadata.error_reason || "News temporarily unavailable.";
+        if (hasExistingCards) {
+          container.querySelector(".news-refresh-ribbon")?.remove();
+          const ribbon = document.createElement("div");
+          ribbon.className = "news-refresh-ribbon";
+          ribbon.innerHTML = `⚠️ ${this.#sanitizeHTML(reason)}`;
+          container.appendChild(ribbon);
+          setTimeout(() => ribbon.remove(), 8000);
+        } else {
+          container.innerHTML = `
+            <div class="news-error">
+                <strong>News temporarily unavailable</strong>
+                <small>${this.#sanitizeHTML(reason)}</small>
+            </div>
+          `;
+        }
+        return;
+      }
+
       container.innerHTML = "";
 
       // No data case
@@ -2211,8 +2276,31 @@ export class NavigationPanel {
     } catch (error) {
       console.error("❌ Error fetching news:", error);
       const container = document.getElementById("news-scroll");
-      if (container) {
-        container.classList.remove("is-loading");
+      if (!container) return;
+      container.classList.remove("is-loading");
+
+      // If we already have cards on-screen from a previous successful
+      // fetch, KEEP them and show a small non-blocking failure ribbon
+      // at the bottom instead of wiping the panel with a fatal error.
+      // The user can retry via the refresh button.
+      const hasExistingCards = container.querySelector(".news-box") != null;
+      const message = error && error.name === "AbortError"
+        ? "Refresh timed out — showing older data. Try again in a moment."
+        : `Refresh failed: ${error.message}. Showing older data if available.`;
+
+      if (hasExistingCards) {
+        // Drop any previous ribbon, then append a fresh one that
+        // auto-dismisses after 6 s.
+        container.querySelector(".news-refresh-ribbon")?.remove();
+        const ribbon = document.createElement("div");
+        ribbon.className = "news-refresh-ribbon";
+        ribbon.innerHTML = `⚠️ ${this.#sanitizeHTML(message)}`;
+        container.appendChild(ribbon);
+        setTimeout(() => ribbon.remove(), 6000);
+      } else {
+        // First-load failure with nothing to fall back to — surface the
+        // full error state so the user knows the panel is empty by
+        // design and can retry.
         container.innerHTML = `
           <div class="news-error">
               <strong>Failed to load news</strong>
