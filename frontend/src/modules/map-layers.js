@@ -1660,6 +1660,106 @@ export const ncop_menu_items = {
         },
       },
     },
+
+    // =====================================================================
+    // Food Security  —  IPC / CH acute food insecurity classification
+    //
+    // Each country's polygons come from IPC Info's public API via a small
+    // Django proxy (/api/ipc/<country>/) that resolves the LATEST published
+    // analysis cycle server-side and returns raw GeoJSON.  Proxy exists so
+    // Mapbox's built-in geojson source (which can't chain two API calls)
+    // still gets a single-URL feed, and the alpha-2 country-code bug from
+    // the GCOP integration notes is fixed centrally.
+    //
+    // ---- Paint expression ---------------------------------------------
+    // Every IPC area feature carries an already-computed `color` field
+    // (hex string) matching its `overall_phase`.  We use it directly —
+    // coalesce to a match-on-overall_phase as belt-and-braces, and grey
+    // for the no-classification case.  This was the bug in the first
+    // pass: the fill expression looked up `properties.phase` which
+    // doesn't exist under that name in IPC's response — the actual
+    // field is `overall_phase`, and every polygon fell through to the
+    // grey default.
+    //
+    // ---- Country coverage ---------------------------------------------
+    // Verified live against IPC's /analyses endpoint on 2026-07-27.
+    // Enabled: PK, AF, BD, PS, YE, LB, SD, SO, CD.
+    // NOT available (IPC does not classify these countries at all —
+    // /analyses returns []): India, Iran, Sri Lanka, Nepal, Bhutan,
+    // Myanmar.  Adding them here would render an empty layer — the
+    // limitation is upstream, not in this code.
+    // =====================================================================
+    "Food Security": (function _buildIpcCountries() {
+      // Shared paint expression — every country renders the same way
+      // (official IPC colour ramp), so we factor it out once.  Prefer
+      // the API's baked-in `color` string; fall back to matching on
+      // `overall_phase` if a feature ever lands without one.
+      const IPC_FILL = {
+        "fill-color": [
+          "coalesce",
+          ["get", "color"],
+          [
+            "match",
+            ["to-number", ["coalesce", ["get", "overall_phase"], 0]],
+            1, "#CDFACD",
+            2, "#FAE61E",
+            3, "#E67800",
+            4, "#C80100",
+            5, "#640000",
+            "#cccccc",
+          ],
+        ],
+        "fill-opacity": 0.65,
+        "fill-outline-color": "#333333",
+      };
+
+      const IPC_LEGEND = {
+        title: "IPC / CH Acute Food Insecurity Phase",
+        entries: [
+          { swatch: "#CDFACD", shape: "square", label: "Phase 1 — Minimal" },
+          { swatch: "#FAE61E", shape: "square", label: "Phase 2 — Stressed" },
+          { swatch: "#E67800", shape: "square", label: "Phase 3 — Crisis" },
+          { swatch: "#C80100", shape: "square", label: "Phase 4 — Emergency" },
+          { swatch: "#640000", shape: "square", label: "Phase 5 — Catastrophe / Famine" },
+          { swatch: "#cccccc", shape: "square", label: "No / unknown classification" },
+        ],
+        note: "Official IPC/CH 5-phase global colour ramp. Colour comes from the API's per-feature `color` field (matched to `overall_phase`).",
+      };
+
+      const COUNTRIES = [
+        { key: "ipc_pakistan",    slug: "pakistan",    label: "IPC — Pakistan",
+          info: "Pakistan Acute Food Insecurity classification. Resolves to the newest published IPC analysis (last verified: March 2026 cycle, id 98222655). Click any polygon for the area name, phase (1–5), and classified population." },
+        { key: "ipc_afghanistan", slug: "afghanistan", label: "IPC — Afghanistan",
+          info: "Afghanistan Acute Food Insecurity classification. Same 5-phase scale as Pakistan — cross-border comparison is meaningful." },
+        { key: "ipc_bangladesh",  slug: "bangladesh",  label: "IPC — Bangladesh",
+          info: "Bangladesh Acute Food Insecurity classification. IPC coverage exists for coastal districts and Rohingya refugee areas." },
+      ];
+
+      const toggle = {};
+      for (const c of COUNTRIES) {
+        const src = `${c.key}-source`;
+        toggle[c.key] = {
+          label: c.label,
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: src,
+            type: "geojson",
+            data: `${window.location.origin}/api/ipc/${c.slug}/`,
+            generateId: true,
+          },
+          layers: [
+            { id: `${c.key}-fill`,    type: "fill", source: src, paint: IPC_FILL },
+            { id: `${c.key}-outline`, type: "line", source: src, minzoom: 5,
+              paint: { "line-color": "#333333", "line-width": 0.6 } },
+          ],
+          popup: true,
+          information: c.info,
+          dynamicLegend: IPC_LEGEND,
+        };
+      }
+      return { toggle };
+    })(),
   },
   weather: {
     "Radar Layers": {

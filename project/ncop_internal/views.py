@@ -7092,3 +7092,253 @@ if __name__ == "__main__":
 
     print("\n=== Production Notes ===")
     configure_for_production()
+
+
+# ==================================================================
+#  IPC / Food Security proxy — resolves the latest analysis for a
+#  country against IPC Info's public API and returns the GeoJSON.
+#  Additive — new class, new URL route, does not touch any existing
+#  view or dispatcher.
+#
+#  Why this needs a backend at all: the "latest analysis" resolve
+#  requires a two-step chain (GET /analyses → sort → GET /areas/<id>/P)
+#  that Mapbox's built-in GeoJSON source can't do on its own.  Doing
+#  it server-side also fixes the country-code bug documented in the
+#  GCOP integration notes: IPC's /analyses endpoint expects ISO 3166
+#  alpha-2 codes, not the alpha-3 codes GCOP was originally sending,
+#  which silently forced every ipc_* layer to fall back to a stale
+#  hardcoded snapshot instead of the true latest.
+#
+#  The response is cached per-country for 6 hours (IPC publishes
+#  analysis cycles quarterly, so hourly cache invalidation would be
+#  wasteful).  Failure returns an empty FeatureCollection so the
+#  frontend just renders nothing instead of an error state.
+# ==================================================================
+class IpcFoodSecurityAPIView(View):
+    IPC_KEY  = "ec20f488-0457-448e-b9f0-c32900af975c"
+    ANALYSES = "https://api.ipcinfo.org/analyses"
+    AREAS    = "https://api.ipcinfo.org/areas"
+    CACHE_TTL = 6 * 3600  # 6 hours
+
+    # ISO 3166 alpha-2 codes — verified live against /analyses on
+    # 2026-07-27.  Scoped to the South-Asia trio that's directly
+    # relevant to NCOP's operational area; every one of these returns
+    # at least one non-empty polygon analysis.  Countries IPC does NOT
+    # currently classify (India, Iran, Sri Lanka, Nepal, Bhutan,
+    # Myanmar) would return empty lists — see integration notes.
+    COUNTRY_CODES = {
+        "pakistan":    "PK",
+        "afghanistan": "AF",
+        "bangladesh":  "BD",
+    }
+
+    # Max analyses we'll walk before giving up.  IPC's newest published
+    # analysis is often a "projection" or table without polygon geometry
+    # (Somalia's newest ID currently returns 0 features), so we fall
+    # through to the next-newest until one returns features > 0.  Six
+    # is plenty — polygon publication happens on every real cycle.
+    MAX_ANALYSIS_WALK = 6
+
+    def get(self, request, country):
+        country = (country or "").lower()
+        if country not in self.COUNTRY_CODES:
+            return JsonResponse(
+                {"type": "FeatureCollection", "features": [],
+                 "meta": {"error": f"unsupported country '{country}'"}},
+                status=404,
+            )
+
+        cache_key = f"ipc_fc|{country}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
+
+        code = self.COUNTRY_CODES[country]
+        # Ordered list of candidate analysis IDs, newest first.  We walk
+        # this list (fetching /areas/<id>/P per attempt) until one
+        # returns non-empty features — see MAX_ANALYSIS_WALK note.
+        candidates = self._resolve_analysis_candidates(code)
+        if not candidates:
+            empty = {"type": "FeatureCollection", "features": [],
+                     "meta": {"error": "no analysis available", "country": country}}
+            return JsonResponse(empty, status=200)
+
+        last_error = None
+        for ana_id in candidates:
+            try:
+                r = requests.get(
+                    f"{self.AREAS}/{ana_id}/P",
+                    params={"format": "geojson", "key": self.IPC_KEY},
+                    timeout=15,
+                )
+                r.raise_for_status()
+                data = r.json()
+            except Exception as e:
+                last_error = str(e)
+                print(f"[IPC] /areas fetch failed for {country} (id={ana_id}): {e}")
+                continue
+
+            feats = (data or {}).get("features") or [] if isinstance(data, dict) else []
+            if not feats:
+                # Common case — the newest analysis is a projection
+                # without polygon geometry; fall through to older ones.
+                print(f"[IPC] {country} analysis {ana_id} has 0 features, trying next.")
+                continue
+
+            # Success — stamp meta so the frontend can show which
+            # analysis cycle is on screen and cache for 6 h.
+            data.setdefault("meta", {})
+            data["meta"]["analysis_id"] = ana_id
+            data["meta"]["country"] = country
+            data["meta"]["feature_count"] = len(feats)
+            cache.set(cache_key, data, self.CACHE_TTL)
+            return JsonResponse(data)
+
+        # Walked every candidate without finding one with polygons.
+        return JsonResponse(
+            {"type": "FeatureCollection", "features": [],
+             "meta": {"error": f"no analysis with polygon data available (last: {last_error})",
+                      "country": country, "tried_ids": candidates}},
+            status=200,
+        )
+
+    def _resolve_analysis_candidates(self, alpha2_code):
+        """Return analysis ids newest-first (sorted by year, then created)."""
+        try:
+            r = requests.get(
+                self.ANALYSES,
+                params={
+                    "format": "json",
+                    "type": "A",
+                    "country": alpha2_code,
+                    "key": self.IPC_KEY,
+                },
+                timeout=10,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[IPC] /analyses failed for {alpha2_code}: {e}")
+            return []
+        if not isinstance(payload, list) or not payload:
+            return []
+        # Sort by (year, created) desc — the original code sorted by
+        # `from_date` which doesn't exist on any IPC response, so the
+        # sort was effectively a no-op and depended on IPC's own
+        # response order.  These two fields are always present.
+        payload.sort(
+            key=lambda a: (a.get("year") or 0, a.get("created") or ""),
+            reverse=True,
+        )
+        return [str(a.get("id") or "") for a in payload[: self.MAX_ANALYSIS_WALK] if a.get("id")]
+
+
+# ==================================================================
+#  IPC PTT (Population Tracking Tool) proxy — yearly historical
+#  analyses for a country.
+#
+#  IPC's PTT is a public dashboard on top of a public JSON endpoint at
+#  gsu-prod.ipc.codes.  We hit /api/ptt/data-with-meta which returns
+#  every published analysis for the requested country across the year
+#  range, each with `totals.current` / `totals.projected-1` blocks
+#  containing the phase-1..5 populations + percentages the modal's
+#  history tab needs.  Not scraping — this is the same JSON endpoint
+#  IPC's own dashboard consumes.
+#
+#  Normalized so the frontend gets one flat row per analysis, sorted
+#  oldest → newest for chart X-axis chronology.  Cached 24 h — IPC
+#  publishes on a quarterly cycle, so per-hour invalidation would be
+#  overkill.  Failure returns an empty timeline (200 with
+#  meta.error) rather than an HTTP error so the modal can render a
+#  friendly empty-state.
+# ==================================================================
+class IpcHistoryAPIView(View):
+    PTT_URL = "https://gsu-prod.ipc.codes/api/ptt/data-with-meta/2017,2027"
+    CACHE_TTL = 24 * 3600
+
+    COUNTRY_CODES = IpcFoodSecurityAPIView.COUNTRY_CODES  # reuse alpha-2 map
+
+    def get(self, request, country):
+        country = (country or "").lower()
+        if country not in self.COUNTRY_CODES:
+            return JsonResponse(
+                {"analyses": [], "meta": {"error": f"unsupported country '{country}'"}},
+                status=404,
+            )
+
+        cache_key = f"ipc_ptt|{country}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
+
+        code = self.COUNTRY_CODES[country]
+        try:
+            r = requests.get(
+                self.PTT_URL,
+                params={"country": code, "limit": 100},
+                headers={"User-Agent": "NCOP/1.0", "Accept": "application/json"},
+                timeout=20,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[IPC PTT] fetch failed for {country}: {e}")
+            return JsonResponse(
+                {"analyses": [], "meta": {"error": str(e)[:200], "country": country}},
+                status=200,
+            )
+
+        raw = payload.get("data") or []
+        normalized = []
+        for it in raw:
+            if not isinstance(it, dict):
+                continue
+            totals = it.get("totals") or {}
+            # Prefer "current" period totals; fall back to first
+            # projected block if the analysis is projection-only.
+            period_key = None
+            block = None
+            for k in ("current", "projected-1", "projected-2"):
+                if isinstance(totals.get(k), dict) and totals[k]:
+                    period_key = k
+                    block = totals[k]
+                    break
+            if not block:
+                continue
+
+            date_str = it.get("analysis_date") or it.get("fanalysis_date") or ""
+            normalized.append({
+                "anl_id":            str(it.get("anl_id") or ""),
+                "title":             it.get("title") or "",
+                "date":              date_str[:10] if isinstance(date_str, str) else "",
+                "period":            period_key,
+                "analyzed_pop":      block.get("analyzedPopulation") or 0,
+                "phase1_pop":        block.get("phase1Population") or 0,
+                "phase2_pop":        block.get("phase2Population") or 0,
+                "phase3_pop":        block.get("phase3Population") or 0,
+                "phase4_pop":        block.get("phase4Population") or 0,
+                "phase5_pop":        block.get("phase5Population") or 0,
+                "phase3plus_pop":    block.get("phase3PlusPopulation") or 0,
+                "phase1_pct":        block.get("phase1Percentage") or 0,
+                "phase2_pct":        block.get("phase2Percentage") or 0,
+                "phase3_pct":        block.get("phase3Percentage") or 0,
+                "phase4_pct":        block.get("phase4Percentage") or 0,
+                "phase5_pct":        block.get("phase5Percentage") or 0,
+                "phase3plus_pct":    block.get("phase3PlusPercentage") or 0,
+                "country_population": it.get("country_population") or 0,
+            })
+
+        # Oldest first — chart X-axis reads left-to-right by convention.
+        normalized.sort(key=lambda a: a.get("date") or "")
+
+        result = {
+            "analyses": normalized,
+            "meta": {
+                "country":   country,
+                "count":     len(normalized),
+                "source":    "gsu-prod.ipc.codes / IPC PTT public API",
+                "cached_ttl_seconds": self.CACHE_TTL,
+            },
+        }
+        cache.set(cache_key, result, self.CACHE_TTL)
+        return JsonResponse(result)

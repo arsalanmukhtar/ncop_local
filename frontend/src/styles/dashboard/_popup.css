@@ -1481,3 +1481,577 @@
         padding: 6px 6px;
     }
 }
+
+/* =========================================================================
+ * IPC / Food Security popup
+ * -------------------------------------------------------------------------
+ * Extends the shared .ncop-popup__ theme.  The badge colour is set
+ * inline (per-feature IPC hex) so no per-phase class variant needs to
+ * live here; this block styles the badge shape + the phase-breakdown
+ * table and its highlighted-current-phase row.
+ * ========================================================================= */
+.ncop-popup__badge--ipc {
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    border: 1px solid transparent;   /* colour set inline */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    padding: 3px 10px;
+    font-size: 10.5px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.ipc-popup__summary { margin-bottom: 12px; }
+
+.ipc-popup__flag {
+    font-weight: 600;
+    color: var(--popup-text, #e5eef7);
+}
+.ipc-popup__flag--warn {
+    color: #b91c1c;
+    font-weight: 700;
+}
+
+.ipc-popup__breakdown {
+    margin: 10px 0 12px;
+    /* Use --popup-card-bg so the panel picks up the same soft glass
+       fill the other stat cards use — subtle, but reads as a
+       differentiated block on both dark (day) and light (night) popup
+       backgrounds. */
+    background: var(--popup-card-bg, rgba(17, 24, 39, 0.55));
+    border: 1px solid var(--popup-card-border, rgba(148, 163, 184, 0.22));
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.ipc-popup__breakdown-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--popup-text-muted, #64748b);
+    margin-bottom: 6px;
+}
+
+.ipc-popup__phase-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    color: var(--popup-text, #e5eef7);
+}
+
+.ipc-popup__phase-table thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 10.5px;
+    color: var(--popup-text-muted, #64748b);
+    padding: 4px 6px 6px;
+    border-bottom: 1px solid var(--popup-divider, rgba(15, 23, 42, 0.10));
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.ipc-popup__phase-table tbody td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--popup-divider, rgba(15, 23, 42, 0.06));
+    vertical-align: middle;
+}
+.ipc-popup__phase-table tbody tr:last-child td { border-bottom: 0; }
+
+.ipc-popup__swatch-cell { width: 22px; padding-right: 4px !important; }
+.ipc-popup__swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.20);
+}
+
+.ipc-popup__phase-cell { display: flex; flex-direction: column; line-height: 1.2; }
+/* Phase name — MUST inherit the popup-text colour explicitly rather
+   than relying on the <td> cascade, because the previous version
+   referenced a non-existent CSS var (--popup-text-primary) and fell
+   back to browser-default black, which was invisible on the day-mode
+   dark popup background.  Both fields now read at full contrast on
+   both themes. */
+.ipc-popup__phase-num {
+    font-weight: 700;
+    font-size: 11.5px;
+    color: var(--popup-text, #e5eef7);
+}
+.ipc-popup__phase-lbl {
+    font-size: 10.5px;
+    color: var(--popup-text-muted, rgba(203, 213, 225, 0.72));
+}
+
+.ipc-popup__pop-cell,
+.ipc-popup__pct-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--popup-text, #e5eef7);
+}
+.ipc-popup__pct-cell {
+    width: 52px;
+    color: var(--popup-text-muted, rgba(203, 213, 225, 0.72));
+}
+
+/* Active phase row — highlights the population bucket matching the
+   feature's overall_phase so the eye lands there first.  Uses a
+   stronger tint on the row background + accented text colour on the
+   phase name + population so both themes render the row unambiguously
+   as the "current" phase without hiding the rest of the table. */
+.ipc-popup__phase-table tr.is-active td {
+    background: rgba(70, 178, 255, 0.20);
+}
+.ipc-popup__phase-table tr.is-active .ipc-popup__phase-num,
+.ipc-popup__phase-table tr.is-active .ipc-popup__pop-cell {
+    color: var(--popup-link, #38bdf8);
+}
+.ipc-popup__phase-table tr.is-active .ipc-popup__phase-lbl,
+.ipc-popup__phase-table tr.is-active .ipc-popup__pct-cell {
+    color: var(--popup-text, #e5eef7);
+    opacity: 0.92;
+}
+/* Night-mode variant of the active row — the light popup background
+   needs a darker accent than sky-blue so the number contrasts. */
+[data-theme="night"] .ipc-popup__phase-table tr.is-active td {
+    background: rgba(11, 94, 168, 0.16);
+}
+[data-theme="night"] .ipc-popup__phase-table tr.is-active .ipc-popup__phase-num,
+[data-theme="night"] .ipc-popup__phase-table tr.is-active .ipc-popup__pop-cell {
+    color: var(--popup-link, #0d4a7a);
+}
+
+.ipc-popup__justification {
+    margin: 8px 0 10px;
+    padding: 8px 10px;
+    background: rgba(251, 191, 36, 0.10);
+    border-left: 3px solid rgba(245, 158, 11, 0.60);
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--popup-text, #e5eef7);
+}
+
+.ipc-popup__meta {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--popup-divider, rgba(15, 23, 42, 0.10));
+}
+
+/* =========================================================================
+ * IPC / Food Security stats modal — dedicated draggable + resizable panel
+ * -------------------------------------------------------------------------
+ * Mirrors .heatwave-modal chrome + drag/resize behaviour but is a
+ * separate class hierarchy so IPC + heatwave can be restyled
+ * independently.  Uses the same --popup-* CSS vars so day / night
+ * themes flip automatically.
+ * ========================================================================= */
+.ipc-modal {
+    position: absolute;
+    bottom: 12px;
+    left: 20%;
+    width: 75%;
+    height: 380px;
+    min-width: 560px;
+    min-height: 320px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    z-index: 999;
+    color: var(--popup-text);
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px var(--shadow-soft, rgba(0,0,0,0.45)),
+                0 24px 60px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(12px) scale(0.985);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    font-family: "Cabin", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+}
+.ipc-modal.is-open      { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+.ipc-modal.hidden       { display: none; }
+.ipc-modal.is-dragging,
+.ipc-modal.is-resizing  {
+    transition: none;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Header ------------------------------------------------------------ */
+.ipc-modal__head {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 44px 10px 14px;
+    background: linear-gradient(135deg, rgba(146, 64, 14, 0.42), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+    border-bottom: 1px solid var(--popup-divider);
+    cursor: grab;
+    user-select: none;
+    flex: 0 0 auto;
+}
+.ipc-modal.is-dragging .ipc-modal__head { cursor: grabbing; }
+.ipc-modal__drag-grip {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 4px;
+    opacity: 0.55;
+    transition: opacity 0.18s ease;
+}
+.ipc-modal__head:hover .ipc-modal__drag-grip { opacity: 0.9; }
+.ipc-modal__drag-grip span {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--popup-text-muted);
+}
+.ipc-modal__title-block { flex: 1 1 auto; min-width: 0; }
+.ipc-modal__kicker {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--popup-text-muted);
+    line-height: 1.2;
+}
+.ipc-modal__title {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--popup-text);
+    margin-top: 2px;
+}
+.ipc-modal__subtitle {
+    font-size: 11.5px;
+    color: var(--popup-text-muted);
+    margin-top: 2px;
+    line-height: 1.35;
+}
+.ipc-modal__badge {
+    align-self: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.ipc-modal__close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--popup-text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.ipc-modal__close:hover {
+    background: rgba(239, 68, 68, 0.50);
+    color: #fff;
+}
+
+/* ---- Body split (left stats, right chart) ---------------------------- */
+.ipc-modal__body {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) 1fr;
+    overflow: hidden;
+    min-height: 0;
+}
+.ipc-modal__left {
+    border-right: 1px solid var(--popup-divider);
+    padding: 12px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.ipc-modal__stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.ipc-modal__stat {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.ipc-modal__stat-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--popup-text-muted);
+}
+.ipc-modal__stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--popup-text);
+    font-variant-numeric: tabular-nums;
+}
+.ipc-modal__flag         { font-weight: 600; color: var(--popup-text); }
+.ipc-modal__flag--warn   { color: #dc2626; }
+
+.ipc-modal__legend {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 8px;
+}
+.ipc-modal__legend-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--popup-text-muted);
+    margin-bottom: 4px;
+}
+.ipc-modal__legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--popup-text);
+    padding: 2px 0;
+}
+.ipc-modal__legend-sw {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.20);
+    flex: 0 0 auto;
+}
+
+/* ---- Right column (tabs + chart) ------------------------------------- */
+.ipc-modal__right {
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+.ipc-modal__tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--popup-divider);
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+}
+.ipc-modal__tab {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--popup-text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.ipc-modal__tab:hover      { color: var(--popup-text); }
+.ipc-modal__tab.is-active {
+    color: var(--popup-link, #38bdf8);
+    border-bottom-color: var(--popup-link, #38bdf8);
+}
+
+.ipc-modal__chart-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.ipc-modal__chart-head {
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+}
+.ipc-modal__chart-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--popup-text);
+}
+.ipc-modal__chart-sub {
+    font-size: 10.5px;
+    color: var(--popup-text-muted);
+    margin-top: 1px;
+}
+.ipc-modal__canvas-host {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 8px;
+    padding: 8px;
+    overflow: hidden;
+}
+.ipc-modal__canvas-host canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+.ipc-modal__loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.30);
+    backdrop-filter: blur(3px);
+}
+.ipc-modal__loader span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--popup-link, #38bdf8);
+    animation: ipc-modal-loader 0.9s infinite ease-in-out;
+}
+.ipc-modal__loader span:nth-child(2) { animation-delay: 0.15s; }
+.ipc-modal__loader span:nth-child(3) { animation-delay: 0.30s; }
+@keyframes ipc-modal-loader {
+    0%, 100% { transform: scale(0.6); opacity: 0.55; }
+    50%      { transform: scale(1.0); opacity: 1; }
+}
+
+.ipc-modal__info-body {
+    padding: 4px;
+    color: var(--popup-text);
+    overflow: auto;
+    height: 100%;
+}
+.ipc-modal__meta-dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    row-gap: 6px;
+    column-gap: 12px;
+    font-size: 12px;
+}
+.ipc-modal__meta-dl dt {
+    font-weight: 700;
+    color: var(--popup-text-muted);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    align-self: center;
+}
+.ipc-modal__meta-dl dd {
+    margin: 0;
+    color: var(--popup-text);
+    word-break: break-word;
+}
+.ipc-modal__error {
+    padding: 12px 16px;
+    color: #fecaca;
+    background: rgba(127, 29, 29, 0.35);
+    border: 1px solid rgba(239, 68, 68, 0.55);
+    border-radius: 8px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.ipc-modal__footnote {
+    flex: 0 0 auto;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--popup-divider);
+    font-size: 10.5px;
+    color: var(--popup-text-muted);
+    text-align: center;
+}
+
+.ipc-modal__resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    color: var(--popup-text-muted);
+    opacity: 0.65;
+    transition: opacity 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    z-index: 4;
+    touch-action: none;
+}
+.ipc-modal__resize:hover  { opacity: 1; color: #f97316; transform: scale(1.08); }
+.ipc-modal__resize svg    { width: 14px; height: 14px; display: block; }
+.ipc-modal.is-resizing .ipc-modal__resize { opacity: 1; color: #f97316; }
+
+/* ---- 'Open Food Security Panel' button (in the popup drawer) --------- */
+.ipc-open-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 2px;
+    padding: 8px 14px;
+    background: linear-gradient(135deg, #0b5ea8 0%, #1e88e5 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(11, 94, 168, 0.35);
+    transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.ipc-open-stats:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(11, 94, 168, 0.50);
+    filter: brightness(1.08);
+}
+.ipc-open-stats:active {
+    transform: translateY(0) scale(0.98);
+}
+
+@media (max-width: 720px) {
+    .ipc-modal {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        bottom: 12px;
+        height: 60vh;
+    }
+    .ipc-modal__body       { grid-template-columns: 1fr; }
+    .ipc-modal__left       { border-right: none; border-bottom: 1px solid var(--popup-divider); }
+    .ipc-modal__stats      { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ipc-modal__meta-dl    { grid-template-columns: 1fr; row-gap: 2px; }
+    .ipc-modal__meta-dl dd { margin-bottom: 6px; }
+}
