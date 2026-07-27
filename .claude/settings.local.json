@@ -36,7 +36,9 @@
       "Bash(node --check frontend/src/modules/wind-ocean-particles.js)",
       "Bash(python -c \"import ast, sys; ast.parse\\(open\\('project/ncop_internal/views.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('project/ncop_internal/views.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "Bash(node --check frontend/src/modules/navigation-panel.js)"
+      "Bash(node --check frontend/src/modules/navigation-panel.js)",
+      "Bash(node --check frontend/src/modules/weather-report-control.js)",
+      "Bash(node --check frontend/src/modules/dashboard.js)"
     ]
   }
 }

@@ -614,6 +614,15 @@ function anchorRailPanelsToButtons() {
     const btn = document.getElementById(btnId);
     if (!panel || !btn) return;
 
+    // Panels that the user has dragged/resized opt out of rail
+    // anchoring — otherwise a re-render would teleport them back to
+    // the rail edge and wipe the user's chosen position.  Individual
+    // panels signal this via `data-*-user-positioned` on themselves;
+    // right now only the weather-report panel uses it, but the check
+    // is generic so any future draggable panel just needs to set
+    // its own data attribute.
+    if (panel.dataset.wrpUserPositioned === "true") return;
+
     const btnRect = btn.getBoundingClientRect();
     panel.style.top = `${btnRect.top - mapRect.top}px`;
     panel.style.right = `${rightOffset}px`;
