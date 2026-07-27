@@ -357,6 +357,7 @@
                 <div class="sidebar-heading">Data &amp; Layers</div>
                 <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
                 <a href="#new-gis-layers" class="sidebar-link">New GIS Layers &mdash; Hydrology / Geology / Seismology</a>
+                <a href="#agriculture-monitoring" class="sidebar-link">Agriculture Monitoring &mdash; IPC &amp; PBS Crops</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
                 <a href="#station-layers" class="sidebar-link">Station Layers</a>
@@ -405,7 +406,7 @@
             <div class="page-meta">
                 <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
                 <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
-                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-25</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-27</span>
             </div>
 
             <!-- ============================================================ -->
@@ -900,6 +901,7 @@ sudo journalctl -u ncop-waitress.service -f
                             <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
                             <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
                             <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast</td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO.</td></tr>
+                            <tr><td><strong>Agriculture Monitoring</strong> <em>(new)</em></td><td>Food Security (IPC/CH), Crop Production (PBS)</td><td>IPC/CH Acute Food Insecurity polygons for Pakistan/Afghanistan/Bangladesh with a 4-tab draggable Stats Modal (includes Historical Trend chart from the PTT scrape). Provincial + District crop-production choropleths driven by a single-select filter card with all 121 PBS crops; popup CTA launches the 6-tab Crop Explorer modal (Time Series, Province &amp; District Map/Table, About). See <a href="#agriculture-monitoring">Agriculture Monitoring</a> for the full breakdown.</td></tr>
                             <tr><td><strong>Ocean &amp; Coastal</strong></td><td>Wind/Ocean Particles, SkyTruth Slick+</td><td>Animated particle vectors; marine oil spill detections.</td></tr>
                             <tr><td><strong>Early Warning (DEW)</strong></td><td>API Features, Hazard Alerts (GDACS, EONET, USGS, Meteoblue early warnings)</td><td>Global disaster events, earthquakes, tropical cyclones, drought etc.</td></tr>
                         </tbody>
@@ -1328,8 +1330,8 @@ seismological_global:seismic_hazard_map
 
             <!-- ============================================================ -->
             <section id="guided-tour">
-                <h2 class="section-title">Guided Tour (53 steps) <span class="section-anchor">#</span></h2>
-                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Rewritten from ~45 stale steps into <strong>53 workflow-ordered steps</strong> that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
+                <h2 class="section-title">Guided Tour (57 steps) <span class="section-anchor">#</span></h2>
+                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>57 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
 
                 <h3 class="subsection-title">Section flow</h3>
                 <ol>
@@ -1339,8 +1341,9 @@ seismological_global:seismic_hazard_map
                     <li><strong>Weather Systems accordion</strong> (7 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations.</li>
                     <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
                     <li><strong>Air Quality accordion</strong> (2 steps).</li>
+                    <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
                     <li><strong>Right rail</strong> (25 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the new <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps.</li>
-                    <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint.</li>
+                    <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint (mentions every new feature).</li>
                 </ol>
 
                 <h3 class="subsection-title">Smart step preparation (<code>NCOPTour.executeAction</code>)</h3>
@@ -1420,6 +1423,78 @@ seismological_global:seismic_hazard_map
                 </div>
 
                 <p>All new layers carry <code>dynamicLegend</code> configuration in <code>map-layers.js</code> so the Layer Info panel auto-renders coloured swatches without a separate image legend asset &mdash; consistent with the shift to declarative legends documented in <a href="#layer-info-panel">Layer Info &amp; Legends</a>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="agriculture-monitoring">
+                <h2 class="section-title">Agriculture Monitoring <span class="section-anchor">#</span></h2>
+                <p>A new top-level sidebar accordion (wheat icon, registered in <code>sidebar-menu.js#getCategoryConfig</code>) that groups humanitarian food-security indicators with Pakistan&rsquo;s official crop-production statistics. Deliberately named broadly so future subcategories (livestock, irrigation, pests, market prices) can live here without another reshuffle. Two subcategories today:</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Subcategory</th><th>Layers</th><th>Upstream</th><th>Proxy</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Food Security</strong></td><td>IPC &mdash; Pakistan, IPC &mdash; Afghanistan, IPC &mdash; Bangladesh (polygon toggles)</td><td>IPC Info <code>api.ipcinfo.org</code> (Acute Food Insecurity), IPC PTT <code>gsu-prod.ipc.codes</code> (historical trend)</td><td><code>/api/ipc/&lt;country&gt;/</code> &middot; <code>/api/ipc/&lt;country&gt;/history/</code></td></tr>
+                            <tr><td><strong>Crop Production</strong></td><td>Crop Production (Provincial), Crop Production (District) &mdash; both driven by a shared 121-crop filter card</td><td>PBS Crop Reporting Service via <code>na.data.gov.pk/Crops/*</code> (values) + <code>na.data.gov.pk/Scripts/polygons/*</code> (geometry)</td><td><code>/api/crops/list/</code> &middot; <code>/api/crops/years/</code> &middot; <code>/api/crops/summary/</code> &middot; <code>/api/crops/yearly/</code> &middot; <code>/api/crops/map/</code> &middot; <code>/api/crops/geojson/</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">Food Security &mdash; IPC / CH</h3>
+                <p>Each country polygon renders in the official IPC/CH 5-phase colour ramp (<span style="color:#CDFACD">■</span> 1 Minimal &middot; <span style="color:#FAE61E">■</span> 2 Stressed &middot; <span style="color:#E67800">■</span> 3 Crisis &middot; <span style="color:#C80100">■</span> 4 Emergency &middot; <span style="color:#640000">■</span> 5 Catastrophe). The fill expression prefers each feature&rsquo;s API-baked <code>color</code> field and falls back to a <code>match</code> on <code>overall_phase</code> so any polygon rendered without the pre-computed colour still lands in the correct band. <strong>Country coverage:</strong> Enabled &mdash; PK, AF, BD, PS, YE, LB, SD, SO, CD (verified against <code>/analyses</code>). Not enabled &mdash; India, Iran, Sri Lanka, Nepal, Bhutan, Myanmar (IPC does not classify these countries; <code>/analyses</code> returns <code>[]</code>).</p>
+                <p>The Django proxy <code>IpcFoodSecurityAPIView</code> (<code>project/ncop_internal/views.py</code>) resolves the LATEST published analysis cycle server-side and walks up to six recent analyses until one has features &mdash; fixes the case where the newest analysis (e.g. Somalia) is empty. The alpha-2 country code bug from the earlier GCOP integration is fixed centrally here so every downstream consumer gets the same corrected feed. Cached 6 h per country.</p>
+
+                <h4 class="subsection-title" style="font-size:14px">IPC Stats Modal &mdash; draggable + resizable</h4>
+                <p>Clicking any IPC polygon opens a tabular popup with per-phase population breakdown and an <strong>Open Food Security Panel</strong> button. The button launches the <code>IpcStatsModal</code> &mdash; a draggable + resizable panel styled from the shared <code>--popup-*</code> variables and following the same pattern as the Heatwave and Crop Explorer modals. Four tabs:</p>
+                <ul>
+                    <li><strong>Overview</strong> &mdash; totals, population-at-risk, per-phase bar chart.</li>
+                    <li><strong>Areas</strong> &mdash; ranked table of classified areas with population + phase.</li>
+                    <li><strong>Analysis</strong> &mdash; upstream analysis metadata (id, cycle, source, publication date).</li>
+                    <li><strong>Historical Trend</strong> &mdash; stacked-bar timeline of phase distribution across recent cycles, sourced from the PTT scrape (<code>/api/ipc/&lt;country&gt;/history/</code>, cached 24 h).</li>
+                </ul>
+
+                <h3 class="subsection-title">Crop Production &mdash; 121 crops &times; 44 fiscal years</h3>
+                <p>Two toggleable choropleths &mdash; <strong>Crop Production (Provincial)</strong> and <strong>Crop Production (District)</strong> &mdash; both driven by the <strong>same</strong> crop selection. A filter card injected above the toggles (see <code>crop-filter-controller.js</code>) is a single-select radio list of all 121 crops with a live search box. Default open state: Wheat (crop id 4), fiscal year 2024-25.</p>
+                <p>On filter change, both active layers&rsquo; source URLs are rewritten in place via <code>map.getSource(...).setData(&lt;new url&gt;)</code> so Mapbox refetches the joined GeoJSON without any addSource/removeLayer churn. <code>fill-color</code> is re-set via <code>setPaintProperty</code> with per-crop stops from a small lookup table &mdash; Wheat, Rice, Cotton, Sugarcane, Maize etc. all have different production magnitudes, so the 5-stop green ramp rescales sensibly per crop. Unknown crops fall through to a generic scale.</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Endpoint</th><th>Purpose</th><th>TTL</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>/api/crops/list/</code></td><td>All 121 crops with their PBS ids &mdash; populates the filter card and the modal picker.</td><td>24 h</td></tr>
+                            <tr><td><code>/api/crops/years/</code></td><td>~44 fiscal years (1981&ndash;82 &hellip; 2024&ndash;25) for the modal year picker.</td><td>24 h</td></tr>
+                            <tr><td><code>/api/crops/summary/</code></td><td>National aggregate card &mdash; Area / Production / Yield for a (crop, year) tuple. Backs the modal&rsquo;s left-panel stats.</td><td>24 h</td></tr>
+                            <tr><td><code>/api/crops/yearly/</code></td><td>Full 44-year national time series for a crop. Backs the Time Series tab.</td><td>24 h</td></tr>
+                            <tr><td><code>/api/crops/map/</code></td><td>Per-region breakdown &mdash; <code>level=11</code> Province, <code>level=12</code> Division, <code>level=13</code> District. Backs the Province + District Map/Table tabs.</td><td>24 h</td></tr>
+                            <tr><td><code>/api/crops/geojson/</code></td><td>Ready-to-consume FeatureCollection &mdash; polygons from <code>na.data.gov.pk/Scripts/polygons/*</code> joined server-side with values from <code>/GetMap</code>. Consumed directly by Mapbox&rsquo;s <code>geojson</code> source; no client-side stitching.</td><td>24 h (values) + 7 d (polygons)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p>The GeoJSON join handles two upstream quirks in <code>CropGeoJSONAPIView</code>:</p>
+                <ul>
+                    <li><strong>District id mismatch</strong> &mdash; polygon file uses <code>code=5</code> (int), values feed uses <code>id="005"</code> (zero-padded string). Both sides are cast through <code>_to_int(v)</code> and stored in the same lookup, so all 119/119 crop-data rows join cleanly for Wheat 2021&ndash;22.</li>
+                    <li><strong>Name-normalized fallback</strong> &mdash; <code>_norm_name(n)</code> upper-cases, strips <code>&quot; DISTRICT&quot;/&quot; DIVISION&quot;</code> suffixes, and squeezes to alphanumerics for tolerant name matching when int ids don&rsquo;t line up.</li>
+                </ul>
+                <p>Polygons without matching crop-data still ship in the FeatureCollection with <code>has_data:false</code> and zero values, so those regions render as light-grey &ldquo;no data&rdquo; cells in the choropleth ramp instead of vanishing from the map.</p>
+
+                <h4 class="subsection-title" style="font-size:14px">Crop Explorer Modal &mdash; 6 tabs</h4>
+                <p>Launched from the <strong>Open Crop Explorer</strong> button inside every crop-choropleth popup (via the global <code>window.__openCropExplorer(cropId, year)</code>). The modal is draggable + resizable, uses Chart.js v4, and has six tabs backed by the endpoints above &mdash; district data fires in parallel with province/summary/yearly so the extra fetch is free after the first hit per <code>(crop, year)</code>.</p>
+                <ul>
+                    <li><strong>Time Series</strong> &mdash; dual-axis line chart: Area (000 Ha) + Production (000 MT) on the left axis, Yield (MT/Ha) on the right axis, over ~44 fiscal years.</li>
+                    <li><strong>Province Map</strong> &mdash; horizontal bar chart ranked by production (000 MT) for the selected year; darkest green at rank #1.</li>
+                    <li><strong>Province Table</strong> &mdash; full per-province Area / Production / Yield breakdown.</li>
+                    <li><strong>District Map</strong> &mdash; horizontal bar chart of the top-20 producing districts (list capped for legibility; full ranking lives in the District Table tab).</li>
+                    <li><strong>District Table</strong> &mdash; full ranked list of every reporting district with an aggregate row on top and a per-district <em>share</em> column showing each district&rsquo;s percentage of the national district total.</li>
+                    <li><strong>About</strong> &mdash; source, cadence, method notes, and the PBS province-ID mapping (1 KP &middot; 2 Punjab &middot; 3 Sindh &middot; 4 Balochistan &middot; 6 Federal Capital).</li>
+                </ul>
+
+                <h4 class="subsection-title" style="font-size:14px">Sidebar-injection pattern</h4>
+                <p>The crop filter card and the PMD Warnings hazard filter both follow the same injection strategy: a <code>MutationObserver</code> watches for the first <code>input[data-item-key=&quot;crop_provincial&quot;]</code> (or <code>pmd_warnings</code>) toggle to render, then inserts the filter card as the previous sibling of the toggle row. Firing a custom event (<code>ncop-crop-selection-changed</code> / <code>pmd-warnings-filter-changed</code>) on <code>window</code> lets any future consumer react. The crop filter&rsquo;s subcategory-lookup walker scans every top-level key in <code>ncop_menu_items</code> so it stays working across the earlier reshuffle from <code>gis_layers &rarr; agriculture_monitoring</code>.</p>
             </section>
 
             <!-- ============================================================ -->

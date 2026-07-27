@@ -34,6 +34,12 @@ from .views import (
     HeatwaveDetailView,
     IpcFoodSecurityAPIView,
     IpcHistoryAPIView,
+    CropListAPIView,
+    CropYearsAPIView,
+    CropSummaryAPIView,
+    CropYearlyAPIView,
+    CropMapAPIView,
+    CropGeoJSONAPIView,
 
 
 )
@@ -81,4 +87,11 @@ urlpatterns = [
     # PTT (Population Tracking Tool) historical time-series — used by
     # the Food Security stats-modal's Historical Trend tab.
     path("api/ipc/<str:country>/history/", IpcHistoryAPIView.as_view(), name="ipc-history"),
+    # Pakistan Crop Data (na.data.gov.pk / PBS)
+    path("api/crops/list/",    CropListAPIView.as_view(),    name="crops-list"),
+    path("api/crops/years/",   CropYearsAPIView.as_view(),   name="crops-years"),
+    path("api/crops/summary/", CropSummaryAPIView.as_view(), name="crops-summary"),
+    path("api/crops/yearly/",  CropYearlyAPIView.as_view(),  name="crops-yearly"),
+    path("api/crops/map/",     CropMapAPIView.as_view(),     name="crops-map"),
+    path("api/crops/geojson/", CropGeoJSONAPIView.as_view(), name="crops-geojson"),
 ]

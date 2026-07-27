@@ -1643,6 +1643,113 @@ function _handleIpcPopupClick(e) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Crop choropleth popup (crop_wheat / crop_rice / crop_cotton / crop_sugarcane)
+// ---------------------------------------------------------------------------
+// The layer's GeoJSON features carry `name`, `code`, `production`, `area`,
+// `yield`, `crop_id`, `year`, `level`, `has_data` (see /api/crops/geojson/).
+// We surface the three headline numbers as stat tiles + a small "Open
+// Crop Explorer" CTA that launches the standalone modal pre-selected for
+// the current crop.  Zero coupling to the crop-explorer module — it
+// reaches window.__openCropExplorer only, exposed globally by
+// CropExplorerControl's constructor.
+// ---------------------------------------------------------------------------
+function _cropFmt(v, digits = 1) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(digits)}k`;
+  return n.toFixed(digits);
+}
+function _cropCropName(id) {
+  const map = { 4: "Wheat", 2: "Rice", 5: "Cotton", 3: "Sugarcane" };
+  return map[Number(id)] || `Crop ${id}`;
+}
+
+function buildCropPopupContent(props) {
+  const name = String(props.name || "Province").trim();
+  const cropId = Number(props.crop_id) || 4;
+  const cropName = _cropCropName(cropId);
+  const year   = String(props.year || "");
+  const hasData = props.has_data === true || props.has_data === "true";
+  const prod = Number(props.production) || 0;
+  const area = Number(props.area) || 0;
+  const yld  = Number(props.yield) || 0;
+
+  const primary = `
+    <div class="ncop-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${escapeHtml(name)}</div>
+        <div class="ncop-popup__subtitle">${escapeHtml(cropName)}${year ? ` &middot; ${escapeHtml(year)}` : ""} &middot; Pakistan Bureau of Statistics</div>
+      </div>
+      <div class="ncop-popup__header-aside">
+        <span class="ncop-popup__badge ncop-popup__badge--crop">
+          ${hasData ? "Reported" : "No Data"}
+        </span>
+      </div>
+    </div>
+  `;
+
+  const drawer = hasData
+    ? `
+      <div class="ncop-popup__grid crop-popup__stats">
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Area</div>
+          <div class="ncop-popup__card-value">${_cropFmt(area, 1)} <span class="crop-popup__unit">000 Ha</span></div>
+        </div>
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Production</div>
+          <div class="ncop-popup__card-value crop-popup__value--prod">${_cropFmt(prod, 1)} <span class="crop-popup__unit">000 MT</span></div>
+        </div>
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Yield</div>
+          <div class="ncop-popup__card-value">${yld.toFixed(3)} <span class="crop-popup__unit">MT/Ha</span></div>
+        </div>
+      </div>
+      <p class="crop-popup__reading">
+        <strong>Reading:</strong> Province colour = ${escapeHtml(cropName)} production ranked against the crop's national spread. Popup values are for the ${escapeHtml(year)} fiscal year specifically; open the Explorer for the full 40+ year time series.
+      </p>
+      <button type="button" class="crop-open-explorer"
+        data-crop-id="${escapeHtml(String(cropId))}"
+        data-year="${escapeHtml(year)}">
+        Open Crop Explorer
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    `
+    : `
+      <div class="crop-popup__empty">
+        <p><strong>No provincial ${escapeHtml(cropName)} production reported for ${escapeHtml(year || "this year")}.</strong></p>
+        <p>${escapeHtml(name)} may not be a primary producing region for this crop in the selected fiscal year. Open the Explorer to browse other crops or years.</p>
+        <button type="button" class="crop-open-explorer"
+          data-crop-id="${escapeHtml(String(cropId))}"
+          data-year="${escapeHtml(year)}">
+          Open Crop Explorer
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    `;
+
+  return { primary, drawer, drawerTitle: `${cropName} — Provincial Breakdown` };
+}
+
+// One delegated listener wired at first dispatch — clicking any
+// `.crop-open-explorer` button hands the (cropId, year) to the global
+// launcher the crop-explorer-control module exposes.
+function setupCropPopupEventHandlers() {
+  document.removeEventListener("click", _handleCropPopupClick);
+  document.addEventListener("click", _handleCropPopupClick);
+}
+function _handleCropPopupClick(e) {
+  const btn = e.target.closest(".crop-open-explorer");
+  if (!btn) return;
+  const cid = Number(btn.getAttribute("data-crop-id")) || 4;
+  const yr  = btn.getAttribute("data-year") || "";
+  if (typeof window.__openCropExplorer === "function") {
+    window.__openCropExplorer(cid, yr);
+  } else {
+    console.warn("[crop popup] window.__openCropExplorer not available");
+  }
+}
+
 function buildNwfcPopupContent(props) {
   const popupId = `nwfc-${String(props.name || "station")
     .replace(/\s+/g, "-")
@@ -3993,6 +4100,24 @@ export default class LayerAttributePopup {
         this.#show();
         this.#updatePosition();
         this.#attachMoveListeners();
+        return;
+      }
+
+      // SPECIAL HANDLING FOR Crop choropleth LAYERS (crop_*)
+      // Every crop_<name> source registered in map-layers.js (wheat,
+      // rice, cotton, sugarcane, …) routes through this branch so the
+      // popup shows the joined province card + Open Explorer CTA.
+      if (
+        (layerId && layerId.startsWith("crop_")) ||
+        (sourceId && sourceId.startsWith("crop_"))
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const { primary, drawer, drawerTitle } = buildCropPopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupCropPopupEventHandlers();
         return;
       }
 

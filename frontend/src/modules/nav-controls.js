@@ -342,6 +342,40 @@ const TOUR_STEPS = [
   },
 
   // ===============================================================
+  //  AGRICULTURE MONITORING accordion — new
+  // ===============================================================
+  {
+    title: "5 · Agriculture Monitoring — new",
+    content:
+      "The Agriculture Monitoring accordion (wheat icon) is a new top-level category that combines humanitarian food-security indicators with Pakistan's official crop-production statistics. Two subcategories today — Food Security (IPC/CH) and Crop Production (PBS) — with room for livestock, irrigation, pest, and market-price layers in future releases.",
+    position: "right",
+    action: "openSidebarAccordion",
+    actionValue: "Agriculture Monitoring",
+    targetResolver: "accordionHeaderByTitle",
+    targetValue: "Agriculture Monitoring",
+  },
+  {
+    title: "Food Security — IPC / CH",
+    content:
+      "Three country layers driven by IPC Info's official Acute Food Insecurity classification: Pakistan, Afghanistan, and Bangladesh. Each polygon renders in the official 5-phase colour ramp (Minimal → Catastrophe). The layers are fetched through a Django proxy that resolves the LATEST published analysis cycle server-side, so you always see the most recent classification without hard-coded cycle IDs. Click any polygon for a tabular popup and the Open Food Security Panel button, which launches a draggable + resizable IPC Stats Modal with 4 tabs including a Historical Trend chart from the PTT scrape.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Food Security",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Food Security",
+  },
+  {
+    title: "Crop Production — 121 crops · 44 fiscal years",
+    content:
+      "Two toggleable choropleths — Provincial and District — driven by the Pakistan Bureau of Statistics (PBS) Crop Reporting Service, joined server-side to na.data.gov.pk's polygon file. The 'Filter by crop type' card injected above the toggles is a single-select radio list of all 121 crops with a live search box: pick any crop (Wheat is the default) and BOTH active layers redraw in lock-step with per-crop stops so the colour ramp always spans the crop's real production magnitude. Click any province/district polygon for the full Area / Production / Yield tile and the Open Crop Explorer button, which launches the standalone 6-tab Crop Explorer modal (Time Series · Province Map · Province Table · District Map · District Table · About) pre-selected on the current crop.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Crop Production",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Crop Production",
+  },
+
+  // ===============================================================
   //  UNIFIED RIGHT RAIL — every button, in stack order
   // ===============================================================
   {
@@ -548,7 +582,7 @@ const TOUR_STEPS = [
     target: "#ncopTourToggle",
     title: "That's the full tour",
     content:
-      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, and the new Geology + Seismology + expanded Hydrological Layers. Click this graduation-cap icon any time to restart the tour.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the new Geology + Seismology + expanded Hydrological Layers, and the newest addition — the Agriculture Monitoring accordion with IPC/CH Food Security and the PBS Crop Production choropleths (with 121-crop filter and the 6-tab Crop Explorer modal). Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];

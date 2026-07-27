@@ -1660,6 +1660,16 @@ export const ncop_menu_items = {
         },
       },
     },
+  },
+
+  // =======================================================================
+  // Agriculture Monitoring — hoisted out of GIS Layers so operators find
+  // humanitarian + crop-choropleth work in one dedicated accordion.  Named
+  // broadly so future subcategories (livestock, irrigation, pests, market
+  // prices…) can live here without another reshuffle.  Consumers reference
+  // toggles by data-item-key (ipc_*, crop_*) and are unaffected.
+  // =======================================================================
+  agriculture_monitoring: {
 
     // =====================================================================
     // Food Security  —  IPC / CH acute food insecurity classification
@@ -1760,7 +1770,130 @@ export const ncop_menu_items = {
       }
       return { toggle };
     })(),
+
+    // =====================================================================
+    // Agriculture — Pakistan Bureau of Statistics crop production
+    //
+    // Two toggles — Provincial and District choropleths.  Both are
+    // driven by the SAME crop selection: a filter card injected above
+    // the toggles (see crop-filter-controller.js) lets the operator
+    // pick one of the 121 crops PBS publishes.  On change, both
+    // active layers' geojson `data` URLs are rewritten via
+    // map.getSource(...).setData(<new url>) — Mapbox refetches from
+    // /api/crops/geojson/?crop=<newId>&year=2024-25&level=<11|13>.
+    //
+    // Server-side (CropGeoJSONAPIView) joins na.data.gov.pk's polygon
+    // file with the /Crops/GetMap values feed.  Popup dispatch
+    // (crop_* sources in layer-attribute-popup.js) shows the joined
+    // province/district card + Open Crop Explorer CTA that launches
+    // the standalone modal pre-selected on the current crop.
+    // =====================================================================
+    "Crop Production": (function _buildCropLayers() {
+      // Latest year with stable coverage across every major crop.
+      // Users can drill into other years via the Crop Explorer modal.
+      const YEAR    = "2024-25";
+      const DEFAULT_CROP_ID = 4;   // Wheat
+
+      // 5-stop green ramp used for both provincial + district layers.
+      // The filter controller rewrites the source URL on crop change;
+      // Mapbox `interpolate` clamps out-of-range values so the same
+      // ramp visually adapts to whatever the crop's magnitude is.
+      const RAMP = ["#f7fcf5", "#c7e9c0", "#74c476", "#238b45", "#00441b"];
+
+      // Provincial stops match wheat's magnitude by default; the
+      // controller re-tunes them per crop via a small lookup table
+      // when the source URL is swapped (see crop-filter-controller.js).
+      const PROV_STOPS_WHEAT = [0, 500, 2000, 6000, 20000];
+      const DIST_STOPS_WHEAT = [0, 50, 150, 400, 1500];
+
+      const _fillExpr = (stops) => ([
+        "case",
+        ["!=", ["get", "has_data"], true], "#e5e7eb",
+        [
+          "interpolate", ["linear"],
+          ["to-number", ["coalesce", ["get", "production"], 0]],
+          stops[0], RAMP[0],
+          stops[1], RAMP[1],
+          stops[2], RAMP[2],
+          stops[3], RAMP[3],
+          stops[4], RAMP[4],
+        ],
+      ]);
+
+      const LAYERS = [
+        { key: "crop_provincial",
+          label: "Crop Production (Provincial)",
+          level: 11,
+          stops: PROV_STOPS_WHEAT,
+          info: "Provincial choropleth of the currently-filtered crop's production (000 MT) for fiscal " + YEAR +
+                ". Use the 'Filter by crop type' selector above these toggles to switch crop; both provincial and district layers update in lock-step. Data: PBS Crop Reporting Service, joined server-side to na.data.gov.pk's polygon file (7-day cache). Click any province for the full breakdown card + 40-year time series." },
+        { key: "crop_district",
+          label: "Crop Production (District)",
+          level: 13,
+          stops: DIST_STOPS_WHEAT,
+          info: "District-level choropleth of the currently-filtered crop. District values from PBS are typically ~5–10 % of the containing province's total, so the ramp uses smaller stops than the provincial layer. Districts without reported data render grey — coverage varies by crop." },
+      ];
+
+      const toggle = {};
+      for (const c of LAYERS) {
+        const src = `${c.key}-source`;
+        toggle[c.key] = {
+          label: c.label,
+          theme: null,
+          geometry: "polygon",
+          // Meta read by the crop-popup dispatcher (for the Open
+          // Explorer CTA) and by crop-filter-controller.js (for
+          // source URL rewrites on filter change).  Ignored by Mapbox.
+          _ncop_cropDefault:  DEFAULT_CROP_ID,
+          _ncop_year:         YEAR,
+          _ncop_level:        c.level,
+          _ncop_stops:        c.stops,
+          source: {
+            id:   src,
+            type: "geojson",
+            data: `${window.location.origin}/api/crops/geojson/?crop=${DEFAULT_CROP_ID}&year=${YEAR}&level=${c.level}`,
+            generateId: true,
+          },
+          layers: [
+            { id: `${c.key}-fill`,
+              type: "fill",
+              source: src,
+              paint: {
+                "fill-color": _fillExpr(c.stops),
+                "fill-opacity": 0.72,
+                "fill-outline-color": "#333333",
+              },
+            },
+            { id: `${c.key}-outline`,
+              type: "line",
+              source: src,
+              minzoom: c.level === 13 ? 6 : 4,
+              paint: {
+                "line-color": "#0f172a",
+                "line-width": c.level === 13 ? 0.5 : 0.8,
+              },
+            },
+          ],
+          popup: true,
+          information: c.info,
+          dynamicLegend: {
+            title: `Production (000 MT) — fiscal ${YEAR}`,
+            entries: [
+              { swatch: RAMP[0], shape: "square", label: `≤ ${c.stops[0].toLocaleString()}` },
+              { swatch: RAMP[1], shape: "square", label: `~ ${c.stops[1].toLocaleString()}` },
+              { swatch: RAMP[2], shape: "square", label: `~ ${c.stops[2].toLocaleString()}` },
+              { swatch: RAMP[3], shape: "square", label: `~ ${c.stops[3].toLocaleString()}` },
+              { swatch: RAMP[4], shape: "square", label: `≥ ${c.stops[4].toLocaleString()}` },
+              { swatch: "#e5e7eb", shape: "square", label: "No reported data for the selected crop" },
+            ],
+            note: "Colour interpolates linearly on production. Pick a different crop via the filter card above. Popup shows the full area / production / yield for the region plus a link to the full 40-year time series in the Crop Explorer modal.",
+          },
+        };
+      }
+      return { toggle };
+    })(),
   },
+
   weather: {
     "Radar Layers": {
       temporal: {

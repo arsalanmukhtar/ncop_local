@@ -35,10 +35,12 @@ import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
+import CropExplorerControl from "./crop-explorer-control.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
 import { initPmdWarningsFilter } from "./pmd-warnings-filter.js";
+import { initCropFilter } from "./crop-filter-controller.js";
 
 
 // ---- Mapbox token handling ----
@@ -151,6 +153,11 @@ class DashboardManager {
     // Mapbox instance while active.  No hook into the primary map's
     // existing render pipeline required.
     new SplitCompareControl(this.#map);
+    // Crop Data Explorer — standalone rail button that opens a modal
+    // for 44-year Pakistan crop production / area / yield analysis
+    // (proxied via /api/crops/*).  Self-contained: adds its own button
+    // + its own Chart.js modal; does not touch the map's render pipeline.
+    new CropExplorerControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -159,6 +166,15 @@ class DashboardManager {
     // MutationObserver) and injects the 13-row filter card directly
     // above it — see pmd-warnings-filter.js.
     initPmdWarningsFilter(this.#map);
+
+    // Crop-type pre-filter for the Agriculture subcategory (Provincial +
+    // District crop-production layers).  Same sidebar-injection pattern
+    // as PMD warnings, but semantics are single-select — a choropleth
+    // only paints ONE crop at a time.  Fires
+    // `ncop-crop-selection-changed` on window; also directly refreshes
+    // any active crop_* source's data URL and repaints the ramp for
+    // the newly-selected crop's production magnitude.
+    initCropFilter(this.#map);
 
     // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
     waitForEl("#story-root")

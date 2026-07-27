@@ -168,6 +168,10 @@ export class SidebarMenu {
         icon: "alert-triangle",
         customIcon: earlyWarningIcon,
       },
+      agriculture_monitoring: {
+        title: "Agriculture Monitoring",
+        icon: "wheat",
+      },
     };
     return (
       categoryConfig[categoryKey] || {

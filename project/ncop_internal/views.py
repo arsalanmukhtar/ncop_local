@@ -7342,3 +7342,276 @@ class IpcHistoryAPIView(View):
         }
         cache.set(cache_key, result, self.CACHE_TTL)
         return JsonResponse(result)
+
+
+# ==================================================================
+#  Pakistan Crop Data proxy — na.data.gov.pk/Crops/*
+#  ----------------------------------------------------------------
+#  The upstream site (Pakistan Bureau of Statistics' National
+#  Account Dashboard for crops) publishes a stable public JSON API
+#  under /Crops/Get*.  We proxy it so:
+#    * the frontend can consume it with same-origin cookies (some
+#      browsers block third-party form-POST responses),
+#    * we get a 24-hour Django cache in front of an origin that
+#      typically responds in 1-3 s,
+#    * one code path can normalize error responses to
+#      { data: [] } instead of an HTML error page.
+#
+#  Endpoints (frontend base = /api/crops/):
+#    GET  list/                        → 121 crops [{id, name}]
+#    GET  years/                       → fiscal-year dropdown values
+#    GET  summary/?crop&year&level&area  → single-cell current-year card
+#    GET  yearly/?crop&level&area      → full ~44-year time series
+#    GET  map/?crop&year&level         → per-region values (province/division/district)
+#
+#  All are cached per (endpoint + query string).  Failure returns
+#  { data: [] } with HTTP 200 so the modal renders empty state.
+#  No HTML scraping — every endpoint is JSON.
+# ==================================================================
+class _CropsBaseView(View):
+    BASE_URL  = "https://na.data.gov.pk/Crops"
+    CACHE_TTL = 24 * 3600
+    TIMEOUT   = 20
+
+    def _fetch(self, path, method="GET", data=None, cache_key_extra=""):
+        cache_key = f"crops|{method}|{path}|{cache_key_extra}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        url = f"{self.BASE_URL}{path}"
+        try:
+            if method == "GET":
+                r = requests.get(url, timeout=self.TIMEOUT,
+                                 headers={"User-Agent": "NCOP/1.0",
+                                          "Accept": "application/json"})
+            else:
+                r = requests.post(url, data=(data or {}), timeout=self.TIMEOUT,
+                                  headers={"User-Agent": "NCOP/1.0",
+                                           "Accept": "application/json"})
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[crops] {method} {path} failed: {e}")
+            return {"data": [], "meta": {"error": str(e)[:200]}}
+        cache.set(cache_key, payload, self.CACHE_TTL)
+        return payload
+
+
+class CropListAPIView(_CropsBaseView):
+    def get(self, request):
+        return JsonResponse(self._fetch("/GetCrops"))
+
+
+class CropYearsAPIView(_CropsBaseView):
+    def get(self, request):
+        return JsonResponse(self._fetch("/GetSelectList/?item=year",
+                                        cache_key_extra="year"))
+
+
+class CropSummaryAPIView(_CropsBaseView):
+    def get(self, request):
+        params = {
+            "level": request.GET.get("level", "11"),
+            "area":  request.GET.get("area",  "0"),
+            "year":  request.GET.get("year",  "2021-22"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['area']}|{params['year']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetSimpleCard", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+class CropYearlyAPIView(_CropsBaseView):
+    def get(self, request):
+        # Full historical time series — ~44 fiscal years for the classic crops.
+        params = {
+            "level": request.GET.get("level", "11"),
+            "area":  request.GET.get("area",  "0"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['area']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetYearly", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+class CropMapAPIView(_CropsBaseView):
+    def get(self, request):
+        # Per-region breakdown.  level: 11=Province, 12=Division, 13=District.
+        params = {
+            "level": request.GET.get("level", "11"),
+            "year":  request.GET.get("year",  "2021-22"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['year']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetMap", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+# ==================================================================
+#  Crop choropleth GeoJSON endpoint — joins polygons + values
+#  ----------------------------------------------------------------
+#  na.data.gov.pk publishes two independent JSON feeds:
+#    * /Scripts/polygons/Provinces.json      → an ARRAY of
+#         { code, name, boundary: <MultiPolygon> }
+#    * /Crops/GetMap                          → per-region values
+#         { data: [{ id, name, production, area, yield }] }
+#  The `code` on the polygon file matches the `id` on the map feed
+#  1-for-1, so we join them here server-side and hand the frontend a
+#  standards-compliant FeatureCollection Mapbox's geojson source can
+#  consume directly.  This keeps the map layer registration in
+#  map-layers.js identical in shape to every other vector layer NCOP
+#  ships — no client-side stitching required.
+#
+#  Cached 24 h per (crop, year, level).  Failure returns an empty
+#  FeatureCollection with meta.error so the sidebar toggle renders
+#  gracefully instead of exposing an HTTP error.
+# ==================================================================
+class CropGeoJSONAPIView(_CropsBaseView):
+    POLY_URL = "https://na.data.gov.pk/Scripts/polygons"
+
+    # Which polygon file to fetch per level.  Divisions.json /
+    # Districts.json share the same {code, name, boundary} shape.
+    LEVEL_FILE = {
+        "11": "Provinces.json",
+        "12": "Divisions.json",
+        "13": "Districts.json",
+    }
+
+    def get(self, request):
+        crop  = request.GET.get("crop",  "4")
+        year  = request.GET.get("year",  "2021-22")
+        level = request.GET.get("level", "11")
+
+        cache_key = f"crops_geojson|{crop}|{year}|{level}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 1. Polygons — 1 cheap request; the geometry file is static
+        #    across crop/year selections so we cache it independently
+        #    with a longer TTL.  Uses a nested `_fetch_raw` because the
+        #    upstream serves a plain JSON array (not { data: [] }).
+        poly_file = self.LEVEL_FILE.get(level, "Provinces.json")
+        poly_cache_key = f"crops_poly|{level}"
+        polygons = cache.get(poly_cache_key)
+        if polygons is None:
+            try:
+                r = requests.get(
+                    f"{self.POLY_URL}/{poly_file}",
+                    timeout=self.TIMEOUT,
+                    headers={"User-Agent": "NCOP/1.0", "Accept": "application/json"},
+                )
+                r.raise_for_status()
+                polygons = r.json()
+                # 7-day cache — the polygon file changes almost never.
+                cache.set(poly_cache_key, polygons, 7 * 24 * 3600)
+            except Exception as e:
+                print(f"[crops geojson] polygon fetch failed ({poly_file}): {e}")
+                return JsonResponse({
+                    "type": "FeatureCollection", "features": [],
+                    "meta": {"error": f"polygon fetch failed: {e}"},
+                }, status=200)
+
+        # 2. Crop values — reuse the same cached path GetMap already
+        #    goes through in CropMapAPIView (identical params).
+        map_payload = self._fetch(
+            "/GetMap", method="POST",
+            data={"level": level, "year": year, "crop": crop},
+            cache_key_extra=f"{level}|{year}|{crop}",
+        )
+        rows = (map_payload or {}).get("data") or []
+        # Build TWO lookups so we can match districts (whose codes on
+        # the polygon feed are ints and on the map feed are zero-padded
+        # strings — e.g. polygon.code=5 vs map.id="005") AND provinces
+        # (which line up cleanly on int id).  Name-normalized lookup
+        # is a belt-and-braces fallback for edge cases.
+        def _to_int(v):
+            try:
+                return int(str(v).strip().lstrip("0") or "0")
+            except Exception:
+                return None
+        def _norm_name(n):
+            n = str(n or "").upper().strip()
+            # Drop the trailing " DISTRICT" / " DIVISION" suffix if
+            # present, then squeeze to alphanumerics for tolerant match.
+            for suffix in (" DISTRICT", " DIVISION"):
+                if n.endswith(suffix):
+                    n = n[: -len(suffix)]
+            return "".join(c for c in n if c.isalnum())
+
+        by_int_id  = {}
+        by_name    = {}
+        for r in rows:
+            rid = _to_int(r.get("id"))
+            entry = {
+                "production": float(r.get("production") or 0),
+                "area":       float(r.get("area")       or 0),
+                "yield":      float(r.get("yield")      or 0),
+                "name":       str(r.get("name") or "").strip(),
+            }
+            if rid is not None:
+                by_int_id[rid] = entry
+            nm = _norm_name(r.get("name"))
+            if nm:
+                by_name.setdefault(nm, entry)
+
+        # 3. Assemble the FeatureCollection.  Every polygon becomes a
+        #    feature — polygons without matching crop data get zero
+        #    values but stay in the file so the region still renders
+        #    (as a light-grey "no data" cell in the choropleth ramp).
+        features = []
+        for p in polygons or []:
+            code_raw = p.get("code")
+            geom = p.get("boundary")
+            if not geom or code_raw is None:
+                continue
+            code_int = _to_int(code_raw)
+            values = None
+            if code_int is not None and code_int in by_int_id:
+                values = by_int_id[code_int]
+            else:
+                nm = _norm_name(p.get("name"))
+                if nm and nm in by_name:
+                    values = by_name[nm]
+            has_data = values is not None
+            if not has_data:
+                values = {"production": 0, "area": 0, "yield": 0,
+                          "name": (p.get("name") or "").strip()}
+            features.append({
+                "type": "Feature",
+                "geometry": geom,
+                "properties": {
+                    "code":       str(code_raw),
+                    "name":       values["name"] or (p.get("name") or "").strip(),
+                    "production": values["production"],
+                    "area":       values["area"],
+                    "yield":      values["yield"],
+                    "crop_id":    int(crop) if str(crop).isdigit() else crop,
+                    "year":       year,
+                    "level":      int(level) if str(level).isdigit() else level,
+                    "has_data":   has_data,
+                },
+            })
+
+        # Compute min/max production for client-side ramp fallback.
+        prods = [f["properties"]["production"] for f in features if f["properties"]["has_data"]]
+        result = {
+            "type": "FeatureCollection",
+            "features": features,
+            "meta": {
+                "crop":  crop, "year":  year, "level": level,
+                "polygon_count": len(polygons or []),
+                "data_count":    len(rows),
+                "matched":       len([f for f in features if f["properties"]["has_data"]]),
+                "min_production": min(prods) if prods else 0,
+                "max_production": max(prods) if prods else 0,
+            },
+        }
+        cache.set(cache_key, result, self.CACHE_TTL)
+        return JsonResponse(result)
