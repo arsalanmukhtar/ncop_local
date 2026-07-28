@@ -889,6 +889,867 @@ function nwfcWeatherEmoji(text) {
   return "🌡️";
 }
 
+// ---------------------------------------------------------------------------
+// IPC / Food Security popup — one function covers every ipc_<country>
+// layer because they all share the same feature schema.
+// ---------------------------------------------------------------------------
+// The raw IPC response is 33 fields long, most of them internal / UI-
+// hint metadata that would just clutter a generic key-value dump.  This
+// builder keeps ONLY the operationally useful ones and lays them out in
+// a header + phase-breakdown table shape:
+//   * Header  = area title + phase badge (colour tracks the IPC ramp)
+//   * Summary = classified population + prolonged-crisis flag +
+//               confidence level
+//   * Table   = one row per IPC phase (1–5) with its colour swatch,
+//               population, and % share — the phase whose colour
+//               matches the header badge is highlighted so it stands
+//               out at a glance.
+//   * Footer  = analysis id + IPC period + justification (if present)
+// ---------------------------------------------------------------------------
+const IPC_PHASE_LABELS = {
+  1: "Minimal",
+  2: "Stressed",
+  3: "Crisis",
+  4: "Emergency",
+  5: "Catastrophe / Famine",
+};
+// Baseline hex ramp — used when a feature lacks the API's baked-in
+// phase-N colour (rare, but safest to have a fallback).
+const IPC_PHASE_COLORS = {
+  1: "#CDFACD",
+  2: "#FAE61E",
+  3: "#E67800",
+  4: "#C80100",
+  5: "#640000",
+};
+
+function _ipcFormatPopulation(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return n.toLocaleString();
+}
+function _ipcFormatPercent(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  // API returns 0.35 for 35 %.
+  return `${(n * 100).toFixed(0)}%`;
+}
+// Pick a text colour that reads on the swatch — light phases (1, 2)
+// need dark text; darker phases (3, 4, 5) need white.
+function _ipcTextOn(phase) {
+  return phase >= 3 ? "#ffffff" : "#1a1a1a";
+}
+
+function buildIpcPopupContent(props) {
+  const title    = String(props.title || "IPC Area");
+  const phase    = Number(props.overall_phase) || 0;
+  const phaseLbl = IPC_PHASE_LABELS[phase] || "Unclassified";
+  const badgeBg  = props.color || IPC_PHASE_COLORS[phase] || "#cccccc";
+  const badgeFg  = _ipcTextOn(phase);
+  const analysisId = props.anl_id ? String(props.anl_id) : "";
+
+  const primary = `
+    <div class="ncop-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${escapeHtml(title)}</div>
+        <div class="ncop-popup__subtitle">IPC Acute Food Insecurity${analysisId ? ` &middot; Analysis ${escapeHtml(analysisId)}` : ""}</div>
+      </div>
+      <div class="ncop-popup__header-aside">
+        <span class="ncop-popup__badge ncop-popup__badge--ipc"
+              style="background:${escapeHtml(badgeBg)};color:${badgeFg};border-color:${escapeHtml(badgeBg)}">
+          Phase ${phase || "—"} &middot; ${escapeHtml(phaseLbl)}
+        </span>
+      </div>
+    </div>
+  `;
+
+  // Top summary tiles — the three numbers that matter operationally.
+  // `population_min` is IPC's shorthand for the population in the
+  // "phase equal to or worse than the overall phase" bucket (the
+  // headline number in most IPC bulletins).
+  const totalPop      = _ipcFormatPopulation(props.estimated_population);
+  const classifiedPop = _ipcFormatPopulation(props.population_min);
+  const prolonged     = props.prolonged_crisis === true
+    ? `<span class="ipc-popup__flag ipc-popup__flag--warn">Yes</span>`
+    : `<span class="ipc-popup__flag">No</span>`;
+  const confidence    = props.confidence_level != null
+    ? `${escapeHtml(String(props.confidence_level))} / 3`
+    : "—";
+
+  // Phase-breakdown table — one row per IPC phase with a colour swatch
+  // pulled from the API's baked-in phase-N-colour field (falls back to
+  // the baseline ramp above).  Row for the current overall_phase gets
+  // an is-active class so it stands out.
+  const phaseRows = [1, 2, 3, 4, 5].map((p) => {
+    const pop     = props[`phase${p}_population`];
+    const pct     = props[`phase${p}_percent`];
+    const color   = props[`phase${p}_color`] || IPC_PHASE_COLORS[p];
+    const isCur   = p === phase;
+    return `
+      <tr class="ipc-popup__phase-row${isCur ? " is-active" : ""}">
+        <td class="ipc-popup__swatch-cell">
+          <span class="ipc-popup__swatch" style="background:${escapeHtml(color)}"></span>
+        </td>
+        <td class="ipc-popup__phase-cell">
+          <span class="ipc-popup__phase-num">Phase ${p}</span>
+          <span class="ipc-popup__phase-lbl">${escapeHtml(IPC_PHASE_LABELS[p])}</span>
+        </td>
+        <td class="ipc-popup__pop-cell">${_ipcFormatPopulation(pop)}</td>
+        <td class="ipc-popup__pct-cell">${_ipcFormatPercent(pct)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const justification = props.justification && String(props.justification).trim()
+    ? `<p class="ipc-popup__justification">
+         <strong>Justification:</strong> ${escapeHtml(String(props.justification))}
+       </p>`
+    : "";
+
+  const drawer = `
+    <div class="ncop-popup__grid ipc-popup__summary">
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Total Population</div>
+        <div class="ncop-popup__card-value">${totalPop}</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">In Phase ${phase || "—"}+</div>
+        <div class="ncop-popup__card-value">${classifiedPop}</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Prolonged Crisis</div>
+        <div class="ncop-popup__card-value">${prolonged}</div>
+      </div>
+      <div class="ncop-popup__card">
+        <div class="ncop-popup__card-label">Confidence</div>
+        <div class="ncop-popup__card-value">${confidence}</div>
+      </div>
+    </div>
+
+    <div class="ipc-popup__breakdown">
+      <div class="ipc-popup__breakdown-title">Population by IPC Phase</div>
+      <table class="ipc-popup__phase-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Phase</th>
+            <th class="ipc-popup__pop-cell">Population</th>
+            <th class="ipc-popup__pct-cell">Share</th>
+          </tr>
+        </thead>
+        <tbody>${phaseRows}</tbody>
+      </table>
+    </div>
+
+    ${justification}
+
+    <div class="ncop-popup__info ipc-popup__meta">
+      <p class="ncop-popup__info-row">
+        <strong>Reading:</strong>
+        The polygon covers the ${escapeHtml(title)} classification area.
+        Colour = current overall phase (${escapeHtml(String(phase || "—"))}); the
+        table above shows how the population is distributed across every
+        IPC phase, not just the overall one.
+      </p>
+      ${props.ipc_period
+        ? `<p class="ncop-popup__info-row"><strong>IPC Period:</strong> ${escapeHtml(String(props.ipc_period))}${
+            props.ipc_period === "C" ? " (Current)"
+            : props.ipc_period === "P" ? " (Projected — first period)"
+            : props.ipc_period === "S" ? " (Projected — second period)"
+            : ""}</p>`
+        : ""}
+    </div>
+
+    <button type="button" class="ipc-open-stats"
+        data-country="${escapeHtml(String(props._ipcCountry || ""))}"
+        data-title="${escapeHtml(title)}"
+        data-phase="${escapeHtml(String(phase))}"
+        data-phase-label="${escapeHtml(phaseLbl)}"
+        data-color="${escapeHtml(String(badgeBg))}"
+        data-anl-id="${escapeHtml(String(props.anl_id || ""))}"
+        data-total-pop="${escapeHtml(String(props.estimated_population || ""))}"
+        data-classified-pop="${escapeHtml(String(props.population_min || ""))}"
+        data-confidence="${escapeHtml(String(props.confidence_level || ""))}"
+        data-prolonged="${props.prolonged_crisis === true ? "true" : "false"}"
+        data-phase1-pop="${escapeHtml(String(props.phase1_population || 0))}"
+        data-phase2-pop="${escapeHtml(String(props.phase2_population || 0))}"
+        data-phase3-pop="${escapeHtml(String(props.phase3_population || 0))}"
+        data-phase4-pop="${escapeHtml(String(props.phase4_population || 0))}"
+        data-phase5-pop="${escapeHtml(String(props.phase5_population || 0))}"
+        data-phase1-pct="${escapeHtml(String(props.phase1_percent || 0))}"
+        data-phase2-pct="${escapeHtml(String(props.phase2_percent || 0))}"
+        data-phase3-pct="${escapeHtml(String(props.phase3_percent || 0))}"
+        data-phase4-pct="${escapeHtml(String(props.phase4_percent || 0))}"
+        data-phase5-pct="${escapeHtml(String(props.phase5_percent || 0))}">
+      Open Food Security Panel
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+    </button>
+  `;
+
+  return { primary, drawer, drawerTitle: "Food-Security Breakdown" };
+}
+
+// ==========================================================================
+//  IPC / Food Security Stats Modal (dedicated draggable + resizable panel)
+// --------------------------------------------------------------------------
+//  Mirrors the heatwave-modal pattern but is IPC-specific:
+//    * Header  — area name, country kicker, phase badge, close button
+//    * Left    — per-area stat tiles (total pop / in-phase-N+ / prolonged /
+//                confidence + full phase 1-5 breakdown mirroring the popup)
+//    * Right   — three tabs backed by Chart.js:
+//                  1. Phase Breakdown  — bar chart of THIS area's phase-N pop
+//                  2. Country Overview — bar chart of ALL districts in this
+//                     country aggregated by phase (pulled from the /api/ipc/
+//                     backend cache — no extra IPC hit if the map already
+//                     loaded that country)
+//                  3. Analysis Info    — resolved analysis ID + refresh info
+//  Zero coupling to the heatwave modal.  Own drag/resize helper (~90 lines)
+//  so heatwave code stays untouched.
+//  Data source: the button carries every needed field on data-* attrs;
+//  the country tab additionally reads window fetch of the cached backend
+//  response (per-country, cached 6 h server-side by IpcFoodSecurityAPIView).
+// ==========================================================================
+
+const IPC_MODAL_ID = "ipc-stats-modal";
+const IPC_MODAL_INSTANCE_KEY = "ipc-modal-chart";
+const ipcChartInstances = {};
+let _ipcCountryAggCache = new Map();  // country slug → { phase1..5 totals }
+let _ipcHistoryCache    = new Map();  // country slug → { analyses: [...] }
+
+function ensureIpcModal() {
+  let modal = document.getElementById(IPC_MODAL_ID);
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = IPC_MODAL_ID;
+  modal.className = "ipc-modal hidden";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-label", "Food Security Stats");
+  modal.innerHTML = `
+    <div class="ipc-modal__head" data-ipc-drag>
+      <div class="ipc-modal__drag-grip" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="ipc-modal__title-block">
+        <div class="ipc-modal__kicker" id="ipc-modal-kicker">Food Security · IPC / CH</div>
+        <div class="ipc-modal__title" id="ipc-modal-name">—</div>
+        <div class="ipc-modal__subtitle" id="ipc-modal-meta"></div>
+      </div>
+      <span class="ipc-modal__badge" id="ipc-modal-badge">—</span>
+      <button type="button" class="ipc-modal__close" aria-label="Close" data-ipc-close>×</button>
+    </div>
+
+    <div class="ipc-modal__body">
+      <aside class="ipc-modal__left">
+        <div class="ipc-modal__stats" id="ipc-modal-stats"></div>
+        <div class="ipc-modal__legend">
+          <div class="ipc-modal__legend-title">IPC Phase Ramp</div>
+          <div class="ipc-modal__legend-row"><span class="ipc-modal__legend-sw" style="background:#CDFACD"></span><span>1 — Minimal</span></div>
+          <div class="ipc-modal__legend-row"><span class="ipc-modal__legend-sw" style="background:#FAE61E"></span><span>2 — Stressed</span></div>
+          <div class="ipc-modal__legend-row"><span class="ipc-modal__legend-sw" style="background:#E67800"></span><span>3 — Crisis</span></div>
+          <div class="ipc-modal__legend-row"><span class="ipc-modal__legend-sw" style="background:#C80100"></span><span>4 — Emergency</span></div>
+          <div class="ipc-modal__legend-row"><span class="ipc-modal__legend-sw" style="background:#640000"></span><span>5 — Catastrophe</span></div>
+        </div>
+      </aside>
+      <section class="ipc-modal__right">
+        <div class="ipc-modal__tabs" role="tablist">
+          <button class="ipc-modal__tab is-active" data-mode="area" type="button">Phase Breakdown</button>
+          <button class="ipc-modal__tab"           data-mode="country" type="button">Country Overview</button>
+          <button class="ipc-modal__tab"           data-mode="history" type="button">Historical Trend</button>
+          <button class="ipc-modal__tab"           data-mode="info" type="button">Analysis Info</button>
+        </div>
+        <div class="ipc-modal__chart-wrap">
+          <div class="ipc-modal__chart-head">
+            <div class="ipc-modal__chart-title" id="ipc-modal-title">Phase Breakdown</div>
+            <div class="ipc-modal__chart-sub" id="ipc-modal-sub">Population distribution by IPC phase for the selected area</div>
+          </div>
+          <div class="ipc-modal__canvas-host">
+            <canvas id="ipc-modal-canvas"></canvas>
+            <div class="ipc-modal__info-body" id="ipc-modal-info-body" style="display:none;"></div>
+            <div class="ipc-modal__loader" id="ipc-modal-loader" style="display:none;"><span></span><span></span><span></span></div>
+          </div>
+          <div class="ipc-modal__footnote">Data: IPC Info public API — resolved via NCOP proxy (/api/ipc/&lt;country&gt;/), cached 6 h server-side.</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="ipc-modal__resize" data-ipc-resize aria-label="Resize">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M14 6 L6 14 M14 10 L10 14" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Close button
+  modal.querySelector("[data-ipc-close]")?.addEventListener("click", () => {
+    modal.classList.remove("is-open");
+    modal.classList.add("hidden");
+    if (ipcChartInstances[IPC_MODAL_INSTANCE_KEY]) {
+      try { ipcChartInstances[IPC_MODAL_INSTANCE_KEY].destroy(); } catch (_) {}
+      delete ipcChartInstances[IPC_MODAL_INSTANCE_KEY];
+    }
+  });
+
+  // Tab click delegation
+  modal.querySelectorAll(".ipc-modal__tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.getAttribute("data-mode");
+      modal.querySelectorAll(".ipc-modal__tab").forEach((t) =>
+        t.classList.toggle("is-active", t === btn));
+      _renderIpcModalTab(modal, mode);
+    });
+  });
+
+  _attachIpcDragAndResize(modal);
+  return modal;
+}
+
+// Own drag/resize — self-contained duplicate of the heatwave pattern so
+// heatwave code stays untouched.  Pinning to viewport pixels on first
+// interaction lets subsequent drags/resizes stay sticky regardless of
+// the CSS defaults from the initial open.
+function _attachIpcDragAndResize(modal) {
+  const drag   = modal.querySelector("[data-ipc-drag]");
+  const resize = modal.querySelector("[data-ipc-resize]");
+
+  const pinToPixels = () => {
+    const r = modal.getBoundingClientRect();
+    modal.style.left = `${Math.round(r.left)}px`;
+    modal.style.top  = `${Math.round(r.top)}px`;
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+    modal.style.width  = `${Math.round(r.width)}px`;
+    modal.style.height = `${Math.round(r.height)}px`;
+  };
+
+  if (drag) {
+    drag.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("[data-ipc-close]")) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      pinToPixels();
+      const sx = e.clientX, sy = e.clientY;
+      const sl = parseFloat(modal.style.left) || 0;
+      const st = parseFloat(modal.style.top)  || 0;
+      modal.classList.add("is-dragging");
+      try { drag.setPointerCapture(e.pointerId); } catch (_) {}
+      const onMove = (ev) => {
+        const m = 8;
+        const w = modal.offsetWidth, h = modal.offsetHeight;
+        let nl = sl + (ev.clientX - sx);
+        let nt = st + (ev.clientY - sy);
+        nl = Math.max(m, Math.min(window.innerWidth  - w - m, nl));
+        nt = Math.max(m, Math.min(window.innerHeight - h - m, nt));
+        modal.style.left = `${Math.round(nl)}px`;
+        modal.style.top  = `${Math.round(nt)}px`;
+      };
+      const onUp = () => {
+        modal.classList.remove("is-dragging");
+        try { drag.releasePointerCapture(e.pointerId); } catch (_) {}
+        drag.removeEventListener("pointermove",   onMove);
+        drag.removeEventListener("pointerup",     onUp);
+        drag.removeEventListener("pointercancel", onUp);
+      };
+      drag.addEventListener("pointermove",   onMove);
+      drag.addEventListener("pointerup",     onUp);
+      drag.addEventListener("pointercancel", onUp);
+      e.preventDefault();
+    });
+  }
+
+  if (resize) {
+    const minW = 560, minH = 320;
+    resize.addEventListener("pointerdown", (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      pinToPixels();
+      const sx = e.clientX, sy = e.clientY;
+      const sw = modal.offsetWidth, sh = modal.offsetHeight;
+      const sl = parseFloat(modal.style.left) || 0;
+      const st = parseFloat(modal.style.top)  || 0;
+      modal.classList.add("is-resizing");
+      try { resize.setPointerCapture(e.pointerId); } catch (_) {}
+      const onMove = (ev) => {
+        const m = 8;
+        const maxW = window.innerWidth  - sl - m;
+        const maxH = window.innerHeight - st - m;
+        const w = Math.max(minW, Math.min(maxW, sw + (ev.clientX - sx)));
+        const h = Math.max(minH, Math.min(maxH, sh + (ev.clientY - sy)));
+        modal.style.width  = `${Math.round(w)}px`;
+        modal.style.height = `${Math.round(h)}px`;
+      };
+      const onUp = () => {
+        modal.classList.remove("is-resizing");
+        try { resize.releasePointerCapture(e.pointerId); } catch (_) {}
+        resize.removeEventListener("pointermove",   onMove);
+        resize.removeEventListener("pointerup",     onUp);
+        resize.removeEventListener("pointercancel", onUp);
+      };
+      resize.addEventListener("pointermove",   onMove);
+      resize.addEventListener("pointerup",     onUp);
+      resize.addEventListener("pointercancel", onUp);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+}
+
+// Entry point — called from the click handler with the button's data-* set.
+async function showIpcModalForArea(ctx) {
+  const modal = ensureIpcModal();
+  modal._ipcCtx = ctx;
+
+  // Header
+  const badgeBg = ctx.color || "#cccccc";
+  const badgeFg = ctx.phase >= 3 ? "#ffffff" : "#1a1a1a";
+  modal.querySelector("#ipc-modal-name").textContent    = ctx.title || "IPC Area";
+  modal.querySelector("#ipc-modal-meta").textContent    =
+    `${_ipcCountryLabel(ctx.country)}${ctx.anlId ? ` · Analysis ${ctx.anlId}` : ""}`;
+  const badge = modal.querySelector("#ipc-modal-badge");
+  badge.textContent = `Phase ${ctx.phase || "—"} · ${ctx.phaseLabel || "Unclassified"}`;
+  badge.style.background   = badgeBg;
+  badge.style.color        = badgeFg;
+  badge.style.borderColor  = badgeBg;
+
+  // Left column stats
+  const total    = Number(ctx.totalPop) || 0;
+  const classif  = Number(ctx.classifiedPop) || 0;
+  const conf     = ctx.confidence || "—";
+  const prol     = ctx.prolonged === "true"
+    ? `<span class="ipc-modal__flag ipc-modal__flag--warn">Yes</span>`
+    : `<span class="ipc-modal__flag">No</span>`;
+  modal.querySelector("#ipc-modal-stats").innerHTML = `
+    <div class="ipc-modal__stat"><div class="ipc-modal__stat-label">Total Pop.</div><div class="ipc-modal__stat-value">${total ? total.toLocaleString() : "—"}</div></div>
+    <div class="ipc-modal__stat"><div class="ipc-modal__stat-label">In Phase ${ctx.phase || "—"}+</div><div class="ipc-modal__stat-value" style="color:${badgeBg}">${classif ? classif.toLocaleString() : "—"}</div></div>
+    <div class="ipc-modal__stat"><div class="ipc-modal__stat-label">Prolonged Crisis</div><div class="ipc-modal__stat-value">${prol}</div></div>
+    <div class="ipc-modal__stat"><div class="ipc-modal__stat-label">Confidence</div><div class="ipc-modal__stat-value">${conf}/3</div></div>
+  `;
+
+  // Reveal + default tab
+  modal.classList.remove("hidden");
+  requestAnimationFrame(() => modal.classList.add("is-open"));
+  _renderIpcModalTab(modal, "area");
+}
+
+function _ipcCountryLabel(slug) {
+  switch (slug) {
+    case "pakistan":    return "Pakistan";
+    case "afghanistan": return "Afghanistan";
+    case "bangladesh":  return "Bangladesh";
+    default:            return slug || "";
+  }
+}
+
+function _renderIpcModalTab(modal, mode) {
+  const ctx = modal._ipcCtx || {};
+  const titleEl  = modal.querySelector("#ipc-modal-title");
+  const subEl    = modal.querySelector("#ipc-modal-sub");
+  const canvas   = modal.querySelector("#ipc-modal-canvas");
+  const infoBody = modal.querySelector("#ipc-modal-info-body");
+  const loader   = modal.querySelector("#ipc-modal-loader");
+
+  // Kill any prior chart before rebuilding.
+  if (ipcChartInstances[IPC_MODAL_INSTANCE_KEY]) {
+    try { ipcChartInstances[IPC_MODAL_INSTANCE_KEY].destroy(); } catch (_) {}
+    delete ipcChartInstances[IPC_MODAL_INSTANCE_KEY];
+  }
+
+  if (mode === "area") {
+    titleEl.textContent = "Phase Breakdown";
+    subEl.textContent   = `Population by IPC phase — ${ctx.title || "selected area"}`;
+    canvas.style.display = "block";
+    infoBody.style.display = "none";
+    _drawIpcBarChart(canvas, _extractPhasePops(ctx), ctx.title || "Area");
+  } else if (mode === "country") {
+    titleEl.textContent = `Country Overview — ${_ipcCountryLabel(ctx.country)}`;
+    subEl.textContent   = "Aggregate population by phase across every classified area in the country";
+    canvas.style.display = "block";
+    infoBody.style.display = "none";
+    loader.style.display = "flex";
+    _loadCountryAggregate(ctx.country).then((agg) => {
+      loader.style.display = "none";
+      if (!agg) {
+        canvas.style.display = "none";
+        infoBody.style.display = "block";
+        infoBody.innerHTML = `<div class="ipc-modal__error">Could not load country data. Try again in a moment.</div>`;
+        return;
+      }
+      _drawIpcBarChart(canvas, agg, _ipcCountryLabel(ctx.country));
+    });
+  } else if (mode === "history") {
+    titleEl.textContent = `Historical Trend — ${_ipcCountryLabel(ctx.country)}`;
+    subEl.textContent   =
+      "Population by IPC phase across every published analysis cycle — data from IPC's Population Tracking Tool";
+    canvas.style.display = "block";
+    infoBody.style.display = "none";
+    loader.style.display = "flex";
+    _loadIpcHistory(ctx.country).then((analyses) => {
+      loader.style.display = "none";
+      if (!analyses || !analyses.length) {
+        canvas.style.display = "none";
+        infoBody.style.display = "block";
+        infoBody.innerHTML = `<div class="ipc-modal__error">No historical analyses available for ${escapeHtml(_ipcCountryLabel(ctx.country))}. Try again later.</div>`;
+        return;
+      }
+      _drawIpcHistoryChart(canvas, analyses);
+    });
+  } else if (mode === "info") {
+    titleEl.textContent = "Analysis Info";
+    subEl.textContent   = "Metadata for the currently-loaded IPC analysis";
+    canvas.style.display = "none";
+    infoBody.style.display = "block";
+    infoBody.innerHTML = `
+      <dl class="ipc-modal__meta-dl">
+        <dt>Area</dt><dd>${escapeHtml(ctx.title || "—")}</dd>
+        <dt>Country</dt><dd>${escapeHtml(_ipcCountryLabel(ctx.country) || "—")}</dd>
+        <dt>Current Phase</dt><dd>Phase ${escapeHtml(String(ctx.phase || "—"))} · ${escapeHtml(ctx.phaseLabel || "—")}</dd>
+        <dt>Analysis ID</dt><dd>${escapeHtml(ctx.anlId || "—")}</dd>
+        <dt>Total Population</dt><dd>${(Number(ctx.totalPop) || 0).toLocaleString() || "—"}</dd>
+        <dt>Confidence</dt><dd>${escapeHtml(ctx.confidence || "—")} / 3</dd>
+        <dt>Prolonged Crisis</dt><dd>${ctx.prolonged === "true" ? "Yes" : "No"}</dd>
+        <dt>Source</dt><dd>IPC Info public API — resolved server-side; cached 6 h.</dd>
+        <dt>Colour Ramp</dt><dd>Official IPC/CH global 5-phase scale.</dd>
+        <dt>Notes</dt><dd>The proxy walks up to 6 recent analyses to find one with polygon geometry — projections without maps are skipped automatically.</dd>
+      </dl>
+    `;
+  }
+}
+
+function _extractPhasePops(ctx) {
+  return [1, 2, 3, 4, 5].map((p) => ({
+    phase: p,
+    pop: Number(ctx[`phase${p}Pop`]) || 0,
+    pct: Number(ctx[`phase${p}Pct`]) || 0,
+  }));
+}
+
+async function _loadCountryAggregate(country) {
+  if (!country) return null;
+  if (_ipcCountryAggCache.has(country)) return _ipcCountryAggCache.get(country);
+  try {
+    const r = await fetch(`${window.location.origin}/api/ipc/${country}/`, {
+      credentials: "same-origin",
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const feats = (data && data.features) || [];
+    const sums = [1, 2, 3, 4, 5].map((p) => ({ phase: p, pop: 0, pct: 0 }));
+    let totalPop = 0;
+    for (const f of feats) {
+      const p = f.properties || {};
+      for (const b of sums) {
+        b.pop += Number(p[`phase${b.phase}_population`]) || 0;
+      }
+      totalPop += Number(p.estimated_population) || 0;
+    }
+    if (totalPop > 0) {
+      for (const b of sums) b.pct = b.pop / totalPop;
+    }
+    _ipcCountryAggCache.set(country, sums);
+    return sums;
+  } catch (e) {
+    console.warn("[IPC modal] country aggregate load failed:", e);
+    return null;
+  }
+}
+
+async function _loadIpcHistory(country) {
+  if (!country) return null;
+  if (_ipcHistoryCache.has(country)) return _ipcHistoryCache.get(country);
+  try {
+    const r = await fetch(`${window.location.origin}/api/ipc/${country}/history/`, {
+      credentials: "same-origin",
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const analyses = (data && data.analyses) || [];
+    _ipcHistoryCache.set(country, analyses);
+    return analyses;
+  } catch (e) {
+    console.warn("[IPC modal] history load failed:", e);
+    return null;
+  }
+}
+
+// Stacked bar chart — one bar per analysis cycle (chronological), each
+// bar stacked into the 5 IPC phases with the official IPC hex ramp.
+// Y-axis auto-formats to millions/thousands so long timelines stay
+// readable.
+function _drawIpcHistoryChart(canvas, analyses) {
+  const colors = ["#CDFACD", "#FAE61E", "#E67800", "#C80100", "#640000"];
+  const labels = analyses.map((a) => a.date || a.anl_id || "?");
+  const buildSet = (phase) => ({
+    label: `Phase ${phase}`,
+    data: analyses.map((a) => Number(a[`phase${phase}_pop`]) || 0),
+    backgroundColor: colors[phase - 1],
+    borderColor: colors[phase - 1],
+    borderWidth: 0.5,
+    stack: "ipc",
+  });
+  ipcChartInstances[IPC_MODAL_INSTANCE_KEY] = new Chart(canvas.getContext("2d"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [buildSet(1), buildSet(2), buildSet(3), buildSet(4), buildSet(5)],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: getComputedStyle(document.documentElement).getPropertyValue("--popup-text") || "#e5eef7",
+            boxWidth: 10,
+            boxHeight: 10,
+            font: { size: 11 },
+            padding: 8,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              const a = analyses[i];
+              return `${a.date || "—"} · ${a.title || a.anl_id || ""}`;
+            },
+            label: (item) => {
+              const v = Number(item.raw) || 0;
+              const pct = analyses[item.dataIndex]?.[`phase${item.datasetIndex + 1}_pct`];
+              const pctStr = pct ? ` (${(pct * 100).toFixed(1)}%)` : "";
+              return `${item.dataset.label}: ${v.toLocaleString()}${pctStr}`;
+            },
+            footer: (items) => {
+              const a = analyses[items[0].dataIndex];
+              const total = Number(a?.analyzed_pop) || 0;
+              const p3 = Number(a?.phase3plus_pop) || 0;
+              const pct = total ? ` (${((p3 / total) * 100).toFixed(1)}%)` : "";
+              return total
+                ? `Analyzed: ${total.toLocaleString()}   |   Phase 3+: ${p3.toLocaleString()}${pct}`
+                : "";
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: {
+            color: getComputedStyle(document.documentElement).getPropertyValue("--popup-text-muted") || "rgba(203,213,225,0.72)",
+            font: { size: 10 },
+            maxRotation: 45,
+            minRotation: 0,
+          },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          grid: { color: "rgba(148, 163, 184, 0.18)" },
+          ticks: {
+            color: getComputedStyle(document.documentElement).getPropertyValue("--popup-text-muted") || "rgba(203,213,225,0.72)",
+            callback: (v) => {
+              if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+              if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}k`;
+              return v;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function _drawIpcBarChart(canvas, phaseData, label) {
+  const colors = ["#CDFACD", "#FAE61E", "#E67800", "#C80100", "#640000"];
+  const textColors = ["#1a1a1a", "#1a1a1a", "#ffffff", "#ffffff", "#ffffff"];
+  ipcChartInstances[IPC_MODAL_INSTANCE_KEY] = new Chart(canvas.getContext("2d"), {
+    type: "bar",
+    data: {
+      labels: phaseData.map((d) => `Phase ${d.phase}`),
+      datasets: [{
+        label: `${label} — population`,
+        data: phaseData.map((d) => d.pop),
+        backgroundColor: colors,
+        borderColor: colors.map((c) => c),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const d = phaseData[item.dataIndex];
+              const pct = d.pct ? ` (${(d.pct * 100).toFixed(1)}%)` : "";
+              return `${d.pop.toLocaleString()} people${pct}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: getComputedStyle(document.documentElement).getPropertyValue("--popup-text") || "#e5eef7" },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "rgba(148, 163, 184, 0.18)" },
+          ticks: {
+            color: getComputedStyle(document.documentElement).getPropertyValue("--popup-text-muted") || "rgba(203,213,225,0.72)",
+            callback: (v) => {
+              if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+              if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}k`;
+              return v;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// Delegated click handler — one listener for every IPC popup on the page.
+function setupIpcPopupEventHandlers() {
+  document.removeEventListener("click", _handleIpcPopupClick);
+  document.addEventListener("click", _handleIpcPopupClick);
+}
+
+function _handleIpcPopupClick(e) {
+  const btn = e.target.closest(".ipc-open-stats");
+  if (!btn) return;
+  const ds = btn.dataset;
+  showIpcModalForArea({
+    country:      ds.country || "",
+    title:        ds.title || "IPC Area",
+    phase:        Number(ds.phase) || 0,
+    phaseLabel:   ds.phaseLabel || "",
+    color:        ds.color || "#cccccc",
+    anlId:        ds.anlId || "",
+    totalPop:     ds.totalPop || "",
+    classifiedPop: ds.classifiedPop || "",
+    confidence:   ds.confidence || "",
+    prolonged:    ds.prolonged || "false",
+    phase1Pop: ds.phase1Pop, phase2Pop: ds.phase2Pop, phase3Pop: ds.phase3Pop,
+    phase4Pop: ds.phase4Pop, phase5Pop: ds.phase5Pop,
+    phase1Pct: ds.phase1Pct, phase2Pct: ds.phase2Pct, phase3Pct: ds.phase3Pct,
+    phase4Pct: ds.phase4Pct, phase5Pct: ds.phase5Pct,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Crop choropleth popup (crop_wheat / crop_rice / crop_cotton / crop_sugarcane)
+// ---------------------------------------------------------------------------
+// The layer's GeoJSON features carry `name`, `code`, `production`, `area`,
+// `yield`, `crop_id`, `year`, `level`, `has_data` (see /api/crops/geojson/).
+// We surface the three headline numbers as stat tiles + a small "Open
+// Crop Explorer" CTA that launches the standalone modal pre-selected for
+// the current crop.  Zero coupling to the crop-explorer module — it
+// reaches window.__openCropExplorer only, exposed globally by
+// CropExplorerControl's constructor.
+// ---------------------------------------------------------------------------
+function _cropFmt(v, digits = 1) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(digits)}k`;
+  return n.toFixed(digits);
+}
+function _cropCropName(id) {
+  const map = { 4: "Wheat", 2: "Rice", 5: "Cotton", 3: "Sugarcane" };
+  return map[Number(id)] || `Crop ${id}`;
+}
+
+function buildCropPopupContent(props) {
+  const name = String(props.name || "Province").trim();
+  const cropId = Number(props.crop_id) || 4;
+  const cropName = _cropCropName(cropId);
+  const year   = String(props.year || "");
+  const hasData = props.has_data === true || props.has_data === "true";
+  const prod = Number(props.production) || 0;
+  const area = Number(props.area) || 0;
+  const yld  = Number(props.yield) || 0;
+
+  const primary = `
+    <div class="ncop-popup__header">
+      <div class="ncop-popup__title-block">
+        <div class="ncop-popup__title">${escapeHtml(name)}</div>
+        <div class="ncop-popup__subtitle">${escapeHtml(cropName)}${year ? ` &middot; ${escapeHtml(year)}` : ""} &middot; Pakistan Bureau of Statistics</div>
+      </div>
+      <div class="ncop-popup__header-aside">
+        <span class="ncop-popup__badge ncop-popup__badge--crop">
+          ${hasData ? "Reported" : "No Data"}
+        </span>
+      </div>
+    </div>
+  `;
+
+  const drawer = hasData
+    ? `
+      <div class="ncop-popup__grid crop-popup__stats">
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Area</div>
+          <div class="ncop-popup__card-value">${_cropFmt(area, 1)} <span class="crop-popup__unit">000 Ha</span></div>
+        </div>
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Production</div>
+          <div class="ncop-popup__card-value crop-popup__value--prod">${_cropFmt(prod, 1)} <span class="crop-popup__unit">000 MT</span></div>
+        </div>
+        <div class="ncop-popup__card">
+          <div class="ncop-popup__card-label">Yield</div>
+          <div class="ncop-popup__card-value">${yld.toFixed(3)} <span class="crop-popup__unit">MT/Ha</span></div>
+        </div>
+      </div>
+      <p class="crop-popup__reading">
+        <strong>Reading:</strong> Province colour = ${escapeHtml(cropName)} production ranked against the crop's national spread. Popup values are for the ${escapeHtml(year)} fiscal year specifically; open the Explorer for the full 40+ year time series.
+      </p>
+      <button type="button" class="crop-open-explorer"
+        data-crop-id="${escapeHtml(String(cropId))}"
+        data-year="${escapeHtml(year)}">
+        Open Crop Explorer
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    `
+    : `
+      <div class="crop-popup__empty">
+        <p><strong>No provincial ${escapeHtml(cropName)} production reported for ${escapeHtml(year || "this year")}.</strong></p>
+        <p>${escapeHtml(name)} may not be a primary producing region for this crop in the selected fiscal year. Open the Explorer to browse other crops or years.</p>
+        <button type="button" class="crop-open-explorer"
+          data-crop-id="${escapeHtml(String(cropId))}"
+          data-year="${escapeHtml(year)}">
+          Open Crop Explorer
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    `;
+
+  return { primary, drawer, drawerTitle: `${cropName} — Provincial Breakdown` };
+}
+
+// One delegated listener wired at first dispatch — clicking any
+// `.crop-open-explorer` button hands the (cropId, year) to the global
+// launcher the crop-explorer-control module exposes.
+function setupCropPopupEventHandlers() {
+  document.removeEventListener("click", _handleCropPopupClick);
+  document.addEventListener("click", _handleCropPopupClick);
+}
+function _handleCropPopupClick(e) {
+  const btn = e.target.closest(".crop-open-explorer");
+  if (!btn) return;
+  const cid = Number(btn.getAttribute("data-crop-id")) || 4;
+  const yr  = btn.getAttribute("data-year") || "";
+  if (typeof window.__openCropExplorer === "function") {
+    window.__openCropExplorer(cid, yr);
+  } else {
+    console.warn("[crop popup] window.__openCropExplorer not available");
+  }
+}
+
 function buildNwfcPopupContent(props) {
   const popupId = `nwfc-${String(props.name || "station")
     .replace(/\s+/g, "-")
@@ -3239,6 +4100,53 @@ export default class LayerAttributePopup {
         this.#show();
         this.#updatePosition();
         this.#attachMoveListeners();
+        return;
+      }
+
+      // SPECIAL HANDLING FOR Crop choropleth LAYERS (crop_*)
+      // Every crop_<name> source registered in map-layers.js (wheat,
+      // rice, cotton, sugarcane, …) routes through this branch so the
+      // popup shows the joined province card + Open Explorer CTA.
+      if (
+        (layerId && layerId.startsWith("crop_")) ||
+        (sourceId && sourceId.startsWith("crop_"))
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        const { primary, drawer, drawerTitle } = buildCropPopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupCropPopupEventHandlers();
+        return;
+      }
+
+      // SPECIAL HANDLING FOR IPC / Food Security LAYERS (ipc_*)
+      // One builder covers every country layer because the IPC schema
+      // is identical per feature.  Filters the 33-field raw record
+      // down to the operationally-useful subset and renders it as a
+      // header + phase-breakdown table instead of the generic
+      // key-value dump.  The "Open Food Security Panel" button in the
+      // drawer opens the standalone IPC stats modal — the country
+      // slug is stamped onto props here so the modal knows which
+      // country's aggregate to load for the "Country Overview" tab.
+      if (
+        (layerId && layerId.startsWith("ipc_")) ||
+        (sourceId && sourceId.startsWith("ipc_"))
+      ) {
+        const properties = { ...(eligible.properties || {}) };
+        // Derive the country slug from layer/source id: "ipc_pakistan" → "pakistan"
+        const idForSlug = (sourceId || layerId || "").replace(/-source$/, "");
+        const m = /^ipc_([a-z_]+?)(?:-[a-z]+)?$/i.exec(idForSlug);
+        properties._ipcCountry = m ? m[1] : "";
+        const { primary, drawer, drawerTitle } =
+          buildIpcPopupContent(properties);
+        this.#renderSplit(primary, drawer, drawerTitle);
+
+        this.#show();
+        this.#updatePosition();
+        this.#attachMoveListeners();
+        setupIpcPopupEventHandlers();
         return;
       }
 

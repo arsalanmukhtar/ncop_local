@@ -69,6 +69,7 @@ import {
   // tuning is finalised.
   // generateRainViewerRadarLayers,
   // generateRainViewerSatelliteIRLayers,
+  generatePmdPredictionsLoader,
 } from "./time-functions.js";
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
@@ -510,6 +511,24 @@ window.snowfall_hourly_forecast = snowfall_hourly_layers;
 window.thunderstorm_probability_3hourly_forecast = thunderstorm_prob_3hourly_layers;
 window.liquid_fog_probability_3hourly_forecast = liquid_fog_prob_3hourly_layers;
 window.convective_precipitation_weekly_forecast = convective_precip_weekly_layers;
+
+// PMD Predictions — WRFPRS precipitation forecast rasters served through
+// the authenticated Django proxy at /api/pmd/monitor/predictions/<element>/.
+// Descriptor-driven like RainViewer: we expose FUNCTIONS (not static arrays)
+// so the fetch + colorized-PNG conversion only happens on the user's first
+// toggle click, and returns a Promise resolved by updateTempSliderAsync.
+// Element codes verified live against the vendor's /api/modelTimeList —
+// the vendor's WRFPRS model publishes exactly these 4 accumulation windows.
+window.pmd_pred_hourtpe       = generatePmdPredictionsLoader("hourtpe",       "pmd_pred_hourtpe");
+window.pmd_pred_sixtpe        = generatePmdPredictionsLoader("sixtpe",        "pmd_pred_sixtpe");
+window.pmd_pred_twelvetpe     = generatePmdPredictionsLoader("twelvetpe",     "pmd_pred_twelvetpe");
+window.pmd_pred_daytpe        = generatePmdPredictionsLoader("daytpe",        "pmd_pred_daytpe");
+// State-quantity layers — temperature, cloud cover, humidity.  Same loader,
+// different registry entries on the backend (element_keys map to the vendor's
+// TEM / TCC / RHU codes across WRFPRS + GDFS models).
+window.pmd_pred_temp2m        = generatePmdPredictionsLoader("temp2m",        "pmd_pred_temp2m");
+window.pmd_pred_cloud_cover   = generatePmdPredictionsLoader("cloud_cover",   "pmd_pred_cloud_cover");
+window.pmd_pred_rel_humidity  = generatePmdPredictionsLoader("rel_humidity",  "pmd_pred_rel_humidity");
 
 // RainViewer is descriptor-driven (frame list comes from a runtime API call),
 // so we expose *functions* instead of static arrays. The temporal dispatcher
@@ -1661,6 +1680,239 @@ export const ncop_menu_items = {
       },
     },
   },
+
+  // =======================================================================
+  // Agriculture Monitoring — hoisted out of GIS Layers so operators find
+  // humanitarian + crop-choropleth work in one dedicated accordion.  Named
+  // broadly so future subcategories (livestock, irrigation, pests, market
+  // prices…) can live here without another reshuffle.  Consumers reference
+  // toggles by data-item-key (ipc_*, crop_*) and are unaffected.
+  // =======================================================================
+  agriculture_monitoring: {
+
+    // =====================================================================
+    // Food Security  —  IPC / CH acute food insecurity classification
+    //
+    // Each country's polygons come from IPC Info's public API via a small
+    // Django proxy (/api/ipc/<country>/) that resolves the LATEST published
+    // analysis cycle server-side and returns raw GeoJSON.  Proxy exists so
+    // Mapbox's built-in geojson source (which can't chain two API calls)
+    // still gets a single-URL feed, and the alpha-2 country-code bug from
+    // the GCOP integration notes is fixed centrally.
+    //
+    // ---- Paint expression ---------------------------------------------
+    // Every IPC area feature carries an already-computed `color` field
+    // (hex string) matching its `overall_phase`.  We use it directly —
+    // coalesce to a match-on-overall_phase as belt-and-braces, and grey
+    // for the no-classification case.  This was the bug in the first
+    // pass: the fill expression looked up `properties.phase` which
+    // doesn't exist under that name in IPC's response — the actual
+    // field is `overall_phase`, and every polygon fell through to the
+    // grey default.
+    //
+    // ---- Country coverage ---------------------------------------------
+    // Verified live against IPC's /analyses endpoint on 2026-07-27.
+    // Enabled: PK, AF, BD, PS, YE, LB, SD, SO, CD.
+    // NOT available (IPC does not classify these countries at all —
+    // /analyses returns []): India, Iran, Sri Lanka, Nepal, Bhutan,
+    // Myanmar.  Adding them here would render an empty layer — the
+    // limitation is upstream, not in this code.
+    // =====================================================================
+    "Food Security": (function _buildIpcCountries() {
+      // Shared paint expression — every country renders the same way
+      // (official IPC colour ramp), so we factor it out once.  Prefer
+      // the API's baked-in `color` string; fall back to matching on
+      // `overall_phase` if a feature ever lands without one.
+      const IPC_FILL = {
+        "fill-color": [
+          "coalesce",
+          ["get", "color"],
+          [
+            "match",
+            ["to-number", ["coalesce", ["get", "overall_phase"], 0]],
+            1, "#CDFACD",
+            2, "#FAE61E",
+            3, "#E67800",
+            4, "#C80100",
+            5, "#640000",
+            "#cccccc",
+          ],
+        ],
+        "fill-opacity": 0.65,
+        "fill-outline-color": "#333333",
+      };
+
+      const IPC_LEGEND = {
+        title: "IPC / CH Acute Food Insecurity Phase",
+        entries: [
+          { swatch: "#CDFACD", shape: "square", label: "Phase 1 — Minimal" },
+          { swatch: "#FAE61E", shape: "square", label: "Phase 2 — Stressed" },
+          { swatch: "#E67800", shape: "square", label: "Phase 3 — Crisis" },
+          { swatch: "#C80100", shape: "square", label: "Phase 4 — Emergency" },
+          { swatch: "#640000", shape: "square", label: "Phase 5 — Catastrophe / Famine" },
+          { swatch: "#cccccc", shape: "square", label: "No / unknown classification" },
+        ],
+        note: "Official IPC/CH 5-phase global colour ramp. Colour comes from the API's per-feature `color` field (matched to `overall_phase`).",
+      };
+
+      const COUNTRIES = [
+        { key: "ipc_pakistan",    slug: "pakistan",    label: "IPC — Pakistan",
+          info: "Pakistan Acute Food Insecurity classification. Resolves to the newest published IPC analysis (last verified: March 2026 cycle, id 98222655). Click any polygon for the area name, phase (1–5), and classified population." },
+        { key: "ipc_afghanistan", slug: "afghanistan", label: "IPC — Afghanistan",
+          info: "Afghanistan Acute Food Insecurity classification. Same 5-phase scale as Pakistan — cross-border comparison is meaningful." },
+        { key: "ipc_bangladesh",  slug: "bangladesh",  label: "IPC — Bangladesh",
+          info: "Bangladesh Acute Food Insecurity classification. IPC coverage exists for coastal districts and Rohingya refugee areas." },
+      ];
+
+      const toggle = {};
+      for (const c of COUNTRIES) {
+        const src = `${c.key}-source`;
+        toggle[c.key] = {
+          label: c.label,
+          theme: null,
+          geometry: "polygon",
+          source: {
+            id: src,
+            type: "geojson",
+            data: `${window.location.origin}/api/ipc/${c.slug}/`,
+            generateId: true,
+          },
+          layers: [
+            { id: `${c.key}-fill`,    type: "fill", source: src, paint: IPC_FILL },
+            { id: `${c.key}-outline`, type: "line", source: src, minzoom: 5,
+              paint: { "line-color": "#333333", "line-width": 0.6 } },
+          ],
+          popup: true,
+          information: c.info,
+          dynamicLegend: IPC_LEGEND,
+        };
+      }
+      return { toggle };
+    })(),
+
+    // =====================================================================
+    // Agriculture — Pakistan Bureau of Statistics crop production
+    //
+    // Two toggles — Provincial and District choropleths.  Both are
+    // driven by the SAME crop selection: a filter card injected above
+    // the toggles (see crop-filter-controller.js) lets the operator
+    // pick one of the 121 crops PBS publishes.  On change, both
+    // active layers' geojson `data` URLs are rewritten via
+    // map.getSource(...).setData(<new url>) — Mapbox refetches from
+    // /api/crops/geojson/?crop=<newId>&year=2024-25&level=<11|13>.
+    //
+    // Server-side (CropGeoJSONAPIView) joins na.data.gov.pk's polygon
+    // file with the /Crops/GetMap values feed.  Popup dispatch
+    // (crop_* sources in layer-attribute-popup.js) shows the joined
+    // province/district card + Open Crop Explorer CTA that launches
+    // the standalone modal pre-selected on the current crop.
+    // =====================================================================
+    "Crop Production": (function _buildCropLayers() {
+      // Latest year with stable coverage across every major crop.
+      // Users can drill into other years via the Crop Explorer modal.
+      const YEAR    = "2024-25";
+      const DEFAULT_CROP_ID = 4;   // Wheat
+
+      // 5-stop green ramp used for both provincial + district layers.
+      // The filter controller rewrites the source URL on crop change;
+      // Mapbox `interpolate` clamps out-of-range values so the same
+      // ramp visually adapts to whatever the crop's magnitude is.
+      const RAMP = ["#f7fcf5", "#c7e9c0", "#74c476", "#238b45", "#00441b"];
+
+      // Provincial stops match wheat's magnitude by default; the
+      // controller re-tunes them per crop via a small lookup table
+      // when the source URL is swapped (see crop-filter-controller.js).
+      const PROV_STOPS_WHEAT = [0, 500, 2000, 6000, 20000];
+      const DIST_STOPS_WHEAT = [0, 50, 150, 400, 1500];
+
+      const _fillExpr = (stops) => ([
+        "case",
+        ["!=", ["get", "has_data"], true], "#e5e7eb",
+        [
+          "interpolate", ["linear"],
+          ["to-number", ["coalesce", ["get", "production"], 0]],
+          stops[0], RAMP[0],
+          stops[1], RAMP[1],
+          stops[2], RAMP[2],
+          stops[3], RAMP[3],
+          stops[4], RAMP[4],
+        ],
+      ]);
+
+      const LAYERS = [
+        { key: "crop_provincial",
+          label: "Crop Production (Provincial)",
+          level: 11,
+          stops: PROV_STOPS_WHEAT,
+          info: "Provincial choropleth of the currently-filtered crop's production (000 MT) for fiscal " + YEAR +
+                ". Use the 'Filter by crop type' selector above these toggles to switch crop; both provincial and district layers update in lock-step. Data: PBS Crop Reporting Service, joined server-side to na.data.gov.pk's polygon file (7-day cache). Click any province for the full breakdown card + 40-year time series." },
+        { key: "crop_district",
+          label: "Crop Production (District)",
+          level: 13,
+          stops: DIST_STOPS_WHEAT,
+          info: "District-level choropleth of the currently-filtered crop. District values from PBS are typically ~5–10 % of the containing province's total, so the ramp uses smaller stops than the provincial layer. Districts without reported data render grey — coverage varies by crop." },
+      ];
+
+      const toggle = {};
+      for (const c of LAYERS) {
+        const src = `${c.key}-source`;
+        toggle[c.key] = {
+          label: c.label,
+          theme: null,
+          geometry: "polygon",
+          // Meta read by the crop-popup dispatcher (for the Open
+          // Explorer CTA) and by crop-filter-controller.js (for
+          // source URL rewrites on filter change).  Ignored by Mapbox.
+          _ncop_cropDefault:  DEFAULT_CROP_ID,
+          _ncop_year:         YEAR,
+          _ncop_level:        c.level,
+          _ncop_stops:        c.stops,
+          source: {
+            id:   src,
+            type: "geojson",
+            data: `${window.location.origin}/api/crops/geojson/?crop=${DEFAULT_CROP_ID}&year=${YEAR}&level=${c.level}`,
+            generateId: true,
+          },
+          layers: [
+            { id: `${c.key}-fill`,
+              type: "fill",
+              source: src,
+              paint: {
+                "fill-color": _fillExpr(c.stops),
+                "fill-opacity": 0.72,
+                "fill-outline-color": "#333333",
+              },
+            },
+            { id: `${c.key}-outline`,
+              type: "line",
+              source: src,
+              minzoom: c.level === 13 ? 6 : 4,
+              paint: {
+                "line-color": "#0f172a",
+                "line-width": c.level === 13 ? 0.5 : 0.8,
+              },
+            },
+          ],
+          popup: true,
+          information: c.info,
+          dynamicLegend: {
+            title: `Production (000 MT) — fiscal ${YEAR}`,
+            entries: [
+              { swatch: RAMP[0], shape: "square", label: `≤ ${c.stops[0].toLocaleString()}` },
+              { swatch: RAMP[1], shape: "square", label: `~ ${c.stops[1].toLocaleString()}` },
+              { swatch: RAMP[2], shape: "square", label: `~ ${c.stops[2].toLocaleString()}` },
+              { swatch: RAMP[3], shape: "square", label: `~ ${c.stops[3].toLocaleString()}` },
+              { swatch: RAMP[4], shape: "square", label: `≥ ${c.stops[4].toLocaleString()}` },
+              { swatch: "#e5e7eb", shape: "square", label: "No reported data for the selected crop" },
+            ],
+            note: "Colour interpolates linearly on production. Pick a different crop via the filter card above. Popup shows the full area / production / yield for the region plus a link to the full 40-year time series in the Crop Explorer modal.",
+          },
+        };
+      }
+      return { toggle };
+    })(),
+  },
+
   weather: {
     "Radar Layers": {
       temporal: {
@@ -1705,6 +1957,84 @@ export const ncop_menu_items = {
           theme: "slider",
           title: null,
           information:"The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
+        },
+      },
+    },
+    // ---------------------------------------------------------------------
+    // PMD Predictions — NWP forecast rasters, fetched (authenticated) from
+    // the PMD Monitor portal and colorized server-side via GDAL into PNGs
+    // the temporal slider can render as Mapbox `image` sources.  All items
+    // share the same descriptor-driven pattern (window.pmd_pred_* is a
+    // factory function, not a pre-baked array) so the round-trip only
+    // happens on the user's first click of each toggle.  Model source per
+    // element is a backend decision: precipitation + 2m-temperature use
+    // WRFPRS (Pakistan-tuned WRF); cloud-cover + relative-humidity use
+    // GDFS (CMA-GOWFS global grid, ~80 frames vs 0 upstream for WRFPRS/TCC).
+    // ---------------------------------------------------------------------
+    "PMD Predictions": {
+      temporal: {
+        pmd_pred_hourtpe: {
+          label: "PMD Predictions — 3h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 3h Precip (mm)",
+          information:
+            "Pakistan Meteorological Department WRF model 3-hour precipitation-accumulation forecast (mm). Latest run auto-selected; 76 forecast steps thinned to every hour through +48 h then 6-hourly to the end of the run. Data authenticated-fetched from PMD Monitor as raw GeoTIFFs and colorized server-side using the vendor's own official mm ramp so the map reads identically to PMD's own dashboard.",
+        },
+        pmd_pred_sixtpe: {
+          label: "PMD Predictions — 6h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 6h Precip (mm)",
+          information:
+            "WRF 6-hour precipitation-accumulation forecast (mm). Same source pipeline as the 3-hour layer — vendor mm ramp preserved, thinning applied. Longer accumulation window renders detail across low-rain-rate days better than the 3-hour layer.",
+        },
+        pmd_pred_twelvetpe: {
+          label: "PMD Predictions — 12h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 12h Precip (mm)",
+          information:
+            "WRF 12-hour precipitation-accumulation forecast (mm). Wider mm scale than the 3/6-hour layers so the ramp reads meaningfully across storm and dry days alike. Same authenticated PMD Monitor pipeline.",
+        },
+        pmd_pred_daytpe: {
+          label: "PMD Predictions — 24h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 24h Precip (mm)",
+          information:
+            "WRF daily (24-hour) precipitation-accumulation forecast (mm) — the deepest accumulation window the vendor publishes. Ideal for planning-horizon situational briefings; use the 3/6/12-hour layers for finer-grained tactical scrubbing.",
+        },
+        pmd_pred_temp2m: {
+          label: "PMD Predictions — 2m Temperature",
+          image: getImage("6mp-air-temp.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 2m Temperature (°C)",
+          information:
+            "WRF 2-metre air temperature forecast (°C). Ramp spans -30 °C to +45 °C with cyan at the freezing line, blue for arctic cold and dark red for extreme heat — matches standard meteorological convention. Same authenticated PMD Monitor pipeline as the precipitation layers.",
+        },
+        pmd_pred_cloud_cover: {
+          label: "PMD Predictions — Total Cloud Cover",
+          image: getImage("Total_cloud_cover_3hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD Total Cloud Cover (%)",
+          information:
+            "Total cloud cover forecast (%) from CMA-GOWFS (GDFS) global grid — PMD Monitor's own WRFPRS/TCC feed currently publishes empty frames upstream, so this layer is served from the GDFS feed which has full 80-frame coverage. Light grey through dark grey; adjust opacity via the blend control for a see-through map view.",
+        },
+        pmd_pred_rel_humidity: {
+          label: "PMD Predictions — Relative Humidity",
+          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD Relative Humidity (%)",
+          information:
+            "Relative humidity forecast (%) from CMA-GOWFS (GDFS) — brown (arid) through cream (moderate) to deep blue (near-saturated). Complementary to the 2m-temperature and precipitation layers for a full atmospheric moisture picture.",
         },
       },
     },

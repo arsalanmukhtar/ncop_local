@@ -385,6 +385,20 @@ body.split-compare-active #temp-slider1::before {
     color: var(--text-primary);
 }
 
+/* Empty labels — mirrors the #temp-slider1 rule; see _temporal.css. Applies
+   here so a PMD Predictions (or any other loader that emits "" for skipped
+   labels) doesn't cascade tick marks on Map B in split-compare mode. */
+#temp-slider2 .year-labels1 span:empty {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+}
+#temp-slider2 .year-labels1 span:empty::after {
+    display: none;
+}
+
 #temp-slider2 .year-labels1 span.is-active {
     color: #fff;
     background: var(--ndma-blue);

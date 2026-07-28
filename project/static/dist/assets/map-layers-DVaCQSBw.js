@@ -1,0 +1,1 @@
+import{n as e,t}from"./dashboard_main-Cp23XPfg.js";export{t as baseUrl,e as ncop_menu_items};

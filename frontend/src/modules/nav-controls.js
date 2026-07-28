@@ -272,6 +272,16 @@ const TOUR_STEPS = [
     targetResolver: "subcategoryHeaderByTitle",
     targetValue: "Live Meteorological Operations",
   },
+  {
+    title: "PMD Predictions — new",
+    content:
+      "The newest subcategory under Weather Systems: seven forecast rasters fetched (authenticated) from PMD Monitor's own /predictions API, colorized server-side via GDAL into PNG frames the temporal slider plays as animated overlays. Precipitation windows in four accumulations (3h / 6h / 12h / 24h) from the Pakistan-tuned WRFPRS model, plus 2m Temperature (WRFPRS), Total Cloud Cover (GDFS — vendor's WRFPRS/TCC feed is currently empty), and Relative Humidity (GDFS). Every layer gets its own colour ramp, unit-aware legend, and a live 'current timestep' line inside the slider's variable panel that updates as you scrub. GDFS-backed layers are clipped server-side to a South-Asia bbox so a global-grid raster doesn't balloon Mapbox's GPU texture pool.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "PMD Predictions",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "PMD Predictions",
+  },
 
   // ===============================================================
   //  FLOOD MONITORING accordion
@@ -339,6 +349,40 @@ const TOUR_STEPS = [
     actionValue: "Real Time Air Quality Parameters",
     targetResolver: "subcategoryHeaderByTitle",
     targetValue: "Real Time Air Quality Parameters",
+  },
+
+  // ===============================================================
+  //  AGRICULTURE MONITORING accordion — new
+  // ===============================================================
+  {
+    title: "5 · Agriculture Monitoring — new",
+    content:
+      "The Agriculture Monitoring accordion (wheat icon) is a new top-level category that combines humanitarian food-security indicators with Pakistan's official crop-production statistics. Two subcategories today — Food Security (IPC/CH) and Crop Production (PBS) — with room for livestock, irrigation, pest, and market-price layers in future releases.",
+    position: "right",
+    action: "openSidebarAccordion",
+    actionValue: "Agriculture Monitoring",
+    targetResolver: "accordionHeaderByTitle",
+    targetValue: "Agriculture Monitoring",
+  },
+  {
+    title: "Food Security — IPC / CH",
+    content:
+      "Three country layers driven by IPC Info's official Acute Food Insecurity classification: Pakistan, Afghanistan, and Bangladesh. Each polygon renders in the official 5-phase colour ramp (Minimal → Catastrophe). The layers are fetched through a Django proxy that resolves the LATEST published analysis cycle server-side, so you always see the most recent classification without hard-coded cycle IDs. Click any polygon for a tabular popup and the Open Food Security Panel button, which launches a draggable + resizable IPC Stats Modal with 4 tabs including a Historical Trend chart from the PTT scrape.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Food Security",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Food Security",
+  },
+  {
+    title: "Crop Production — 121 crops · 44 fiscal years",
+    content:
+      "Two toggleable choropleths — Provincial and District — driven by the Pakistan Bureau of Statistics (PBS) Crop Reporting Service, joined server-side to na.data.gov.pk's polygon file. The 'Filter by crop type' card injected above the toggles is a single-select radio list of all 121 crops with a live search box: pick any crop (Wheat is the default) and BOTH active layers redraw in lock-step with per-crop stops so the colour ramp always spans the crop's real production magnitude. Click any province/district polygon for the full Area / Production / Yield tile and the Open Crop Explorer button, which launches the standalone 6-tab Crop Explorer modal (Time Series · Province Map · Province Table · District Map · District Table · About) pre-selected on the current crop.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Crop Production",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Crop Production",
   },
 
   // ===============================================================
@@ -548,7 +592,7 @@ const TOUR_STEPS = [
     target: "#ncopTourToggle",
     title: "That's the full tour",
     content:
-      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, and the new Geology + Seismology + expanded Hydrological Layers. Click this graduation-cap icon any time to restart the tour.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), and the newest addition — the PMD Predictions subcategory with 7 authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider. Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];
