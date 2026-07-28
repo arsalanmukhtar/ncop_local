@@ -12,6 +12,7 @@ Keep public symbol names stable — ``ncop_internal.views`` still imports
 """
 
 import os
+import sys
 from pathlib import Path
 
 import environ
@@ -43,32 +44,82 @@ if os.path.isfile(_geos_candidate):
 # PROJ / GDAL data directories.  MUST run before django.contrib.gis loads
 # GDAL (which happens during app startup), otherwise proj_context caches a
 # missing-proj.db state and every subsequent gdal.Warp(..., dstSRS="EPSG:*")
-# fails with 'Cannot find proj.db'.
+# silently fails.  A silent failure is the worst case here: gdal.Warp
+# returns a Dataset whose pixels are all NoData; gdal.DEMProcessing then
+# writes a technically-valid PNG that is 100% transparent.  Nginx serves
+# it with HTTP 200; Mapbox loads it without a console error; the map
+# stays empty.  This has been observed on both:
+#   * Windows dev — where QGIS/OSGeo4W set a stale PROJ_LIB pointing at a
+#     non-existent path that OSGeo's own `proj_context` respects blindly.
+#   * Linux prod — where the pip GDAL wheel ships without any bundled
+#     data/ dir, so PROJ_LIB is unset; system libproj is used unless a
+#     packager installed it at an unusual location.
 #
-# Behaviour: point each var at the OSGeo wheel's bundled data dir if the
-# currently-set env var (a) is unset OR (b) points at a non-existent path
-# (a QGIS/OSGeo4W install may have set a stale path that no longer exists
-# on this machine — respecting it silently would break every GDAL warp).
-# On Linux production the OSGeo pip wheel typically ships without a data/
-# subdir (system PROJ takes over via libproj-dev), so the bundled_path
-# won't exist and this whole block is a no-op — safe by inspection.
-try:
-    import osgeo as _osgeo_probe
-    _osgeo_dir = os.path.dirname(_osgeo_probe.__file__)
-    for _var, _path in (
-        ("PROJ_LIB",  os.path.join(_osgeo_dir, "data", "proj")),
-        ("GDAL_DATA", os.path.join(_osgeo_dir, "data", "gdal")),
-    ):
-        current = os.environ.get(_var)
-        # Set the var if it's missing OR if it points at a path that
-        # doesn't exist on this machine — but only when we have a real
-        # OSGeo-bundled dir to point it at instead.
-        if os.path.exists(_path) and (not current or not os.path.exists(current)):
-            os.environ[_var] = _path
-except Exception:
-    # osgeo not importable at this early point — production environments
-    # typically ship PROJ_LIB via the OS package, so nothing to do here.
-    pass
+# Behaviour: pick the FIRST candidate path that both exists AND contains
+# `proj.db` for PROJ_LIB (or a real GDAL data dir for GDAL_DATA), and set
+# the env var to it.  If the currently-set env var already points at a
+# valid path, respect it.  If nothing valid is found, leave the env vars
+# alone and log a warning at startup — this is a hard operational error
+# on prod that shouldn't fail silently.
+def _pick_first_valid_dir(candidates, sentinel_file):
+    """Return the first path in `candidates` that exists and contains
+    `sentinel_file`; None otherwise."""
+    for p in candidates:
+        if p and os.path.isdir(p) and os.path.isfile(os.path.join(p, sentinel_file)):
+            return p
+    return None
+
+def _bootstrap_gdal_paths():
+    # Assemble the candidate list per var: current env value first
+    # (respect operator override), then wheel bundle, then common Linux
+    # system paths.  On Windows dev the wheel bundle wins; on Linux prod
+    # the /usr/share/proj path typically wins.
+    try:
+        import osgeo as _osgeo_probe
+        wheel_dir = os.path.dirname(_osgeo_probe.__file__)
+    except Exception:
+        wheel_dir = None
+
+    proj_candidates = [
+        os.environ.get("PROJ_LIB"),
+        os.environ.get("PROJ_DATA"),  # PROJ >= 9 renamed the var; check both
+        os.path.join(wheel_dir, "data", "proj") if wheel_dir else None,
+        # Linux system installs (apt: libproj-dev / conda / homebrew).
+        "/usr/share/proj",
+        "/usr/local/share/proj",
+        "/opt/homebrew/share/proj",
+        # Conda envs relative to sys.prefix.
+        os.path.join(sys.prefix, "share", "proj"),
+        os.path.join(sys.prefix, "Library", "share", "proj"),
+    ]
+    picked = _pick_first_valid_dir(proj_candidates, "proj.db")
+    if picked:
+        os.environ["PROJ_LIB"]  = picked
+        os.environ["PROJ_DATA"] = picked  # belt-and-braces for PROJ 9+
+    else:
+        print(
+            "[ncop] WARNING: no valid PROJ_LIB found — GDAL raster warps to "
+            "EPSG:3857 may silently produce empty rasters.  Set PROJ_LIB to "
+            "a directory containing proj.db (typically /usr/share/proj on "
+            "Linux) via the environment before starting the app."
+        )
+
+    gdal_candidates = [
+        os.environ.get("GDAL_DATA"),
+        os.path.join(wheel_dir, "data", "gdal") if wheel_dir else None,
+        "/usr/share/gdal",
+        "/usr/local/share/gdal",
+        "/opt/homebrew/share/gdal",
+        os.path.join(sys.prefix, "share", "gdal"),
+        os.path.join(sys.prefix, "Library", "share", "gdal"),
+    ]
+    picked = _pick_first_valid_dir(gdal_candidates, "gdalvrt.xsd") or \
+             _pick_first_valid_dir(gdal_candidates, "GDALLogoBW.svg")
+    if picked:
+        os.environ["GDAL_DATA"] = picked
+    # GDAL_DATA is less critical for our warp+colorize pipeline; no warning.
+
+_bootstrap_gdal_paths()
 
 # ---------------------------------------------------------------------------
 # Core Django
