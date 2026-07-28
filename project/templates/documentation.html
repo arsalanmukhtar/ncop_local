@@ -36,6 +36,282 @@
             --rail-width: 70px;
         }
 
+        /* ---------- LIGHT theme overrides ----------
+           The docs are dark by default (matches the operator dashboard aesthetic);
+           the theme-toggle button in the top-bar sets data-theme="light" on <html>
+           and swaps the entire palette via variable overrides.  Zero rule
+           duplication downstream — every existing selector uses var(--*). */
+        :root[data-theme="light"] {
+            --bg-primary: #fafbfd;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f2f5fa;
+            --bg-card: #ffffff;
+            --bg-hover: #eef2f8;
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --accent: #2563eb;
+            --accent-soft: rgba(37, 99, 235, 0.10);
+            --success: #059669;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --code-bg: #f4f6fb;
+            --code-border: #dbe3ee;
+            --gradient: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+        }
+        /* Theme-toggle button — sits in the topbar next to NDMA / Open Dashboard.
+           Uses the same var-driven palette so it recolours with the theme. */
+        .docs-theme-toggle {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 34px;
+            padding: 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .docs-theme-toggle:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+            transform: translateY(-1px);
+        }
+        .docs-theme-toggle svg { width: 18px; height: 18px; display: block; }
+        /* Show the correct icon per theme (sun = you can switch to light, moon = you can switch to dark). */
+        .docs-theme-toggle .icon-sun  { display: none; }
+        .docs-theme-toggle .icon-moon { display: block; }
+        :root[data-theme="light"] .docs-theme-toggle .icon-sun  { display: block; }
+        :root[data-theme="light"] .docs-theme-toggle .icon-moon { display: none; }
+
+        /* ---------- Image placeholders ----------
+           Used inside How-to-use sections while real screenshots are pending.
+           Aspect-ratio locked so the layout doesn't jump when real images
+           swap in later.  Purely visual — a placeholder <div> or a real
+           <img> can go inside the .doc-figure wrapper interchangeably. */
+        .doc-figure {
+            display: block;
+            margin: 20px 0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+        }
+        .doc-figure img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .doc-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            aspect-ratio: 16 / 9;
+            background: repeating-linear-gradient(
+                45deg,
+                var(--bg-tertiary) 0 12px,
+                var(--bg-card) 12px 24px
+            );
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            padding: 24px;
+            border-bottom: 1px dashed var(--border);
+        }
+        .doc-placeholder::before {
+            content: "🖼";
+            font-size: 32px;
+            margin-right: 12px;
+            filter: grayscale(0.4);
+        }
+        .doc-figure figcaption {
+            padding: 10px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            line-height: 1.5;
+        }
+        .doc-figure figcaption b { color: var(--text-primary); }
+
+        /* ---------- Numbered step list (How to Use) ---------- */
+        .doc-steps {
+            counter-reset: doc-step;
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .doc-steps > li {
+            counter-increment: doc-step;
+            position: relative;
+            padding: 14px 16px 14px 60px;
+            margin-bottom: 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .doc-steps > li::before {
+            content: counter(doc-step);
+            position: absolute;
+            left: 14px; top: 12px;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: var(--gradient);
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(79, 159, 255, 0.20);
+        }
+        .doc-steps > li b { color: var(--text-primary); }
+
+        /* ---------- Infograph: flow diagram (pure CSS boxes + arrows) ----------
+           Renders a horizontal or wrap-friendly pipeline: [Node] → [Node] → […]
+           Each .flow-node is one boxed step; .flow-arrow between them is
+           a right-pointing chevron rendered via CSS mask (no images/SVG). */
+        .flow-diagram {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 10px;
+            padding: 18px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .flow-node {
+            flex: 1 1 140px;
+            min-width: 140px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            display: flex; flex-direction: column; justify-content: center;
+            text-align: center;
+            font-size: 12.5px;
+            line-height: 1.4;
+        }
+        .flow-node b {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .flow-node span { color: var(--text-secondary); }
+        .flow-node--accent { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+        .flow-node--success { border-color: var(--success); }
+        .flow-node--warning { border-color: var(--warning); }
+        .flow-arrow {
+            flex: 0 0 auto;
+            align-self: center;
+            color: var(--text-muted);
+            font-size: 18px;
+            line-height: 1;
+            user-select: none;
+        }
+
+        /* ---------- Infograph: layered architecture ----------
+           A vertical stack of "planes" (User → Frontend → Django → Data),
+           each with a label + list of components inside.  Colored left
+           borders code the plane by concern. */
+        .arch-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 18px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .arch-plane {
+            padding: 14px 16px;
+            background: var(--bg-card);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+        }
+        .arch-plane--data     { border-left-color: var(--success); }
+        .arch-plane--upstream { border-left-color: var(--warning); }
+        .arch-plane--frontend { border-left-color: var(--accent); }
+        .arch-plane--user     { border-left-color: #a78bfa; }
+        .arch-plane__title {
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .arch-plane__items {
+            display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .arch-plane__chip {
+            font-size: 11.5px;
+            padding: 3px 9px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--text-secondary);
+        }
+
+        /* ---------- Infograph: metric tiles ---------- */
+        .metric-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        .metric-tile {
+            padding: 14px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .metric-tile__val {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1.1;
+        }
+        .metric-tile__label {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            letter-spacing: 0.02em;
+        }
+
+        /* ---------- Callout box ---------- */
+        .callout {
+            padding: 12px 16px;
+            margin: 16px 0;
+            border-left: 4px solid var(--accent);
+            background: var(--accent-soft);
+            border-radius: 6px;
+            font-size: 13.5px;
+            color: var(--text-primary);
+        }
+        .callout--warning { border-left-color: var(--warning); background: rgba(251, 191, 36, 0.10); }
+        .callout--success { border-left-color: var(--success); background: rgba(45, 212, 191, 0.10); }
+        .callout b { color: var(--text-primary); }
+
+        /* ---------- ASCII diagram styling (for the terminal-style pipelines) ---------- */
+        pre.ascii-diagram {
+            background: var(--code-bg);
+            border: 1px solid var(--code-border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+        pre.ascii-diagram .a-node { color: var(--accent); font-weight: 700; }
+        pre.ascii-diagram .a-note { color: var(--text-muted); }
+
         * {
             box-sizing: border-box;
         }
@@ -320,6 +596,20 @@
             </div>
         </a>
         <div class="topbar-actions">
+            <button id="docsThemeToggle" type="button" class="docs-theme-toggle"
+                    aria-label="Toggle documentation theme" title="Toggle light / dark theme">
+                <!-- Both icons ship; CSS reveals the correct one per theme. -->
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path><path d="M12 20v2"></path>
+                    <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
+                    <path d="M2 12h2"></path><path d="M20 12h2"></path>
+                    <path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>
+                </svg>
+            </button>
             <a href="https://ndma.gov.pk/" target="_blank" rel="noopener" class="topbar-btn">NDMA</a>
             <a href="/" class="topbar-btn topbar-btn--primary">Open Dashboard</a>
         </div>
@@ -328,6 +618,13 @@
     <div class="layout">
         <!-- Sidebar Navigation -->
         <aside class="sidebar" id="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-heading">Start Here</div>
+                <a href="#preamble" class="sidebar-link">Why NCOP Exists</a>
+                <a href="#ncop-explained" class="sidebar-link">What NCOP Is</a>
+                <a href="#how-to-use" class="sidebar-link">How to Use NCOP</a>
+            </div>
+
             <div class="sidebar-section">
                 <div class="sidebar-heading">Overview</div>
                 <a href="#introduction" class="sidebar-link">Introduction</a>
@@ -355,9 +652,11 @@
 
             <div class="sidebar-section">
                 <div class="sidebar-heading">Data &amp; Layers</div>
+                <a href="#layers-apis-explained" class="sidebar-link">Layers &amp; APIs Explained</a>
                 <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
                 <a href="#new-gis-layers" class="sidebar-link">New GIS Layers &mdash; Hydrology / Geology / Seismology</a>
                 <a href="#agriculture-monitoring" class="sidebar-link">Agriculture Monitoring &mdash; IPC &amp; PBS Crops</a>
+                <a href="#pmd-predictions" class="sidebar-link">PMD Predictions &mdash; WRFPRS / GDFS Forecasts</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
                 <a href="#station-layers" class="sidebar-link">Station Layers</a>
@@ -385,6 +684,7 @@
 
             <div class="sidebar-section">
                 <div class="sidebar-heading">Backend</div>
+                <a href="#backend-thesis" class="sidebar-link">Backend Deep-Dive (Workflows)</a>
                 <a href="#api-reference" class="sidebar-link">REST API Reference</a>
                 <a href="#caching" class="sidebar-link">Caching Strategy</a>
                 <a href="#proxies" class="sidebar-link">Upstream Proxies</a>
@@ -406,11 +706,208 @@
             <div class="page-meta">
                 <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
                 <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
-                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-27</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-28</span>
             </div>
 
             <!-- ============================================================ -->
-            <section id="introduction" class="first">
+            <section id="preamble" class="first">
+                <h2 class="section-title">Why NCOP Exists <span class="section-anchor">#</span></h2>
+                <p>Pakistan sits in the middle of one of the world&rsquo;s most disaster-exposed geographies. Monsoon floods on the Indus. Glacial-lake outburst floods in the Karakoram. Heatwaves in Sindh. Cyclones on the Arabian coast. Wildfires in KP. Earthquakes across the northern belt. Locust swarms coming in from the west. Between them, dozens of institutions publish authoritative data every single day &mdash; and until NCOP, an emergency operator responding to a real incident had to open <em>eight browser tabs</em> just to see what was happening.</p>
+
+                <div class="callout callout--warning">
+                    <b>The core problem:</b> the data existed. The <em>picture</em> didn&rsquo;t. Weather, floods, air quality, seismic activity, food security, live station feeds, satellite imagery &mdash; each source lived on its own website, in its own format, on its own refresh cadence, behind its own login. Analysts spent hours <em>collecting</em> before they could start <em>deciding</em>.
+                </div>
+
+                <p>NCOP was commissioned by Pakistan&rsquo;s <strong>National Disaster Management Authority (NDMA)</strong> to solve that specific problem. Not a new dataset. Not a new model. A <strong>single operational picture</strong> where every meaningful feed &mdash; PMD, FFD, NWFC, ECMWF, GDACS, EONET, USGS, IPC, PBS, WAQI, GloFAS, GeoServer, IMERG, DWD, Meteoblue, Copernicus, GEE &mdash; is fused onto one Mapbox canvas, live, cached, colour-coded, playable through a shared temporal slider, and comparable side-by-side.</p>
+
+                <p>The value isn&rsquo;t any one layer. The value is <b>seeing them at the same time</b>: an IPC food-insecurity polygon over a GloFAS discharge forecast over an NWFC weather warning over a live PMD station reading, all keyed to the same district, all fetched by the same session. That&rsquo;s the difference between reacting to a briefing 6 hours late and deploying assets 6 hours early.</p>
+
+                <div class="metric-row">
+                    <div class="metric-tile"><div class="metric-tile__val">10+</div><div class="metric-tile__label">Upstream data providers fused</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">200+</div><div class="metric-tile__label">Individual map layers</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">1</div><div class="metric-tile__label">Operator screen</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">Live</div><div class="metric-tile__label">Every minute, refreshed &amp; cached</div></div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="ncop-explained">
+                <h2 class="section-title">What NCOP Is (in plain terms) <span class="section-anchor">#</span></h2>
+                <p>Think of NCOP as <b>Google Maps for emergencies</b>. Same familiar map, same pan/zoom, same clean UI. The difference is what you can turn <em>on</em> on top of it.</p>
+
+                <h3 class="subsection-title">The three things a user does</h3>
+                <ol>
+                    <li><b>Pick layers</b> from the left-hand sidebar &mdash; an accordion of ~7 categories (GIS layers, weather, floods, air quality, agriculture, ocean, early warning). Each accordion contains subcategories, each subcategory contains toggles.</li>
+                    <li><b>Play time</b> on the bottom timeline &mdash; for weather / satellite / forecast layers, hitting the play button animates a forecast frame-by-frame. Drag the slider to jump to any hour.</li>
+                    <li><b>Read what&rsquo;s on the map</b> &mdash; click any polygon or point for a popup card with the underlying data (station reading, forecast value, phase classification, upstream ID). For richer layers (heatwave, IPC food security, crops, weather) there&rsquo;s a follow-up modal with charts and tabs.</li>
+                </ol>
+
+                <h3 class="subsection-title">Where the data comes from (grassroots view)</h3>
+                <p>NCOP itself doesn&rsquo;t <em>generate</em> the data. Every layer is fetched from an <em>authoritative source</em> &mdash; the same organisation that a paper briefing would quote &mdash; but instead of a PDF twelve hours later, you see the polygon on a map right now:</p>
+
+                <div class="arch-stack">
+                    <div class="arch-plane arch-plane--user">
+                        <div class="arch-plane__title">👤 Operator (you)</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">Browser</span>
+                            <span class="arch-plane__chip">Map + Sidebar</span>
+                            <span class="arch-plane__chip">Popups &amp; Modals</span>
+                            <span class="arch-plane__chip">Split-Compare</span>
+                        </div>
+                    </div>
+                    <div class="arch-plane arch-plane--frontend">
+                        <div class="arch-plane__title">🖥️ NCOP Frontend (Mapbox GL JS + Vite)</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">Layer catalogue</span>
+                            <span class="arch-plane__chip">Temporal slider</span>
+                            <span class="arch-plane__chip">Legend engine</span>
+                            <span class="arch-plane__chip">Chart.js panels</span>
+                        </div>
+                    </div>
+                    <div class="arch-plane arch-plane--data">
+                        <div class="arch-plane__title">🐍 NCOP Backend (Django)</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">Proxy views</span>
+                            <span class="arch-plane__chip">In-memory cache</span>
+                            <span class="arch-plane__chip">GDAL colorization</span>
+                            <span class="arch-plane__chip">Auth session pool</span>
+                        </div>
+                    </div>
+                    <div class="arch-plane arch-plane--upstream">
+                        <div class="arch-plane__title">🌐 Upstream authoritative sources</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">PMD Monitor</span>
+                            <span class="arch-plane__chip">PMD NWFC</span>
+                            <span class="arch-plane__chip">FFD</span>
+                            <span class="arch-plane__chip">ECMWF</span>
+                            <span class="arch-plane__chip">GDACS / EONET / USGS</span>
+                            <span class="arch-plane__chip">IPC Info</span>
+                            <span class="arch-plane__chip">PBS Crops</span>
+                            <span class="arch-plane__chip">WAQI / CAMS</span>
+                            <span class="arch-plane__chip">Copernicus (GloFAS)</span>
+                            <span class="arch-plane__chip">Meteoblue</span>
+                            <span class="arch-plane__chip">NASA IMERG</span>
+                            <span class="arch-plane__chip">DWD Satellite</span>
+                            <span class="arch-plane__chip">GeoServer (NDMA)</span>
+                            <span class="arch-plane__chip">Google Earth Engine</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="font-size:12.5px; color:var(--text-muted); margin-top:6px">Data always flows top-to-bottom on request, and results always flow bottom-to-top with caching at every hop. No upstream credentials or hosts ever reach the browser.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="how-to-use">
+                <h2 class="section-title">How to Use NCOP <span class="section-anchor">#</span></h2>
+                <p>Everything the operator does on NCOP happens in one of four regions of the screen. Learn these and you know the whole UI.</p>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/four_regions.png' %}" alt="NCOP full screen with the four regions labelled: top-bar, sidebar, right rail, bottom slider" loading="lazy">
+                    <figcaption><b>The four regions.</b> Top bar (theme, tour, help), left sidebar (layer catalogue), right rail (tools &amp; panels), bottom timeline (temporal slider). Everything else is the map itself.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">1 &middot; Turning layers on and off</h3>
+                <ol class="doc-steps">
+                    <li><b>Click the hamburger menu</b> (top-left corner). The sidebar slides in with every category available.</li>
+                    <li><b>Expand an accordion</b> &mdash; GIS Layers, Weather Systems, Flood Monitoring, Air Quality, Agriculture Monitoring, Ocean &amp; Coastal, or Early Warning.</li>
+                    <li><b>Expand a subcategory</b> inside it (e.g. Weather Systems &rarr; PMD Predictions).</li>
+                    <li><b>Toggle a layer</b> &mdash; either a switch (for &ldquo;always-on&rdquo; layers like boundaries) or a click-tile (for &ldquo;time-aware&rdquo; layers where the bottom slider lights up).</li>
+                    <li><b>Search</b> &mdash; if you know the layer name, type it in the sidebar&rsquo;s search box to filter every category instantly.</li>
+                </ol>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/layers_on_off.png' %}" alt="Sidebar accordion open, PMD Predictions subcategory expanded, one layer being toggled on" loading="lazy">
+                    <figcaption>The sidebar tree. Categories &rarr; Subcategories &rarr; Layers. Filter cards (like the 121-crop selector or the 13-hazard PMD Warnings filter) appear <em>above</em> the toggles they govern.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">2 &middot; Reading a temporal (time-aware) layer</h3>
+                <ol class="doc-steps">
+                    <li><b>Click a temporal item</b> (has a small clock/movie icon in the sidebar). The bottom slider appears with playable frames.</li>
+                    <li><b>Hit Play</b> (left icon) to animate through the forecast hour-by-hour, or drag the slider handle to jump to a specific time.</li>
+                    <li><b>Change speed</b> with the 1&times; pill &mdash; cycles through 0.5&times; / 1&times; / 2&times; / 4&times;.</li>
+                    <li><b>Read the legend</b> &mdash; centre-bottom shows a colour ramp with values (mm, &deg;C, %) so you know what the colours mean.</li>
+                    <li><b>Live timestep</b> &mdash; the layer&rsquo;s title area shows exactly which forecast hour is currently visible; it updates as you scrub.</li>
+                    <li><b>Adjust opacity</b> with the blend button on the far right &mdash; useful when you want to see the basemap through a cloud-cover layer.</li>
+                    <li><b>Remove the layer</b> with the trash icon; it doesn&rsquo;t affect any other layer.</li>
+                </ol>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/temporal.png' %}" alt="Bottom temporal slider active on a PMD Predictions layer, showing play button, speed, timeline with visible date labels, gradient legend, opacity control" loading="lazy">
+                    <figcaption>The temporal slider. Top row: transport controls, timeline with click-to-jump date labels, drag handle. Bottom row: remove button + layer title + current timestep, colour ramp legend, opacity control.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">3 &middot; Clicking a feature for details</h3>
+                <ol class="doc-steps">
+                    <li><b>Click any polygon or point</b> on the map. A popup opens with the feature&rsquo;s underlying values (station reading, phase classification, forecast, area, etc.).</li>
+                    <li><b>Some popups launch a follow-up modal</b> &mdash; e.g. IPC polygons expose an &ldquo;Open Food Security Panel&rdquo; button for a 4-tab draggable modal with charts, historical trends, and per-area breakdowns.</li>
+                    <li><b>Crop layers</b> have an &ldquo;Open Crop Explorer&rdquo; button for a 6-tab modal spanning 44 years of national and district crop statistics.</li>
+                    <li><b>Close a popup</b> by pressing ESC (there&rsquo;s no close button on purpose &mdash; less chrome, cleaner map).</li>
+                </ol>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/Clicking_a_feature.png' %}" alt="IPC polygon popup with tabular phase breakdown, plus the Open Food Security Panel button" loading="lazy">
+                    <figcaption>Popups are contextual to the layer. Simple layers (boundaries) show key-value cards; richer layers (IPC, crops, heatwave, weather stations) show tabular breakdowns with a CTA that opens a dedicated modal.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">4 &middot; The right-hand tools rail</h3>
+                <p>Everything on the right edge is a single-purpose tool. Top-to-bottom by workflow:</p>
+                <div class="flow-diagram">
+                    <div class="flow-node flow-node--accent"><b>Collapse</b><span>Hide/show whole rail</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>User</b><span>Profile / logout</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Search</b><span>Fly to place</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Layer Order</b><span>Drag to reorder</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Layer Style</b><span>Recolor active layers</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Layer Info</b><span>Descriptions + legends</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--success"><b>Weather Report</b><span>Live PMD brief for map centre</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--accent"><b>Split Compare</b><span>Side-by-side dual map</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Basemap</b><span>Streets / satellite / OSM…</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Tour</b><span>Interactive walkthrough</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>3D / Globe</b><span>Tilt &amp; projection</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Particles</b><span>Wind / ocean streamlines</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Zoom</b><span>+ / − / reset bearing</span></div>
+                </div>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/right-hand_tools_rail.png' %}" alt="Right rail expanded, showing every button with tooltips" loading="lazy">
+                    <figcaption>The right rail. Every icon is a single well-defined action; click for details or hover for a tooltip. The <b>Guided Tour</b> (graduation-cap) walks a first-time user through <em>every</em> icon in the correct order.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">5 &middot; Split Compare (side-by-side)</h3>
+                <ol class="doc-steps">
+                    <li><b>Click the Split Compare icon</b> (two-column icon on the right rail). The map splits vertically into Map A (left) and Map B (right).</li>
+                    <li><b>Load a layer on Map B</b> from the picker at the bottom &mdash; while Map A keeps whatever you already have.</li>
+                    <li><b>Cameras stay in sync</b> &mdash; pan/zoom either side and the other follows. Great for &ldquo;A/B comparing&rdquo; forecasts, past-vs-future, or two different models on the same event.</li>
+                    <li><b>Two independent timelines</b> &mdash; each side has its own temporal slider so you can play back different hours on each map.</li>
+                    <li><b>Exit split mode</b> by clicking the split icon again.</li>
+                </ol>
+
+                <figure class="doc-figure">
+                    <img src="{% static 'docs_images/Split_Compare.png' %}" alt="Split Compare active, Map A showing 3h precipitation, Map B showing 24h precipitation, cameras aligned on the same city" loading="lazy">
+                    <figcaption>Split Compare turns NCOP into a two-map comparison workspace &mdash; cameras synced, temporal sliders independent, the divider draggable.</figcaption>
+                </figure>
+
+                <h3 class="subsection-title">6 &middot; The Guided Tour</h3>
+                <p>If any of the above feels unfamiliar, click the <b>graduation-cap icon</b> on the right rail. It walks you through all <strong>58 workflow-ordered steps</strong>: every category, every subcategory, every button on the rail, the temporal slider anatomy, split-compare, the weather-report panel, the popups, everything. The tour drives the sidebar and panels itself &mdash; you just click Next.</p>
+
+                <div class="callout callout--success">
+                    <b>Tip:</b> the tour is safe to restart at any time. Great for training new operators, refreshing after a release, or showing a briefing audience how NCOP works.
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="introduction">
                 <h2 class="section-title">Introduction <span class="section-anchor">#</span></h2>
                 <p>
                     NCOP is a <strong>real-time, multi-source geospatial dashboard</strong> built for Pakistan&rsquo;s
@@ -887,6 +1384,115 @@ sudo journalctl -u ncop-waitress.service -f
             </section>
 
             <!-- ============================================================ -->
+            <section id="layers-apis-explained">
+                <h2 class="section-title">Layers &amp; APIs Explained <span class="section-anchor">#</span></h2>
+                <p>NCOP&rsquo;s layers all reach the browser through the <em>same</em> pipeline, no matter which upstream serves them. Understanding that pipeline is the fastest way for a new developer or a client to reason about &ldquo;where does this data come from and why is it fast enough.&rdquo;</p>
+
+                <h3 class="subsection-title">The five layer archetypes</h3>
+                <p>Every layer in NCOP falls into one of five shapes. Once you recognise the shape, everything else about it &mdash; how it&rsquo;s stored, how it&rsquo;s rendered, how it&rsquo;s cached &mdash; is predictable.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Shape</th><th>What it is</th><th>How it&rsquo;s served</th><th>Example</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><b>Vector Tile</b></td>
+                                <td>Always-on polygon / line / point layer with fixed styling. Fast, zooms cleanly, tiled by Mapbox.</td>
+                                <td>GeoServer TMS tiles (<code>{z}/{x}/{y}.pbf</code>) hit directly from the browser.</td>
+                                <td>National Boundary, Rivers, Fault Lines, Flood Extents.</td>
+                            </tr>
+                            <tr>
+                                <td><b>GeoJSON</b></td>
+                                <td>A single JSON feature-collection with dynamic per-feature styling. Best for &ldquo;live&rdquo; feeds where colour depends on an attribute.</td>
+                                <td>Django proxy fetches upstream, joins polygons + values, returns one JSON object.</td>
+                                <td>IPC food security, Crop Production choropleths, PMD Warnings.</td>
+                            </tr>
+                            <tr>
+                                <td><b>Raster Tile</b></td>
+                                <td>Time-aware raster served as WMS tiles, one URL template per forecast timestep.</td>
+                                <td>External WMS server (DWD, ECMWF, Meteoblue) hit directly with a <code>time=</code> param per frame.</td>
+                                <td>DWD Satellite IR, IMERG Precipitation, ECMWF Temperature.</td>
+                            </tr>
+                            <tr>
+                                <td><b>Image Frame</b></td>
+                                <td>Time-aware raster where each forecast hour is a single pre-rendered PNG pinned to 4 corner coordinates.</td>
+                                <td>Django proxy fetches the raw GeoTIFF from an authenticated source, warps + colorizes via GDAL, caches PNG on disk.</td>
+                                <td>PMD Predictions (WRFPRS / GDFS): precipitation, temperature, cloud cover, humidity.</td>
+                            </tr>
+                            <tr>
+                                <td><b>Feature Popup Layer</b></td>
+                                <td>A base vector layer whose value is the <em>click handler</em>. Clicking a feature opens a card / modal with attributes + charts.</td>
+                                <td>Any of the above +  a per-layer popup builder in <code>layer-attribute-popup.js</code>.</td>
+                                <td>Heatwave stations, IPC polygons, Crop districts, GLOF observations.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">The request lifecycle for a single layer</h3>
+                <p>When an operator toggles a layer &mdash; e.g. &ldquo;PMD Predictions &mdash; 3h Precipitation&rdquo; &mdash; here&rsquo;s exactly what happens in order:</p>
+                <div class="flow-diagram">
+                    <div class="flow-node flow-node--accent"><b>1 · Click</b><span>Sidebar checkbox fires; <code>handleTemporalInteraction</code> called.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>2 · Factory</b><span><code>window.pmd_pred_hourtpe()</code> resolves to a Promise.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>3 · Fetch</b><span>Browser hits Django: <code>GET /api/pmd/monitor/predictions/hourtpe/</code></span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--warning"><b>4 · Cache?</b><span>Hit → return.<br>Miss → continue.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>5 · Auth</b><span>Django gets logged-in session (JWT bearer, cached 1&nbsp;h).</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>6 · Upstream</b><span>PMD Monitor: latest run, then per-frame <code>.tif</code>.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>7 · GDAL</b><span>Warp EPSG:4326 → 3857, color-relief PNG.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--success"><b>8 · Disk cache</b><span>PNG + JSON metadata under <code>MEDIA_ROOT</code>.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>9 · JSON return</b><span>{steps: [{date, url, coords}]} → browser.</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--accent"><b>10 · Slider</b><span><code>updateTempSliderAsync</code> registers image sources; play.</span></div>
+                </div>
+                <p><b>Every layer follows the same shape.</b> Steps 5-8 are optional (only for authenticated / colorized layers); everything else is universal. This uniformity is why adding a new layer typically takes only a registry entry + a loader function.</p>
+
+                <h3 class="subsection-title">Why the browser never sees an upstream URL</h3>
+                <div class="callout">
+                    NCOP&rsquo;s browser bundle contains <b>no upstream credentials, no upstream hostnames, no API keys for restricted sources</b>. Every request that needs authentication or IP-restricted access goes through Django. This is intentional: it protects rotating credentials, it lets us cache aggressively at the server, and it gives us a single audit point when a source&rsquo;s API shape changes.
+                </div>
+                <p>The browser only knows about <code>window.location.origin</code>. Django translates <code>/api/pmd/monitor/*</code>, <code>/api/ipc/*</code>, <code>/api/crops/*</code>, etc. into the right upstream call, injects the right auth, and returns a normalised JSON shape the frontend already understands.</p>
+
+                <h3 class="subsection-title">Cache layers &mdash; why NCOP feels instant</h3>
+                <p>Three levels of cache stack on top of each other. Any one is enough to make a repeat visit fast; together they mean the same layer, opened twice in one session, costs zero network trips.</p>
+                <div class="arch-stack">
+                    <div class="arch-plane arch-plane--user">
+                        <div class="arch-plane__title">🌐 Browser cache</div>
+                        <div class="arch-plane__items"><span class="arch-plane__chip">Standard HTTP cache on the returned PNGs / JSON</span></div>
+                    </div>
+                    <div class="arch-plane arch-plane--frontend">
+                        <div class="arch-plane__title">🖥️ Frontend memo</div>
+                        <div class="arch-plane__items"><span class="arch-plane__chip">Loader factories (e.g. <code>_PMD_PRED_CACHE Map</code>) keep resolved frame arrays</span></div>
+                    </div>
+                    <div class="arch-plane arch-plane--data">
+                        <div class="arch-plane__title">🐍 Django in-memory cache</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">30 min: latest-run lookups</span>
+                            <span class="arch-plane__chip">3 h: frame-list per run</span>
+                            <span class="arch-plane__chip">6 h: IPC per country</span>
+                            <span class="arch-plane__chip">24 h: Crops, IPC history</span>
+                        </div>
+                    </div>
+                    <div class="arch-plane arch-plane--upstream">
+                        <div class="arch-plane__title">💾 On-disk cache</div>
+                        <div class="arch-plane__items">
+                            <span class="arch-plane__chip">Colorized PNG frames under <code>MEDIA_ROOT/pmd_predictions/</code></span>
+                            <span class="arch-plane__chip">Unbounded &mdash; (element, run, forecast-hour) never changes once written</span>
+                        </div>
+                    </div>
+                </div>
+                <p>Cache invalidation is <em>time-based</em>, not manual. New model runs supersede old ones automatically because the &ldquo;latest-run&rdquo; lookup expires every 30 minutes; new frames get their own filenames so they can&rsquo;t collide with older ones.</p>
+            </section>
+
+            <!-- ============================================================ -->
             <section id="layer-catalogue">
                 <h2 class="section-title">Layer Catalogue <span class="section-anchor">#</span></h2>
                 <p>The single source of truth is <code>frontend/src/modules/map-layers.js</code> &rarr; <code>ncop_menu_items</code>. Each category nests subcategories; each subcategory contains <code>toggle</code> (always-on/off vector layers), <code>temporal</code> (slider-driven raster sequences), <code>static</code> (single raster image overlays), or <code>nested</code> (further grouping).</p>
@@ -897,7 +1503,7 @@ sudo journalctl -u ncop-waitress.service -f
                         </thead>
                         <tbody>
                             <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers <em>(expanded)</em>, Geology <em>(new)</em>, Seismology <em>(new)</em></td><td>National / provincial / district / tehsil boundaries; airports, schools, settlements; rivers, dams, watersheds AND 20 pre-computed flood-extent polygons across 6 major river basins &times; 3 severities; geological formations + PGA zones; fault lines, seismic source zones, seismic hazard map. See <a href="#new-gis-layers">New GIS Layers</a> for the full breakdown.</td></tr>
-                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
+                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, PMD Predictions <em>(new)</em>, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, seven PMD-Monitor forecast rasters (WRFPRS + GDFS &mdash; see <a href="#pmd-predictions">PMD Predictions</a>), Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
                             <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
                             <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
                             <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast</td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO.</td></tr>
@@ -1330,15 +1936,15 @@ seismological_global:seismic_hazard_map
 
             <!-- ============================================================ -->
             <section id="guided-tour">
-                <h2 class="section-title">Guided Tour (57 steps) <span class="section-anchor">#</span></h2>
-                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>57 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
+                <h2 class="section-title">Guided Tour (58 steps) <span class="section-anchor">#</span></h2>
+                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>58 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section + the PMD Predictions step under Weather Systems) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
 
                 <h3 class="subsection-title">Section flow</h3>
                 <ol>
                     <li><strong>Orientation</strong> (2 steps) &mdash; NCOP header + mini globe.</li>
                     <li><strong>Sidebar layer catalogue</strong> (3 steps) &mdash; hamburger menu, sidebar panel overview, search box.</li>
                     <li><strong>GIS Layers accordion</strong> (6 steps) &mdash; Administrative Boundaries &rarr; Infrastructure &rarr; Hydrological Layers &rarr; Geology <em>(new)</em> &rarr; Seismology <em>(new)</em>.</li>
-                    <li><strong>Weather Systems accordion</strong> (7 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations.</li>
+                    <li><strong>Weather Systems accordion</strong> (8 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations &rarr; <strong>PMD Predictions</strong> <em>(new)</em>.</li>
                     <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
                     <li><strong>Air Quality accordion</strong> (2 steps).</li>
                     <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
@@ -1498,6 +2104,65 @@ seismological_global:seismic_hazard_map
             </section>
 
             <!-- ============================================================ -->
+            <section id="pmd-predictions">
+                <h2 class="section-title">PMD Predictions <span class="section-anchor">#</span></h2>
+                <p>Seven authenticated forecast rasters from the PMD Monitor portal at <code>115.186.56.181:12304</code>, fetched as raw single-band GeoTIFFs, warped + colorized server-side via GDAL, and served as ready-to-consume PNG frames the standard <code>#temp-slider1</code> controller plays as Mapbox <code>image</code> sources. Lives as a new subcategory under Weather Systems (see <a href="#sidebar-menu">Sidebar Menu</a>).</p>
+
+                <h3 class="subsection-title">Layer catalogue</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Layer</th><th>Model</th><th>Vendor code</th><th>Unit</th><th>Notes</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>3h Precipitation</strong>  (<code>pmd_pred_hourtpe</code>)</td>   <td>WRFPRS</td><td><code>HOURTPE</code></td>   <td>mm</td><td>~76 forecast steps per run.</td></tr>
+                            <tr><td><strong>6h Precipitation</strong>  (<code>pmd_pred_sixtpe</code>)</td>    <td>WRFPRS</td><td><code>SIXTPE</code></td>    <td>mm</td><td>Longer accumulation window than 3h &mdash; reads well on low-rain-rate days.</td></tr>
+                            <tr><td><strong>12h Precipitation</strong> (<code>pmd_pred_twelvetpe</code>)</td> <td>WRFPRS</td><td><code>TWELVETPE</code></td> <td>mm</td><td>Wider mm scale so ramp reads across storm and dry days alike.</td></tr>
+                            <tr><td><strong>24h Precipitation</strong> (<code>pmd_pred_daytpe</code>)</td>    <td>WRFPRS</td><td><code>DAYTPE</code></td>    <td>mm</td><td>Deepest accumulation window PMD Monitor publishes.</td></tr>
+                            <tr><td><strong>2m Temperature</strong>    (<code>pmd_pred_temp2m</code>)</td>    <td>WRFPRS</td><td><code>TEM</code></td>       <td>&deg;C</td><td>Ramp -30 &deg;C purple &rarr; cyan at 0 &deg;C &rarr; dark red at 45 &deg;C.</td></tr>
+                            <tr><td><strong>Total Cloud Cover</strong> (<code>pmd_pred_cloud_cover</code>)</td><td>GDFS</td>  <td><code>TCC</code></td>       <td>%</td> <td>WRFPRS/TCC currently publishes 0 frames upstream &mdash; GDFS is the working feed.</td></tr>
+                            <tr><td><strong>Relative Humidity</strong> (<code>pmd_pred_rel_humidity</code>)</td><td>GDFS</td> <td><code>RHU</code></td>       <td>%</td> <td>WRFPRS publishes specific humidity (SHU) instead &mdash; GDFS/RHU is more operator-friendly.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>A 7-day precipitation product was probed for (~90 code combinations across 4 model types + full SPA-chunk inspection) and does not exist upstream. The full vendor element registry (24 codes) was extracted from <code>index-CpR5BEje.js</code>; specific-level layers (RH500 / RH700 / RH850 / 850hPa Temperature / Max/Min Temperature / SST) go through a different endpoint (WMS) not exposed by <code>/api/model</code>, so they are not integrated here.</p>
+
+                <h3 class="subsection-title">Pipeline &mdash; per-step convert</h3>
+                <p>All backend code lives in <code>ncop_internal/views.py</code> (search for <code>_MON_PRED_ELEMENTS</code>). One endpoint: <code>GET /api/pmd/monitor/predictions/&lt;element_key&gt;/</code> returning <code>{element, label, unit, run, steps: [{date, url, coordinates, bounds}, &hellip;]}</code>.</p>
+                <ol>
+                    <li><strong>Auth</strong> &mdash; <code>_mon_sess()</code> holds one authenticated <code>requests.Session</code> per Django worker process (1 h TTL, auto-relogin on 401/403). Bearer JWT extracted from the vendor&rsquo;s <code>/user/login</code> response; the vendor uses a self-signed cert + legacy cipher policy so a custom <code>_MonSSLAdapter</code> with SECLEVEL=0 and TLSv1 minimum is required.</li>
+                    <li><strong>Discover run</strong> &mdash; <code>GET /api/modelTimeList?data_type=&lt;model&gt;&amp;element=&lt;code&gt;</code>, take newest. Cached 30 min.</li>
+                    <li><strong>List frames</strong> &mdash; <code>GET /api/model?date_time=&lt;run&gt;&hellip;</code>. Cached 3 h.</li>
+                    <li><strong>Thin steps</strong> &mdash; hourly through +48 h then 6-hourly to end-of-run, caps texture count per layer at ~20-30.</li>
+                    <li><strong>Per-step convert (parallelized)</strong> &mdash; <code>ThreadPoolExecutor(max_workers=5)</code>: fetch raw <code>.tif</code>, <code>gdal.Warp(dstSRS=&quot;EPSG:3857&quot;)</code>, <code>gdal.DEMProcessing(&quot;color-relief&quot;)</code>, write PNG + JSON metadata sidecar under <code>MEDIA_ROOT/pmd_predictions/</code>. Deterministic filename keyed by <code>element_key</code> so future <code>WRFPRS/CAPE</code> + <code>GDFS/CAPE</code> entries can coexist without collision. GDAL <code>PAM_ENABLED=NO</code> scoped per-call, cleanup of intermediates in <code>finally</code>.</li>
+                </ol>
+
+                <h3 class="subsection-title">Element registry &mdash; single source of truth</h3>
+                <p>Each entry in <code>_MON_PRED_ELEMENTS</code> carries <code>data_type</code>, <code>element</code>, <code>label</code>, <code>unit</code>, <code>stops</code>, and optional <code>bbox</code>. The ramp emitter treats <code>stops[0][0] &gt; 0</code> as &ldquo;additive quantity&rdquo; (precip, snowfall) and emits an extra <code>0 &rarr; transparent</code> line so no-signal backgrounds stay clear of the map; for state quantities (temperature, cloud cover, humidity) whose stops start at 0 or below, that synthetic line is skipped.</p>
+                <p><strong>GDFS bbox clipping</strong> &mdash; the GDFS feed is a <em>global</em> grid (2847&times;2846 pixels warped to Mercator = ~32 MB per frame &times; 48 frames = 1.5 GB of GPU texture per layer, unusable in a browser). Registry entries for cloud-cover and humidity carry <code>bbox: (55, 20, 80, 40)</code> covering Pakistan + neighbours; <code>gdal.Warp(outputBounds=&hellip;, outputBoundsSRS=&quot;EPSG:4326&quot;)</code> clips + reprojects in one pass, dropping the PNG to <strong>~242&times;226 pixels / ~36 KB per frame</strong> (100&times; smaller). WRFPRS layers are Pakistan-native and omit <code>bbox</code>.</p>
+
+                <h3 class="subsection-title">Frontend integration &mdash; descriptor-driven factory</h3>
+                <p><code>generatePmdPredictionsLoader(elementKey, itemKey)</code> in <code>time-functions.js</code> returns an async factory function assigned to <code>window.pmd_pred_*</code>. The temporal dispatcher in <code>mapbox-functions.js</code> invokes it on first click (never at boot), awaits the resulting <code>Promise&lt;Array&lt;entry&gt;&gt;</code>, and hands the frames to <code>updateTempSliderAsync</code>. Session-scoped memoisation per <code>elementKey</code> so re-toggling the same layer doesn&rsquo;t re-fetch.</p>
+                <ul>
+                    <li><strong>Mapbox source shape</strong> &mdash; <code>source.type = &quot;image&quot;</code> + <code>layers[].type = &quot;raster&quot;</code>. The slider is source-shape-agnostic (calls <code>map.addSource(id, source)</code> directly at <code>temporal-controls.js:609</code>), so both raster-tile and image sources work.</li>
+                    <li><strong>Label thinning</strong> &mdash; <code>_pmdPickLabelIndices(total, target=8)</code> chooses first, last, and every-Nth index for visible slider labels. Skipped indices emit <code>date: &quot;&quot;</code>; a CSS rule <code>span:empty { display: none for pill + ::after }</code> in <code>_temporal.css</code> zeros out visual weight without breaking step indexing.</li>
+                    <li><strong>Legends</strong> &mdash; four appended entries in <code>temporal-layer-legends.js</code> mirror the backend <code>stops</code> one-for-one (colors + tick values). The shared <code>legends[layerKey]</code> lookup in <code>temporal-controls.js:827</code> resolves them automatically &mdash; no wiring change.</li>
+                    <li><strong>Dynamic current-timestep display</strong> &mdash; new self-contained module <code>temporal-current-step.js</code> injects a <code>&lt;p class=&quot;ts-current-date&quot;&gt;</code> into the slider&rsquo;s <code>.ts-variable</code> panel and keeps it in sync with slider input (delegated <code>input</code>/<code>change</code> listeners + <code>MutationObserver</code> on <code>#slider1[max/value]</code>). Frames carry <code>dateFull</code> (always populated) alongside <code>date</code> (empty on thinned indices) so the display shows a meaningful date on <em>every</em> step. Mirrored in Layer B via a small block inside <code>SplitCompareControl#stepLayerBTo</code>.</li>
+                </ul>
+
+                <h3 class="subsection-title">Runtime cache &amp; gitignore</h3>
+                <p>PNG frames + JSON sidecars live under <code>project/media/pmd_predictions/</code> (Django <code>MEDIA_ROOT</code>). One rule &mdash; <code>project/media/pmd_predictions/</code> &mdash; in the repo <code>.gitignore</code> keeps this runtime cache out of git without touching the broader <code>project/media/</code> directory (future uploads / thumbnails / other proxy caches remain trackable). Ramp text files under <code>_ramps/</code> are cached under the same rule but regenerate on-demand if deleted.</p>
+
+                <h3 class="subsection-title">Settings &amp; environment</h3>
+                <p>Credentials via three env vars with dev defaults in <code>settings/base.py</code>:</p>
+                <pre><code>PMD_MONITOR_URL   default https://115.186.56.181:12304
+PMD_MONITOR_USER  default PMD
+PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
+                <p>Rotate the password by setting <code>PMD_MONITOR_PASS</code> in the environment &mdash; no code change needed. The auth session invalidates on the next 401/403 and re-logs in inline.</p>
+                <p><strong>PROJ_LIB bootstrap</strong> &mdash; base.py sets <code>PROJ_LIB</code> / <code>GDAL_DATA</code> to the OSGeo wheel&rsquo;s bundled data dirs <em>only</em> if the current env-var is unset OR points at a non-existent path (fixes the Windows-dev case where a QGIS/OSGeo4W install has already set a stale path). No-op on Linux prod where the pip GDAL wheel doesn&rsquo;t ship data/ and system <code>libproj-dev</code> takes over.</p>
+            </section>
+
+            <!-- ============================================================ -->
             <section id="popups">
                 <h2 class="section-title">Feature Popups <span class="section-anchor">#</span></h2>
                 <p><code>LayerAttributePopup</code> binds a single click handler to the map and delegates per-layer popup rendering based on the source/layer id of the clicked feature. Popups present a primary card plus an optional drawer with the full property table. Close behaviour: <strong>ESC key</strong> dismisses the popup (close buttons were intentionally removed for cleaner chrome).</p>
@@ -1527,6 +2192,204 @@ seismological_global:seismic_hazard_map
             <section id="basemap-projection">
                 <h2 class="section-title">Basemaps &amp; Projection <span class="section-anchor">#</span></h2>
                 <p>Basemap selection and projection toggle live in <code>map-display-panels.js</code>. Supported basemaps include Mapbox Streets, Light, Dark, Satellite, Navigation Day/Night plus CARTO Positron and dark-matter. Switching basemaps preserves every active layer and its user-applied styling via the SourceLayerControl/LayerStyleConfig pipeline.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="backend-thesis">
+                <h2 class="section-title">Backend Deep-Dive (Workflows) <span class="section-anchor">#</span></h2>
+                <p>The NCOP backend is a single Django application (<code>ncop_internal</code>) whose entire job is to be a <b>disciplined middleman</b> between a diverse zoo of upstream services and one uniform browser API. It doesn&rsquo;t author data; it fetches, normalises, caches, colorizes, joins, and re-exposes.</p>
+
+                <h3 class="subsection-title">1 · The Zeitgeist &mdash; what problems the backend solves</h3>
+                <p>Five recurring problems appear in every &ldquo;fuse a bunch of external data feeds into one dashboard&rdquo; project. NCOP&rsquo;s architecture is organised around solving all five in one coherent set of primitives:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Problem</th><th>Why it matters</th><th>NCOP&rsquo;s answer</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><b>Credential leakage</b></td><td>API keys / JWTs in the browser bundle are permanently compromised.</td><td>Every credential-bearing call proxied through Django; browser sees only <code>window.location.origin</code>.</td></tr>
+                            <tr><td><b>Rate-limit thrash</b></td><td>Free-tier upstreams throttle at the source IP; N users → 1&thinsp;/&thinsp;N budget each.</td><td>Server-side caching (5&nbsp;min &rarr; 24&nbsp;h) makes N users cost 1 upstream request.</td></tr>
+                            <tr><td><b>Format zoo</b></td><td>Every upstream returns a different shape (JSON, XML, WMS tiles, raw GeoTIFF, HTML scrape).</td><td>Every Django endpoint returns a normalised JSON that matches what Mapbox <em>directly</em> consumes.</td></tr>
+                            <tr><td><b>Auth expiry</b></td><td>JWTs expire; sessions get invalidated server-side.</td><td>Retry-once-after-401 pattern &mdash; a transient token expiry never surfaces to the user.</td></tr>
+                            <tr><td><b>Upstream outage</b></td><td>One flaky source shouldn&rsquo;t break the whole map.</td><td>Cache-with-stale-fallback wrapper: transient failure serves last-known-good instead of a 502.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">2 · The 5-primitive vocabulary</h3>
+                <p>Practically all backend code &mdash; the PMD auth session, the crop join, the IPC proxy, the heatwave scraper &mdash; is built out of the same five primitives. Learn these five and the whole codebase reads consistently:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Primitive</th><th>Purpose</th><th>Where it lives</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>_*_sess()</code></td><td>Return a logged-in <code>requests.Session</code> for an upstream; caches per worker process, thread-safe, auto-relogin on 401.</td><td><code>_mon_sess</code>, <code>_heatwave_sess</code>, per source.</td></tr>
+                            <tr><td><code>_*_get()</code> / <code>_*_get_bytes()</code></td><td>Do the authenticated call; retry once after re-login on 401/403. Bytes variant preserves binary content (GeoTIFFs, PDFs).</td><td>Alongside each session.</td></tr>
+                            <tr><td><code>_*_cached()</code></td><td>Cache-with-stale-fallback wrapper. On hit → return. On miss → fetch, cache. On fetch fail → stale fallback if any, else raise.</td><td>Shared pattern; each source picks its TTL.</td></tr>
+                            <tr><td><code>_*_convert_step()</code></td><td>Where server-side heavy lifting happens: GDAL warp + colorize, join two feeds by ID, scrape HTML → JSON, etc.</td><td>Per-layer converters.</td></tr>
+                            <tr><td><code>APIView.get()</code></td><td>The public Django view. Composes the above; returns <code>JsonResponse</code> in the shape the frontend already consumes.</td><td>Every route in <code>urls.py</code>.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">3 · Data flow for a typical &ldquo;click a layer&rdquo; request</h3>
+                <p>ASCII diagram of the moving parts &mdash; from operator click all the way to the paint on the map:</p>
+<pre class="ascii-diagram">
+  <span class="a-note">Browser</span>                              <span class="a-note">NCOP Django</span>                       <span class="a-note">Upstream</span>
+  ────────                              ────────────                       ────────
+  operator toggles layer
+       │
+       └──► loader factory() ─── GET /api/{...}/ ──► <span class="a-node">view.get()</span>
+                                                       │
+                                                       ├── <span class="a-node">_cached()</span> ── hit ─────────► JSON returned to browser
+                                                       │       │
+                                                       │       └── miss
+                                                       │            │
+                                                       │            ▼
+                                                       ├── <span class="a-node">_sess()</span> ── logged-in Session (JWT/cookie)
+                                                       │            │
+                                                       │            ▼
+                                                       ├── <span class="a-node">_get()</span> ────── fetch ──────────► authoritative API
+                                                       │                              (rate-limited, self-signed cert,
+                                                       │                               weird format — all handled here)
+                                                       │            │
+                                                       │            ▼
+                                                       ├── <span class="a-node">_convert_step()</span>
+                                                       │       │
+                                                       │       ├── GDAL warp/colorize  ⇄  MEDIA_ROOT/… disk cache
+                                                       │       ├── join by feature ID
+                                                       │       ├── normalise property names
+                                                       │       └── clip to bbox
+                                                       │            │
+                                                       │            ▼
+                                                       └── JsonResponse ({normalised shape}) ──► browser
+                                                                                                    │
+                                                                                                    ▼
+                                                                                            Mapbox addSource(...)
+                                                                                            + slider frames
+                                                                                            + legend swatch
+                                                                                            + popup binding
+</pre>
+
+                <h3 class="subsection-title">4 · Categorising every endpoint by shape</h3>
+                <p>Grouping every backend route by its <em>shape</em> makes onboarding fast for a new developer &mdash; you learn a shape once, then every endpoint in that shape is instantly familiar.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Shape</th><th>Endpoints</th><th>Returned</th><th>Cache TTL</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><b>Public JSON pass-through</b></td>
+                                <td><code>/api/pmd/public-forecast/</code><br><code>/get-weather-pmdffd-data/</code></td>
+                                <td>Upstream JSON, minimally normalised.</td>
+                                <td>30&thinsp;min</td>
+                            </tr>
+                            <tr>
+                                <td><b>Authenticated JSON</b></td>
+                                <td><code>/api/pmd/monitor/stations/</code>, <code>/warnings/</code>, <code>/monsoon/</code>, <code>/lightning/</code>, <code>/city-forecast/</code></td>
+                                <td>GeoJSON FeatureCollection ready for Mapbox.</td>
+                                <td>2&ndash;30&thinsp;min per feed</td>
+                            </tr>
+                            <tr>
+                                <td><b>Scraped &rarr; JSON</b></td>
+                                <td>Heatwave (<code>/heatwave/*</code>), IPC history (<code>/api/ipc/&lt;country&gt;/history/</code>)</td>
+                                <td>Structured JSON extracted from HTML/PDF dashboards.</td>
+                                <td>24&thinsp;h</td>
+                            </tr>
+                            <tr>
+                                <td><b>Join &amp; return GeoJSON</b></td>
+                                <td><code>/api/crops/geojson/</code>, <code>/api/ipc/&lt;country&gt;/</code></td>
+                                <td>Two upstream feeds joined server-side (polygons + values) into a single FC.</td>
+                                <td>24&thinsp;h values + 7&thinsp;d polygons</td>
+                            </tr>
+                            <tr>
+                                <td><b>GeoTIFF &rarr; PNG frames</b></td>
+                                <td><code>/api/pmd/monitor/predictions/&lt;element_key&gt;/</code></td>
+                                <td>{steps: [{date, url, coordinates}]} &mdash; one PNG per forecast hour.</td>
+                                <td>30&thinsp;min run + 3&thinsp;h frames + &infin; on disk</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title">5 · The auth session model &mdash; one worked example</h3>
+                <p>The PMD Monitor session (<code>_mon_sess</code>) is the archetypal authenticated-source pattern. Read this once and you understand every other <code>_*_sess()</code> in the codebase.</p>
+<pre class="ascii-diagram">
+  <span class="a-note">Process start</span>
+        │
+        ▼
+   _mon_session = None
+   _mon_session_expiry = 0
+        │
+        ▼                              <span class="a-note">first call in this process</span>
+   ┌─── _mon_sess() ──────────────────────────────────────────┐
+   │                                                          │
+   │   now &lt; expiry  ─── yes ──► return cached session         │
+   │                                                          │
+   │   ── no ───────────────────► with lock:                  │
+   │                                 - build bare Session     │
+   │                                 - POST /user/login       │
+   │                                 - extract JWT            │
+   │                                 - attach Bearer header   │
+   │                                 - expiry = now + 1h      │
+   │                                 return session           │
+   └──────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+   ┌─── _mon_get(path) ───────────────────────────────────────┐
+   │   for attempt in (0, 1):                                 │
+   │       resp = session.get(path)                           │
+   │       if resp.status in (401, 403) and attempt == 0:     │
+   │            _mon_invalidate_session()   <span class="a-note">(re-login next call)</span>│
+   │            continue                                      │
+   │       resp.raise_for_status()                            │
+   │       return resp.json()                                 │
+   └──────────────────────────────────────────────────────────┘
+</pre>
+
+                <h3 class="subsection-title">6 · The GDAL colorization pipeline</h3>
+                <p>PMD Predictions is the most involved backend feature. Every step is one of the five primitives, glued together:</p>
+                <div class="flow-diagram">
+                    <div class="flow-node"><b>modelTimeList</b><span>Get newest run for (data_type, element)</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>model</b><span>List all frame paths for that run</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Thin steps</b><span>Hourly for +48h, then 6h-ly</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--accent"><b>ThreadPool(5)</b><span>Parallel per-step convert</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>get_bytes</b><span>Fetch raw .tif</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>gdal.Warp</b><span>→ EPSG:3857 + optional bbox clip</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>DEMProcessing</b><span>color-relief with fixed mm ramp</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node flow-node--success"><b>Write PNG</b><span>+ JSON metadata sidecar</span></div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node"><b>Aggregate</b><span>{steps: [...]} → JsonResponse</span></div>
+                </div>
+
+                <h3 class="subsection-title">7 · Where each pattern is applied today</h3>
+                <div class="metric-row">
+                    <div class="metric-tile"><div class="metric-tile__val">18+</div><div class="metric-tile__label">Django proxy endpoints</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">6</div><div class="metric-tile__label">Authenticated upstreams</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">2</div><div class="metric-tile__label">HTML/PDF scrapers (heatwave, IPC)</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">1</div><div class="metric-tile__label">GDAL raster pipeline (PMD Predictions)</div></div>
+                    <div class="metric-tile"><div class="metric-tile__val">4</div><div class="metric-tile__label">Cache TTL tiers (min → hour → day → &infin;)</div></div>
+                </div>
+
+                <h3 class="subsection-title">8 · Extending the backend &mdash; add a new authenticated source in 5 files</h3>
+                <p>Because every source follows the same 5-primitive shape, adding a new one is mechanical:</p>
+                <ol>
+                    <li><code>settings/base.py</code> &mdash; add three env-var reads for the new source&rsquo;s URL / user / pass.</li>
+                    <li><code>views.py</code> &mdash; copy an existing <code>_mon_*</code> block, rename to <code>_newsource_*</code>. Fill in the login body shape.</li>
+                    <li><code>views.py</code> &mdash; write one <code>NewSourceAPIView(APIView)</code> that composes <code>_newsource_get</code> + <code>_newsource_cached</code>.</li>
+                    <li><code>urls.py</code> &mdash; one line to route the new endpoint.</li>
+                    <li><code>frontend/map-layers.js</code> &mdash; register a new layer entry that points at the new endpoint.</li>
+                </ol>
+                <p>No new patterns are invented; no core files are touched; the shape catches every existing failure mode (auth expiry, upstream outage, format drift) automatically because it&rsquo;s the same shape as everything else.</p>
             </section>
 
             <!-- ============================================================ -->
@@ -1740,6 +2603,40 @@ seismological_global:seismic_hazard_map
         }, { rootMargin: '-25% 0px -65% 0px' });
 
         sections.forEach((s) => observer.observe(s));
+
+        // ---------- Theme toggle -----------------------------------------
+        // Persists user's choice in localStorage; if none stored, follows
+        // the OS preference (prefers-color-scheme).  Applies by setting
+        // data-theme="light|dark" on <html>, which drives the CSS variable
+        // overrides at the top of this file.
+        (function initDocsTheme() {
+            const KEY = 'ncop-docs-theme';
+            const root = document.documentElement;
+            const btn  = document.getElementById('docsThemeToggle');
+            const stored = (function () {
+                try { return localStorage.getItem(KEY); } catch (_) { return null; }
+            })();
+            const prefersLight = window.matchMedia &&
+                                 window.matchMedia('(prefers-color-scheme: light)').matches;
+            const initial = stored || (prefersLight ? 'light' : 'dark');
+            root.setAttribute('data-theme', initial);
+
+            function apply(theme) {
+                root.setAttribute('data-theme', theme);
+                try { localStorage.setItem(KEY, theme); } catch (_) {}
+                if (btn) {
+                    btn.setAttribute(
+                        'title',
+                        theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'
+                    );
+                }
+            }
+            apply(initial);
+            btn && btn.addEventListener('click', () => {
+                const current = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+                apply(current === 'light' ? 'dark' : 'light');
+            });
+        })();
     </script>
 </body>
 </html>
