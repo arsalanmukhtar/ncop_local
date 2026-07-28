@@ -102,7 +102,13 @@
       "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/pmd_predictions/_ramps/DAYTPE.txt)",
       "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/pmd_predictions/hourtpe_20260728000000_20260728030000.json project/media/pmd_predictions/hourtpe_20260728000000_20260728030000.png project/media/pmd_predictions/_ramps/DAYTPE.txt)",
       "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/some-future-upload.jpg)",
-      "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/uploads/user_avatars/x.png)"
+      "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/uploads/user_avatars/x.png)",
+      "Bash(git -C d:/muhammad_arsalan/ncop_local status --short project/templates/)",
+      "Bash(mkdir -p d:/muhammad_arsalan/ncop_local/project/static/src/docs_images)",
+      "Bash(cp 'd:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/four regions.png' d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/four_regions.png)",
+      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/layers_on_off.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/layers_on_off.png)",
+      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/temporal.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/temporal.png)",
+      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/Clicking_a_feature.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/Clicking_a_feature.png)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard"
