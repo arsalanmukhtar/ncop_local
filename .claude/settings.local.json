@@ -71,7 +71,26 @@
       "Bash(git checkout *)",
       "Bash(rm -rf d:/muhammad_arsalan/ncop_local/frontend/dist)",
       "Bash(mkdir -p d:/muhammad_arsalan/ncop_local/project/static/src)",
-      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/public/favicon.ico d:/muhammad_arsalan/ncop_local/project/static/src/favicon.ico)"
+      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/public/favicon.ico d:/muhammad_arsalan/ncop_local/project/static/src/favicon.ico)",
+      "Bash(ncopenv311/Scripts/python.exe -c ' *)",
+      "Bash(PYTHONIOENCODING=utf-8 ncopenv311/Scripts/python.exe -c ' *)",
+      "Bash(grep -n \"^import ssl\\\\|^import requests\\\\|urllib3\\\\|threading\\\\|^import time$\\\\|^from django.conf\" d:/muhammad_arsalan/ncop_local/project/ncop_internal/views.py)",
+      "Bash(grep -n \"^import os$\\\\|^from datetime\\\\|^import datetime\" d:/muhammad_arsalan/ncop_local/project/ncop_internal/views.py)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_internal/views.py project/ncop_internal/urls.py project/ncop_project/settings/base.py)",
+      "Bash(node --check frontend/src/modules/time-functions.js)",
+      "Bash(ncopenv311/Scripts/python.exe project/manage.py runserver 127.0.0.1:8123 --noreload)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}   time=%{time_total}s\\\\n\" http://127.0.0.1:8123/api/pmd/monitor/predictions/hourtpe/)",
+      "Bash(curl -s http://127.0.0.1:8123/api/pmd/monitor/predictions/hourtpe/)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_internal/views.py)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_internal/views.py project/ncop_project/settings/base.py)",
+      "Bash([ -f \"$SCRATCH/pmd_srv.log\" ])",
+      "Bash(PYTHONIOENCODING=utf-8 ncopenv311/Scripts/python.exe project/manage.py shell -c ' *)",
+      "Bash(node --check src/modules/time-functions.js)",
+      "Bash(node --check src/modules/map-layers.js)",
+      "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/pmd_predictions/first.png)",
+      "Bash(git -C d:/muhammad_arsalan/ncop_local status --short)",
+      "Bash(rm -rf d:/muhammad_arsalan/ncop_local/project/media/pmd_predictions)",
+      "Bash(node --check frontend/src/modules/temporal-layer-legends.js)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard"

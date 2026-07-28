@@ -69,6 +69,7 @@ import {
   // tuning is finalised.
   // generateRainViewerRadarLayers,
   // generateRainViewerSatelliteIRLayers,
+  generatePmdPredictionsLoader,
 } from "./time-functions.js";
 // Global baseUrl for the entire application
 window.baseUrl = window.location.origin;
@@ -510,6 +511,18 @@ window.snowfall_hourly_forecast = snowfall_hourly_layers;
 window.thunderstorm_probability_3hourly_forecast = thunderstorm_prob_3hourly_layers;
 window.liquid_fog_probability_3hourly_forecast = liquid_fog_prob_3hourly_layers;
 window.convective_precipitation_weekly_forecast = convective_precip_weekly_layers;
+
+// PMD Predictions — WRFPRS precipitation forecast rasters served through
+// the authenticated Django proxy at /api/pmd/monitor/predictions/<element>/.
+// Descriptor-driven like RainViewer: we expose FUNCTIONS (not static arrays)
+// so the fetch + colorized-PNG conversion only happens on the user's first
+// toggle click, and returns a Promise resolved by updateTempSliderAsync.
+// Element codes verified live against the vendor's /api/modelTimeList —
+// the vendor's WRFPRS model publishes exactly these 4 accumulation windows.
+window.pmd_pred_hourtpe   = generatePmdPredictionsLoader("hourtpe",   "pmd_pred_hourtpe");
+window.pmd_pred_sixtpe    = generatePmdPredictionsLoader("sixtpe",    "pmd_pred_sixtpe");
+window.pmd_pred_twelvetpe = generatePmdPredictionsLoader("twelvetpe", "pmd_pred_twelvetpe");
+window.pmd_pred_daytpe    = generatePmdPredictionsLoader("daytpe",    "pmd_pred_daytpe");
 
 // RainViewer is descriptor-driven (frame list comes from a runtime API call),
 // so we expose *functions* instead of static arrays. The temporal dispatcher
@@ -1938,6 +1951,57 @@ export const ncop_menu_items = {
           theme: "slider",
           title: null,
           information:"The IMERG Precipitation Rate layer displays the precipitation rates over the past 14 days using data from the Integrated Multi-satellitE Retrievals for GPM (IMERG). This layer is crucial for understanding recent rainfall patterns and assessing hydrological conditions.",
+        },
+      },
+    },
+    // ---------------------------------------------------------------------
+    // PMD Predictions — WRFPRS precipitation forecast rasters, fetched
+    // (authenticated) from the PMD Monitor portal and colorized server-side
+    // via GDAL into PNGs the temporal slider can render as Mapbox `image`
+    // sources.  All four elements share the same descriptor-driven pattern
+    // (window.pmd_pred_* is a factory function, not a pre-baked array) so
+    // the round-trip only happens on the user's first click of each toggle.
+    // Vendor publishes 3h/6h/12h/24h accumulation windows; a 7-day product
+    // was probed for and does not exist upstream — do not add without first
+    // discovering a real element code the vendor actually serves.
+    // ---------------------------------------------------------------------
+    "PMD Predictions (WRF)": {
+      temporal: {
+        pmd_pred_hourtpe: {
+          label: "PMD Predictions — 3h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 3h Precip (mm)",
+          information:
+            "Pakistan Meteorological Department WRF model 3-hour precipitation-accumulation forecast (mm). Latest run auto-selected; 76 forecast steps thinned to every hour through +48 h then 6-hourly to the end of the run. Data authenticated-fetched from PMD Monitor as raw GeoTIFFs and colorized server-side using the vendor's own official mm ramp so the map reads identically to PMD's own dashboard.",
+        },
+        pmd_pred_sixtpe: {
+          label: "PMD Predictions — 6h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 6h Precip (mm)",
+          information:
+            "WRF 6-hour precipitation-accumulation forecast (mm). Same source pipeline as the 3-hour layer — vendor mm ramp preserved, thinning applied. Longer accumulation window renders detail across low-rain-rate days better than the 3-hour layer.",
+        },
+        pmd_pred_twelvetpe: {
+          label: "PMD Predictions — 12h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 12h Precip (mm)",
+          information:
+            "WRF 12-hour precipitation-accumulation forecast (mm). Wider mm scale than the 3/6-hour layers so the ramp reads meaningfully across storm and dry days alike. Same authenticated PMD Monitor pipeline.",
+        },
+        pmd_pred_daytpe: {
+          label: "PMD Predictions — 24h Precipitation",
+          image: getImage("Convective_precipitation_weekly_kgm2_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 24h Precip (mm)",
+          information:
+            "WRF daily (24-hour) precipitation-accumulation forecast (mm) — the deepest accumulation window the vendor publishes. Ideal for planning-horizon situational briefings; use the 3/6/12-hour layers for finer-grained tactical scrubbing.",
         },
       },
     },

@@ -40,6 +40,7 @@ from .views import (
     CropYearlyAPIView,
     CropMapAPIView,
     CropGeoJSONAPIView,
+    PmdMonitorPredictionsAPIView,
 
 
 )
@@ -94,4 +95,14 @@ urlpatterns = [
     path("api/crops/yearly/",  CropYearlyAPIView.as_view(),  name="crops-yearly"),
     path("api/crops/map/",     CropMapAPIView.as_view(),     name="crops-map"),
     path("api/crops/geojson/", CropGeoJSONAPIView.as_view(), name="crops-geojson"),
+
+    # PMD Monitor — WRFPRS precipitation forecast rasters, colorized
+    # server-side into PNGs consumed by the temporal-slider system as
+    # Mapbox `image` sources.  <element_key> ∈ {hourtpe, sixtpe,
+    # twelvetpe, daytpe} — 3h / 6h / 12h / 24h accumulation windows.
+    path(
+        "api/pmd/monitor/predictions/<str:element_key>/",
+        PmdMonitorPredictionsAPIView.as_view(),
+        name="pmd-monitor-predictions",
+    ),
 ]

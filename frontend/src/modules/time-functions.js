@@ -3742,3 +3742,140 @@ export async function generateRainViewerSatelliteIRLayers() {
   const frames = evenSampleArray(allFrames, RAINVIEWER_MAX_FRAMES);
   return frames.map((f) => rvBuildEntry(host, f, "satellite"));
 }
+
+
+// ===========================================================================
+// PMD Predictions (WRFPRS precipitation forecast rasters)
+// ---------------------------------------------------------------------------
+// The backend endpoint /api/pmd/monitor/predictions/<element_key>/ fetches
+// authenticated GeoTIFFs from the vendor PMD Monitor system, warps them to
+// EPSG:3857, colorizes via GDAL, and returns one {date, url, coordinates}
+// per forecast hour.  Here we map that into the temporal-slider entry shape
+// the rest of NCOP uses — one Mapbox `image` source per step, one `raster`
+// layer referencing it, only step 0 rendered opaque at load.
+//
+// Wired into the sidebar as a `() => Promise<Array<entry>>` factory (see
+// map-layers.js).  The temporal dispatcher (mapbox-functions.js) treats
+// factory + promise the same as static arrays — invokes the factory,
+// awaits the resulting promise, hands the resolved frames to
+// updateTempSliderAsync which finally calls updateTempSlider.
+//
+// Session cache: the loader memoises its most-recent successful result
+// per elementKey so re-toggling the same layer during one session doesn't
+// re-fetch the whole frame list from the backend.  A different elementKey
+// is cached independently; the memo is cleared on the first fetch error.
+// ===========================================================================
+const _PMD_PRED_CACHE = new Map(); // elementKey → Array<entry>
+
+// Slider label thinner — the temporal slider renders one <span> per frame,
+// so with 20-30 steps the labels cascade into an unreadable strip.  Solution
+// that doesn't touch the shared slider code: emit a formatted date only for
+// a small, evenly-spaced subset of indices (first + last + every-Nth), and
+// return an empty string for the rest.  Empty spans still get created (so
+// step indexing stays 1:1 with frames and click-to-jump keeps working), but
+// they render as 0-width elements — visually silent, functionally intact.
+// Target ~8 visible labels regardless of frame count.
+function _pmdPickLabelIndices(total, target = 8) {
+  if (total <= target) return null; // null = show every label
+  const step = Math.max(1, Math.ceil(total / target));
+  const picks = new Set([0, total - 1]);
+  for (let i = 0; i < total; i += step) picks.add(i);
+  return picks;
+}
+
+function _pmdPredBuildEntry(step, index, itemKey, showLabel) {
+  const id = `${itemKey}_${index}`;
+  return {
+    source: {
+      id,
+      // Mapbox `image` source (one static PNG pinned to 4 corner coords).
+      // Correct primitive for pre-rendered raster steps — `raster` would
+      // want a {z}/{x}/{y} tile template which we do not have here.
+      type: "image",
+      url: step.url,
+      coordinates: step.coordinates,
+    },
+    layers: [
+      {
+        id,
+        type: "raster", // layer type stays `raster` — it renders both
+                        // raster-tile AND image sources; not a typo.
+        source: id,
+        layout: { visibility: "visible" },
+        paint: {
+          "raster-opacity": index === 0 ? 0.85 : 0,
+          "raster-fade-duration": 500,
+        },
+      },
+    ],
+    // Empty date on skipped indices => 0-width span => uncluttered strip.
+    date: showLabel ? _pmdPredFormatDate(step.date) : "",
+  };
+}
+
+function _pmdPredFormatDate(iso) {
+  // Convert 2026-07-27T03:00:00 → "Jul 27 - 08:00 AM" in PKT (UTC+5),
+  // matching the label style used by DWD / IMERG entries so the shared
+  // timeline year-labels renderer displays them consistently.
+  if (!iso) return "";
+  try {
+    const utc = new Date(iso);
+    if (Number.isNaN(utc.getTime())) return String(iso);
+    const pkt = new Date(utc.getTime() + 5 * 60 * 60 * 1000);
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const day = String(pkt.getUTCDate()).padStart(2, "0");
+    const mon = MONTHS[pkt.getUTCMonth()];
+    let h = pkt.getUTCHours();
+    const m = String(pkt.getUTCMinutes()).padStart(2, "0");
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${mon} ${day} - ${String(h).padStart(2, "0")}:${m} ${ampm}`;
+  } catch (_) {
+    return String(iso);
+  }
+}
+
+/**
+ * Factory: returns a builder function that, when invoked, fetches the
+ * per-element frame list from the Django proxy and resolves it into the
+ * temporal-slider entry shape.  Assign the returned function (not its
+ * result) to `window[itemKey]` — the temporal dispatcher calls it lazily
+ * on the user's first click, so no boot-time network cost.
+ *
+ * @param {"hourtpe"|"sixtpe"|"twelvetpe"|"daytpe"} elementKey
+ * @param {string} itemKey  window key + sidebar data-item-key (e.g. "pmd_pred_hourtpe")
+ * @returns {() => Promise<Array<entry>>}
+ */
+export function generatePmdPredictionsLoader(elementKey, itemKey) {
+  return async function _loadPmdPredictions() {
+    if (_PMD_PRED_CACHE.has(elementKey)) {
+      return _PMD_PRED_CACHE.get(elementKey);
+    }
+    const url = `${window.location.origin}/api/pmd/monitor/predictions/${elementKey}/`;
+    let data;
+    try {
+      const r = await fetch(url, { credentials: "same-origin" });
+      if (!r.ok) {
+        console.warn(`[pmd-predictions] ${elementKey} → HTTP ${r.status}`);
+        return [];
+      }
+      data = await r.json();
+    } catch (e) {
+      console.warn(`[pmd-predictions] ${elementKey} fetch failed:`, e);
+      return [];
+    }
+    const steps = Array.isArray(data?.steps) ? data.steps : [];
+    if (!steps.length) {
+      console.info(`[pmd-predictions] ${elementKey} returned no frames`);
+      return [];
+    }
+    // Decide which indices should show a real label before we walk the list
+    // — computed once per layer load rather than per-entry.
+    const showAt = _pmdPickLabelIndices(steps.length, 8);
+    const frames = steps.map((s, i) =>
+      _pmdPredBuildEntry(s, i, itemKey, showAt === null || showAt.has(i))
+    );
+    _PMD_PRED_CACHE.set(elementKey, frames);
+    return frames;
+  };
+}

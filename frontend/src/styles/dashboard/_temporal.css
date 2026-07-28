@@ -214,6 +214,23 @@
     color: var(--text-primary);
 }
 
+/* Empty labels — used by loaders that emit "" for skipped-label indices to
+   preserve 1:1 span-to-frame indexing while thinning what actually shows
+   (see generatePmdPredictionsLoader in time-functions.js). Empty spans stay
+   in the DOM at their `left:X%` position so index math never drifts, but
+   we strip every visual affordance: no pill, no tick, no hover cursor.
+   pointer-events:none because there's no label text to click on. */
+#temp-slider1 .year-labels1 span:empty {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+}
+#temp-slider1 .year-labels1 span:empty::after {
+    display: none;
+}
+
 #temp-slider1 .year-labels1 span.is-active {
     color: #fff;
     background: var(--ndma-blue);

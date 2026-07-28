@@ -7615,3 +7615,463 @@ class CropGeoJSONAPIView(_CropsBaseView):
         }
         cache.set(cache_key, result, self.CACHE_TTL)
         return JsonResponse(result)
+
+
+# ==================================================================
+#  PMD Monitor — authenticated proxy for WRFPRS precipitation
+#  forecast GeoTIFFs → colorized PNGs for the temporal-slider system
+#  ----------------------------------------------------------------
+#  Fetches raw single-band precipitation-accumulation GeoTIFFs from
+#  the PMD Monitor portal (Chinese-vendor NWP system at a private IP),
+#  reprojects them to EPSG:3857, and colorizes them server-side via
+#  GDAL's color-relief mode using the vendor's own mm→RGB legend
+#  stops.  Frontend (map-layers.js + time-functions.js) consumes the
+#  returned per-step {url, coordinates} list as Mapbox `image`
+#  sources — one texture per forecast hour, opacity-scrubbed by the
+#  standard #temp-slider1 controller.
+#
+#  Auth: the vendor issues both a bearer JWT (in the login response's
+#  `token` field, valid ~30 days server-side) and an `ews_jwt` cookie
+#  gating page routes.  Only the bearer is needed for /api/* JSON
+#  and the /static/*.tif file range we scrape; the cookie is captured
+#  incidentally by the session jar and comes along for the ride.
+#
+#  Two caching layers, deliberately different TTLs:
+#    * model-run lookup (30 min) — cheap to refresh, want to notice new cycles
+#    * frame list per run (3 h)  — file list for a given run doesn't change
+#    * converted PNGs (unbounded, on-disk under MEDIA_ROOT/pmd_predictions/)
+#      — a given (element, run, forecast-hour) render never changes
+# ==================================================================
+_MON_BASE    = getattr(settings, "PMD_MONITOR_URL",  "https://115.186.56.181:12304").rstrip("/")
+_MON_USER    = getattr(settings, "PMD_MONITOR_USER", "")
+_MON_PASS    = getattr(settings, "PMD_MONITOR_PASS", "")
+_MON_TIMEOUT = 15
+_MON_HDRS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept":          "application/json, text/html, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         _MON_BASE + "/",
+}
+
+
+class _MonSSLAdapter(requests.adapters.HTTPAdapter):
+    """Legacy-TLS + no-cert adapter — the vendor host uses a self-signed
+    cert and a cipher/TLS-version policy that Python 3.10+ rejects by
+    default.  Confirmed live during discovery: plain `verify=False` alone
+    was not sufficient; we need SECLEVEL=0 and minimum_version=TLSv1."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try: ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except Exception: pass
+        try: ctx.minimum_version = ssl.TLSVersion.TLSv1
+        except Exception: pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def _mon_make_bare_session():
+    s = requests.Session()
+    s.mount("https://", _MonSSLAdapter())
+    s.headers.update(_MON_HDRS)
+    return s
+
+
+def _mon_extract_jwt(resp_json):
+    """Robust to slight upstream shape drift — walks the common token-
+    field names at both the top level and under `data`."""
+    if not isinstance(resp_json, dict):
+        return None
+    for key in ("token", "access_token", "jwt", "jwtToken", "accessToken", "id_token"):
+        val = resp_json.get(key)
+        if val and isinstance(val, str) and len(val) > 20:
+            return val
+    data = resp_json.get("data")
+    if isinstance(data, dict):
+        for key in ("token", "access_token", "jwt"):
+            val = data.get(key)
+            if val and isinstance(val, str) and len(val) > 20:
+                return val
+    return None
+
+
+def _mon_do_login(sess):
+    """POST creds, extract bearer JWT, attach to session default headers."""
+    if not (_MON_USER and _MON_PASS):
+        print("[pmd_monitor] credentials missing — set PMD_MONITOR_USER/PASS")
+        return False
+    creds = {"username": _MON_USER, "password": _MON_PASS}
+    for ep in ("/user/login", "/user/login/", "/api/user/login"):
+        try:
+            r = sess.post(f"{_MON_BASE}{ep}", json=creds, timeout=_MON_TIMEOUT,
+                          verify=False, allow_redirects=False)
+            if r.status_code not in (200, 201):
+                continue
+            body = r.json()
+            tok = _mon_extract_jwt(body)
+            if tok:
+                sess.headers["Authorization"] = f"Bearer {tok}"
+                return True
+            if body.get("success") in (True, "true") or body.get("code") in (0, "0", 200):
+                # Login succeeded but no bearer in body — cookies alone may
+                # be enough for some endpoints.  Kept for shape-drift safety.
+                return True
+        except Exception as e:
+            print(f"[pmd_monitor] login attempt {ep!r} failed: {e}")
+            continue
+    return False
+
+
+_mon_session         = None
+_mon_session_expiry  = 0.0
+_mon_session_lock    = threading.Lock()
+_MON_SESSION_TTL     = 3600  # 1 hour — refresh proactively, force-refresh on 401/403
+
+
+def _mon_sess():
+    """Return a logged-in requests.Session, one per Django worker process.
+    Rebuilds on TTL expiry or after a forced invalidation."""
+    global _mon_session, _mon_session_expiry
+    now = time.monotonic()
+    if _mon_session is not None and now < _mon_session_expiry:
+        return _mon_session
+    with _mon_session_lock:
+        if _mon_session is not None and now < _mon_session_expiry:
+            return _mon_session
+        sess = _mon_make_bare_session()
+        _mon_do_login(sess)
+        _mon_session = sess
+        _mon_session_expiry = now + _MON_SESSION_TTL
+    return _mon_session
+
+
+def _mon_invalidate_session():
+    global _mon_session, _mon_session_expiry
+    with _mon_session_lock:
+        _mon_session = None
+        _mon_session_expiry = 0.0
+
+
+def _mon_get(path, params=None, timeout=_MON_TIMEOUT):
+    """Authenticated GET → parsed JSON.  Retries once after re-login on 401/403."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise requests.HTTPError(f"Auth failed for GET {path}")
+
+
+def _mon_get_bytes(path, params=None, timeout=_MON_TIMEOUT):
+    """Same as _mon_get but returns raw bytes — for the .tif files, which
+    _mon_get would text/JSON-parse and thereby corrupt."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.content
+    raise requests.HTTPError(f"Auth failed for GET {path} (bytes)")
+
+
+# ---- Element registry (4 confirmed WRFPRS precipitation accumulations) ----
+# Live-probed 2026-07-27 against the vendor API — HOURTPE/SIXTPE/TWELVETPE/
+# DAYTPE each return 14 runs with 76 frames per run.  A "7d" variant is not
+# published by this vendor's WRFPRS model (verified by brute-forcing ~90
+# element codes across 4 model types + inspecting the shipped SPA chunks);
+# do not add a 7-day entry here without first discovering a real element
+# code the vendor actually publishes.
+_MON_PRED_ELEMENTS = {
+    "hourtpe":   {"data_type": "WRFPRS", "element": "HOURTPE",   "label": "3h Precipitation"},
+    "sixtpe":    {"data_type": "WRFPRS", "element": "SIXTPE",    "label": "6h Precipitation"},
+    "twelvetpe": {"data_type": "WRFPRS", "element": "TWELVETPE", "label": "12h Precipitation"},
+    "daytpe":    {"data_type": "WRFPRS", "element": "DAYTPE",    "label": "24h Precipitation"},
+}
+
+# Color stops extracted from the vendor's own legendList JS chunk — one
+# element = one physical quantity (mm accumulation per window), so the
+# stops must be FIXED per element, not auto-stretched per file.  Longer
+# accumulation windows use larger mm thresholds so the ramp reads
+# meaningfully across a low-rain-rate day.
+_MON_PRED_COLOR_STOPS = {
+    "HOURTPE": [
+        (0.1, (185, 244, 171)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+        (10, (37, 144, 38)),    (25,  (98, 184, 255)), (50, (0, 0, 252)),
+        (100, (250, 0, 250)),
+    ],
+    "SIXTPE": [
+        (0.01, (166, 242, 143)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+        (10, (37, 144, 38)),     (25,  (98, 184, 255)), (50, (0, 0, 252)),
+        (100, (250, 0, 250)),
+    ],
+    "TWELVETPE": [
+        (0.1, (166, 242, 143)), (5,  (61, 186, 61)),  (15, (97, 184, 255)),
+        (30,  (0, 0, 255)),      (70, (250, 0, 250)), (140, (128, 0, 64)),
+    ],
+    "DAYTPE": [
+        (0.1, (166, 242, 143)), (10, (61, 186, 61)),  (25, (97, 184, 255)),
+        (50,  (0, 0, 255)),      (100, (250, 0, 250)), (250, (128, 0, 64)),
+    ],
+}
+
+
+_PRED_MEDIA_SUBDIR = "pmd_predictions"
+_PRED_RAMP_SUBDIR  = os.path.join(_PRED_MEDIA_SUBDIR, "_ramps")
+
+
+def _mon_pred_ramp_file(element):
+    """Build (once) a GDAL color-relief text ramp for this element.  The
+    extra `nv` + `0-value transparent` lines matter: without them GDAL
+    clamps below-lowest-stop values to the first stop's color, painting
+    the whole 'no rain' area a solid pastel.  Alpha 0 on both makes them
+    transparent instead."""
+    ramp_dir = os.path.join(settings.MEDIA_ROOT, _PRED_RAMP_SUBDIR)
+    os.makedirs(ramp_dir, exist_ok=True)
+    path = os.path.join(ramp_dir, f"{element}.txt")
+    if os.path.exists(path):
+        return path
+    stops = _MON_PRED_COLOR_STOPS[element]
+    lines = ["nv 0 0 0 0"]                             # nodata → transparent
+    r, g, b = stops[0][1]
+    lines.append(f"0 {r} {g} {b} 0")                   # 0 mm → transparent
+    for value, (r, g, b) in stops:
+        lines.append(f"{value} {r} {g} {b} 255")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return path
+
+
+_PRED_DENSE_HOURS       = 48   # keep every hour through this point
+_PRED_SPARSE_STEP_HOURS = 6    # then thin to every N hours
+
+
+def _mon_pred_select_steps(ds_list):
+    """Thin the 76-hour frame list — Mapbox image sources are live GPU
+    textures, so registering every one for every layer would balloon
+    memory quickly.  Keep hourly for the first 48 h (the tactically
+    useful window), then 6-hourly for the long tail."""
+    def _p(s):
+        try: return datetime.fromisoformat(s)
+        except Exception: return None
+    if not ds_list:
+        return []
+    run_dt = _p((ds_list[0] or {}).get("data_time") or "")
+    kept = []
+    for item in ds_list:
+        fc = _p((item or {}).get("forecast_time") or "")
+        if not run_dt or not fc:
+            kept.append(item); continue
+        hours_out = (fc - run_dt).total_seconds() / 3600.0
+        if hours_out <= _PRED_DENSE_HOURS or int(round(hours_out)) % _PRED_SPARSE_STEP_HOURS == 0:
+            kept.append(item)
+    return kept
+
+
+def _mon_pred_convert_step(element, item):
+    """Fetch one raw .tif, warp to EPSG:3857, colorize via GDAL DEM
+    processing, cache result to disk.  Returns the frontend-ready
+    {date, url, coordinates, bounds} dict or None on failure — one bad
+    step shouldn't take down the whole layer.
+
+    Media-key convention: `{element}_{run}_{fh}.png` (+ `.json` metadata
+    sidecar) so repeat requests hit the disk-cache branch instantly."""
+    from osgeo import gdal
+    import re, math, json
+
+    # Suppress GDAL's persistent auxiliary metadata (.png.aux.xml) sidecar.
+    # It's harmless and Mapbox never requests it, but writing it doubles
+    # the per-step disk-IO cost.  Scoped per-call so we never leak the
+    # option into other GDAL consumers (django.contrib.gis geometry ops).
+    gdal.SetConfigOption("GDAL_PAM_ENABLED", "NO")
+
+    run = (item.get("data_time")     or "").replace("-", "").replace(":", "").replace("T", "")
+    fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element}_{run}_{fh}")
+    out_dir  = os.path.join(settings.MEDIA_ROOT, _PRED_MEDIA_SUBDIR)
+    png_path  = os.path.join(out_dir, f"{safe}.png")
+    meta_path = os.path.join(out_dir, f"{safe}.json")
+
+    if os.path.exists(png_path) and os.path.exists(meta_path):
+        try:
+            with open(meta_path) as f:
+                return json.load(f)
+        except Exception:
+            pass  # corrupt sidecar — fall through and re-render
+
+    os.makedirs(out_dir, exist_ok=True)
+    src_path    = os.path.join(out_dir, f"{safe}_src.tif")
+    warped_path = os.path.join(out_dir, f"{safe}_3857.tif")
+    try:
+        tif_bytes = _mon_get_bytes(item["file_path"])
+        with open(src_path, "wb") as f:
+            f.write(tif_bytes)
+
+        src_ds = gdal.Open(src_path)
+        if src_ds is None:
+            raise ValueError("could not open fetched GeoTIFF")
+
+        warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(
+            dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
+        ))
+        src_ds = None
+        if warped_ds is None:
+            raise ValueError("reprojection failed")
+
+        # Corner-based WGS84 bounds — 4-corner math handles any rotation
+        # the warp introduces; 2-corner min/max shortcut would miss it.
+        gt = warped_ds.GetGeoTransform()
+        w, h = warped_ds.RasterXSize, warped_ds.RasterYSize
+        _MERC_MAX = 20037508.3427892
+        cx = [gt[0], gt[0]+gt[1]*w, gt[0]+gt[2]*h, gt[0]+gt[1]*w+gt[2]*h]
+        cy = [gt[3], gt[3]+gt[4]*w, gt[3]+gt[5]*h, gt[3]+gt[4]*w+gt[5]*h]
+        minx_m, maxx_m = max(min(cx), -_MERC_MAX), min(max(cx), _MERC_MAX)
+        miny_m, maxy_m = max(min(cy), -_MERC_MAX), min(max(cy), _MERC_MAX)
+
+        def _lon(x): return (x / _MERC_MAX) * 180.0
+        def _lat(y): return math.degrees(2.0*math.atan(math.exp(y / 6378137.0)) - math.pi/2.0)
+        minx, maxx = round(_lon(minx_m), 6), round(_lon(maxx_m), 6)
+        miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
+
+        ramp = _mon_pred_ramp_file(element)
+        colored_ds = gdal.DEMProcessing(
+            png_path, warped_path, "color-relief",
+            colorFilename=ramp, format="PNG", addAlpha=True,
+        )
+        warped_ds = None
+        if colored_ds is None:
+            raise ValueError("color-relief render failed")
+        colored_ds = None
+
+        payload = {
+            "date":        item.get("forecast_time"),
+            "url":         f"{settings.MEDIA_URL}{_PRED_MEDIA_SUBDIR}/{safe}.png",
+            "bounds":      [minx, miny, maxx, maxy],
+            # Mapbox ImageSource coord order: TL, TR, BR, BL.
+            "coordinates": [[minx, maxy], [maxx, maxy], [maxx, miny], [minx, miny]],
+        }
+        with open(meta_path, "w") as f:
+            json.dump(payload, f)
+        return payload
+    except Exception as e:
+        print(f"[pmd_monitor] convert failed {element}/{run}/{fh}: {e}")
+        return None
+    finally:
+        for p in (src_path, warped_path):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
+
+def _mon_cached(key, ttl, fetch_fn, fallback_key=None):
+    """Cache-with-stale-fallback wrapper — same pattern used across NCOP
+    for humanitarian upstreams so a transient PMD Monitor outage degrades
+    to slightly-stale data instead of a 502."""
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    try:
+        data = fetch_fn()
+        cache.set(key, data, ttl)
+        if fallback_key:
+            cache.set(fallback_key, data, ttl * 6)
+        return data
+    except Exception as exc:
+        if fallback_key:
+            stale = cache.get(fallback_key)
+            if stale is not None:
+                return stale
+        raise exc
+
+
+class PmdMonitorPredictionsAPIView(APIView):
+    """GET /api/pmd/monitor/predictions/<element_key>/  →  {element, label,
+    unit, run, steps: [{date, url, coordinates, bounds}, …]}
+
+    The frontend loader in time-functions.js maps each step to a Mapbox
+    `image` source under a `raster` layer (source-type is "image", layer-
+    type stays "raster" — Mapbox's raster layer renders both raster-tile
+    sources and image sources) and hands the whole array to the standard
+    #temp-slider1 controller via updateTempSliderAsync."""
+
+    def get(self, request, element_key):
+        cfg = _MON_PRED_ELEMENTS.get(element_key)
+        if not cfg:
+            return JsonResponse(
+                {"error": f"Unknown element_key {element_key!r}",
+                 "valid": sorted(_MON_PRED_ELEMENTS.keys())},
+                status=404,
+            )
+
+        try:
+            from osgeo import gdal  # noqa — availability probe before any work
+        except Exception as e:
+            return JsonResponse({"error": f"GDAL is required: {e}"}, status=500)
+
+        data_type, element = cfg["data_type"], cfg["element"]
+
+        def _latest_run():
+            resp = _mon_get("/api/modelTimeList",
+                            {"data_type": data_type, "element": element})
+            times = (resp or {}).get("data") or []
+            if not times:
+                raise ValueError("no model runs available")
+            return times[0]["data_time"]
+
+        try:
+            run = _mon_cached(f"pmd_pred_run_{element_key}", 1800,
+                              _latest_run, f"pmd_pred_run_{element_key}_last")
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        def _frames():
+            resp = _mon_get("/api/model",
+                            {"data_type": data_type, "element": element, "date_time": run})
+            return (resp or {}).get("ds") or []
+
+        try:
+            frame_list = _mon_cached(
+                f"pmd_pred_frames_{element_key}_{run}", 10800,
+                _frames, f"pmd_pred_frames_{element_key}_{run}_last",
+            )
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        # Per-step convert is I/O-heavy (one auth HTTP fetch + one GDAL
+        # warp + one color-relief pass per frame).  Serial for 20-30 steps
+        # cold = ~8-17s; a small ThreadPoolExecutor drops that ~3× because
+        # the network wait for each .tif overlaps other threads' GDAL work.
+        # Concurrency is bounded (5 workers): the auth session is shared +
+        # requests.Session is thread-safe, but the vendor host is a
+        # private-IP machine that we should not hammer with 30 concurrent
+        # downloads.  Order is preserved by dispatching in-order and
+        # collecting via the same iteration index.
+        selected = _mon_pred_select_steps(frame_list)
+        results  = [None] * len(selected)
+        if selected:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=5, thread_name_prefix="pmd_pred") as pool:
+                futures = {pool.submit(_mon_pred_convert_step, element, it): i
+                           for i, it in enumerate(selected)}
+                for fut in as_completed(futures):
+                    idx = futures[fut]
+                    try:
+                        results[idx] = fut.result()
+                    except Exception as e:
+                        print(f"[pmd_monitor] worker {idx} raised: {e}")
+        steps = [r for r in results if r]
+
+        return JsonResponse({
+            "element": element_key,
+            "label":   cfg["label"],
+            "unit":    "mm",
+            "run":     run,
+            "steps":   steps,
+        })
