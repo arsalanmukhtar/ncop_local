@@ -3785,6 +3785,7 @@ function _pmdPickLabelIndices(total, target = 8) {
 
 function _pmdPredBuildEntry(step, index, itemKey, showLabel) {
   const id = `${itemKey}_${index}`;
+  const fullLabel = _pmdPredFormatDate(step.date);
   return {
     source: {
       id,
@@ -3808,8 +3809,12 @@ function _pmdPredBuildEntry(step, index, itemKey, showLabel) {
         },
       },
     ],
-    // Empty date on skipped indices => 0-width span => uncluttered strip.
-    date: showLabel ? _pmdPredFormatDate(step.date) : "",
+    // Empty date on skipped indices => 0-width slider-label span (thinning).
+    date: showLabel ? fullLabel : "",
+    // `dateFull` is always populated so the dynamic current-step display
+    // in .ts-variable can show a date for every frame, including the ones
+    // whose slider-label span was intentionally left empty for the thin.
+    dateFull: fullLabel,
   };
 }
 

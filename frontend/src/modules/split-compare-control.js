@@ -962,6 +962,24 @@ export default class SplitCompareControl {
         s.classList.toggle("is-active", i === idx);
         s.setAttribute("aria-current", i === idx ? "true" : "false");
       });
+      // Mirror of the temporal-current-step.js behaviour on Map A: keep a
+      // live "current timestep" line inside the Layer B .ts-variable panel
+      // in sync with the slider.  Prefers each frame's `dateFull` (always
+      // populated on thinned-label layers) and falls back to `date`.  The
+      // paragraph is injected once per panel and reused for every step.
+      const varPanel = slider.querySelector(".ts-variable");
+      if (varPanel) {
+        let dateEl = varPanel.querySelector(".ts-current-date");
+        if (!dateEl) {
+          dateEl = document.createElement("p");
+          dateEl.className = "ts-current-date";
+          varPanel.appendChild(dateEl);
+        }
+        const entry = steps[idx];
+        const text  = String(entry?.dateFull || entry?.date || "");
+        dateEl.textContent = text;
+        dateEl.classList.toggle("is-empty", !text);
+      }
     }
     this.#raiseBoundaryClonesAbove();
   }

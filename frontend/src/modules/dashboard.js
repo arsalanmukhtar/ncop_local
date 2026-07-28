@@ -41,6 +41,10 @@ import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
 import { initPmdWarningsFilter } from "./pmd-warnings-filter.js";
 import { initCropFilter } from "./crop-filter-controller.js";
+// Side-effect import: injects the dynamic "current timestep" line into the
+// #temp-slider1 .ts-variable panel and keeps it in sync with slider input.
+// Auto-inits on DOMContentLoaded; nothing else needs to call it.
+import "./temporal-current-step.js";
 
 
 // ---- Mapbox token handling ----
