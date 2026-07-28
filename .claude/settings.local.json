@@ -110,7 +110,8 @@
       "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/temporal.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/temporal.png)",
       "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/Clicking_a_feature.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/Clicking_a_feature.png)",
       "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_project/urls.py)",
-      "Bash(node --check d:/muhammad_arsalan/ncop_local/frontend/src/modules/temporal-current-step.js)"
+      "Bash(node --check d:/muhammad_arsalan/ncop_local/frontend/src/modules/temporal-current-step.js)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_project/settings/base.py project/ncop_internal/views.py)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard"

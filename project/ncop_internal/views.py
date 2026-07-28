@@ -7993,6 +7993,33 @@ def _mon_pred_convert_step(element_key, item):
             raise ValueError("color-relief render failed")
         colored_ds = None
 
+        # Post-write PNG validation.  GDAL can produce an entirely-empty
+        # colorized PNG when the upstream warp silently landed on NoData
+        # pixels (has happened on Linux prod when PROJ_LIB was misconfigured
+        # — Warp returned a Dataset object rather than None, so the earlier
+        # "reprojection failed" check let it through; DEMProcessing then
+        # wrote a technically-valid, 100%-transparent PNG that Nginx serves
+        # with HTTP 200 and Mapbox loads without a console error).  Reject
+        # (delete + treat as failure) any PNG that is (a) missing, (b)
+        # trivially small (< 1 KB), or (c) opens with no readable band
+        # data — so no broken URL ever propagates to the frontend.
+        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 1024:
+            try: os.remove(png_path)
+            except Exception: pass
+            raise ValueError(
+                f"colorized PNG missing or trivially small ({element_key}/{run}/{fh}) "
+                f"— PROJ_LIB / GDAL_DATA misconfigured?  Check startup log."
+            )
+        try:
+            _check_ds = gdal.Open(png_path)
+            if _check_ds is None or _check_ds.RasterCount < 1:
+                raise ValueError("cannot re-open written PNG")
+            _check_ds = None
+        except Exception as _e:
+            try: os.remove(png_path)
+            except Exception: pass
+            raise ValueError(f"colorized PNG failed validation: {_e}")
+
         payload = {
             "date":        item.get("forecast_time"),
             "url":         f"{settings.MEDIA_URL}{_PRED_MEDIA_SUBDIR}/{safe}.png",
