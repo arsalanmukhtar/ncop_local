@@ -67,7 +67,14 @@
     position: absolute;
     top: 0;
     right: 42px;
-    width: 425px;
+    /* Widened from 425 → 580 so the PMD Weekly Forecast table (6
+       columns incl. weather-emoji temperature ranges) renders without
+       horizontal clipping.  Panel is now user-resizable via the corner
+       grip; the JS enforces a 460 px min-width so it can shrink back to
+       roughly the old footprint if the user prefers a slimmer read.
+       max-width guards against overflowing the map on narrow viewports. */
+    width: 580px;
+    max-width: calc(100vw - 80px);
     height: min(620px, calc(100vh - 240px)) !important;
     background: var(--primary-bg);
     border: 1px solid var(--border-dark);
@@ -80,6 +87,89 @@
     flex-direction: column !important;
     overflow: hidden !important;
     z-index: 1001;
+}
+
+/* ---------- Drag handle on the header ---------- */
+/* The whole .wrp-header row is the grab target; the 3-line grip is a
+   pure visual cue.  cursor:grab / grabbing gives the drag affordance,
+   user-select:none stops the header text from being selected during
+   the drag gesture. */
+.weather-report-panel .wrp-header[data-wrp-drag] {
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.weather-report-panel.is-dragging .wrp-header[data-wrp-drag] {
+    cursor: grabbing;
+}
+
+/* Drag grip — three horizontal bars on the LEFT of the header.  Made
+   visually prominent so the affordance is obvious (subtle 55% opacity
+   left users unsure whether the header was interactive at all).
+   pointer-events: none so the grip doesn't intercept the pointer —
+   the whole `.wrp-header[data-wrp-drag]` catches the gesture. */
+.weather-report-panel .wrp-drag-grip {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 6px;
+    padding: 4px 2px;
+    border-radius: 4px;
+    opacity: 0.85;
+    pointer-events: none;
+    transition: opacity 0.18s ease, background 0.18s ease;
+}
+.weather-report-panel .wrp-header:hover .wrp-drag-grip {
+    opacity: 1;
+    background: rgba(148, 163, 184, 0.12);
+}
+.weather-report-panel.is-dragging .wrp-drag-grip {
+    opacity: 1;
+    background: rgba(70, 178, 255, 0.18);
+}
+.weather-report-panel .wrp-drag-grip span {
+    display: block;
+    height: 2.5px;
+    border-radius: 2px;
+    background: var(--text-secondary, rgba(203, 213, 225, 0.95));
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Resize handle (bottom-right corner) ---------- */
+.weather-report-panel .wrp-resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    color: var(--text-muted, rgba(148, 163, 184, 0.7));
+    opacity: 0.55;
+    transition: opacity 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    z-index: 4;
+    touch-action: none;
+    pointer-events: auto;
+}
+.weather-report-panel .wrp-resize:hover {
+    opacity: 1;
+    color: var(--ndma-blue, #46b2ff);
+    transform: scale(1.08);
+}
+.weather-report-panel .wrp-resize svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+.weather-report-panel.is-resizing .wrp-resize {
+    opacity: 1;
+    color: var(--ndma-blue, #46b2ff);
 }
 
 .weather-report-panel .wrp-header {
@@ -154,6 +244,159 @@
     font-size: 13px;
     line-height: 1.4;
     text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+/* Header actions cluster — groups the two export buttons with the
+   close button so the drag-header layout stays tidy at every panel
+   width.  Buttons share a common 28×28 chrome (see .wrp-close-btn
+   base rules).  Export buttons flip to a subtle NDMA-blue accent on
+   hover to signal they're download actions distinct from the red-
+   tinted close button. */
+.weather-report-panel .wrp-header-actions {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weather-report-panel .wrp-export-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.12s ease;
+}
+
+.weather-report-panel .wrp-export-btn i,
+.weather-report-panel .wrp-export-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.weather-report-panel .wrp-export-btn:hover:not(:disabled) {
+    background: rgba(70, 178, 255, 0.14);
+    border-color: rgba(70, 178, 255, 0.55);
+    color: var(--ndma-blue, #46b2ff);
+    transform: translateY(-1px);
+}
+
+.weather-report-panel .wrp-export-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
+}
+
+.weather-report-panel .wrp-export-btn:disabled {
+    opacity: 0.40;
+    cursor: not-allowed;
+}
+
+/* -------- Export progress overlay ------------------------------------
+   Full-panel modal shown while the Word / PDF report is being built +
+   handed to the OS download layer.  Reuses the existing @keyframes
+   wrp-loader-spin so no new animation is registered.  z-index sits
+   above .wrp-body/.wrp-scroll but below the header drag layer so the
+   panel can still be moved while a build is in flight (rare — the
+   spin is <50ms — but it stays consistent).  is-error swaps the
+   accent to the NDMA red palette for failure surfacing. */
+.weather-report-panel .wrp-export-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-bg);
+    background: color-mix(in srgb, var(--primary-bg) 88%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+    border-radius: inherit;
+}
+.weather-report-panel .wrp-export-overlay.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.weather-report-panel .wrp-export-overlay__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 28px;
+    max-width: 80%;
+    text-align: center;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    color: var(--text-primary);
+}
+
+.weather-report-panel .wrp-export-overlay__spinner {
+    width: 44px;
+    aspect-ratio: 1;
+    display: grid;
+}
+.weather-report-panel .wrp-export-overlay__spinner::before,
+.weather-report-panel .wrp-export-overlay__spinner::after {
+    content: "";
+    grid-area: 1 / 1;
+    --wrp-loader-c: var(--ndma-blue, #46b2ff);
+    --c: no-repeat radial-gradient(farthest-side, var(--wrp-loader-c) 92%, transparent);
+    background:
+        var(--c) 50% 0,
+        var(--c) 50% 100%,
+        var(--c) 100% 50%,
+        var(--c) 0 50%;
+    background-size: 10px 10px;
+    animation: wrp-loader-spin 1s infinite;
+}
+.weather-report-panel .wrp-export-overlay__spinner::before {
+    margin: 4px;
+    filter: hue-rotate(45deg);
+    background-size: 7px 7px;
+    animation-timing-function: linear;
+}
+
+.weather-report-panel .wrp-export-overlay__text {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+}
+
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__spinner {
+    display: none;
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__card {
+    border-color: rgba(239, 68, 68, 0.55);
+    background:
+        linear-gradient(135deg, rgba(127, 29, 29, 0.30), transparent 60%),
+        var(--secondary-bg);
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__text {
+    color: #fecaca;
+    font-weight: 500;
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__card::before {
+    content: "⚠️";
+    font-size: 28px;
+    line-height: 1;
+    display: block;
+    margin-bottom: 4px;
 }
 
 .weather-report-panel .wrp-close-btn {
@@ -1276,8 +1519,12 @@
 }
 
 /* ---------- Report fc[] table ---------- */
+/* Fixed table layout + auto sizing so the 6-column PMD weekly forecast
+   distributes cell widths evenly.  Column widths are set below so
+   long city names get more room than the numeric temp columns. */
 .weather-report-panel .wrp-pmd-fc-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0;
     font-size: 10px;
@@ -1286,27 +1533,58 @@
     border-radius: 4px;
     overflow: hidden;
 }
+/* City name column gets ~30% for readable "MUZAFFARABAD CITY" and
+   "CHAKLALA- RAWALPINDI"; the 5 data columns split the rest. */
+.weather-report-panel .wrp-pmd-fc-table--full th:nth-child(1),
+.weather-report-panel .wrp-pmd-fc-table--full td:nth-child(1) {
+    width: 30%;
+}
+.weather-report-panel .wrp-pmd-fc-table--full th:not(:first-child),
+.weather-report-panel .wrp-pmd-fc-table--full td:not(:first-child) {
+    width: 14%;
+}
 .weather-report-panel .wrp-pmd-fc-table thead th {
     position: sticky;
     top: 0;
     z-index: 1;
     background: rgba(79,159,255,0.20);
     color: #cfe4ff;
-    padding: 4px 6px;
+    padding: 4px 5px;
     text-align: left;
     font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
     border-bottom: 1px solid rgba(255,255,255,0.14);
-    white-space: nowrap;
+    /* Allow wrap ONLY on the header so "Wednesday°C" can break to two
+       lines in a narrow column instead of stretching the column. */
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.15;
 }
 .weather-report-panel .wrp-pmd-fc-table tbody td {
-    padding: 3px 6px;
+    padding: 3px 5px;
     color: var(--text-secondary, #cbd2e0);
     border-bottom: 1px solid rgba(255,255,255,0.04);
+    /* Numeric cells (34-36, ☀️ 35-37) stay on one line and never
+       squish — the fixed column width handles the rest. */
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* City name cell — the ONLY cell allowed to wrap in the body row so
+   long names like "CHAKLALA- RAWALPINDI" or "MUZAFFARABAD CITY" fit
+   without ellipsising them. */
+.weather-report-panel .wrp-pmd-fc-table tbody td.wrp-pmd-fc-time {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+}
+/* Keep the city-emoji + name pair on the same visual line by using
+   inline-flex with a small gap. */
+.weather-report-panel .wrp-pmd-city-name {
+    display: inline;
 }
 .weather-report-panel .wrp-pmd-fc-table tbody tr:nth-child(even) td {
     background: rgba(255,255,255,0.02);

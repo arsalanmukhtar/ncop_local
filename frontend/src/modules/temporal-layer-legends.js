@@ -1270,4 +1270,66 @@ export const legends = {
     ],
     ["-0.1", "1", "2", "3", "4", "5", "7", "10", "15", "20", "25", "30", "40", "60", "100", "150", "200", "250", "300", "350", "400", "500"]
   ),
+
+  // PMD Predictions — WRF precipitation accumulation forecasts (mm).  Colors
+  // and thresholds mirror the vendor's own legendList JS chunk one-for-one
+  // (see _MON_PRED_COLOR_STOPS in ncop_internal/views.py) so the map + the
+  // legend read the same as PMD Monitor's own dashboard.  Each accumulation
+  // window has its OWN scale — a 3h scale ceiling of 100 mm wouldn't read
+  // meaningfully on a 24h layer, so the ramps diverge deliberately.
+  pmd_pred_hourtpe: gradientLegendBar(
+    [
+      "rgb(185, 244, 171)", "rgb(111, 218, 111)", "rgb(56, 188, 57)",
+      "rgb(37, 144, 38)",   "rgb(98, 184, 255)",  "rgb(0, 0, 252)",
+      "rgb(250, 0, 250)",
+    ],
+    ["0.1", "2.5", "5", "10", "25", "50", "100+"]
+  ),
+  pmd_pred_sixtpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(111, 218, 111)", "rgb(56, 188, 57)",
+      "rgb(37, 144, 38)",   "rgb(98, 184, 255)",  "rgb(0, 0, 252)",
+      "rgb(250, 0, 250)",
+    ],
+    ["0.01", "2.5", "5", "10", "25", "50", "100+"]
+  ),
+  pmd_pred_twelvetpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(61, 186, 61)",  "rgb(97, 184, 255)",
+      "rgb(0, 0, 255)",      "rgb(250, 0, 250)", "rgb(128, 0, 64)",
+    ],
+    ["0.1", "5", "15", "30", "70", "140+"]
+  ),
+  pmd_pred_daytpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(61, 186, 61)",  "rgb(97, 184, 255)",
+      "rgb(0, 0, 255)",      "rgb(250, 0, 250)", "rgb(128, 0, 64)",
+    ],
+    ["0.1", "10", "25", "50", "100", "250+"]
+  ),
+
+  // State-quantity layers — colors + ticks mirror _MON_PRED_ELEMENTS stops
+  // in views.py one-for-one, so map + legend stay in sync.
+  pmd_pred_temp2m: gradientLegendBar(
+    [
+      "rgb(128, 0, 128)", "rgb(0, 0, 255)",   "rgb(0, 255, 255)",
+      "rgb(0, 255, 0)",   "rgb(255, 255, 0)", "rgb(255, 128, 0)",
+      "rgb(255, 0, 0)",   "rgb(128, 0, 0)",
+    ],
+    ["-30", "-15", "0", "10", "20", "30", "40", "45"]
+  ),
+  pmd_pred_cloud_cover: gradientLegendBar(
+    [
+      "rgb(220, 220, 220)", "rgb(180, 180, 180)", "rgb(140, 140, 140)",
+      "rgb(100, 100, 100)", "rgb(60, 60, 60)",
+    ],
+    ["0", "25", "50", "75", "100"]
+  ),
+  pmd_pred_rel_humidity: gradientLegendBar(
+    [
+      "rgb(140, 100, 60)",  "rgb(200, 170, 120)", "rgb(240, 220, 180)",
+      "rgb(200, 230, 250)", "rgb(100, 150, 220)", "rgb(0, 50, 180)",
+    ],
+    ["0", "20", "40", "60", "80", "100"]
+  ),
 };

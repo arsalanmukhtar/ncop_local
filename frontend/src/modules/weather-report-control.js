@@ -532,6 +532,17 @@ export class WeatherReportControl {
   };
   #pmdClickBound = false;
 
+  // Snapshot of the last successful Dynamic Report render — the Word/PDF
+  // export buttons pull from here so the download always matches what
+  // the user is currently looking at.  All references, no cloning —
+  // rows/meta/state are already in memory during the render pass and
+  // won't be mutated after being handed here.  Cleared on the empty /
+  // loading paths so the export buttons stay disabled until real data
+  // is on screen.
+  #lastReport = null; // { rows, meta, state, generatedAt: Date }
+  #wrpExportDocBtn = null;
+  #wrpExportPdfBtn = null;
+
   // §3.4 drill-down state — "overview" is the default multi-section
   // scroll; the other values are the dedicated full-content sub-views
   // reached via the drill button strip.
@@ -593,7 +604,10 @@ export class WeatherReportControl {
     panel.id = PANEL_ID;
     panel.className = "weather-report-panel";
     panel.innerHTML = `
-      <div class="wrp-header">
+      <div class="wrp-header" data-wrp-drag>
+        <div class="wrp-drag-grip" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
         <div class="wrp-header-text">
           <h3 class="wrp-title">Weather Report</h3>
           <p class="wrp-subtitle">Enable a temporal layer to begin</p>
@@ -602,9 +616,23 @@ export class WeatherReportControl {
             <span class="wrp-threshold-value"></span>
           </p>
         </div>
-        <button class="wrp-close-btn" type="button" title="Close" aria-label="Close">
-          <i data-lucide="x"></i>
-        </button>
+        <div class="wrp-header-actions">
+          <button class="wrp-export-btn" type="button"
+                  id="wrpExportDocBtn"
+                  title="Download as Word (.doc)"
+                  aria-label="Download as Word" disabled>
+            <i data-lucide="file-text"></i>
+          </button>
+          <button class="wrp-export-btn" type="button"
+                  id="wrpExportPdfBtn"
+                  title="Download as PDF"
+                  aria-label="Download as PDF" disabled>
+            <i data-lucide="file-down"></i>
+          </button>
+          <button class="wrp-close-btn" type="button" title="Close" aria-label="Close">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
       </div>
       <div class="wrp-tabs" role="tablist">
         <button class="wrp-tab is-active" type="button" role="tab"
@@ -616,6 +644,13 @@ export class WeatherReportControl {
       <div class="wrp-body wrp-body--pmd" id="weatherReportPmdBody"
            data-tab-content="pmd" hidden></div>
       <div class="wrp-footer" id="weatherReportFooter"></div>
+      <div class="wrp-resize" data-wrp-resize aria-label="Resize">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M14 6 L6 14 M14 10 L10 14"
+                stroke="currentColor" stroke-width="1.6"
+                fill="none" stroke-linecap="round"></path>
+        </svg>
+      </div>
     `;
     mapContainer.appendChild(panel);
     this.#panelEl = panel;
@@ -627,6 +662,25 @@ export class WeatherReportControl {
     this.#subtitleEl = panel.querySelector(".wrp-subtitle");
     this.#thresholdEl = panel.querySelector(".wrp-threshold");
     this.#thresholdValueEl = panel.querySelector(".wrp-threshold-value");
+    this.#wrpExportDocBtn = panel.querySelector("#wrpExportDocBtn");
+    this.#wrpExportPdfBtn = panel.querySelector("#wrpExportPdfBtn");
+
+    // Wire the two Dynamic-Report export buttons.  Handlers are no-ops
+    // when there's no report snapshot yet (buttons are also disabled in
+    // that state via the `disabled` attribute set at render time).
+    // The runExport() wrapper below shows a spinner overlay while the
+    // report HTML is being built + streamed to Blob/window, and surfaces
+    // any thrown error in the same overlay instead of silently failing.
+    this.#wrpExportDocBtn?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (this.#wrpExportDocBtn.disabled) return;
+      this.#runExport("Word", () => this.#downloadReportAsWord());
+    });
+    this.#wrpExportPdfBtn?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (this.#wrpExportPdfBtn.disabled) return;
+      this.#runExport("PDF", () => this.#downloadReportAsPdf());
+    });
 
     // Tab click delegation — single listener on the strip, dispatches
     // on the clicked <button>'s data-tab.
@@ -639,6 +693,17 @@ export class WeatherReportControl {
     // Lucide icons get rendered by the global init pass; nudge it in case
     // we're mounted after the initial pass.
     if (window.lucide?.createIcons) window.lucide.createIcons();
+
+    // Drag + resize — mirrors the heatwave modal pattern (see
+    // layer-attribute-popup.js attachHeatwaveDragAndResize).  Pointer-
+    // event based (single-touch friendly), converts CSS-driven
+    // positioning to pixel-anchored inline styles on first interaction
+    // so subsequent moves stay sticky and the rail's anchoring rule
+    // stops fighting our updates.  Zero listeners fire while the panel
+    // is idle — pointerdown adds pointermove/up then removes them on
+    // release, so there's no rAF loop or observer running in the
+    // background.
+    this.#attachDragAndResize(panel);
 
     // ONE delegated handler for the entire body — survives every render
     // (innerHTML changes don't drop listeners on the parent).  Reads
@@ -1136,6 +1201,18 @@ export class WeatherReportControl {
     this.#subtitleEl.textContent = `${primarySubtitleLabel}${dateSuffix} · ${rows.length} district${rows.length === 1 ? "" : "s"}`;
     this.#renderRows(rows, primaryMeta);
     this.#lastRenderComplete = true;
+
+    // Snapshot for the Word / PDF export buttons.  References only —
+    // rows and meta live on the render frame; storing the pointer is
+    // O(1) memory.  Downloads read directly from this snapshot at
+    // click time, no re-query into the map.
+    this.#lastReport = {
+      rows,
+      meta: primaryMeta,
+      state,
+      generatedAt: new Date(),
+    };
+    this.#setExportEnabled(true);
   }
 
   // -------------------------------------------------------------- station helpers
@@ -1527,12 +1604,14 @@ export class WeatherReportControl {
         <p>${body}</p>
       </div>
     `;
-    // Empty state has no report → clear footer so the chrome strip
-    // collapses out of view.
+    // Empty state has no report → clear footer + disable exports so the
+    // header buttons match the actual availability of data.
     if (this.#footerEl) {
       this.#footerEl.innerHTML = "";
       this.#footerEl.classList.remove("is-visible");
     }
+    this.#setExportEnabled(false);
+    this.#lastReport = null;
   }
 
   // Spinner state — shown while the active frame's tiles are still
@@ -1549,6 +1628,15 @@ export class WeatherReportControl {
       this.#footerEl.innerHTML = "";
       this.#footerEl.classList.remove("is-visible");
     }
+    // Loading state — keep whatever snapshot we already had (so a
+    // brief re-fetch doesn't disable the buttons mid-review), but
+    // don't advertise the exports as new-data ready.
+    this.#setExportEnabled(!!this.#lastReport);
+  }
+
+  #setExportEnabled(enabled) {
+    if (this.#wrpExportDocBtn) this.#wrpExportDocBtn.disabled = !enabled;
+    if (this.#wrpExportPdfBtn) this.#wrpExportPdfBtn.disabled = !enabled;
   }
 
   // ---- Province aggregation -------------------------------------------
@@ -4773,12 +4861,822 @@ export class WeatherReportControl {
     return null;
   }
 
+  // ================================================================
+  //  Dynamic Report — Word / PDF export
+  // ================================================================
+  //  Zero-dependency exports.  The full styled report HTML is built
+  //  ONLY on click (never stored between clicks), so the memory
+  //  footprint while the panel is idle is a single { rows, meta, state }
+  //  reference — no serialized copy.
+  //  * Word (.doc):  Blob with `application/msword` MIME; Word opens
+  //                  the HTML natively.  No docx library needed.
+  //  * PDF:          new window with the same HTML + auto window.print()
+  //                  — user's OS print dialog exports the PDF.  No
+  //                  jsPDF, no html2canvas, no rasterization overhead.
+  //  Both share #buildReportHtml() so the two formats stay in sync.
+  // ================================================================
+
+  // Overlay-wrapped runner for the two export buttons.  Shows a spinner
+  // in the panel body while the report HTML is built + streamed to the
+  // download layer, restores the button state on completion, and
+  // surfaces any thrown error inline (previously errors were silently
+  // eaten by the button's click handler + never made it to the user).
+  //
+  // The report build is synchronous but can take a beat on wide bboxes
+  // — we yield to the paint pipeline once via requestAnimationFrame so
+  // the spinner actually appears BEFORE the ~30-50ms serialisation runs.
+  async #runExport(label, fn) {
+    this.#showExportOverlay(`Preparing ${label} report…`);
+    // Two rAFs guarantees the spinner paints at least one frame before
+    // the (synchronous) serialisation starts.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try {
+      const result = fn();
+      if (result && typeof result.then === "function") await result;
+      this.#hideExportOverlay();
+    } catch (err) {
+      console.error(`[WeatherReport] ${label} export failed:`, err);
+      this.#showExportOverlay(
+        `${label} export failed. ${err && err.message ? err.message : "See console for details."}`,
+        { isError: true }
+      );
+      // Auto-clear the error banner after 4 s so the panel returns to
+      // normal on its own.
+      setTimeout(() => this.#hideExportOverlay(), 4000);
+    }
+  }
+
+  #showExportOverlay(message, opts = {}) {
+    const panel = this.#panelEl;
+    if (!panel) return;
+    let overlay = panel.querySelector(".wrp-export-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "wrp-export-overlay";
+      overlay.innerHTML = `
+        <div class="wrp-export-overlay__card">
+          <div class="wrp-export-overlay__spinner" aria-hidden="true"></div>
+          <div class="wrp-export-overlay__text"></div>
+        </div>
+      `;
+      panel.appendChild(overlay);
+    }
+    overlay.querySelector(".wrp-export-overlay__text").textContent = message;
+    overlay.classList.toggle("is-error", !!opts.isError);
+    // Force a reflow before adding the visible class so the CSS
+    // transition kicks in on first show as well.
+    void overlay.offsetWidth;
+    overlay.classList.add("is-visible");
+  }
+
+  #hideExportOverlay() {
+    const overlay = this.#panelEl?.querySelector(".wrp-export-overlay");
+    if (!overlay) return;
+    overlay.classList.remove("is-visible");
+    // Match CSS transition duration before removing from DOM so a
+    // rapid re-open reuses the same node.
+    setTimeout(() => {
+      if (!overlay.classList.contains("is-visible")) overlay.remove();
+    }, 320);
+  }
+
+  #downloadReportAsWord() {
+    if (!this.#lastReport) return;
+    const html  = this.#buildReportHtml("word");
+    const stamp = this.#slugForFilename();
+    const blob  = new Blob(
+      ["﻿" + html],  // BOM so Word recognises UTF-8
+      { type: "application/msword" }
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `weather-report-${stamp}.doc`;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    // Explicit MouseEvent so browsers that gate synthetic .click() on
+    // non-visible anchors (Firefox in particular) still initiate the
+    // download.  Bubbles + cancelable so the browser's own download
+    // handler picks it up.
+    a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    // Small teardown delay lets Chrome flush the download; Blob is
+    // GC'd the moment the URL is revoked + a is removed.
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 400);
+  }
+
+  #downloadReportAsPdf() {
+    if (!this.#lastReport) return;
+    const html = this.#buildReportHtml("pdf");
+    // Fresh popup window scoped just to the printable report.  We
+    // inject the HTML directly (document.write) rather than data-URL
+    // so the print dialog opens in a normal window context — Chrome
+    // blocks window.print() on data: URLs.
+    const w = window.open("", "_blank", "noopener,noreferrer,width=980,height=720");
+    if (!w) {
+      // Popup blocked — fall back to opening in a temporary iframe
+      // whose print() call targets the main window's print dialog.
+      this.#pdfViaIframe(html);
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    // Wait for the doc to finish parsing + fonts before printing so the
+    // dialog opens with the fully-laid-out content.
+    const doPrint = () => {
+      try { w.focus(); } catch (_) {}
+      try { w.print(); } catch (_) {}
+    };
+    if (w.document.readyState === "complete") {
+      setTimeout(doPrint, 120);
+    } else {
+      w.addEventListener("load", () => setTimeout(doPrint, 120), { once: true });
+    }
+  }
+
+  #pdfViaIframe(html) {
+    // Fallback path when popups are blocked.  The iframe is torn down
+    // one second after print() fires so we don't leak DOM.
+    const frame = document.createElement("iframe");
+    frame.style.position = "fixed";
+    frame.style.left = "-10000px";
+    frame.style.top  = "-10000px";
+    frame.style.width  = "0";
+    frame.style.height = "0";
+    document.body.appendChild(frame);
+    const fdoc = frame.contentDocument || frame.contentWindow.document;
+    fdoc.open();
+    fdoc.write(html);
+    fdoc.close();
+    setTimeout(() => {
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (_) {}
+      setTimeout(() => frame.remove(), 1000);
+    }, 200);
+  }
+
+  #slugForFilename() {
+    const d = this.#lastReport?.generatedAt || new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const key = this.#lastReport?.meta?.label
+      ? this.#lastReport.meta.label
+          .toLowerCase()
+          .replace(/[^\w]+/g, "-")
+          .replace(/^-|-$/g, "")
+      : "report";
+    return `${key}-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  }
+
+  // ----------------------------------------------------------------
+  // Report HTML builder — cover, executive summary, per-province
+  // narrative, per-district table, mitigation.  Format-agnostic:
+  // `mode` only tweaks trivia (whether to auto-print, filename hint).
+  // ----------------------------------------------------------------
+  #buildReportHtml(mode) {
+    const snap  = this.#lastReport;
+    const rows  = snap.rows || [];
+    const meta  = snap.meta || {};
+    const state = snap.state || {};
+    const kind  = meta.kind || "unknown";
+    const guidance = this.#kindGuidance(kind);
+    const genDate  = snap.generatedAt || new Date();
+    const alertRows = rows.filter((r) => r.reading.alert);
+    const provinces = this.#groupRowsByProvince(rows);
+
+    const headerTitle = escapeHtml(meta.label || "Weather Report");
+    const stepLabel   = escapeHtml(state.date || "Current step");
+    const genStr      = genDate.toLocaleString();
+
+    // Auto-generated bulletin-style paragraph — mirrors the narrative
+    // tone of the example the user gave ("Rain-wind/thundershowers is
+    // expected in ...").  Assembled from the province groupings, so
+    // provinces with alerts appear first.
+    const bulletin = this.#buildBulletinParagraph(kind, provinces, meta);
+
+    // Executive summary tiles (rendered as a table for Word-HTML
+    // compatibility — Word ignores CSS flex/grid).
+    const summaryHtml = `
+      <table class="wrp-doc-summary" role="presentation">
+        <tr>
+          <td><div class="wrp-doc-stat-num">${rows.length}</div>
+              <div class="wrp-doc-stat-lbl">Districts sampled</div></td>
+          <td><div class="wrp-doc-stat-num" style="color:#dc2626">${alertRows.length}</div>
+              <div class="wrp-doc-stat-lbl">Districts over threshold</div></td>
+          <td><div class="wrp-doc-stat-num">${provinces.length}</div>
+              <div class="wrp-doc-stat-lbl">Provinces covered</div></td>
+        </tr>
+      </table>
+    `;
+
+    // Hotspots table — top 10 by score.
+    const hotspotRows = rows.slice(0, 10).map((r, i) => `
+      <tr class="${r.reading.alert ? "wrp-doc-alert" : ""}">
+        <td>${i + 1}</td>
+        <td>${escapeHtml(r.district)}</td>
+        <td>${escapeHtml(r.province)}</td>
+        <td class="wrp-doc-val">${escapeHtml(r.reading.label)}</td>
+        <td>${r.reading.alert ? "⚠ Alert" : "Nominal"}</td>
+      </tr>
+    `).join("");
+
+    // Province breakdown sections — each with narrative + district
+    // rows grouped underneath.
+    let provinceSections = "";
+    for (const [province, list] of provinces) {
+      const agg = this.#provinceAggregate(list, meta);
+      const provinceAlerts = list.filter((r) => r.reading.alert).length;
+      const districtRows = list.map((r) => `
+        <tr class="${r.reading.alert ? "wrp-doc-alert" : ""}">
+          <td>${escapeHtml(r.district)}</td>
+          <td class="wrp-doc-val">${escapeHtml(r.reading.label)}</td>
+          <td>${r.reading.alert ? "⚠" : ""}</td>
+        </tr>
+      `).join("");
+
+      provinceSections += `
+        <div class="wrp-doc-province">
+          <h3>${escapeHtml(province)}
+            ${provinceAlerts ? `<span class="wrp-doc-badge">${provinceAlerts} alert${provinceAlerts === 1 ? "" : "s"}</span>` : ""}
+          </h3>
+          <p class="wrp-doc-province-narrative">
+            ${this.#buildProvinceNarrative(province, list, meta, agg)}
+          </p>
+          <table class="wrp-doc-table">
+            <thead>
+              <tr>
+                <th>District</th>
+                <th>${escapeHtml(meta.label || "Value")}</th>
+                <th>&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody>${districtRows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Best-practice mitigation section, kind-aware.
+    const mitigationHtml = `
+      <div class="wrp-doc-mitigation">
+        <h2>What This Means &amp; Recommended Actions</h2>
+        <p class="wrp-doc-significance"><strong>Significance.</strong> ${escapeHtml(guidance.signifies)}</p>
+        <p class="wrp-doc-risks"><strong>Primary risks if threshold breached.</strong> ${escapeHtml(guidance.risks)}</p>
+        <h3>Best-practice mitigation</h3>
+        <ul>
+          ${guidance.mitigation.map((m) => `<li>${escapeHtml(m)}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+
+    // Word MSO styling gets a little help — page-margin comment is a
+    // no-op in Chrome but Word honours it.  For PDF mode we add a
+    // print stylesheet so the page renders full-width with sensible
+    // margins.
+    const printCss = mode === "pdf" ? `
+      @media print {
+        @page { size: A4 portrait; margin: 14mm 14mm 16mm 14mm; }
+        body { margin: 0; }
+        .wrp-doc-print-controls { display: none !important; }
+      }
+    ` : "";
+
+    const printControls = mode === "pdf" ? `
+      <div class="wrp-doc-print-controls">
+        <button type="button" onclick="window.print()">Print / Save as PDF</button>
+        <button type="button" onclick="window.close()">Close</button>
+      </div>
+    ` : "";
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Weather Report — ${headerTitle}</title>
+<style>
+  body {
+    font-family: 'Segoe UI', 'Inter', Arial, sans-serif;
+    color: #0f172a;
+    line-height: 1.5;
+    margin: 0 auto;
+    max-width: 820px;
+    padding: 24px 32px 40px;
+    background: #ffffff;
+  }
+  .wrp-doc-print-controls {
+    position: fixed; top: 10px; right: 12px;
+    display: flex; gap: 8px; z-index: 999;
+  }
+  .wrp-doc-print-controls button {
+    padding: 8px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
+    background: #1e40af; color: #fff; font-weight: 600; cursor: pointer;
+  }
+  .wrp-doc-print-controls button + button {
+    background: #f8fafc; color: #0f172a;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #0b3b8c; }
+  .wrp-doc-subtitle { color: #475569; margin: 0 0 4px; font-size: 13px; }
+  .wrp-doc-generated { color: #94a3b8; margin: 0 0 20px; font-size: 12px; }
+  h2 { font-size: 17px; color: #0b3b8c; margin: 24px 0 10px;
+       border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+  h3 { font-size: 14px; color: #0b3b8c; margin: 16px 0 6px; }
+  p  { margin: 6px 0 12px; }
+  .wrp-doc-bulletin {
+    background: linear-gradient(135deg, #eef4ff 0%, #f8fafc 100%);
+    border-left: 4px solid #3b82f6;
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-size: 13.5px;
+    color: #1e293b;
+    margin: 12px 0 20px;
+  }
+  .wrp-doc-summary { width: 100%; border-collapse: separate;
+                     border-spacing: 8px 0; margin: 6px 0 18px; }
+  .wrp-doc-summary td { width: 33.3%; padding: 12px; text-align: center;
+                        background: #f1f5f9; border-radius: 6px; }
+  .wrp-doc-stat-num { font-size: 26px; font-weight: 700; color: #0b3b8c; }
+  .wrp-doc-stat-lbl { font-size: 11px; color: #64748b; text-transform: uppercase;
+                      letter-spacing: 0.6px; margin-top: 2px; }
+  .wrp-doc-table { width: 100%; border-collapse: collapse; margin: 6px 0 14px;
+                   font-size: 12px; }
+  .wrp-doc-table th, .wrp-doc-table td { padding: 6px 8px;
+                                          border-bottom: 1px solid #e2e8f0;
+                                          text-align: left; }
+  .wrp-doc-table thead th { background: #dbeafe; color: #0b3b8c; font-size: 11px;
+                             text-transform: uppercase; letter-spacing: 0.4px; }
+  .wrp-doc-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wrp-doc-alert td { background: #fef2f2; color: #7f1d1d; }
+  .wrp-doc-alert .wrp-doc-val { color: #b91c1c; }
+  .wrp-doc-province { margin: 20px 0 8px; page-break-inside: avoid; }
+  .wrp-doc-province h3 { margin: 0 0 6px; }
+  .wrp-doc-badge {
+    display: inline-block; margin-left: 8px; padding: 2px 8px;
+    background: #dc2626; color: #fff; font-size: 10px; font-weight: 700;
+    border-radius: 999px; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .wrp-doc-province-narrative { font-size: 12.5px; color: #334155; margin: 0 0 8px; }
+  .wrp-doc-mitigation { margin-top: 22px; padding: 14px 16px;
+                        background: #fef7ec; border-left: 4px solid #f59e0b;
+                        border-radius: 4px; }
+  .wrp-doc-mitigation h2 { color: #92400e; border-bottom-color: #fbbf24; margin-top: 0; }
+  .wrp-doc-mitigation h3 { color: #92400e; }
+  .wrp-doc-mitigation ul { margin: 4px 0 6px 18px; padding: 0; }
+  .wrp-doc-mitigation li { margin: 4px 0; font-size: 12.5px; color: #422006; }
+  .wrp-doc-footer { margin-top: 30px; padding-top: 12px;
+                    border-top: 1px solid #e2e8f0; color: #94a3b8;
+                    font-size: 11px; text-align: center; }
+  ${printCss}
+</style>
+</head>
+<body>
+${printControls}
+<h1>${headerTitle}</h1>
+<p class="wrp-doc-subtitle">Time step: ${stepLabel} &middot; NDMA National Common Operating Picture</p>
+<p class="wrp-doc-generated">Generated ${escapeHtml(genStr)}</p>
+
+<h2>Bulletin</h2>
+<div class="wrp-doc-bulletin">${bulletin}</div>
+
+<h2>Executive Summary</h2>
+${summaryHtml}
+
+<h2>Top Affected Districts</h2>
+<table class="wrp-doc-table">
+  <thead>
+    <tr><th>#</th><th>District</th><th>Province</th><th>${escapeHtml(meta.label || "Reading")}</th><th>Status</th></tr>
+  </thead>
+  <tbody>${hotspotRows}</tbody>
+</table>
+
+<h2>Province Breakdown</h2>
+${provinceSections}
+
+${mitigationHtml}
+
+<div class="wrp-doc-footer">
+  Auto-generated from live map state &middot; NCOP &middot; ${escapeHtml(genStr)}
+</div>
+</body>
+</html>`;
+  }
+
+  // Group rows by province while preserving alert-first ordering used
+  // by the on-screen renderer.  Returns a plain array of [name, rows]
+  // pairs so it survives JSON roundtrips if we ever cache it.
+  #groupRowsByProvince(rows) {
+    const map = new Map();
+    for (const r of rows) {
+      if (!map.has(r.province)) map.set(r.province, []);
+      map.get(r.province).push(r);
+    }
+    return [...map.entries()].sort(([, a], [, b]) => {
+      const alertsA = a.filter((r) => r.reading.alert).length;
+      const alertsB = b.filter((r) => r.reading.alert).length;
+      if (alertsB !== alertsA) return alertsB - alertsA;
+      return b.length - a.length;
+    });
+  }
+
+  // Human-readable narrative for a single province.  Auto-composed so
+  // the report reads like a PMD bulletin instead of a table dump.
+  // Names the alerting districts explicitly and quotes the aggregate
+  // reading for context.
+  #buildProvinceNarrative(province, list, meta, agg) {
+    const alerts = list.filter((r) => r.reading.alert).map((r) => r.district);
+    const top    = list.slice(0, 3).map((r) => `${r.district} (${r.reading.label})`);
+    const kindText = this.#kindNarrativePhrase(meta.kind);
+    const period   = this.#cadenceText(meta.cadence);
+    const parts = [];
+
+    if (alerts.length) {
+      parts.push(
+        `${kindText} at threshold-breach levels reported across ${alerts.length} district${alerts.length === 1 ? "" : "s"} ` +
+        `of ${province} — most notably ${alerts.slice(0, 3).map(escapeHtml).join(", ")}` +
+        `${alerts.length > 3 ? ` and ${alerts.length - 3} other${alerts.length - 3 === 1 ? "" : "s"}` : ""}.`
+      );
+    } else {
+      parts.push(
+        `${kindText} sampled across ${list.length} district${list.length === 1 ? "" : "s"} of ${escapeHtml(province)} ` +
+        `remains within nominal ranges${period ? ` over ${period}` : ""}.`
+      );
+    }
+
+    if (agg && agg.label) {
+      parts.push(`Provincial aggregate reads <strong>${escapeHtml(agg.label)}</strong>.`);
+    }
+    if (top.length) {
+      parts.push(`Top readings: ${top.map(escapeHtml).join("; ")}.`);
+    }
+    return parts.join(" ");
+  }
+
+  // Bulletin paragraph — the opening card that reads like the PMD/NWFC
+  // narrative the user gave as reference.  Assembles province names
+  // into a natural sentence and prepends a date stamp.
+  #buildBulletinParagraph(kind, provinces, meta) {
+    if (!provinces.length) return "";
+    const alertProvinces = provinces
+      .filter(([, list]) => list.some((r) => r.reading.alert))
+      .map(([name]) => name);
+    const label   = (meta.label || this.#kindNarrativePhrase(kind)).replace(/ – /g, " ");
+    const dateStr = this.#formatBulletinDate(this.#lastReport?.generatedAt);
+    const period  = this.#cadenceText(meta.cadence);
+
+    if (alertProvinces.length) {
+      const list = this.#joinList(alertProvinces);
+      return `${escapeHtml(dateStr)}. ${escapeHtml(label)} is showing threshold-level activity across ${escapeHtml(list)}` +
+        `${period ? ` over ${escapeHtml(period)}` : ""}. Localised heavy readings are likely at isolated places within these regions during the period. ` +
+        `Refer to the province breakdown below for district-level detail and recommended actions.`;
+    }
+    const covered = provinces.map(([name]) => name);
+    const list = this.#joinList(covered);
+    return `${escapeHtml(dateStr)}. ${escapeHtml(label)} sampled across ${escapeHtml(list)} remains within nominal ranges${period ? ` over ${escapeHtml(period)}` : ""}. ` +
+      `No districts have crossed the alert threshold at this time step; continue routine monitoring.`;
+  }
+
+  // Small utilities for narrative generation ------------------------
+  #joinList(items) {
+    if (!items.length) return "";
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  }
+
+  #formatBulletinDate(d) {
+    const date = d instanceof Date ? d : new Date();
+    return date.toLocaleDateString(undefined, {
+      day: "numeric", month: "long", year: "numeric", weekday: "long",
+    });
+  }
+
+  #cadenceText(cadence) {
+    if (!cadence) return "";
+    if (cadence === "hourly") return "the next hourly window";
+    if (cadence === "daily")  return "the current 24-hour window";
+    if (cadence === "weekly") return "the current weekly window";
+    return "";
+  }
+
+  #kindNarrativePhrase(kind) {
+    switch (kind) {
+      case "precipitation":       return "Rain / thundershower activity";
+      case "snowfall":            return "Snowfall";
+      case "cape":                return "Convective instability (CAPE)";
+      case "storm_helicity":      return "Storm-relative helicity";
+      case "temperature":         return "Ambient air temperature";
+      case "aqi":                 return "Air Quality Index (AQI)";
+      case "desert_dust":         return "Airborne desert dust";
+      case "aod":                 return "Aerosol Optical Depth (AOD)";
+      case "no2":                 return "Nitrogen dioxide (NO₂)";
+      case "co":                  return "Carbon monoxide (CO)";
+      case "so2":                 return "Sulphur dioxide (SO₂)";
+      case "rainfall_station":    return "Station-observed rainfall";
+      case "temperature_station": return "Station-observed temperature";
+      default:                    return "Weather observation";
+    }
+  }
+
+  // Kind → { signifies, risks, mitigation[] }.  Sourced from PMD /
+  // NDMA advisory guidance, WHO 2021 AQ guidelines, US EPA AQI and
+  // standard operational best-practice.  Kept as a flat lookup so
+  // additions are cheap (one object entry per new kind).
+  #kindGuidance(kind) {
+    const G = {
+      precipitation: {
+        signifies:
+          "Cumulative or short-window rainfall over the sampled districts. High values on the accumulated / hourly bands indicate potential for surface water accumulation, urban flash flooding, and elevated river inflow.",
+        risks:
+          "Flash floods in urban low-lying areas, riverine flooding in the Indus / Chenab / Jhelum / Ravi / Sutlej basins, landslides in the KP / GB / AJK belt, road closures, and disruption to agricultural fields close to harvest.",
+        mitigation: [
+          "Activate district Flood Control Rooms and pre-position dewatering pumps in identified low-elevation neighbourhoods.",
+          "Issue early-warning SMS to residents in floodplain and glacial-lake outburst (GLOF) exposure zones.",
+          "Coordinate with FFD and PMD for updated river-gauge and short-range QPF; ready evacuation routes for downstream districts.",
+          "Restrict travel through gorge and landslide-prone sections (Karakoram Highway, Neelum Valley, Kaghan / Naran corridor).",
+          "Alert farmers in Punjab and Sindh to secure standing crops and drain excess irrigation water where possible.",
+        ],
+      },
+      snowfall: {
+        signifies:
+          "Frozen precipitation accumulation. Sustained heavy snowfall in the northern belt closes passes, isolates communities, and increases avalanche risk on high-elevation slopes.",
+        risks:
+          "Highway closures (Babusar, Lowari, Khunjerab), avalanche exposure in KP and GB, hypothermia risk for stranded travellers, structural loading on flat roofs.",
+        mitigation: [
+          "Pre-deploy snow-clearing machinery to the Karakoram Highway and Naran-Kaghan corridor.",
+          "Coordinate with FWO / NHA to stage road-closure advisories with alternate-route guidance.",
+          "Distribute cold-weather relief kits (blankets, heaters, generators) to district administrations of Chitral, Skardu, and Ghizer.",
+          "Issue avalanche advisories through PMD to trekking / expedition operators in Gilgit-Baltistan.",
+        ],
+      },
+      cape: {
+        signifies:
+          "Convective Available Potential Energy — the energy an air parcel would gain if lifted. High values ( ≥1000 J/kg) signal that any triggered convection can develop into severe thunderstorms with hail and strong downbursts.",
+        risks:
+          "Severe thunderstorms, damaging straight-line winds, large hail (crop damage), lightning fatalities in exposed rural work areas, aviation disruption.",
+        mitigation: [
+          "Issue thunderstorm watch advisories through PMD / NDMA channels for the flagged districts.",
+          "Coordinate with PCAA for aviation route-planning around convective cells.",
+          "Advise agricultural extension officers to warn open-field workers to seek shelter during peak instability hours.",
+          "Ready DDMA rapid-response teams for lightning-strike and hail-damage response.",
+        ],
+      },
+      storm_helicity: {
+        signifies:
+          "0–3 km storm-relative helicity — a measure of horizontal wind rotation that can be tilted into vertical rotation by an updraft, giving thunderstorms their tornadic potential.",
+        risks:
+          "Tornadic supercells (rare in Pakistan but documented in Sindh / south Punjab), roof and infrastructure damage, wind-driven power outages.",
+        mitigation: [
+          "Elevate PMD watch level for tornado-capable environments and coordinate with district disaster cells.",
+          "Pre-position emergency shelter capacity in identified severe-storm corridors.",
+          "Broadcast public safety messaging on shelter-in-place procedures.",
+        ],
+      },
+      temperature: {
+        signifies:
+          "Ambient air temperature at the sampled districts. Sustained readings ≥40 °C trigger PMD's heat advisory ladder; ≤5 °C flags cold-wave risk in the northern belt and Balochistan uplands.",
+        risks:
+          "Heat-stroke fatalities (particularly urban outdoor workers in Karachi / Sindh / South Punjab), power-grid overload from AC demand, wildfire ignition, cold-related morbidity in the north.",
+        mitigation: [
+          "Open cooling centres in the flagged high-temperature districts; distribute ORS / drinking water via municipal outlets.",
+          "Coordinate with health departments on heat-stroke protocols in tertiary hospitals.",
+          "Adjust school and outdoor-work timings; issue public health advisories on hydration and midday sun avoidance.",
+          "For cold-wave: distribute blankets, verify LPG / heater safety in valleys, monitor livestock exposure.",
+        ],
+      },
+      aqi: {
+        signifies:
+          "Composite Air Quality Index across PM2.5, PM10, NO₂, O₃, SO₂, and CO. Values in the Unhealthy for Sensitive Groups band (≥100) begin affecting children, the elderly, and those with respiratory conditions.",
+        risks:
+          "Aggravated asthma and cardiovascular conditions, reduced visibility, school-absence spikes, hospital admissions for respiratory distress.",
+        mitigation: [
+          "Advise sensitive groups (children, elderly, respiratory patients) to remain indoors during flagged periods.",
+          "Coordinate with Punjab / Sindh EPAs on emission controls (brick kilns, industrial stack scrubbers, crop-residue burning).",
+          "Issue N95 mask advisories through health departments; support distribution in identified hotspot districts.",
+          "Monitor school outdoor-activity restrictions; brief EPI / DHOs on expected respiratory case load.",
+        ],
+      },
+      desert_dust: {
+        signifies:
+          "Airborne desert-dust concentration. Heavy loading blankets Sindh and southern Punjab during shamal winds, degrading air quality and creating aviation and road-visibility hazards.",
+        risks:
+          "Aviation disruption at Karachi / Sukkur / Rahim Yar Khan, reduced highway visibility, respiratory distress, solar-panel efficiency loss, agricultural leaf damage.",
+        mitigation: [
+          "Coordinate advisory to PCAA on airport visibility and aviation dust NOTAMs.",
+          "Issue road-visibility warnings for national highways in Sindh / South Punjab.",
+          "Health departments to increase respiratory-clinic capacity in flagged districts.",
+        ],
+      },
+      aod: {
+        signifies:
+          "Aerosol Optical Depth — total column aerosol loading. High AOD indicates dense atmospheric particulates (dust, smoke, pollution) between the surface and satellite.",
+        risks:
+          "Combined visibility and health impact — often correlates with elevated PM2.5 at surface. Reduces surface solar irradiance (agriculture / power).",
+        mitigation: [
+          "Cross-reference with PM2.5 station data to confirm surface impact before issuing public advisory.",
+          "Alert utilities to expected drop in solar generation for the flagged period.",
+        ],
+      },
+      no2: {
+        signifies:
+          "Tropospheric nitrogen dioxide — a proxy for combustion sources (traffic, power plants, industry). WHO 24-hour AQ Guideline is 25 µg/m³.",
+        risks:
+          "Respiratory irritation, aggravated asthma, and contribution to secondary ozone / particulate formation.",
+        mitigation: [
+          "Advise traffic-heavy district administrations on rush-hour diversion where feasible.",
+          "Coordinate with EPA on industrial-source monitoring at flagged locations.",
+        ],
+      },
+      co: {
+        signifies:
+          "Carbon monoxide — incomplete combustion product; primary sources are vehicle exhaust and biomass burning. EPA 8-hour standard is 10 mg/m³.",
+        risks:
+          "Headache, dizziness, unconsciousness in enclosed spaces; cardiovascular stress at chronic exposure.",
+        mitigation: [
+          "Health department briefing to hospital ERs on CO-poisoning signs during flagged periods.",
+          "Coordinate with municipal environment cells on biomass-burning restrictions.",
+        ],
+      },
+      so2: {
+        signifies:
+          "Sulphur dioxide — mainly from thermal power plants and industry. WHO 24-hour guideline is 40 µg/m³.",
+        risks:
+          "Bronchoconstriction, aggravated asthma, contribution to acid deposition affecting agriculture and infrastructure.",
+        mitigation: [
+          "Cross-check with power-generation dispatch data; recommend fuel-switching where thermal capacity dominates.",
+          "Issue advisory for asthma patients in flagged districts.",
+        ],
+      },
+      rainfall_station: {
+        signifies:
+          "Rainfall observed at PMD / hydrometric stations across the flagged districts.",
+        risks:
+          "Same envelope as precipitation kind — flash floods, riverine flooding, landslides.",
+        mitigation: [
+          "Same as precipitation — activate flood control rooms, brief FFD, pre-position pumping capacity.",
+        ],
+      },
+      temperature_station: {
+        signifies:
+          "Air temperature observed at PMD stations. Values ≥35 °C flag heat exposure per PMD advisory ladder.",
+        risks:
+          "Same envelope as temperature kind — heat-stroke, grid overload, wildfire.",
+        mitigation: [
+          "Same as temperature — open cooling centres, brief health departments, adjust outdoor-work timings.",
+        ],
+      },
+    };
+    return G[kind] || {
+      signifies: "Observation at the sampled districts.",
+      risks: "Refer to the applicable NDMA / PMD advisory for this parameter.",
+      mitigation: [
+        "Coordinate with the relevant technical agency (PMD / FFD / EPA) for parameter-specific guidance.",
+        "Monitor over the next several time steps for trend confirmation before escalating response.",
+      ],
+    };
+  }
+
   // -------------------------------------------------------------- destroy
   destroy() {
     // Single source of truth — same path used on panel close.  No need
     // to also clear #renderRafId because the throttle uses setTimeout
     // and #detachListeners clears that.
     this.#detachListeners();
+  }
+
+  // ================================================================
+  //  Drag + Resize (mirrors heatwave-modal pattern)
+  // ================================================================
+  //  * Drag handle  = the whole `.wrp-header` row (tagged data-wrp-drag).
+  //  * Resize grip  = 22×22 corner element (data-wrp-resize).
+  //  * pinToPixels  = converts the rail-anchored top/right offsets into
+  //                   absolute left/top + explicit width/height so
+  //                   subsequent moves aren't fighting the anchoring
+  //                   rule from anchorRailPanelsToButtons().
+  //  * Listeners: pointerdown attaches move/up ONLY for the duration of
+  //    the gesture and removes them on release — nothing runs while
+  //    the panel is idle.
+  //  * Pointer capture makes single-touch reliable across the whole
+  //    viewport even when the pointer leaves the handle bounds.
+  // ================================================================
+  #attachDragAndResize(panel) {
+    const drag   = panel.querySelector("[data-wrp-drag]");
+    const resize = panel.querySelector("[data-wrp-resize]");
+
+    // Position helper — always use setProperty with 'important' because
+    // BOTH .right-rail-panel { left: auto !important } (map-panels.css)
+    // AND .weather-report-panel { height: min(...) !important } beat
+    // plain inline styles.  Without the important flag, panel.style.left
+    // is silently ignored and the panel snaps to the map's left edge
+    // the moment we set right:auto during pinToPixels().
+    const setPx = (name, value) => panel.style.setProperty(name, value, "important");
+
+    const pinToPixels = () => {
+      const r = panel.getBoundingClientRect();
+      setPx("left",   `${Math.round(r.left)}px`);
+      setPx("top",    `${Math.round(r.top)}px`);
+      setPx("right",  "auto");
+      setPx("bottom", "auto");
+      setPx("width",  `${Math.round(r.width)}px`);
+      setPx("height", `${Math.round(r.height)}px`);
+      // Once user-positioned, opt this panel out of the rail's
+      // per-tick anchoring loop so anchorRailPanelsToButtons() doesn't
+      // teleport it back after each render.
+      panel.dataset.wrpUserPositioned = "true";
+    };
+
+    // Drag from header (but not from the interactive children — otherwise
+    // pointerdown captures the pointer and swallows the click that would
+    // have hit the close / export / tab buttons).  Any button inside the
+    // header's action cluster is opted out here.
+    if (drag) {
+      drag.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".wrp-close-btn"))       return;
+        if (e.target.closest(".wrp-export-btn"))      return;
+        if (e.target.closest(".wrp-header-actions"))  return;
+        if (e.target.closest("[data-tab]"))           return;
+        if (e.button !== undefined && e.button !== 0) return;
+
+        pinToPixels();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = parseFloat(panel.style.left) || 0;
+        const startTop  = parseFloat(panel.style.top)  || 0;
+        panel.classList.add("is-dragging");
+        try { drag.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onMove = (ev) => {
+          const margin = 8;
+          const w = panel.offsetWidth;
+          const h = panel.offsetHeight;
+          let nl = startLeft + (ev.clientX - startX);
+          let nt = startTop  + (ev.clientY - startY);
+          nl = Math.max(margin, Math.min(window.innerWidth  - w - margin, nl));
+          nt = Math.max(margin, Math.min(window.innerHeight - h - margin, nt));
+          setPx("left", `${Math.round(nl)}px`);
+          setPx("top",  `${Math.round(nt)}px`);
+        };
+        const onUp = () => {
+          panel.classList.remove("is-dragging");
+          try { drag.releasePointerCapture(e.pointerId); } catch (_) {}
+          drag.removeEventListener("pointermove",   onMove);
+          drag.removeEventListener("pointerup",     onUp);
+          drag.removeEventListener("pointercancel", onUp);
+        };
+        drag.addEventListener("pointermove",   onMove);
+        drag.addEventListener("pointerup",     onUp);
+        drag.addEventListener("pointercancel", onUp);
+        e.preventDefault();
+      });
+    }
+
+    // Bottom-right corner resize
+    if (resize) {
+      // Min sizes chosen to keep the PMD tables' 6-column layout
+      // readable at the smallest allowed width.
+      const MIN_W = 460;
+      const MIN_H = 320;
+
+      resize.addEventListener("pointerdown", (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        pinToPixels();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = panel.offsetWidth;
+        const startH = panel.offsetHeight;
+        const startLeft = parseFloat(panel.style.left) || 0;
+        const startTop  = parseFloat(panel.style.top)  || 0;
+        panel.classList.add("is-resizing");
+        try { resize.setPointerCapture(e.pointerId); } catch (_) {}
+
+        const onMove = (ev) => {
+          const margin = 8;
+          const maxW = window.innerWidth  - startLeft - margin;
+          const maxH = window.innerHeight - startTop  - margin;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+          const w = Math.max(MIN_W, Math.min(maxW, startW + dx));
+          const h = Math.max(MIN_H, Math.min(maxH, startH + dy));
+          setPx("width",  `${Math.round(w)}px`);
+          setPx("height", `${Math.round(h)}px`);
+        };
+        const onUp = () => {
+          panel.classList.remove("is-resizing");
+          try { resize.releasePointerCapture(e.pointerId); } catch (_) {}
+          resize.removeEventListener("pointermove",   onMove);
+          resize.removeEventListener("pointerup",     onUp);
+          resize.removeEventListener("pointercancel", onUp);
+        };
+        resize.addEventListener("pointermove",   onMove);
+        resize.addEventListener("pointerup",     onUp);
+        resize.addEventListener("pointercancel", onUp);
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
   }
 }
 

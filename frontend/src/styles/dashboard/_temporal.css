@@ -214,6 +214,23 @@
     color: var(--text-primary);
 }
 
+/* Empty labels — used by loaders that emit "" for skipped-label indices to
+   preserve 1:1 span-to-frame indexing while thinning what actually shows
+   (see generatePmdPredictionsLoader in time-functions.js). Empty spans stay
+   in the DOM at their `left:X%` position so index math never drifts, but
+   we strip every visual affordance: no pill, no tick, no hover cursor.
+   pointer-events:none because there's no label text to click on. */
+#temp-slider1 .year-labels1 span:empty {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+}
+#temp-slider1 .year-labels1 span:empty::after {
+    display: none;
+}
+
 #temp-slider1 .year-labels1 span.is-active {
     color: #fff;
     background: var(--ndma-blue);
@@ -371,6 +388,32 @@
     text-transform: none;
     white-space: normal;
     overflow-wrap: anywhere;
+}
+
+/* Dynamic "current timestep" line — sits below the layer title inside
+   .ts-variable, updated live by temporal-current-step.js (main slider)
+   and split-compare-control.js's #stepLayerBTo (Layer B).  Subdued so it
+   reads as secondary information rather than competing with the title.
+   Uses the shared --text-muted var so both light and night themes render
+   correctly without a theme-specific override. */
+.ts-variable .ts-current-date {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+    color: var(--text-muted, rgba(148, 163, 184, 0.85));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+/* Empty state (layer with no per-frame date info) — collapse the line so
+   the variable panel is visually identical to its pre-integration state. */
+.ts-variable .ts-current-date.is-empty {
+    display: none;
 }
 
 /* ---- Row 2 :: Legend panel (gradient bar + values) ---- */

@@ -178,6 +178,18 @@ node_modules
 mediafiles
 staticfiles
 
+# PMD Predictions runtime cache (see ncop_internal/views.py →
+# _PRED_MEDIA_SUBDIR).  On first click of each temporal layer the backend
+# fetches the vendor GeoTIFFs, warps + colorizes them via GDAL, and writes
+# 20–50 PNG frames + one JSON metadata sidecar each + a `_ramps/*.txt`
+# color-relief file per element.  ~130 files per full session — regenerates
+# on-demand server-side, safe to never commit.
+#
+# Scoped narrowly to just this cache dir (NOT project/media/ as a whole)
+# so future uploads/thumbnails/other proxy caches under MEDIA_ROOT stay
+# trackable if a feature needs them.
+project/media/pmd_predictions/
+
 # Vite cache
 .vite
 

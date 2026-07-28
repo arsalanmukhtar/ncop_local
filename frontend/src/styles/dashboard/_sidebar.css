@@ -562,6 +562,20 @@
     flex-shrink: 0;
 }
 
+/* Lucide-SVG variant of the accordion badge — used when a category has no
+   custom .webp icon (currently: Agriculture & Food Security).  Sized to
+   match .accordion-custom-icon so header rhythm is uniform across every
+   accordion item; padded slightly so the stroke doesn't touch the edge. */
+.accordion-header > .accordion-icon {
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
+    padding: 4px;
+    color: var(--white);
+    flex-shrink: 0;
+    stroke-width: 1.8;
+}
+
 .accordion-header .accordion-title {
     flex: 1;
     min-width: 0;

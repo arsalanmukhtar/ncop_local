@@ -35,10 +35,16 @@ import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
+import CropExplorerControl from "./crop-explorer-control.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
 import { initPmdWarningsFilter } from "./pmd-warnings-filter.js";
+import { initCropFilter } from "./crop-filter-controller.js";
+// Side-effect import: injects the dynamic "current timestep" line into the
+// #temp-slider1 .ts-variable panel and keeps it in sync with slider input.
+// Auto-inits on DOMContentLoaded; nothing else needs to call it.
+import "./temporal-current-step.js";
 
 
 // ---- Mapbox token handling ----
@@ -151,6 +157,11 @@ class DashboardManager {
     // Mapbox instance while active.  No hook into the primary map's
     // existing render pipeline required.
     new SplitCompareControl(this.#map);
+    // Crop Data Explorer — standalone rail button that opens a modal
+    // for 44-year Pakistan crop production / area / yield analysis
+    // (proxied via /api/crops/*).  Self-contained: adds its own button
+    // + its own Chart.js modal; does not touch the map's render pipeline.
+    new CropExplorerControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -159,6 +170,15 @@ class DashboardManager {
     // MutationObserver) and injects the 13-row filter card directly
     // above it — see pmd-warnings-filter.js.
     initPmdWarningsFilter(this.#map);
+
+    // Crop-type pre-filter for the Agriculture subcategory (Provincial +
+    // District crop-production layers).  Same sidebar-injection pattern
+    // as PMD warnings, but semantics are single-select — a choropleth
+    // only paints ONE crop at a time.  Fires
+    // `ncop-crop-selection-changed` on window; also directly refreshes
+    // any active crop_* source's data URL and repaints the ramp for
+    // the newly-selected crop's production magnitude.
+    initCropFilter(this.#map);
 
     // ✅ Mount Story UI AFTER the NavigationPanel has created #story-root
     waitForEl("#story-root")
@@ -613,6 +633,15 @@ function anchorRailPanelsToButtons() {
     const panel = document.getElementById(panelId);
     const btn = document.getElementById(btnId);
     if (!panel || !btn) return;
+
+    // Panels that the user has dragged/resized opt out of rail
+    // anchoring — otherwise a re-render would teleport them back to
+    // the rail edge and wipe the user's chosen position.  Individual
+    // panels signal this via `data-*-user-positioned` on themselves;
+    // right now only the weather-report panel uses it, but the check
+    // is generic so any future draggable panel just needs to set
+    // its own data attribute.
+    if (panel.dataset.wrpUserPositioned === "true") return;
 
     const btnRect = btn.getBoundingClientRect();
     panel.style.top = `${btnRect.top - mapRect.top}px`;

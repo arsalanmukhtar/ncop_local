@@ -40,6 +40,36 @@ if os.path.isfile(_gdal_candidate):
 if os.path.isfile(_geos_candidate):
     GEOS_LIBRARY_PATH = _geos_candidate
 
+# PROJ / GDAL data directories.  MUST run before django.contrib.gis loads
+# GDAL (which happens during app startup), otherwise proj_context caches a
+# missing-proj.db state and every subsequent gdal.Warp(..., dstSRS="EPSG:*")
+# fails with 'Cannot find proj.db'.
+#
+# Behaviour: point each var at the OSGeo wheel's bundled data dir if the
+# currently-set env var (a) is unset OR (b) points at a non-existent path
+# (a QGIS/OSGeo4W install may have set a stale path that no longer exists
+# on this machine — respecting it silently would break every GDAL warp).
+# On Linux production the OSGeo pip wheel typically ships without a data/
+# subdir (system PROJ takes over via libproj-dev), so the bundled_path
+# won't exist and this whole block is a no-op — safe by inspection.
+try:
+    import osgeo as _osgeo_probe
+    _osgeo_dir = os.path.dirname(_osgeo_probe.__file__)
+    for _var, _path in (
+        ("PROJ_LIB",  os.path.join(_osgeo_dir, "data", "proj")),
+        ("GDAL_DATA", os.path.join(_osgeo_dir, "data", "gdal")),
+    ):
+        current = os.environ.get(_var)
+        # Set the var if it's missing OR if it points at a path that
+        # doesn't exist on this machine — but only when we have a real
+        # OSGeo-bundled dir to point it at instead.
+        if os.path.exists(_path) and (not current or not os.path.exists(current)):
+            os.environ[_var] = _path
+except Exception:
+    # osgeo not importable at this early point — production environments
+    # typically ship PROJ_LIB via the OS package, so nothing to do here.
+    pass
+
 # ---------------------------------------------------------------------------
 # Core Django
 # ---------------------------------------------------------------------------
@@ -156,6 +186,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+# ---------------------------------------------------------------------------
+# PMD Monitor (Cloud-based Early Warning Supporting System — vendor-hosted
+# NWP portal at a private IP).  Credentials for the authenticated proxy in
+# ncop_internal.views (_mon_sess/_mon_get/_mon_get_bytes) that fetches WRFPRS
+# precipitation forecast GeoTIFFs and colorizes them server-side into PNGs
+# consumed by the temporal-slider integration for the "PMD Predictions"
+# layer group.  Defaults are the credentials the vendor issued for the
+# operational account; overrideable via environment variables so a rotated
+# password never needs a code change.
+# ---------------------------------------------------------------------------
+PMD_MONITOR_URL  = env("PMD_MONITOR_URL",  default="https://115.186.56.181:12304")
+PMD_MONITOR_USER = env("PMD_MONITOR_USER", default="PMD")
+PMD_MONITOR_PASS = env("PMD_MONITOR_PASS", default="Ab123456")
 
 # ---------------------------------------------------------------------------
 # CORS
