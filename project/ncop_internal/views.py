@@ -7929,7 +7929,15 @@ def _mon_pred_convert_step(element_key, item):
     png_path  = os.path.join(out_dir, f"{safe}.png")
     meta_path = os.path.join(out_dir, f"{safe}.json")
 
-    if os.path.exists(png_path) and os.path.exists(meta_path):
+    # Disk-cache short-circuit — return the memoised JSON if the PNG is
+    # BOTH present AND passes the same trivial-size sanity check the fresh
+    # write path uses.  Files older than the PROJ_LIB fix on prod were
+    # written as 2894-byte all-transparent PNGs; without this guard they
+    # would be served forever because the short-circuit never re-checked.
+    # Failing files fall through to the regeneration path below (which
+    # will overwrite them via the fresh gdal.Warp + validation chain).
+    if os.path.exists(png_path) and os.path.exists(meta_path) \
+       and os.path.getsize(png_path) >= 4096:
         try:
             with open(meta_path) as f:
                 return json.load(f)
@@ -7999,11 +8007,19 @@ def _mon_pred_convert_step(element_key, item):
         # — Warp returned a Dataset object rather than None, so the earlier
         # "reprojection failed" check let it through; DEMProcessing then
         # wrote a technically-valid, 100%-transparent PNG that Nginx serves
-        # with HTTP 200 and Mapbox loads without a console error).  Reject
-        # (delete + treat as failure) any PNG that is (a) missing, (b)
-        # trivially small (< 1 KB), or (c) opens with no readable band
-        # data — so no broken URL ever propagates to the frontend.
-        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 1024:
+        # with HTTP 200 and Mapbox loads without a console error).
+        #
+        # Two-stage guard:
+        #   1. size floor — filters the trivially small ~2-3 KB PNGs that a
+        #      completely-empty warp produces after PNG compression.
+        #   2. content variance — opens the PNG and confirms at least one
+        #      band has min != max (i.e. actual pixel diversity).  Catches
+        #      the rarer case of a PNG that's ABOVE the size floor but is
+        #      still a single uniform colour with no useful data.
+        # Any failure deletes the broken file and raises — the surrounding
+        # try/except returns None, the endpoint drops the step from the
+        # response, and no broken URL propagates to the browser.
+        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 4096:
             try: os.remove(png_path)
             except Exception: pass
             raise ValueError(
@@ -8014,7 +8030,18 @@ def _mon_pred_convert_step(element_key, item):
             _check_ds = gdal.Open(png_path)
             if _check_ds is None or _check_ds.RasterCount < 1:
                 raise ValueError("cannot re-open written PNG")
+            _has_variance = False
+            for _bi in range(1, _check_ds.RasterCount + 1):
+                try:
+                    _mn, _mx, _, _ = _check_ds.GetRasterBand(_bi).GetStatistics(False, True)
+                    if _mx > _mn:
+                        _has_variance = True
+                        break
+                except Exception:
+                    pass
             _check_ds = None
+            if not _has_variance:
+                raise ValueError("all bands uniform — warp produced empty raster")
         except Exception as _e:
             try: os.remove(png_path)
             except Exception: pass
