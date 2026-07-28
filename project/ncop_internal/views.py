@@ -8278,6 +8278,25 @@ _MON_PRED_ELEMENTS = {
 _PRED_MEDIA_SUBDIR = "pmd_predictions"
 _PRED_RAMP_SUBDIR  = os.path.join(_PRED_MEDIA_SUBDIR, "_ramps")
 
+# GDAL / PROJ are NOT thread-safe for concurrent gdal.Warp calls that share
+# a PROJ context (documented gotcha; the default proj_context is per-process).
+# The endpoint runs a ThreadPoolExecutor(5) over convert steps so the auth
+# fetches overlap, but concurrent Warp calls silently produced empty rasters
+# on Linux prod (all-NoData output, 2894-byte "empty" PNGs after color-relief).
+# Fix: serialise only the GDAL calls (Warp + DEMProcessing) with this lock;
+# the network fetch stays parallel because that's where the real time is.
+_MON_PRED_GDAL_LOCK = threading.Lock()
+
+# Enable GDAL Python exceptions ONCE at module load (idempotent).  Doing this
+# per-call was racy under the thread pool — one thread could flip the mode
+# mid-warp on another.  Silences GDAL 4.0's FutureWarning too.
+try:
+    from osgeo import gdal as _gdal_bootstrap
+    _gdal_bootstrap.UseExceptions()
+    del _gdal_bootstrap
+except Exception:
+    pass
+
 
 def _mon_pred_ramp_file(element_key):
     """Build (once) a GDAL color-relief text ramp for this element_key.
@@ -8346,11 +8365,22 @@ def _mon_pred_convert_step(element_key, item):
     from osgeo import gdal
     import re, math, json
 
+    # gdal.UseExceptions() is set once at module-load (see top of this
+    # section) so we don't race with parallel workers flipping the mode.
+
     # Suppress GDAL's persistent auxiliary metadata (.png.aux.xml) sidecar.
     # It's harmless and Mapbox never requests it, but writing it doubles
-    # the per-step disk-IO cost.  Scoped per-call so we never leak the
-    # option into other GDAL consumers (django.contrib.gis geometry ops).
+    # the per-step disk-IO cost.
     gdal.SetConfigOption("GDAL_PAM_ENABLED", "NO")
+
+    # ---- Rich-error scaffolding ---------------------------------------
+    # `_diag` accumulates per-step observations that get printed together
+    # if anything fails; keeps journalctl focused (one multi-line entry
+    # per failure) instead of scattered prints per convert stage.  On
+    # success `_diag` is discarded silently.
+    _diag = [f"convert {element_key}/{item.get('data_time','?')}/{item.get('forecast_time','?')}"]
+    def _log_fail(msg):
+        print("[pmd_monitor] " + " | ".join(_diag + [msg]))
 
     run = (item.get("data_time")     or "").replace("-", "").replace(":", "").replace("T", "")
     fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
@@ -8379,12 +8409,31 @@ def _mon_pred_convert_step(element_key, item):
     warped_path = os.path.join(out_dir, f"{safe}_3857.tif")
     try:
         tif_bytes = _mon_get_bytes(item["file_path"])
+        _diag.append(f"fetched {len(tif_bytes)}B")
+        # Verify fetched bytes are actually a TIFF and not an HTML error
+        # page / gzipped surprise.  TIFF magic: II*\x00 (little-endian) or
+        # MM\x00* (big-endian).  BigTIFF: II\x2b\x00 or MM\x00\x2b.
+        _magic = tif_bytes[:4]
+        _looks_tif = _magic in (b"II*\x00", b"MM\x00*", b"II\x2b\x00", b"MM\x00\x2b")
+        if not _looks_tif:
+            _preview = tif_bytes[:80].decode("latin1", errors="replace")
+            raise ValueError(f"fetched bytes not a TIFF (magic={_magic!r}, preview={_preview!r})")
         with open(src_path, "wb") as f:
             f.write(tif_bytes)
 
         src_ds = gdal.Open(src_path)
         if src_ds is None:
             raise ValueError("could not open fetched GeoTIFF")
+        _diag.append(
+            f"src {src_ds.RasterXSize}x{src_ds.RasterYSize} b={src_ds.RasterCount} "
+            f"gt={src_ds.GetGeoTransform()} proj={(src_ds.GetProjection() or '')[:60]!r}"
+        )
+        try:
+            _srcband = src_ds.GetRasterBand(1)
+            _s_mn, _s_mx, _, _ = _srcband.GetStatistics(False, True)
+            _diag.append(f"src_b1 min={_s_mn} max={_s_mx} nodata={_srcband.GetNoDataValue()}")
+        except Exception as _e:
+            _diag.append(f"src_b1 stats-fail={_e}")
 
         # Optional per-element clip (lat/lon bbox from the registry).  For
         # global-grid feeds like GDFS this collapses the output texture
@@ -8401,10 +8450,28 @@ def _mon_pred_convert_step(element_key, item):
             # into dstSRS in a single pass.
             _warp_kwargs["outputBounds"]    = _bbox
             _warp_kwargs["outputBoundsSRS"] = "EPSG:4326"
-        warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
+        # GDAL / PROJ thread-safety: serialise the Warp call.  This is the
+        # actual root cause of the "prod PNGs are all 2894-byte empty" bug
+        # observed on Linux prod but not on Windows dev/staging — under a
+        # ThreadPoolExecutor concurrent Warps silently corrupt the output
+        # because they compete for the same proj_context.  The lock scope
+        # is intentionally as tight as possible so the auth fetch above
+        # (which is I/O-bound) keeps running in parallel across workers.
+        try:
+            with _MON_PRED_GDAL_LOCK:
+                warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
+        except Exception as _we:
+            raise ValueError(f"gdal.Warp raised: {_we}")
         src_ds = None
         if warped_ds is None:
-            raise ValueError("reprojection failed")
+            raise ValueError("reprojection failed (Warp returned None)")
+        _diag.append(f"warped {warped_ds.RasterXSize}x{warped_ds.RasterYSize} b={warped_ds.RasterCount}")
+        try:
+            _wband = warped_ds.GetRasterBand(1)
+            _w_mn, _w_mx, _, _ = _wband.GetStatistics(False, True)
+            _diag.append(f"warped_b1 min={_w_mn} max={_w_mx} nodata={_wband.GetNoDataValue()}")
+        except Exception as _e:
+            _diag.append(f"warped_b1 stats-fail={_e}")
 
         # Corner-based WGS84 bounds — 4-corner math handles any rotation
         # the warp introduces; 2-corner min/max shortcut would miss it.
@@ -8422,10 +8489,13 @@ def _mon_pred_convert_step(element_key, item):
         miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
 
         ramp = _mon_pred_ramp_file(element_key)
-        colored_ds = gdal.DEMProcessing(
-            png_path, warped_path, "color-relief",
-            colorFilename=ramp, format="PNG", addAlpha=True,
-        )
+        # Same thread-safety concern as gdal.Warp above — DEMProcessing
+        # touches the shared PROJ/GDAL state too.  Serialise for safety.
+        with _MON_PRED_GDAL_LOCK:
+            colored_ds = gdal.DEMProcessing(
+                png_path, warped_path, "color-relief",
+                colorFilename=ramp, format="PNG", addAlpha=True,
+            )
         warped_ds = None
         if colored_ds is None:
             raise ValueError("color-relief render failed")
@@ -8488,7 +8558,7 @@ def _mon_pred_convert_step(element_key, item):
             json.dump(payload, f)
         return payload
     except Exception as e:
-        print(f"[pmd_monitor] convert failed {element_key}/{run}/{fh}: {e}")
+        _log_fail(f"FAIL: {e}")
         return None
     finally:
         for p in (src_path, warped_path):
