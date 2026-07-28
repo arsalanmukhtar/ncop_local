@@ -519,10 +519,16 @@ window.convective_precipitation_weekly_forecast = convective_precip_weekly_layer
 // toggle click, and returns a Promise resolved by updateTempSliderAsync.
 // Element codes verified live against the vendor's /api/modelTimeList —
 // the vendor's WRFPRS model publishes exactly these 4 accumulation windows.
-window.pmd_pred_hourtpe   = generatePmdPredictionsLoader("hourtpe",   "pmd_pred_hourtpe");
-window.pmd_pred_sixtpe    = generatePmdPredictionsLoader("sixtpe",    "pmd_pred_sixtpe");
-window.pmd_pred_twelvetpe = generatePmdPredictionsLoader("twelvetpe", "pmd_pred_twelvetpe");
-window.pmd_pred_daytpe    = generatePmdPredictionsLoader("daytpe",    "pmd_pred_daytpe");
+window.pmd_pred_hourtpe       = generatePmdPredictionsLoader("hourtpe",       "pmd_pred_hourtpe");
+window.pmd_pred_sixtpe        = generatePmdPredictionsLoader("sixtpe",        "pmd_pred_sixtpe");
+window.pmd_pred_twelvetpe     = generatePmdPredictionsLoader("twelvetpe",     "pmd_pred_twelvetpe");
+window.pmd_pred_daytpe        = generatePmdPredictionsLoader("daytpe",        "pmd_pred_daytpe");
+// State-quantity layers — temperature, cloud cover, humidity.  Same loader,
+// different registry entries on the backend (element_keys map to the vendor's
+// TEM / TCC / RHU codes across WRFPRS + GDFS models).
+window.pmd_pred_temp2m        = generatePmdPredictionsLoader("temp2m",        "pmd_pred_temp2m");
+window.pmd_pred_cloud_cover   = generatePmdPredictionsLoader("cloud_cover",   "pmd_pred_cloud_cover");
+window.pmd_pred_rel_humidity  = generatePmdPredictionsLoader("rel_humidity",  "pmd_pred_rel_humidity");
 
 // RainViewer is descriptor-driven (frame list comes from a runtime API call),
 // so we expose *functions* instead of static arrays. The temporal dispatcher
@@ -1955,17 +1961,17 @@ export const ncop_menu_items = {
       },
     },
     // ---------------------------------------------------------------------
-    // PMD Predictions — WRFPRS precipitation forecast rasters, fetched
-    // (authenticated) from the PMD Monitor portal and colorized server-side
-    // via GDAL into PNGs the temporal slider can render as Mapbox `image`
-    // sources.  All four elements share the same descriptor-driven pattern
-    // (window.pmd_pred_* is a factory function, not a pre-baked array) so
-    // the round-trip only happens on the user's first click of each toggle.
-    // Vendor publishes 3h/6h/12h/24h accumulation windows; a 7-day product
-    // was probed for and does not exist upstream — do not add without first
-    // discovering a real element code the vendor actually serves.
+    // PMD Predictions — NWP forecast rasters, fetched (authenticated) from
+    // the PMD Monitor portal and colorized server-side via GDAL into PNGs
+    // the temporal slider can render as Mapbox `image` sources.  All items
+    // share the same descriptor-driven pattern (window.pmd_pred_* is a
+    // factory function, not a pre-baked array) so the round-trip only
+    // happens on the user's first click of each toggle.  Model source per
+    // element is a backend decision: precipitation + 2m-temperature use
+    // WRFPRS (Pakistan-tuned WRF); cloud-cover + relative-humidity use
+    // GDFS (CMA-GOWFS global grid, ~80 frames vs 0 upstream for WRFPRS/TCC).
     // ---------------------------------------------------------------------
-    "PMD Predictions (WRF)": {
+    "PMD Predictions": {
       temporal: {
         pmd_pred_hourtpe: {
           label: "PMD Predictions — 3h Precipitation",
@@ -2002,6 +2008,33 @@ export const ncop_menu_items = {
           title: "PMD WRF 24h Precip (mm)",
           information:
             "WRF daily (24-hour) precipitation-accumulation forecast (mm) — the deepest accumulation window the vendor publishes. Ideal for planning-horizon situational briefings; use the 3/6/12-hour layers for finer-grained tactical scrubbing.",
+        },
+        pmd_pred_temp2m: {
+          label: "PMD Predictions — 2m Temperature",
+          image: getImage("6mp-air-temp.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD WRF 2m Temperature (°C)",
+          information:
+            "WRF 2-metre air temperature forecast (°C). Ramp spans -30 °C to +45 °C with cyan at the freezing line, blue for arctic cold and dark red for extreme heat — matches standard meteorological convention. Same authenticated PMD Monitor pipeline as the precipitation layers.",
+        },
+        pmd_pred_cloud_cover: {
+          label: "PMD Predictions — Total Cloud Cover",
+          image: getImage("Total_cloud_cover_3hourly_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD Total Cloud Cover (%)",
+          information:
+            "Total cloud cover forecast (%) from CMA-GOWFS (GDFS) global grid — PMD Monitor's own WRFPRS/TCC feed currently publishes empty frames upstream, so this layer is served from the GDFS feed which has full 80-frame coverage. Light grey through dark grey; adjust opacity via the blend control for a see-through map view.",
+        },
+        pmd_pred_rel_humidity: {
+          label: "PMD Predictions — Relative Humidity",
+          image: getImage("Relative_humidity_weekly_2m_forecast.webp"),
+          type: "raster",
+          theme: "slider",
+          title: "PMD Relative Humidity (%)",
+          information:
+            "Relative humidity forecast (%) from CMA-GOWFS (GDFS) — brown (arid) through cream (moderate) to deep blue (near-saturated). Complementary to the 2m-temperature and precipitation layers for a full atmospheric moisture picture.",
         },
       },
     },

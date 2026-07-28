@@ -7780,44 +7780,68 @@ def _mon_get_bytes(path, params=None, timeout=_MON_TIMEOUT):
     raise requests.HTTPError(f"Auth failed for GET {path} (bytes)")
 
 
-# ---- Element registry (4 confirmed WRFPRS precipitation accumulations) ----
-# Live-probed 2026-07-27 against the vendor API — HOURTPE/SIXTPE/TWELVETPE/
-# DAYTPE each return 14 runs with 76 frames per run.  A "7d" variant is not
-# published by this vendor's WRFPRS model (verified by brute-forcing ~90
-# element codes across 4 model types + inspecting the shipped SPA chunks);
-# do not add a 7-day entry here without first discovering a real element
-# code the vendor actually publishes.
+# ---- Element registry ---------------------------------------------------
+# Each entry: element_key → { data_type, element, label, unit, stops }.
+# `data_type` and `element` are the vendor's own internal codes (discovered
+# by dumping the SPA's shipped JS chunks).  `stops` is [(value, (r,g,b))]
+# — a FIXED per-physical-quantity ramp (mm / °C / %), NOT auto-stretched,
+# so identical values render as identical colors across every frame.  The
+# ramp writer treats `stops[0][0] > 0` as "additive quantity" (precip,
+# snowfall) and emits an extra `0 → transparent` line so the no-signal
+# background stays clear of the map; for state quantities that can be 0
+# (cloud cover, humidity, temp) stops start at 0 or below and that
+# synthetic transparent line is skipped.  Precipitation stops verified
+# against the vendor legendList; temperature/humidity/cloud stops are
+# standard-meteorology defaults chosen where the vendor exposed no per-
+# element legend (nothing legend-shaped was findable in the SPA chunks).
 _MON_PRED_ELEMENTS = {
-    "hourtpe":   {"data_type": "WRFPRS", "element": "HOURTPE",   "label": "3h Precipitation"},
-    "sixtpe":    {"data_type": "WRFPRS", "element": "SIXTPE",    "label": "6h Precipitation"},
-    "twelvetpe": {"data_type": "WRFPRS", "element": "TWELVETPE", "label": "12h Precipitation"},
-    "daytpe":    {"data_type": "WRFPRS", "element": "DAYTPE",    "label": "24h Precipitation"},
-}
+    # ---- Precipitation (accumulation windows) --------------------------
+    "hourtpe":   {"data_type": "WRFPRS", "element": "HOURTPE",   "label": "3h Precipitation",  "unit": "mm",
+                  "stops": [(0.1, (185, 244, 171)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+                            (10, (37, 144, 38)),    (25, (98, 184, 255)),  (50, (0, 0, 252)),
+                            (100, (250, 0, 250))]},
+    "sixtpe":    {"data_type": "WRFPRS", "element": "SIXTPE",    "label": "6h Precipitation",  "unit": "mm",
+                  "stops": [(0.01, (166, 242, 143)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+                            (10, (37, 144, 38)),     (25, (98, 184, 255)),   (50, (0, 0, 252)),
+                            (100, (250, 0, 250))]},
+    "twelvetpe": {"data_type": "WRFPRS", "element": "TWELVETPE", "label": "12h Precipitation", "unit": "mm",
+                  "stops": [(0.1, (166, 242, 143)), (5, (61, 186, 61)),  (15, (97, 184, 255)),
+                            (30, (0, 0, 255)),       (70, (250, 0, 250)), (140, (128, 0, 64))]},
+    "daytpe":    {"data_type": "WRFPRS", "element": "DAYTPE",    "label": "24h Precipitation", "unit": "mm",
+                  "stops": [(0.1, (166, 242, 143)), (10, (61, 186, 61)),  (25, (97, 184, 255)),
+                            (50, (0, 0, 255)),       (100, (250, 0, 250)), (250, (128, 0, 64))]},
 
-# Color stops extracted from the vendor's own legendList JS chunk — one
-# element = one physical quantity (mm accumulation per window), so the
-# stops must be FIXED per element, not auto-stretched per file.  Longer
-# accumulation windows use larger mm thresholds so the ramp reads
-# meaningfully across a low-rain-rate day.
-_MON_PRED_COLOR_STOPS = {
-    "HOURTPE": [
-        (0.1, (185, 244, 171)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
-        (10, (37, 144, 38)),    (25,  (98, 184, 255)), (50, (0, 0, 252)),
-        (100, (250, 0, 250)),
-    ],
-    "SIXTPE": [
-        (0.01, (166, 242, 143)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
-        (10, (37, 144, 38)),     (25,  (98, 184, 255)), (50, (0, 0, 252)),
-        (100, (250, 0, 250)),
-    ],
-    "TWELVETPE": [
-        (0.1, (166, 242, 143)), (5,  (61, 186, 61)),  (15, (97, 184, 255)),
-        (30,  (0, 0, 255)),      (70, (250, 0, 250)), (140, (128, 0, 64)),
-    ],
-    "DAYTPE": [
-        (0.1, (166, 242, 143)), (10, (61, 186, 61)),  (25, (97, 184, 255)),
-        (50,  (0, 0, 255)),      (100, (250, 0, 250)), (250, (128, 0, 64)),
-    ],
+    # ---- Temperature / humidity / cloud (state quantities) -------------
+    # 2m Temperature — WRFPRS is the Pakistan-tuned model, first choice
+    # over GDFS.  Ramp: purple → blue → cyan → green → yellow → red across
+    # -30..+45 °C, freezing at cyan (0 °C).
+    "temp2m":       {"data_type": "WRFPRS", "element": "TEM",  "label": "2m Temperature",   "unit": "°C",
+                     "stops": [(-30, (128, 0, 128)), (-15, (0, 0, 255)),   (0, (0, 255, 255)),
+                               (10,  (0, 255, 0)),    (20,  (255, 255, 0)), (30, (255, 128, 0)),
+                               (40,  (255, 0, 0)),    (45,  (128, 0, 0))]},
+
+    # Total Cloud Cover — WRFPRS/TCC currently publishes 0 frames upstream
+    # (all recent runs empty); GDFS/TCC has 80 frames and is the working
+    # cloud-cover feed.  Ramp: light grey → dark grey; user can adjust
+    # opacity via the slider's blend control for a see-through view.
+    # bbox: GDFS is a GLOBAL grid — without clipping the resulting Mapbox
+    # texture is 2847×2846 (~32 MB per frame × 48 frames = 1.5 GB of GPU
+    # texture per layer, unusable in a browser).  Clipping to a generous
+    # South-Asia box (55E-80E, 20N-40N) covers Pakistan + neighbours and
+    # brings the texture down to <1 MB per frame.
+    "cloud_cover":  {"data_type": "GDFS",   "element": "TCC",  "label": "Total Cloud Cover", "unit": "%",
+                     "bbox": (55, 20, 80, 40),
+                     "stops": [(0, (220, 220, 220)), (25, (180, 180, 180)), (50, (140, 140, 140)),
+                               (75, (100, 100, 100)), (100, (60, 60, 60))]},
+
+    # Relative Humidity — GDFS/RHU (WRFPRS publishes SHU/specific humidity
+    # instead, less operator-friendly).  Brown (dry) → tan → cream → blue
+    # → deep blue (saturated) — standard met visualisation.  Same bbox
+    # clipping rationale as cloud_cover — global GDFS grid.
+    "rel_humidity": {"data_type": "GDFS",   "element": "RHU",  "label": "Relative Humidity", "unit": "%",
+                     "bbox": (55, 20, 80, 40),
+                     "stops": [(0, (140, 100, 60)), (20, (200, 170, 120)), (40, (240, 220, 180)),
+                               (60, (200, 230, 250)), (80, (100, 150, 220)), (100, (0, 50, 180))]},
 }
 
 
@@ -7825,21 +7849,26 @@ _PRED_MEDIA_SUBDIR = "pmd_predictions"
 _PRED_RAMP_SUBDIR  = os.path.join(_PRED_MEDIA_SUBDIR, "_ramps")
 
 
-def _mon_pred_ramp_file(element):
-    """Build (once) a GDAL color-relief text ramp for this element.  The
-    extra `nv` + `0-value transparent` lines matter: without them GDAL
-    clamps below-lowest-stop values to the first stop's color, painting
-    the whole 'no rain' area a solid pastel.  Alpha 0 on both makes them
-    transparent instead."""
+def _mon_pred_ramp_file(element_key):
+    """Build (once) a GDAL color-relief text ramp for this element_key.
+    Keyed by element_key (not the vendor's ELEMENT code) so two entries
+    that share a vendor code across different data_types can never collide
+    on disk.  The synthetic `0 → transparent` line is only emitted for
+    additive quantities (precipitation, snow — stops start > 0); for state
+    quantities that can legitimately be 0 (cloud cover, humidity) or
+    negative (temperature) it's skipped so the ramp's own first stop
+    controls the low-end colour."""
+    cfg = _MON_PRED_ELEMENTS[element_key]
+    stops = cfg["stops"]
     ramp_dir = os.path.join(settings.MEDIA_ROOT, _PRED_RAMP_SUBDIR)
     os.makedirs(ramp_dir, exist_ok=True)
-    path = os.path.join(ramp_dir, f"{element}.txt")
+    path = os.path.join(ramp_dir, f"{element_key}.txt")
     if os.path.exists(path):
         return path
-    stops = _MON_PRED_COLOR_STOPS[element]
-    lines = ["nv 0 0 0 0"]                             # nodata → transparent
-    r, g, b = stops[0][1]
-    lines.append(f"0 {r} {g} {b} 0")                   # 0 mm → transparent
+    lines = ["nv 0 0 0 0"]                              # nodata → transparent
+    if stops[0][0] > 0:                                 # additive quantity
+        r, g, b = stops[0][1]
+        lines.append(f"0 {r} {g} {b} 0")                # 0 mm → transparent
     for value, (r, g, b) in stops:
         lines.append(f"{value} {r} {g} {b} 255")
     with open(path, "w") as f:
@@ -7873,14 +7902,17 @@ def _mon_pred_select_steps(ds_list):
     return kept
 
 
-def _mon_pred_convert_step(element, item):
+def _mon_pred_convert_step(element_key, item):
     """Fetch one raw .tif, warp to EPSG:3857, colorize via GDAL DEM
     processing, cache result to disk.  Returns the frontend-ready
     {date, url, coordinates, bounds} dict or None on failure — one bad
     step shouldn't take down the whole layer.
 
-    Media-key convention: `{element}_{run}_{fh}.png` (+ `.json` metadata
-    sidecar) so repeat requests hit the disk-cache branch instantly."""
+    Media-key convention: `{element_key}_{run}_{fh}.png` (+ `.json`
+    metadata sidecar) so repeat requests hit the disk-cache branch
+    instantly.  Keying by element_key (not vendor's ELEMENT code) means
+    e.g. WRFPRS/TEM and a hypothetical GDFS/TEM entry live on disk as
+    distinct files rather than clobbering each other."""
     from osgeo import gdal
     import re, math, json
 
@@ -7892,7 +7924,7 @@ def _mon_pred_convert_step(element, item):
 
     run = (item.get("data_time")     or "").replace("-", "").replace(":", "").replace("T", "")
     fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
-    safe = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element}_{run}_{fh}")
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element_key}_{run}_{fh}")
     out_dir  = os.path.join(settings.MEDIA_ROOT, _PRED_MEDIA_SUBDIR)
     png_path  = os.path.join(out_dir, f"{safe}.png")
     meta_path = os.path.join(out_dir, f"{safe}.json")
@@ -7916,9 +7948,22 @@ def _mon_pred_convert_step(element, item):
         if src_ds is None:
             raise ValueError("could not open fetched GeoTIFF")
 
-        warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(
+        # Optional per-element clip (lat/lon bbox from the registry).  For
+        # global-grid feeds like GDFS this collapses the output texture
+        # from ~2847×2846 (global mercator) to ~800×640 (Pakistan region),
+        # ~50× smaller PNG and dramatically less GPU memory in the browser.
+        # WRFPRS layers omit `bbox` because they're already Pakistan-native.
+        _bbox = _MON_PRED_ELEMENTS.get(element_key, {}).get("bbox")
+        _warp_kwargs = dict(
             dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
-        ))
+        )
+        if _bbox:
+            # outputBounds passed in the src CRS (EPSG:4326 lat/lon here)
+            # via `outputBoundsSRS`; GDAL reprojects both bounds and pixels
+            # into dstSRS in a single pass.
+            _warp_kwargs["outputBounds"]    = _bbox
+            _warp_kwargs["outputBoundsSRS"] = "EPSG:4326"
+        warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
         src_ds = None
         if warped_ds is None:
             raise ValueError("reprojection failed")
@@ -7938,7 +7983,7 @@ def _mon_pred_convert_step(element, item):
         minx, maxx = round(_lon(minx_m), 6), round(_lon(maxx_m), 6)
         miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
 
-        ramp = _mon_pred_ramp_file(element)
+        ramp = _mon_pred_ramp_file(element_key)
         colored_ds = gdal.DEMProcessing(
             png_path, warped_path, "color-relief",
             colorFilename=ramp, format="PNG", addAlpha=True,
@@ -7959,7 +8004,7 @@ def _mon_pred_convert_step(element, item):
             json.dump(payload, f)
         return payload
     except Exception as e:
-        print(f"[pmd_monitor] convert failed {element}/{run}/{fh}: {e}")
+        print(f"[pmd_monitor] convert failed {element_key}/{run}/{fh}: {e}")
         return None
     finally:
         for p in (src_path, warped_path):
@@ -8058,7 +8103,7 @@ class PmdMonitorPredictionsAPIView(APIView):
         if selected:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             with ThreadPoolExecutor(max_workers=5, thread_name_prefix="pmd_pred") as pool:
-                futures = {pool.submit(_mon_pred_convert_step, element, it): i
+                futures = {pool.submit(_mon_pred_convert_step, element_key, it): i
                            for i, it in enumerate(selected)}
                 for fut in as_completed(futures):
                     idx = futures[fut]
@@ -8071,7 +8116,7 @@ class PmdMonitorPredictionsAPIView(APIView):
         return JsonResponse({
             "element": element_key,
             "label":   cfg["label"],
-            "unit":    "mm",
+            "unit":    cfg.get("unit", ""),
             "run":     run,
             "steps":   steps,
         })

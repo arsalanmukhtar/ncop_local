@@ -90,7 +90,8 @@
       "Bash(git -C d:/muhammad_arsalan/ncop_local check-ignore -v project/media/pmd_predictions/first.png)",
       "Bash(git -C d:/muhammad_arsalan/ncop_local status --short)",
       "Bash(rm -rf d:/muhammad_arsalan/ncop_local/project/media/pmd_predictions)",
-      "Bash(node --check frontend/src/modules/temporal-layer-legends.js)"
+      "Bash(node --check frontend/src/modules/temporal-layer-legends.js)",
+      "Bash(git -C d:/muhammad_arsalan/ncop_local checkout -- project/media/pmd_predictions/_ramps/)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard"

@@ -1307,4 +1307,29 @@ export const legends = {
     ],
     ["0.1", "10", "25", "50", "100", "250+"]
   ),
+
+  // State-quantity layers — colors + ticks mirror _MON_PRED_ELEMENTS stops
+  // in views.py one-for-one, so map + legend stay in sync.
+  pmd_pred_temp2m: gradientLegendBar(
+    [
+      "rgb(128, 0, 128)", "rgb(0, 0, 255)",   "rgb(0, 255, 255)",
+      "rgb(0, 255, 0)",   "rgb(255, 255, 0)", "rgb(255, 128, 0)",
+      "rgb(255, 0, 0)",   "rgb(128, 0, 0)",
+    ],
+    ["-30", "-15", "0", "10", "20", "30", "40", "45"]
+  ),
+  pmd_pred_cloud_cover: gradientLegendBar(
+    [
+      "rgb(220, 220, 220)", "rgb(180, 180, 180)", "rgb(140, 140, 140)",
+      "rgb(100, 100, 100)", "rgb(60, 60, 60)",
+    ],
+    ["0", "25", "50", "75", "100"]
+  ),
+  pmd_pred_rel_humidity: gradientLegendBar(
+    [
+      "rgb(140, 100, 60)",  "rgb(200, 170, 120)", "rgb(240, 220, 180)",
+      "rgb(200, 230, 250)", "rgb(100, 150, 220)", "rgb(0, 50, 180)",
+    ],
+    ["0", "20", "40", "60", "80", "100"]
+  ),
 };
