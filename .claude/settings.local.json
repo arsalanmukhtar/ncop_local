@@ -108,7 +108,8 @@
       "Bash(cp 'd:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/four regions.png' d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/four_regions.png)",
       "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/layers_on_off.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/layers_on_off.png)",
       "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/temporal.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/temporal.png)",
-      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/Clicking_a_feature.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/Clicking_a_feature.png)"
+      "Bash(cp d:/muhammad_arsalan/ncop_local/frontend/src/assets/images/docs_images/Clicking_a_feature.png d:/muhammad_arsalan/ncop_local/project/static/src/docs_images/Clicking_a_feature.png)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_project/urls.py)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard"
