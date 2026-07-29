@@ -925,7 +925,13 @@ export default class SplitCompareControl {
     const n = steps.length;
     steps.forEach((entry, i) => {
       const span = document.createElement("span");
-      span.textContent = entry?.date || `Step ${i + 1}`;
+      // Preserve an intentional empty date string ("") — loaders that thin
+      // their slider labels (e.g. PMD Forecast via _pmdPickLabelIndices)
+      // rely on empty spans collapsing through the `span:empty` CSS rule.
+      // The `|| \`Step N\`` fallback would defeat that by filling every
+      // span; only fall back when `date` is genuinely missing.
+      const d = entry?.date;
+      span.textContent = (d === undefined || d === null) ? `Step ${i + 1}` : String(d);
       span.style.left  = n === 1 ? "0%" : `${(i / (n - 1)) * 100}%`;
       span.dataset.step = String(i);
       span.setAttribute("aria-current", i === 0 ? "true" : "false");
@@ -934,6 +940,45 @@ export default class SplitCompareControl {
     });
     labelsEl.innerHTML = "";
     labelsEl.appendChild(frag);
+    // Auto-scale font size to fit the narrower split-compare panel.
+    // Runs after layout so getBoundingClientRect() reflects real widths.
+    requestAnimationFrame(() => this.#recomputeSliderBFontSize());
+  }
+
+  // Mirrors _recomputeDateInset in temporal-controls.js but scoped to the
+  // Layer-B labels strip.  Counts ONLY spans with real text (empty ones
+  // collapse via CSS) so a thinned-label layer gets accurate slot budget.
+  // Same MIN_FONT (8px) / MAX_FONT (12px) clamp as Map A for visual parity.
+  #recomputeSliderBFontSize() {
+    const labels = this.#state.slider?.querySelector(".sc-year-labels-b");
+    if (!labels) return;
+    const spans = labels.querySelectorAll("span");
+    if (!spans.length) return;
+
+    // Reset any previously-set override so we measure at stylesheet baseline.
+    labels.style.removeProperty("--ts-label-font-size");
+    void labels.offsetWidth;
+
+    let maxWidth = 0;
+    let visibleN = 0;
+    spans.forEach((s) => {
+      if (!s.textContent) return;
+      visibleN += 1;
+      const w = s.getBoundingClientRect().width;
+      if (w > maxWidth) maxWidth = w;
+    });
+    if (!maxWidth || visibleN < 2) return;
+
+    const containerWidth = labels.clientWidth || 0;
+    const slotWidth = containerWidth / (visibleN - 1);
+    const GAP = 4;
+    const MIN_FONT = 8;
+    const MAX_FONT = 12;
+    if (maxWidth + GAP > slotWidth) {
+      const scale = slotWidth / (maxWidth + GAP);
+      const fontSize = Math.max(MIN_FONT, Math.floor(MAX_FONT * scale));
+      labels.style.setProperty("--ts-label-font-size", `${fontSize}px`);
+    }
   }
 
   #stepLayerBTo(idx) {
