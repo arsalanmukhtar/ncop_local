@@ -8288,3 +8288,91 @@ class PmdMonitorPredictionsAPIView(APIView):
             "run":     run,
             "steps":   steps,
         })
+
+
+# ==================================================================
+#  PMD Provincial Daily Forecast — proxy for pmd.gov.pk
+#  ----------------------------------------------------------------
+#  Upstream: https://pmd.gov.pk/phpapi/daily-forecastpro.php
+#  Public, no auth; but proxied here so the browser bundle never
+#  contains the upstream host (matches the security posture of every
+#  other integration in NCOP) AND so we can cache the response.
+#
+#  Response shape (upstream): a single-item list whose lone element
+#  has keys `bal_eng`, `gb_eng`, `isb_eng`, `kashmir_eng`, `kpk_eng`,
+#  `punjab_eng`, `sindh_eng` (HTML fragments) + `id`.  Roughly 3 KB
+#  total; PMD refreshes ~twice daily.  We normalize to a friendlier
+#  {provinces: [{id, code, title, text}]} shape the frontend can
+#  render straight into tabs without upstream-specific renames.
+#
+#  Cache: 30 min primary + 3 h stale fallback (same pattern as the
+#  PMD Monitor endpoints above).  If upstream is down we serve last-
+#  known-good with `_stale: true` so the UI can badge it.
+# ==================================================================
+class PmdDailyForecastProAPIView(APIView):
+    UPSTREAM   = "https://pmd.gov.pk/phpapi/daily-forecastpro.php"
+    CACHE_KEY  = "pmd_daily_forecast_pro"
+    STALE_KEY  = "pmd_daily_forecast_pro_stale"
+    PRIMARY_TTL = 30 * 60          # 30 min
+    STALE_TTL   = 6 * 60 * 60      # 6 h
+    TIMEOUT     = 15
+
+    # File-name → operator-friendly identifier + PMD province code (both
+    # extracted live from the vendor SPA at CityForecastRight-*.js).
+    _PROVINCES = [
+        ("bal_eng",     "Balochistan", "5"),
+        ("gb_eng",      "GB",          "7"),
+        ("isb_eng",     "Islamabad",   "6"),
+        ("kashmir_eng", "Kashmir",     "9"),
+        ("kpk_eng",     "KPk",         "1"),
+        ("punjab_eng",  "Punjab",      "3"),
+        ("sindh_eng",   "Sindh",       "4"),
+    ]
+
+    def _normalize(self, upstream):
+        row = (upstream[0] if isinstance(upstream, list) and upstream else {}) or {}
+        provinces = []
+        for file_name, title, code in self._PROVINCES:
+            text = (row.get(file_name) or "").strip()
+            provinces.append({
+                "id":    title,
+                "code":  code,
+                "title": title,
+                "text":  text,           # raw HTML fragment — frontend sanitises
+                "empty": not text,
+            })
+        return {
+            "id":           row.get("id"),
+            "provinces":    provinces,
+            "generated_at": int(time.time()),
+            "upstream":     "pmd.gov.pk/phpapi/daily-forecastpro.php",
+        }
+
+    def get(self, request):
+        # Honour cache-buster query param — the frontend passes _=<epoch>
+        # so a re-toggle of the Story panel triggers a fresh proxy fetch
+        # once the 30-min TTL expires.
+        hit = cache.get(self.CACHE_KEY)
+        if hit is not None:
+            return JsonResponse(hit)
+        try:
+            r = requests.get(
+                self.UPSTREAM,
+                timeout=self.TIMEOUT,
+                headers={"User-Agent": "NCOP/1.0",
+                         "Accept": "application/json"},
+            )
+            r.raise_for_status()
+            payload = self._normalize(r.json())
+            cache.set(self.CACHE_KEY, payload, self.PRIMARY_TTL)
+            cache.set(self.STALE_KEY, payload, self.STALE_TTL)
+            return JsonResponse(payload)
+        except Exception as e:
+            stale = cache.get(self.STALE_KEY)
+            if stale is not None:
+                return JsonResponse({**stale, "_stale": True,
+                                     "_error": str(e)[:200]})
+            return JsonResponse(
+                {"error": f"provincial forecast unavailable: {str(e)[:200]}"},
+                status=502,
+            )

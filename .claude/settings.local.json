@@ -116,7 +116,9 @@
       "Bash(PYTHONIOENCODING=utf-8 ../ncopenv311/Scripts/python.exe -c ' *)",
       "Bash(grep -rn '^svg\\\\s*{\\\\|^svg,\\\\|\\\\.lucide\\\\b\\\\|vertical-align.*svg' d:/muhammad_arsalan/ncop_local/frontend/src/styles/)",
       "Bash(node --check d:/muhammad_arsalan/ncop_local/frontend/src/modules/split-compare-control.js)",
-      "Bash(git -C d:/muhammad_arsalan/ncop_local diff --stat frontend/src/modules/split-compare-control.js frontend/src/styles/dashboard/_split-compare.css)"
+      "Bash(git -C d:/muhammad_arsalan/ncop_local diff --stat frontend/src/modules/split-compare-control.js frontend/src/styles/dashboard/_split-compare.css)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_internal/views.py project/ncop_internal/urls.py)",
+      "Bash(node --check frontend/src/modules/story-provincial-forecast.js)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",
