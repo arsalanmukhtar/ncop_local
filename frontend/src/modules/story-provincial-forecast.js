@@ -39,12 +39,50 @@ const STYLE_ID   = "ncop-provincial-forecast-styles";
 // than the day overview.
 const TICK_MS_OVERVIEW = 10000;   // 10s for the chapter intro (all-polygons view)
 const TICK_MS_FOCUS    = 14000;   // 14s per single-warning focus sub-chapter
+// TTS-mode dwell = estimated speech duration (below).  Clamped to
+// [6s, 75s] so tiny messages don't blip past and pathological long ones
+// don't stall forever.
+const TICK_MS_TTS_MIN  = 6000;
+const TICK_MS_TTS_MAX  = 75000;
+
+// Clean text the same way _speakChapterMessage does, so word-count based
+// duration matches what the voice will actually utter.
+function _ttsCleanText(raw) {
+  return String(raw || "")
+    .replace(/\r/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/#{2,}/g, "")
+    .replace(/\n+/g, ". ")
+    .replace(/\b\d+\.\s+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Rough estimate of how long the browser will take to speak a message.
+// Browser TTS at rate 0.98 ≈ 150 words/min ≈ 400 ms/word.  We use
+// 480 ms/word (~20% buffer) + a 1.5s start/end pause allowance so the
+// estimate LEANS LONGER than the real utterance — that way progress
+// bar + camera orbit almost always finish just before utter.onend fires,
+// which triggers the actual chapter advance.
+function _estimateTtsMs(item) {
+  if (!item || item.type !== "focus") return TICK_MS_FOCUS;
+  const clean = _ttsCleanText(item.feature?.properties?.message || "");
+  if (!clean) return TICK_MS_FOCUS;
+  const words = clean.split(/\s+/).filter(Boolean).length;
+  const est = words * 480 + 1500;
+  return Math.max(TICK_MS_TTS_MIN, Math.min(TICK_MS_TTS_MAX, est));
+}
 
 // Return the target dwell time for the currently-shown playback item.
+// When TTS is on for a focus item we return the WORD-COUNT ESTIMATE so
+// progress bar + camera orbit pace with the narration.  utter.onend is
+// still the authoritative advance signal (below); tick is a safety.
 function _currentTickMs() {
   const item = _story.playable[_story.index];
   if (!item) return TICK_MS_OVERVIEW;
-  return item.type === "focus" ? TICK_MS_FOCUS : TICK_MS_OVERVIEW;
+  const isFocus = item.type === "focus";
+  if (isFocus && _story.ttsEnabled) return _estimateTtsMs(item);
+  return isFocus ? TICK_MS_FOCUS : TICK_MS_OVERVIEW;
 }
 
 // Approximate centroids + zoom per province.  Values chosen so the
@@ -365,6 +403,10 @@ let _story = {
   briefingCardEl: null,   // fixed HTML card in #map (chapter briefing surface)
   briefingResizeHandler: null,   // window.resize listener that repositions the card
   cinematicTimer: null,   // setTimeout id for the bearing-orbit kick-off
+  hazardEffectActive: null,     // last-applied HAZARD_EFFECTS key, or null
+  savedFog: null,               // snapshot of map.getFog() before we override
+  ttsEnabled: false,            // operator toggle — auto-speak each focus warning
+  ttsSpeakingItem: null,        // playback item currently being spoken (dedupe guard)
 
   // Map popup for the current chapter
   chapterPopup:   null,   // mapboxgl.Popup instance
@@ -1137,11 +1179,209 @@ function _injectStyles() {
       font-size: 11px; color: #eaeaea;
     }
 
+    /* ---- Fact pills (Data time / Forecast / Area) --------------------- */
+    #ncop-story-briefing .nsp-facts-row {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      padding: 8px 12px 4px;
+    }
+    #ncop-story-briefing .nsp-fact-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+      background: rgba(70, 178, 255, 0.14);
+      color: #a7d5ff;
+      border: 1px solid rgba(70, 178, 255, 0.35);
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    #ncop-story-briefing .nsp-fact-pill[data-fact="data"] {
+      background: rgba(167, 139, 250, 0.16); color: #c4b5fd;
+      border-color: rgba(167, 139, 250, 0.35);
+    }
+    #ncop-story-briefing .nsp-fact-pill[data-fact="forecast"] {
+      background: rgba(70, 178, 255, 0.16); color: #a7d5ff;
+      border-color: rgba(70, 178, 255, 0.35);
+    }
+    #ncop-story-briefing .nsp-fact-pill[data-fact="area"] {
+      background: rgba(74, 222, 128, 0.16); color: #86efac;
+      border-color: rgba(74, 222, 128, 0.35);
+    }
+
+    /* ---- Rich warning message body ------------------------------------ */
+    #ncop-story-briefing .nsp-focus-msg {
+      margin: 8px 12px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-left: 3px solid var(--ndma-blue, #46b2ff);
+      border-radius: 6px;
+      max-height: none;    /* no inner scroll — outer card scrolls if needed */
+      overflow: visible;
+    }
+    #ncop-story-briefing .wm-content { min-width: 0; }
+    #ncop-story-briefing .wm-body {
+      font-size: 12.5px; line-height: 1.7; color: #eaeaea;
+      word-break: normal; overflow-wrap: anywhere;
+    }
+    /* Highlighted spans inside decorated warning text */
+    #ncop-story-briefing .wm-body mark,
+    #ncop-story-briefing .wm-advisory-body mark,
+    #ncop-story-briefing .wm-advisory-list mark {
+      background: rgba(70, 178, 255, 0.16);
+      color: #a7d5ff;
+      padding: 0 5px;
+      border-radius: 3px;
+      font-weight: 700;
+    }
+    #ncop-story-briefing mark.wm-time {
+      background: rgba(255, 209, 102, 0.18); color: #ffd166;
+    }
+    #ncop-story-briefing mark.wm-num {
+      background: rgba(74, 222, 128, 0.16); color: #86efac;
+    }
+    #ncop-story-briefing mark.wm-date {
+      background: rgba(167, 139, 250, 0.20); color: #c4b5fd;
+    }
+    #ncop-story-briefing mark.wm-lvl {
+      text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.03em;
+      padding: 1px 6px;
+    }
+    #ncop-story-briefing mark.wm-lvl-red    { background: rgba(220,38,38,.28); color: #fca5a5; }
+    #ncop-story-briefing mark.wm-lvl-orange { background: rgba(249,115,22,.28); color: #fdba74; }
+    #ncop-story-briefing mark.wm-lvl-yellow { background: rgba(234,179,8,.28);  color: #fde68a; }
+    #ncop-story-briefing mark.wm-lvl-blue   { background: rgba(59,130,246,.28); color: #93c5fd; }
+    #ncop-story-briefing mark.wm-lvl-thunderstorm { background: rgba(139,92,246,.28); color: #c4b5fd; }
+    #ncop-story-briefing mark.wm-lvl-gust   { background: rgba(20,184,166,.28); color: #7fdfec; }
+
+    /* Advisory block */
+    #ncop-story-briefing .wm-advisory {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+    }
+    #ncop-story-briefing .wm-advisory-head {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+      color: #ffd166; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    #ncop-story-briefing .wm-advisory-list {
+      list-style: none; margin: 0; padding: 0;
+      display: grid; gap: 5px;
+    }
+    #ncop-story-briefing .wm-advisory-list li {
+      position: relative;
+      padding: 4px 8px 4px 22px;
+      font-size: 12px; line-height: 1.5; color: rgba(234, 234, 234, 0.92);
+      background: rgba(255, 209, 102, 0.06);
+      border-left: 2px solid rgba(255, 209, 102, 0.45);
+      border-radius: 4px;
+    }
+    #ncop-story-briefing .wm-advisory-list li::before {
+      content: "✓";
+      position: absolute; left: 8px; top: 4px;
+      color: #ffd166; font-weight: 800;
+    }
+    #ncop-story-briefing .wm-advisory-body {
+      font-size: 12px; line-height: 1.5;
+      color: rgba(234, 234, 234, 0.92);
+      padding: 6px 8px;
+      background: rgba(255, 209, 102, 0.06);
+      border-left: 2px solid rgba(255, 209, 102, 0.45);
+      border-radius: 4px;
+    }
+
+    /* ---- Speaker button in focus header ------------------------------- */
+    #ncop-story-briefing .nsp-tts-btn {
+      appearance: none; border: 1px solid rgba(255, 255, 255, 0.30);
+      background: rgba(0, 0, 0, 0.20); color: inherit;
+      width: 26px; height: 26px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    #ncop-story-briefing .nsp-tts-btn:hover {
+      background: rgba(0, 0, 0, 0.34); transform: scale(1.05);
+    }
+    #ncop-story-briefing .nsp-tts-btn.is-on {
+      background: rgba(255, 255, 255, 0.22);
+      color: #fff;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.20), 0 0 12px rgba(70, 178, 255, 0.55);
+    }
+    #ncop-story-briefing .nsp-tts-btn.is-on svg {
+      animation: pf-tts-wave 1.4s ease-in-out infinite;
+    }
+    @keyframes pf-tts-wave {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.12); }
+    }
+
     /* Narrow viewports: shrink briefing card to fit */
     @media (max-width: 640px) {
       #ncop-story-briefing.ncop-story-briefing {
         width: calc(100% - 24px) !important;
       }
+    }
+
+    /* ---- First-open TTS preference prompt ----------------------------- */
+    #${CARD_ID} .pf-tts-prompt {
+      display: grid; gap: 10px;
+      padding: 16px 14px 14px;
+      background: linear-gradient(180deg, rgba(70, 178, 255, 0.12), rgba(70, 178, 255, 0.04));
+      border: 1px solid rgba(70, 178, 255, 0.35);
+      border-radius: 10px;
+      text-align: center;
+      animation: pf-tts-prompt-in 260ms ease-out;
+    }
+    @keyframes pf-tts-prompt-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    #${CARD_ID} .pf-tts-prompt-icon {
+      font-size: 28px; line-height: 1;
+      filter: drop-shadow(0 2px 6px rgba(70, 178, 255, 0.35));
+      margin: 4px auto 0;
+    }
+    #${CARD_ID} .pf-tts-prompt-title {
+      font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    #${CARD_ID} .pf-tts-prompt-desc {
+      font-size: 11.5px; line-height: 1.5;
+      color: rgba(234, 234, 234, 0.80);
+      padding: 0 4px;
+    }
+    #${CARD_ID} .pf-tts-prompt-buttons {
+      display: grid; gap: 6px;
+      margin-top: 4px;
+    }
+    #${CARD_ID} .pf-tts-prompt-btn {
+      appearance: none; border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: #eaeaea;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #${CARD_ID} .pf-tts-prompt-btn:hover {
+      background: rgba(255, 255, 255, 0.10);
+      transform: translateY(-1px);
+    }
+    #${CARD_ID} .pf-tts-prompt-btn.is-primary {
+      background: var(--ndma-blue, #46b2ff); color: #fff;
+      border-color: rgba(255, 255, 255, 0.30);
+      box-shadow: 0 4px 12px rgba(70, 178, 255, 0.35);
+    }
+    #${CARD_ID} .pf-tts-prompt-btn.is-primary:hover {
+      background: #5cbdff;
+    }
+    #${CARD_ID} .pf-tts-prompt-hint {
+      font-size: 10px; font-style: italic;
+      color: rgba(234, 234, 234, 0.50);
+      margin-top: 2px;
     }
   `;
   document.head.appendChild(s);
@@ -1573,15 +1813,11 @@ function _focusPopupHtml(item) {
   const p = f.properties || {};
   const meta = item.hazardMeta || HAZARDS_BY_CODE[item.hazardCode] || {};
   const level = String(p.level || "").trim();
-  // Header background = LEVEL colour (blue/yellow/orange/red/tstorm/gust)
-  // so severity is instantly recognisable.  Badge inside header keeps the
-  // hazard-badge colour so the operator can still tell TEM vs TPE at a
-  // glance while the header signals danger level.
   const headColor = _colorForLevel(level, meta.badgeBg || "#666");
   const areaKm2 = p.area_km2 ? Number(p.area_km2) : null;
   const dataTime = _fmtIsoTime(p.data_time);
   const forecastTime = _fmtIsoTime(p.forecast_time);
-  const message = _stripPreventionMeasures(p.message || "");
+  const richMsgHtml = _buildRichFocusMessage(p.message || "", item.hazardCode);
   const provChips = (item.featureProvinces || []).slice(0, 6).map((pr) =>
     `<span class="nsp-prov-chip">${_escapeHtml(pr)}</span>`
   ).join("");
@@ -1589,24 +1825,33 @@ function _focusPopupHtml(item) {
     `<span class="nsp-chip">${_escapeHtml(d)}</span>`
   ).join("");
   const ord = _subChapterOrdinal(item);
+  const ttsOn = !!_story.ttsEnabled;
+  const ttsIcon = ttsOn ? ICON_TTS_ON : ICON_TTS_OFF;
+  const ttsTitle = ttsOn ? "Mute voice briefing" : "Play voice briefing (auto-play on each warning)";
+
+  // Fact pills, styled like the level pill.  Rendered ABOVE the message
+  // so the operator sees the key metadata (when + how big) before the
+  // narrative prose.
+  const factPills = [
+    dataTime     ? `<span class="nsp-fact-pill" data-fact="data">📅&nbsp;${_escapeHtml(dataTime)}</span>` : "",
+    forecastTime ? `<span class="nsp-fact-pill" data-fact="forecast">📡&nbsp;${_escapeHtml(forecastTime)}</span>` : "",
+    areaKm2      ? `<span class="nsp-fact-pill" data-fact="area">📐&nbsp;${areaKm2.toLocaleString()}&nbsp;km²</span>` : "",
+  ].filter(Boolean).join("");
 
   return `
     <div class="nsp-head nsp-head--focus" style="background:${headColor.bg};color:${headColor.fg}">
       <span class="nsp-badge" style="background:${meta.badgeBg || "rgba(0,0,0,0.28)"};color:${meta.badgeText || "#fff"};">${_escapeHtml(meta.badge || item.hazardCode || "!")}</span>
       <span class="nsp-title">${_escapeHtml(meta.label || p.element_label || item.hazardCode || "Warning")}</span>
       ${level ? `<span class="nsp-level" data-level="${_escapeHtml(level.toLowerCase())}">${_escapeHtml(level)}</span>` : ""}
+      <button type="button" class="nsp-tts-btn ${ttsOn ? "is-on" : ""}" data-nsp-tts title="${_escapeHtml(ttsTitle)}" aria-pressed="${ttsOn}">${ttsIcon}</button>
     </div>
     <div class="nsp-context">
       <span class="nsp-dot" aria-hidden="true"></span>
       <span class="nsp-context-date">${_escapeHtml(c.date)}</span>
       ${ord.total ? `<span class="nsp-context-ord">Warning ${ord.current} of ${ord.total}</span>` : ""}
     </div>
-    ${message ? `<div class="nsp-body nsp-focus-msg">${_escapeHtml(message)}</div>` : ""}
-    <dl class="nsp-focus-facts">
-      ${dataTime     ? `<div class="nsp-fact"><dt>Data time</dt><dd>${_escapeHtml(dataTime)}</dd></div>` : ""}
-      ${forecastTime ? `<div class="nsp-fact"><dt>Forecast</dt><dd>${_escapeHtml(forecastTime)}</dd></div>` : ""}
-      ${areaKm2      ? `<div class="nsp-fact"><dt>Area</dt><dd>${areaKm2.toLocaleString()} km²</dd></div>` : ""}
-    </dl>
+    ${factPills ? `<div class="nsp-facts-row">${factPills}</div>` : ""}
+    ${richMsgHtml ? `<div class="nsp-body nsp-focus-msg">${richMsgHtml}</div>` : ""}
     ${provChips ? `<div class="nsp-provs">${provChips}</div>` : ""}
     ${distChips ? `<div class="nsp-districts">${distChips}</div>` : ""}
   `;
@@ -1636,34 +1881,21 @@ function _colorForLevel(level, fallback) {
   return LEVEL_COLORS[key] || { bg: fallback || "#666", fg: "#ffffff" };
 }
 
-// Measure the NCOP header + any other left-side chrome and return the
-// pixel offset from the map's top-left corner where the briefing card
-// should mount.  Called at create-time AND on window resize so the card
-// tracks header size changes (e.g. logo wrap on narrow viewports).
+// Fixed top offset for the briefing card — chosen (188.2 px) so the card
+// starts well below the NCOP header row + its accompanying spacing on
+// standard viewport heights.  Kept as a constant instead of measuring
+// `.ncop-container` because the header can subtly change size (theme
+// toggle icon swap, docs button hover) and produce sub-pixel jitter.
+const BRIEFING_CARD_TOP    = 188;
+const BRIEFING_CARD_LEFT   = 12;
+const BRIEFING_CARD_MARGIN = 12;
+
 function _computeBriefingCardOffset(mapEl) {
   const mapRect = mapEl.getBoundingClientRect();
-  const gap = 12;
-  let top = gap;
-
-  // Header block (logo + NCOP title, theme toggle, docs button) — fixed
-  // at top:12/left:12 with z-index above ours.  Measure its BOTTOM and
-  // slot the briefing card just underneath.
-  const header = document.querySelector(".ncop-container");
-  if (header) {
-    const hRect = header.getBoundingClientRect();
-    // Only shift when the header actually overlaps our left column
-    // (hRect.right is past our own left offset).
-    if (hRect.right > mapRect.left + gap) {
-      const belowHeader = hRect.bottom - mapRect.top + gap;
-      if (belowHeader > top) top = belowHeader;
-    }
-  }
-
-  // Available vertical space for the card so it never overflows the map's
-  // bottom (which would either scroll off-screen or cover the news ticker).
-  const maxHeight = Math.max(180, mapRect.height - top - gap);
-
-  return { top, left: gap, maxHeight };
+  const top     = BRIEFING_CARD_TOP;
+  const left    = BRIEFING_CARD_LEFT;
+  const maxHeight = Math.max(220, mapRect.height - top - BRIEFING_CARD_MARGIN);
+  return { top, left, maxHeight };
 }
 
 function _positionBriefingCard(card) {
@@ -1717,18 +1949,257 @@ function _ensureBriefingCard() {
   return card;
 }
 
+// SVG icons for the speaker button in the focus header
+const ICON_TTS_ON = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+const ICON_TTS_OFF = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+
+// ---- Hazard-in-polygon simulation (Mapbox v3 setRain/setSnow/setFog) ---
+// Maps a hazard code → global weather effect applied while that hazard's
+// focus sub-chapter is on screen.  Effects are GLOBAL to the map (Mapbox
+// doesn't clip these to polygons) but because focus mode zooms tight on
+// the polygon, the effect visually appears "inside" it.  Cleared on
+// overview / panel-close so the map returns to its normal look.
+// Effect params tuned for VISIBILITY at focus zoom-levels — Mapbox v3's
+// rain/snow are global-viewport post-processes, so density + opacity need
+// to be aggressive for the effect to read clearly against a busy basemap.
+const HAZARD_EFFECTS = {
+  RAINSTORM: { kind: "rain", opts: { density: 1.0,  intensity: 1.8, color: "#93a8bd", opacity: 1.0,  "distortion-strength": 0.7, "drop-size": 0.6,  direction: [0, 80],  vignette: 0.55, "vignette-color": "#0f172a", "center-thinning": 0.4 } },
+  HRAIN:     { kind: "rain", opts: { density: 0.9,  intensity: 1.5, color: "#93a8bd", opacity: 1.0,  "distortion-strength": 0.55, "drop-size": 0.55, direction: [0, 80],  vignette: 0.5,  "vignette-color": "#0f172a", "center-thinning": 0.35 } },
+  TSTM:      { kind: "rain", opts: { density: 1.0,  intensity: 1.9, color: "#7a8899", opacity: 1.0,  "distortion-strength": 0.7,  "drop-size": 0.62, direction: [15, 90], vignette: 0.6,  "vignette-color": "#000000", "center-thinning": 0.4 } },
+  CONV:      { kind: "rain", opts: { density: 1.0,  intensity: 2.2, color: "#6a7889", opacity: 1.0,  "distortion-strength": 0.85, "drop-size": 0.7,  direction: [20, 95], vignette: 0.65, "vignette-color": "#000000", "center-thinning": 0.45 } },
+  SNOW:      { kind: "snow", opts: { density: 1.0,  intensity: 1.4, color: "#ffffff", opacity: 1.0,  "flake-size": 0.95, direction: [10, 65], vignette: 0.4,  "vignette-color": "#152030", "center-thinning": 0.4 } },
+  COLD:      { kind: "snow", opts: { density: 0.5,  intensity: 0.9, color: "#e8f0ff", opacity: 0.9,  "flake-size": 0.6,  direction: [8, 55],  vignette: 0.35 } },
+  HAIL:      { kind: "snow", opts: { density: 0.75, intensity: 1.6, color: "#dceaff", opacity: 1.0,  "flake-size": 0.55, direction: [5, 92],  vignette: 0.5 } },
+  FOG:       { kind: "fog",  opts: { range: [-1, 2], color: "rgba(220, 220, 230, 0.90)", "horizon-blend": 0.55, "high-color": "rgba(210, 210, 225, 0.75)", "space-color": "rgba(50, 55, 65, 1)", "star-intensity": 0 } },
+  DUST:      { kind: "fog",  opts: { range: [-1, 2], color: "rgba(190, 152, 95, 0.85)", "horizon-blend": 0.45, "high-color": "rgba(210, 170, 110, 0.65)", "space-color": "rgba(60, 45, 20, 1)", "star-intensity": 0 } },
+  // No visual effect for HEATWAVE / GALE / LTNG / FLD — the polygon fill
+  // colour + level pill already carry the signal; adding fake effects
+  // would misrepresent the data.
+};
+
+function _applyHazardEffect(hazardCode) {
+  const map = window.ncop_map;
+  if (!map) return;
+  if (_story.hazardEffectActive === hazardCode) return;
+  _clearHazardEffects();
+  const effect = HAZARD_EFFECTS[hazardCode];
+  if (!effect) { console.log("[story] no visual effect for hazard", hazardCode); return; }
+
+  const doApply = () => {
+    try {
+      if (effect.kind === "rain") {
+        if (typeof map.setRain !== "function") {
+          console.warn("[story] map.setRain not available — Mapbox GL JS < 3.7?");
+          return;
+        }
+        map.setRain(effect.opts);
+        console.log("[story] setRain applied for", hazardCode, effect.opts);
+      } else if (effect.kind === "snow") {
+        if (typeof map.setSnow !== "function") {
+          console.warn("[story] map.setSnow not available");
+          return;
+        }
+        map.setSnow(effect.opts);
+        console.log("[story] setSnow applied for", hazardCode, effect.opts);
+      } else if (effect.kind === "fog") {
+        if (typeof map.setFog !== "function") {
+          console.warn("[story] map.setFog not available");
+          return;
+        }
+        if (_story.savedFog === null) _story.savedFog = map.getFog ? map.getFog() : {};
+        map.setFog(effect.opts);
+        console.log("[story] setFog applied for", hazardCode);
+      }
+      _story.hazardEffectActive = hazardCode;
+    } catch (e) {
+      console.error("[story] hazard effect apply failed:", e);
+    }
+  };
+
+  // Defer to style.load if the style is still hydrating — otherwise the
+  // effect settings can be dropped by the style-loader.
+  if (typeof map.isStyleLoaded === "function" && !map.isStyleLoaded()) {
+    map.once("style.load", doApply);
+  } else {
+    doApply();
+  }
+}
+
+function _clearHazardEffects() {
+  const map = window.ncop_map;
+  if (!map) return;
+  try { if (typeof map.setRain === "function") map.setRain(null); } catch (_) {}
+  try { if (typeof map.setSnow === "function") map.setSnow(null); } catch (_) {}
+  try {
+    if (typeof map.setFog === "function") {
+      map.setFog(_story.savedFog || null);
+    }
+  } catch (_) {}
+  _story.savedFog = null;
+  _story.hazardEffectActive = null;
+}
+
+// ---- Text-to-speech briefing narrator ---------------------------------
+// Uses the browser's SpeechSynthesis API (built-in, no server, no dep).
+// Cancels the current utterance every time a new focus sub-chapter is
+// shown so the operator never hears two overlapping narrations.  Skips
+// on overview / when the operator toggled TTS off.
+function _speakChapterMessage(item) {
+  const ss = window.speechSynthesis;
+  if (!ss) return;
+  // Always cancel — even if TTS is off — so a pending utterance from a
+  // previous chapter dies with the chapter change.
+  try { ss.cancel(); } catch (_) {}
+  if (!_story.ttsEnabled) return;
+  if (!item || item.type !== "focus") return;
+  const raw = item.feature?.properties?.message || "";
+  if (!raw) return;
+
+  // Prep clean prose for speech synthesis: drop numbered-list markers so
+  // the voice doesn't read out "One dot... two dot..." and collapse the
+  // paragraph structure into a single sentence-flow.
+  const speech = String(raw)
+    .replace(/\r/g, "")
+    .replace(/\n+/g, ". ")
+    .replace(/\b\d+\.\s+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!speech) return;
+
+  const utter = new SpeechSynthesisUtterance(speech);
+  utter.rate  = 0.98;
+  utter.pitch = 1.0;
+  utter.volume = 0.9;
+  utter.lang  = "en-US";
+  // TTS drives the pacing: when the narration ends, auto-advance if
+  // we're still on the same item AND still playing AND TTS is still
+  // enabled.  The auto-tick timer (safety cap 90s) covers the case
+  // where onend never fires.
+  utter.onend = () => {
+    const sameItem = _story.ttsSpeakingItem === item;
+    if (sameItem) _story.ttsSpeakingItem = null;
+    if (!sameItem) return;
+    if (!_story.ttsEnabled) return;
+    if (!_story.isPlaying) return;
+    // Cancel the safety-tick FIRST so it can't double-fire with our
+    // advance below.  The 400ms breath prevents an end-of-utterance
+    // jump-cut into the next chapter's flyTo swoop.
+    if (_story.tickTimer) { clearTimeout(_story.tickTimer); _story.tickTimer = null; }
+    setTimeout(() => {
+      if (_story.ttsSpeakingItem == null && _story.ttsEnabled && _story.isPlaying) {
+        _goto(_story.index + 1, /*byUser*/ false);
+      }
+    }, 400);
+  };
+  utter.onerror = () => { if (_story.ttsSpeakingItem === item) _story.ttsSpeakingItem = null; };
+  _story.ttsSpeakingItem = item;
+  try { ss.speak(utter); } catch (_) {}
+}
+
+function _stopSpeaking() {
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (_) {}
+  _story.ttsSpeakingItem = null;
+}
+
+// ---- TTS preference persistence ---------------------------------------
+const TTS_PREF_KEY = "ncop-story-tts-pref";
+function _loadTtsPref() {
+  try { return localStorage.getItem(TTS_PREF_KEY); } catch (_) { return null; }
+}
+function _saveTtsPref(choice) {
+  try { localStorage.setItem(TTS_PREF_KEY, choice); } catch (_) {}
+}
+
+// Render an inline preference prompt inside the story panel body and
+// resolve when the operator picks a choice.  Called on the FIRST ever
+// story open (no saved pref) — subsequent opens read the stored choice
+// and skip the prompt.  Returns a promise that resolves to "on" | "off".
+function _showTtsPrompt(card) {
+  return new Promise((resolve) => {
+    const bodyEl = card.querySelector(".pf-body");
+    if (!bodyEl) { resolve("off"); return; }
+    const prev = bodyEl.innerHTML;
+    bodyEl.innerHTML = `
+      <div class="pf-tts-prompt" role="dialog" aria-labelledby="pf-tts-prompt-title">
+        <div class="pf-tts-prompt-icon" aria-hidden="true">🔊</div>
+        <div id="pf-tts-prompt-title" class="pf-tts-prompt-title">Enable Voice Briefing?</div>
+        <div class="pf-tts-prompt-desc">
+          Have each warning read aloud during the briefing.
+          You can toggle it anytime from the speaker button in each chapter.
+        </div>
+        <div class="pf-tts-prompt-buttons">
+          <button type="button" class="pf-tts-prompt-btn is-primary" data-choice="on">
+            <span aria-hidden="true">🔊</span>&nbsp;Enable voice briefing
+          </button>
+          <button type="button" class="pf-tts-prompt-btn" data-choice="off">
+            <span aria-hidden="true">🔇</span>&nbsp;Silent mode
+          </button>
+        </div>
+        <div class="pf-tts-prompt-hint">Your choice is remembered for next time.</div>
+      </div>
+    `;
+    const onClick = (e) => {
+      const btn = e.target.closest("[data-choice]");
+      if (!btn) return;
+      bodyEl.removeEventListener("click", onClick);
+      const choice = btn.dataset.choice === "on" ? "on" : "off";
+      // Restore whatever was in the body before the prompt so the
+      // subsequent _renderChapter doesn't have to fight leftover markup.
+      bodyEl.innerHTML = prev;
+      resolve(choice);
+    };
+    bodyEl.addEventListener("click", onClick);
+  });
+}
+
+function _toggleTTS(card) {
+  _story.ttsEnabled = !_story.ttsEnabled;
+  // Re-render the current chapter so the header button reflects the new
+  // pressed state; also trigger speech immediately when enabling.
+  const item = _story.playable[_story.index];
+  if (card && item && item.type === "focus") {
+    card.innerHTML = _focusPopupHtml(item);
+    // Re-attach the toggle listener after re-render.
+    const btn = card.querySelector("[data-nsp-tts]");
+    if (btn) btn.addEventListener("click", (e) => { e.stopPropagation(); _toggleTTS(card); });
+  }
+  if (_story.ttsEnabled) _speakChapterMessage(item);
+  else _stopSpeaking();
+  // Reset the tick since TTS state changes _currentTickMs() — TTS on
+  // moves the safety cap to 90s; TTS off returns to 14s.
+  if (_story.isPlaying) {
+    const activeCard = card || document.getElementById(CARD_ID);
+    if (activeCard) _startTick(activeCard);
+  }
+}
+
+
 function _showChapterPopup(item) {
   const card = _ensureBriefingCard();
   if (!card) return;
   const isFocus = item.type === "focus";
   card.dataset.mode = isFocus ? "focus" : "overview";
   card.innerHTML = isFocus ? _focusPopupHtml(item) : _overviewPopupHtml(item.chapter || item);
+  // Wire the speaker toggle on the freshly-rendered header.
+  const ttsBtn = card.querySelector("[data-nsp-tts]");
+  if (ttsBtn) {
+    ttsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _toggleTTS(card);
+    });
+  }
   // Fade in.  If already visible, re-render swaps content — the
   // transition triggers only on first show.
   requestAnimationFrame(() => {
     card.style.opacity = "1";
     card.style.transform = "translateY(0)";
   });
+  // Apply the polygon-simulation weather effect for this hazard (focus
+  // only — overview would confuse the operator by raining "over Pakistan").
+  if (isFocus) _applyHazardEffect(item.hazardCode);
+  else _clearHazardEffects();
+  // Kick off the voice-briefing narration (a silent no-op if TTS is off).
+  _speakChapterMessage(item);
 }
 
 function _closeChapterPopup(instant = false) {
@@ -2153,9 +2624,23 @@ function _startTick(card) {
   if (fill) fill.style.width = "0%";
   _story.progTimer = setInterval(() => _updateProgress(card), 100);
   const dwell = _currentTickMs();
-  _story.tickTimer = setTimeout(() => {
+  // Advance handler with a TTS-aware guard: if the estimate expires
+  // slightly before the browser voice actually finishes (rare — estimate
+  // has ~20 % buffer, but can happen), re-schedule in 2s chunks and
+  // check again.  utter.onend is still the authoritative primary
+  // advance signal — this is only a fallback / safety.
+  const advanceOrRecheck = () => {
+    _story.tickTimer = null;
+    const stillSpeaking = _story.ttsEnabled
+      && window.speechSynthesis
+      && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+    if (stillSpeaking) {
+      _story.tickTimer = setTimeout(advanceOrRecheck, 2000);
+      return;
+    }
     _goto(_story.index + 1, /*byUser*/ false);
-  }, dwell);
+  };
+  _story.tickTimer = setTimeout(advanceOrRecheck, dwell);
 }
 
 function _goto(rawIdx, byUser) {
@@ -2447,11 +2932,137 @@ function _applyChapterWarningsOverlay() {
   _hoistBoundariesAboveWarnings();
 }
 
-// Message often has "Prevention Measures: 1. … 2. …" — cut that off, it's
-// boilerplate and the popup should focus on the operator-actionable prose.
+// Message often has "Prevention Measures: 1. … 2. …" — split at that
+// marker so we can render warning-prose and advisories with distinct
+// styling.  Also strip PMD's `###` separator character, common HTML
+// entities, and collapse extra whitespace/newlines.
+function _splitWarningMessage(msg) {
+  const raw = String(msg || "")
+    .replace(/\r/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/#{2,}/g, "")          // strip ## / ### / #### separator junk
+    .replace(/\s{2,}/g, " ")        // collapse runs of whitespace
+    .trim();
+  if (!raw) return { warning: "", advisory: "" };
+  const [before, ...afterParts] = raw.split(/prevention\s+measures\s*:/i);
+  const warning  = (before || "").trim();
+  const advisory = afterParts.join(" ").trim();
+  return { warning, advisory };
+}
+// Kept for back-compat with the hover popup + TTS which just want the prose.
 function _stripPreventionMeasures(msg) {
-  if (!msg) return "";
-  return String(msg).split(/prevention\s+measures\s*:/i)[0].trim();
+  return _splitWarningMessage(msg).warning;
+}
+
+// Inline hazard-word → emoji injector.  Runs on already-escaped text.
+// Rules apply in order; each emoji is inserted BEFORE the first match
+// of its hazard word so the operator can scan the text like a comic:
+// "🌧️ rainstorm ... ⚡ lightning ... 🌊 flooding".  Each emoji is used
+// at most once per message so the prose doesn't turn into an emoji soup.
+const INLINE_EMOJI_RULES = [
+  { emoji: "🌧️", re: /\b(rainstorm)\b/i },
+  { emoji: "⛈️", re: /\b(thunderstorm|thundershower|thundery|thunderstorms)\b/i },
+  { emoji: "🌧️", re: /\b(heavy rain|heavy rainfall|rainfall)\b/i },
+  { emoji: "🌪️", re: /\b(convection|convective|severe convective)\b/i },
+  { emoji: "🌡️", re: /\b(heatwave|heat wave|high temperature|hot and humid|hot weather)\b/i },
+  { emoji: "🌫️", re: /\b(fog|foggy|mist|misty|haze|visibility)\b/i },
+  { emoji: "❄️",  re: /\b(snowstorm|snowfall|snow|blizzard)\b/i },
+  { emoji: "🥶", re: /\b(cold wave|cold surge|cold spell|severe cold)\b/i },
+  { emoji: "💨", re: /\b(gale|strong wind|gusty wind|high winds?)\b/i },
+  { emoji: "🌪️", re: /\b(dust storm|duststorm|sandstorm|dust)\b/i },
+  { emoji: "⚡", re: /\b(lightning)\b/i },
+  { emoji: "🌊", re: /\b(flood|flooding|flash flood)\b/i },
+  { emoji: "🧊", re: /\b(hail|hailstorm)\b/i },
+  { emoji: "📍", re: /\b(cities affected)\b/i },
+  { emoji: "👥", re: /\b(residents|citizens|travelers)\b/i },
+  { emoji: "⚠️", re: /\b(warning has been issued|warning is currently)\b/i },
+];
+function _injectInlineEmoji(text) {
+  let out = text;
+  for (const { emoji, re } of INLINE_EMOJI_RULES) {
+    // Use replace with a 1-shot regex (no /g) — we prefix the first
+    // occurrence and skip subsequent ones for that rule.
+    out = out.replace(re, `${emoji} $1`);
+  }
+  return out;
+}
+
+// Decorate the warning prose with <mark> tags around numbers, times,
+// severity levels and calendar dates so key data-points stand out.  Order
+// of replacements matters — apply longest/most-specific patterns first
+// so shorter regexes don't chomp inside the wrappers.  Runs on ESCAPED
+// text so the added `<mark>` tags are the only HTML we introduce.
+function _decorateWarningText(rawEscaped) {
+  let s = rawEscaped;
+
+  // Dates like "2026-07-30" or "July 30, 2026"
+  s = s.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, '<mark class="wm-date">$1</mark>');
+  s = s.replace(/\b((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:,\s*\d{4})?)\b/gi,
+    '<mark class="wm-date">$1</mark>');
+
+  // Areas + counts with units
+  s = s.replace(/\b(\d{1,3}(?:,\d{3})+|\d{1,3}(?:\.\d+)?)\s+(square\s+kilometers?|km²|kilometers?|km\/h)\b/gi,
+    '<mark class="wm-num">$1&nbsp;$2</mark>');
+
+  // Clock times like "21:00", "23:59", "0000 hours"
+  s = s.replace(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/g, '<mark class="wm-time">$1</mark>');
+  s = s.replace(/\b(midnight|midday|noon|dawn|dusk)\b/gi, '<mark class="wm-time">$1</mark>');
+  s = s.replace(/\b(\d{4}\s+hours?)\b/gi, '<mark class="wm-time">$1</mark>');
+
+  // Severity levels (colour-coded)
+  s = s.replace(/\b(level\s+)?(red|orange|yellow|blue|thunderstorm|gust)\b(?![^<]*<\/mark>)/gi,
+    (_, prefix, lvl) => `<mark class="wm-lvl wm-lvl-${String(lvl).toLowerCase()}">${prefix || ""}${lvl}</mark>`);
+
+  return s;
+}
+
+// Compose warning text: escape → inline-emoji → decorate marks.  Order
+// matters: emoji sits BEFORE the mark-wrapped tokens, so highlights stay
+// intact.
+function _composeWarningText(raw) {
+  const escaped = _escapeHtml(raw);
+  const withEmoji = _injectInlineEmoji(escaped);
+  return _decorateWarningText(withEmoji);
+}
+
+// Build the rich focus-message HTML.  Called by _focusPopupHtml.  Flat
+// structure — no big-glyph column; emojis live inline with the text.
+function _buildRichFocusMessage(rawMsg /*, hazardCode */) {
+  const { warning, advisory } = _splitWarningMessage(rawMsg);
+  if (!warning && !advisory) return "";
+  const warnHtml = warning ? `<div class="wm-body">${_composeWarningText(warning)}</div>` : "";
+
+  let advisoryHtml = "";
+  if (advisory) {
+    // Advisory typically arrives as "1. … 2. … 3. …" — split into a
+    // scannable checklist.  Regex splits on the numeric prefix so each
+    // sentence lands on its own row without swallowing periods inside
+    // the sentence body.
+    const items = advisory.split(/\s+(?=\d+\.\s)/g)
+      .map((s) => s.trim().replace(/^\d+\.\s*/, ""))
+      .filter(Boolean);
+    if (items.length > 1) {
+      advisoryHtml = `
+        <div class="wm-advisory">
+          <div class="wm-advisory-head">💡 Prevention Measures</div>
+          <ul class="wm-advisory-list">
+            ${items.map((it) => `<li>${_composeWarningText(it)}</li>`).join("")}
+          </ul>
+        </div>`;
+    } else {
+      advisoryHtml = `
+        <div class="wm-advisory">
+          <div class="wm-advisory-head">💡 Prevention Measures</div>
+          <div class="wm-advisory-body">${_composeWarningText(advisory)}</div>
+        </div>`;
+    }
+  }
+  return `
+    <div class="wm-content">
+      ${warnHtml}
+      ${advisoryHtml}
+    </div>
+  `;
 }
 
 // PMD messages state "<District> in <Province>" (repeated per city, comma
@@ -2665,9 +3276,31 @@ async function _fetchAndBuild(card) {
       console.log("[story]   day", i, c.date, "→", n, "features (provinces:", c.provinces.join(","), ")");
     });
 
+    // Determine TTS preference — on first ever open, ask the operator;
+    // on subsequent opens, honour the saved choice from localStorage.
+    const savedPref = _loadTtsPref();
+    if (savedPref === "on")  _story.ttsEnabled = true;
+    else if (savedPref === "off") _story.ttsEnabled = false;
+
     _renderDots(card);
     _renderChapter(card, { fade: false });
-    _play();
+
+    if (savedPref === null) {
+      // First-open flow: pause playback, show the prompt, then apply
+      // the answer and start playing.  _renderChapter above already
+      // painted the first slide's animations + polygon effect — the
+      // prompt just gates the auto-advance until the operator chooses.
+      _pause();
+      const choice = await _showTtsPrompt(card);
+      _saveTtsPref(choice);
+      _story.ttsEnabled = choice === "on";
+      // Re-render so the speaker button reflects the new state and
+      // (if enabled) TTS speaks the current chapter now.
+      _renderChapter(card, { fade: false });
+      _play();
+    } else {
+      _play();
+    }
   } catch (e) {
     console.error("[story] _fetchAndBuild failed:", e);
     _renderStatus(card, `Couldn't load briefing: ${e.message}`, true);
@@ -2691,6 +3324,11 @@ function _handlePanelHidden() {
   // frames the operator can't see, and this also prevents surprise map flies
   // triggering while they're using another panel.
   _pause();
+  // Silence any in-progress voice briefing.
+  _stopSpeaking();
+  // Remove the polygon-simulation weather effects so the map returns to
+  // its normal, calm look for other panels.
+  _clearHazardEffects();
   // Stop any in-flight cinematic camera loop (bearing orbit) so it
   // doesn't keep panning the map after the panel closes.
   _stopCinematicLoop();
