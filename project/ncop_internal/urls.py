@@ -41,6 +41,7 @@ from .views import (
     CropMapAPIView,
     CropGeoJSONAPIView,
     PmdMonitorPredictionsAPIView,
+    PmdDailyForecastProAPIView,
 
 
 )
@@ -104,5 +105,16 @@ urlpatterns = [
         "api/pmd/monitor/predictions/<str:element_key>/",
         PmdMonitorPredictionsAPIView.as_view(),
         name="pmd-monitor-predictions",
+    ),
+
+    # PMD Provincial Daily Forecast — proxy for the public
+    # pmd.gov.pk/phpapi/daily-forecastpro.php feed.  Consumed by the
+    # Story panel's Provincial Forecast card (see
+    # frontend/src/modules/story-provincial-forecast.js).  30-min
+    # cache + 6 h stale fallback baked into the view.
+    path(
+        "api/pmd/monitor/daily-forecast-pro/",
+        PmdDailyForecastProAPIView.as_view(),
+        name="pmd-daily-forecast-pro",
     ),
 ]

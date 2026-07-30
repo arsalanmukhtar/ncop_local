@@ -112,7 +112,19 @@
       "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_project/urls.py)",
       "Bash(node --check d:/muhammad_arsalan/ncop_local/frontend/src/modules/temporal-current-step.js)",
       "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_project/settings/base.py project/ncop_internal/views.py)",
-      "Bash(rm -rf d:/muhammad_arsalan/ncop_local/project/media/pmd_predictions *)"
+      "Bash(rm -rf d:/muhammad_arsalan/ncop_local/project/media/pmd_predictions *)",
+      "Bash(PYTHONIOENCODING=utf-8 ../ncopenv311/Scripts/python.exe -c ' *)",
+      "Bash(grep -rn '^svg\\\\s*{\\\\|^svg,\\\\|\\\\.lucide\\\\b\\\\|vertical-align.*svg' d:/muhammad_arsalan/ncop_local/frontend/src/styles/)",
+      "Bash(node --check d:/muhammad_arsalan/ncop_local/frontend/src/modules/split-compare-control.js)",
+      "Bash(git -C d:/muhammad_arsalan/ncop_local diff --stat frontend/src/modules/split-compare-control.js frontend/src/styles/dashboard/_split-compare.css)",
+      "Bash(ncopenv311/Scripts/python.exe -m py_compile project/ncop_internal/views.py project/ncop_internal/urls.py)",
+      "Bash(node --check frontend/src/modules/story-provincial-forecast.js)",
+      "Bash(grep -n 'Story warnings \\\\\\\\u2014 hover popup' d:/muhammad_arsalan/ncop_local/frontend/src/modules/story-provincial-forecast.js)",
+      "Bash(time curl -s \"http://172.18.7.21:8000/api/pmd/monitor/warnings/\" -o /tmp/warnings.json -w \"HTTP=%{http_code} bytes=%{size_download}\\\\n\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/tmp/warnings.json'\\)\\); print\\('keys:', list\\(d.keys\\(\\)\\)\\); print\\('count:', d.get\\('count'\\)\\); print\\('features:', len\\(d.get\\('features',[]\\)\\)\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(curl -s http://172.18.7.21:8000/api/pmd/monitor/warnings/ -o C:/Users/USER/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-local/1a37e4c8-41f6-47a5-8a71-2a50d4bc2fda/scratchpad/warnings2.json -w 'HTTP=%{http_code} bytes=%{size_download} time=%{time_total}s\\\\n')"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",

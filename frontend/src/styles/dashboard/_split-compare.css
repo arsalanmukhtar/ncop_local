@@ -297,6 +297,8 @@ body.split-compare-active #temp-slider1::before {
     background: var(--ndma-blue-opaque);
     border: 1px solid var(--ndma-blue-light);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    /* Anchor for the absolute-positioned glyph inside — see below. */
+    position: relative;
 }
 
 #playPauseButton1_b:hover,
@@ -304,12 +306,30 @@ body.split-compare-active #temp-slider1::before {
     background: var(--ndma-blue);
 }
 
-/* Play glyph nudged 2px right so the triangle is optically centered
-   inside the round button (mirrors _temporal.css:116-119 which does
-   the same for #playPauseButton1). */
-#playPauseButton1_b i,
-#playPauseButton1_b svg {
-    margin-left: 2px;
+/* Absolute-position the glyph inside the button so it's centered
+   regardless of the button's own `display` value.  The button ships
+   with an inline `style="display:inline-block"` (used by the JS
+   play/pause visibility toggle at temporal-controls.js:912-913) which
+   BEATS the CSS `display:flex; align-items:center` set on the parent
+   controls row — the SVG then sits on the baseline and appears shifted
+   up-left inside the round button.  Absolute positioning takes the
+   glyph out of that flow entirely.  +2px on the play triangle only
+   optically centres its mass (the vertical edge is on the left, apex
+   on the right, so the geometric centre is left of the optical centre). */
+#playPauseButton1_b > svg,
+#playPauseButton1_b > i,
+#playPauseButton2_b > svg,
+#playPauseButton2_b > i {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+}
+#playPauseButton1_b > svg,
+#playPauseButton1_b > i {
+    /* play triangle only — +2px right nudge for optical centring */
+    transform: translate(calc(-50% + 2px), -50%);
 }
 
 /* Icon color + font-size only — DO NOT set width/height here.  Lucide's

@@ -396,21 +396,57 @@
    reads as secondary information rather than competing with the title.
    Uses the shared --text-muted var so both light and night themes render
    correctly without a theme-specific override. */
+/* Prominent "current timestep" pill — sits below the layer title.
+   Presented as a stand-alone chip so an operator can scan the timestep
+   without hunting.  Colours drawn from the shared NDMA-blue tokens so
+   the pill recolours automatically for day/night themes; the same
+   palette drives the active slider-label pill above (see the
+   `.year-labels1 span.is-active` rule at line 217), giving the two
+   time-indicators a matched visual identity.  Inline-block + fit-content
+   so the pill hugs its text instead of stretching to the panel width. */
 .ts-variable .ts-current-date {
-    margin-top: 2px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    line-height: 1.15;
-    color: var(--text-muted, rgba(148, 163, 184, 0.85));
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;         /* hug left in the flex column of .ts-variable */
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 5px;
+    padding: 3px 10px 3px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.2;
+    color: #fff;
+    background: var(--ndma-blue, #46b2ff);
+    border: 1px solid var(--ndma-blue-light, rgba(70, 178, 255, 0.35));
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.20),
+                0 2px 8px var(--ndma-blue-glow, rgba(70, 178, 255, 0.35));
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    opacity: 0.85;
-    transition: color 0.15s ease, opacity 0.15s ease;
+    transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
-/* Empty state (layer with no per-frame date info) — collapse the line so
+/* Live-dot indicator — pulses subtly to signal that this value tracks
+   the slider position in real time.  Pure CSS, no JS animation. */
+.ts-variable .ts-current-date::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+    flex: 0 0 auto;
+    animation: ncop-ts-date-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ncop-ts-date-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.75); }
+}
+/* Empty state (layer with no per-frame date info) — collapse the pill so
    the variable panel is visually identical to its pre-integration state. */
 .ts-variable .ts-current-date.is-empty {
     display: none;

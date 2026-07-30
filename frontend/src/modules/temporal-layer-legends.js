@@ -1271,7 +1271,7 @@ export const legends = {
     ["-0.1", "1", "2", "3", "4", "5", "7", "10", "15", "20", "25", "30", "40", "60", "100", "150", "200", "250", "300", "350", "400", "500"]
   ),
 
-  // PMD Predictions — WRF precipitation accumulation forecasts (mm).  Colors
+  // PMD Forecast — WRF precipitation accumulation forecasts (mm).  Colors
   // and thresholds mirror the vendor's own legendList JS chunk one-for-one
   // (see _MON_PRED_COLOR_STOPS in ncop_internal/views.py) so the map + the
   // legend read the same as PMD Monitor's own dashboard.  Each accumulation
@@ -1331,5 +1331,24 @@ export const legends = {
       "rgb(200, 230, 250)", "rgb(100, 150, 220)", "rgb(0, 50, 180)",
     ],
     ["0", "20", "40", "60", "80", "100"]
+  ),
+
+  // 24-hour Extreme aggregates — colors mirror _MON_PRED_ELEMENTS[...][stops]
+  // in views.py one-for-one so the legend + the raster read identically.
+  pmd_pred_ext_high_temp: gradientLegendBar(
+    [
+      "rgb(0, 0, 255)",   "rgb(0, 200, 255)", "rgb(0, 200, 100)",
+      "rgb(200, 220, 0)", "rgb(255, 165, 0)", "rgb(255, 0, 0)",
+      "rgb(180, 0, 60)",  "rgb(100, 0, 0)",
+    ],
+    ["0", "15", "25", "35", "40", "45", "50", "55"]
+  ),
+  pmd_pred_ext_low_temp: gradientLegendBar(
+    [
+      "rgb(80, 0, 128)",  "rgb(0, 0, 200)",   "rgb(0, 130, 255)",
+      "rgb(0, 200, 255)", "rgb(0, 200, 100)", "rgb(200, 220, 0)",
+      "rgb(255, 165, 0)", "rgb(255, 0, 0)",
+    ],
+    ["-40", "-20", "-10", "0", "10", "20", "30", "40"]
   ),
 };
