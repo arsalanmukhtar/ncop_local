@@ -45,6 +45,11 @@ import { initCropFilter } from "./crop-filter-controller.js";
 // #temp-slider1 .ts-variable panel and keeps it in sync with slider input.
 // Auto-inits on DOMContentLoaded; nothing else needs to call it.
 import "./temporal-current-step.js";
+// Side-effect import: injects a live Provincial Daily Forecast card at the
+// top of the Story panel (#story-modal / #story-root) whenever the operator
+// toggles the Story button.  Fetches fresh via /api/pmd/monitor/daily-
+// forecast-pro/ on every open; auto-inits on DOMContentLoaded.
+import "./story-provincial-forecast.js";
 
 
 // ---- Mapbox token handling ----
@@ -730,6 +735,13 @@ function anchorFloatingPanelToButton(panel, btnId) {
   panel.style.maxHeight = "";
   // Initial top: align to the trigger button's top.
   let top = btnRect.top - mapRect.top;
+  // The story panel is content-heavy (holds the live provincial forecast
+  // story + chapter list + editor).  Pin it to the top of the rail — the
+  // same level as the Weather Report panel — so its bottom doesn't slide
+  // off the map when playback expands the panel.
+  if (panel.id === "story-modal") {
+    top = railRect.top - mapRect.top;
+  }
   panel.style.top = `${top}px`;
 
   // Force a reflow to get an accurate measurement.

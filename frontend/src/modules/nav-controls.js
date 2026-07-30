@@ -273,14 +273,14 @@ const TOUR_STEPS = [
     targetValue: "Live Meteorological Operations",
   },
   {
-    title: "PMD Predictions — new",
+    title: "PMD Forecast — new",
     content:
-      "The newest subcategory under Weather Systems: seven forecast rasters fetched (authenticated) from PMD Monitor's own /predictions API, colorized server-side via GDAL into PNG frames the temporal slider plays as animated overlays. Precipitation windows in four accumulations (3h / 6h / 12h / 24h) from the Pakistan-tuned WRFPRS model, plus 2m Temperature (WRFPRS), Total Cloud Cover (GDFS — vendor's WRFPRS/TCC feed is currently empty), and Relative Humidity (GDFS). Every layer gets its own colour ramp, unit-aware legend, and a live 'current timestep' line inside the slider's variable panel that updates as you scrub. GDFS-backed layers are clipped server-side to a South-Asia bbox so a global-grid raster doesn't balloon Mapbox's GPU texture pool.",
+      "The newest subcategory under Weather Systems: nine forecast rasters fetched (authenticated) from PMD Monitor's own /predictions API, colorized server-side via GDAL into PNG frames the temporal slider plays as animated overlays. Precipitation windows in four accumulations (3h / 6h / 12h / 24h) from the Pakistan-tuned WRFPRS model, plus 2m Temperature (WRFPRS), Total Cloud Cover (GDFS — vendor's WRFPRS/TCC feed is currently empty), Relative Humidity (GDFS), and 24h Extreme High / Low Temperature (GDFS/TMAX2M + TMIN2M). Every layer gets its own colour ramp, unit-aware legend, and a live 'current timestep' line inside the slider's variable panel that updates as you scrub. GDFS-backed layers are clipped server-side to a South-Asia bbox so a global-grid raster doesn't balloon Mapbox's GPU texture pool.",
     position: "right",
     action: "openSidebarSubcategory",
-    actionValue: "PMD Predictions",
+    actionValue: "PMD Forecast",
     targetResolver: "subcategoryHeaderByTitle",
-    targetValue: "PMD Predictions",
+    targetValue: "PMD Forecast",
   },
 
   // ===============================================================
@@ -592,7 +592,7 @@ const TOUR_STEPS = [
     target: "#ncopTourToggle",
     title: "That's the full tour",
     content:
-      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), and the newest addition — the PMD Predictions subcategory with 7 authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider. Click this graduation-cap icon any time to restart the tour.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), and the newest addition — the PMD Forecast subcategory with nine authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity, and 24h extreme highs/lows), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider. Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];

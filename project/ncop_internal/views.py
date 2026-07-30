@@ -8272,6 +8272,37 @@ _MON_PRED_ELEMENTS = {
                      "bbox": (55, 20, 80, 40),
                      "stops": [(0, (140, 100, 60)), (20, (200, 170, 120)), (40, (240, 220, 180)),
                                (60, (200, 230, 250)), (80, (100, 150, 220)), (100, (0, 50, 180))]},
+
+    # ---- 24-hour Extreme aggregates (from PMD Monitor's /warning page) --
+    # These are daily-max / daily-min / daily-max-wind fields; scientific
+    # equivalents of the operator-facing "24 hour Extreme *" toggles in the
+    # vendor's warning panel.  All three are global grids upstream so they
+    # inherit the same 55E-80E, 20N-40N bbox clip used by cloud_cover /
+    # rel_humidity above — dropping a global 4-8 MB TIFF to a Pakistan-
+    # region tile keeps GPU-texture memory sane.
+    # Data-type picks: TMAX2M / TMIN2M live in GDFS (80 frames — WRFPRS
+    # does not publish these); VMAX10M lives in ICON (42 frames — no other
+    # published model exposes it).
+    "ext_high_temp": {"data_type": "GDFS", "element": "TMAX2M",  "label": "24h Extreme High Temperature", "unit": "°C",
+                      "bbox": (55, 20, 80, 40),
+                      # Extended range for heat extremes over Pakistan
+                      # summer (up to 55 °C observed in Sindh).
+                      "stops": [(0,   (0, 0, 255)),    (15, (0, 200, 255)),  (25, (0, 200, 100)),
+                                (35, (200, 220, 0)),  (40, (255, 165, 0)),  (45, (255, 0, 0)),
+                                (50, (180, 0, 60)),   (55, (100, 0, 0))]},
+
+    "ext_low_temp":  {"data_type": "GDFS", "element": "TMIN2M",  "label": "24h Extreme Low Temperature",  "unit": "°C",
+                      "bbox": (55, 20, 80, 40),
+                      # Winter extremes over the northern belt reach -30 °C.
+                      "stops": [(-40, (80, 0, 128)),   (-20, (0, 0, 200)),    (-10, (0, 130, 255)),
+                                (0,   (0, 200, 255)),  (10,  (0, 200, 100)),  (20,  (200, 220, 0)),
+                                (30,  (255, 165, 0)),  (40,  (255, 0, 0))]},
+
+    # NOT INTEGRATED: 24h Extreme Wind (VMAX10M).  Only ICON publishes it
+    # and the source rasters are 561×1 (a 1-D vector disguised as a
+    # raster), which segfaults gdal.Warp under the thread-pool.  Do NOT
+    # add this element back without switching to a different upstream —
+    # WRFPRS / GDFS / GRAPES / ECMWF do not publish this field.
 }
 
 
@@ -8390,14 +8421,12 @@ def _mon_pred_convert_step(element_key, item):
     meta_path = os.path.join(out_dir, f"{safe}.json")
 
     # Disk-cache short-circuit — return the memoised JSON if the PNG is
-    # BOTH present AND passes the same trivial-size sanity check the fresh
-    # write path uses.  Files older than the PROJ_LIB fix on prod were
-    # written as 2894-byte all-transparent PNGs; without this guard they
-    # would be served forever because the short-circuit never re-checked.
-    # Failing files fall through to the regeneration path below (which
-    # will overwrite them via the fresh gdal.Warp + validation chain).
+    # present + non-truncated.  Fresh writes are validated by variance +
+    # size below, so a paired (PNG, JSON) on disk was already known-good
+    # at write time; only guard here against 0-byte / truncated files
+    # from a system crash mid-write.  Threshold matches the write path.
     if os.path.exists(png_path) and os.path.exists(meta_path) \
-       and os.path.getsize(png_path) >= 4096:
+       and os.path.getsize(png_path) >= 512:
         try:
             with open(meta_path) as f:
                 return json.load(f)
@@ -8428,6 +8457,18 @@ def _mon_pred_convert_step(element_key, item):
             f"src {src_ds.RasterXSize}x{src_ds.RasterYSize} b={src_ds.RasterCount} "
             f"gt={src_ds.GetGeoTransform()} proj={(src_ds.GetProjection() or '')[:60]!r}"
         )
+        # Defensive shape check — some vendor feeds ship 1-D vector data
+        # dressed up as a 1-pixel-tall raster (observed: ICON/VMAX10M is
+        # 561×1).  gdal.Warp under the ThreadPoolExecutor can segfault
+        # trying to reproject such degenerate rasters — a C-level crash
+        # Python can't catch, which brings down the whole waitress
+        # process.  Reject anything with fewer than 4 rows or 4 columns
+        # of source data; a real 2D forecast raster is never that flat.
+        if src_ds.RasterXSize < 4 or src_ds.RasterYSize < 4:
+            raise ValueError(
+                f"source raster too flat ({src_ds.RasterXSize}x{src_ds.RasterYSize}) "
+                f"— likely 1-D vector data, skipping to avoid GDAL crash"
+            )
         try:
             _srcband = src_ds.GetRasterBand(1)
             _s_mn, _s_mx, _, _ = _srcband.GetStatistics(False, True)
@@ -8510,21 +8551,24 @@ def _mon_pred_convert_step(element_key, item):
         # with HTTP 200 and Mapbox loads without a console error).
         #
         # Two-stage guard:
-        #   1. size floor — filters the trivially small ~2-3 KB PNGs that a
-        #      completely-empty warp produces after PNG compression.
+        #   1. size floor — filters truly-broken (0-byte / a-few-hundred-
+        #      bytes) writes only.  Some legitimate layers (e.g. ICON's
+        #      coarse-grid VMAX10M clipped to Pakistan) produce a real
+        #      valid ~3 KB PNG, so the primary validity signal is (2).
         #   2. content variance — opens the PNG and confirms at least one
-        #      band has min != max (i.e. actual pixel diversity).  Catches
-        #      the rarer case of a PNG that's ABOVE the size floor but is
-        #      still a single uniform colour with no useful data.
+        #      band has min != max (i.e. actual pixel diversity).  This
+        #      catches every all-transparent / all-uniform "empty" PNG
+        #      regardless of size (including the 2894-byte case that hit
+        #      prod when PROJ_LIB was misconfigured).
         # Any failure deletes the broken file and raises — the surrounding
         # try/except returns None, the endpoint drops the step from the
         # response, and no broken URL propagates to the browser.
-        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 4096:
+        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 512:
             try: os.remove(png_path)
             except Exception: pass
             raise ValueError(
-                f"colorized PNG missing or trivially small ({element_key}/{run}/{fh}) "
-                f"— PROJ_LIB / GDAL_DATA misconfigured?  Check startup log."
+                f"colorized PNG missing or truncated ({element_key}/{run}/{fh}) "
+                f"— check PROJ_LIB / GDAL_DATA at startup log."
             )
         try:
             _check_ds = gdal.Open(png_path)
@@ -8674,3 +8718,91 @@ class PmdMonitorPredictionsAPIView(APIView):
             "run":     run,
             "steps":   steps,
         })
+
+
+# ==================================================================
+#  PMD Provincial Daily Forecast — proxy for pmd.gov.pk
+#  ----------------------------------------------------------------
+#  Upstream: https://pmd.gov.pk/phpapi/daily-forecastpro.php
+#  Public, no auth; but proxied here so the browser bundle never
+#  contains the upstream host (matches the security posture of every
+#  other integration in NCOP) AND so we can cache the response.
+#
+#  Response shape (upstream): a single-item list whose lone element
+#  has keys `bal_eng`, `gb_eng`, `isb_eng`, `kashmir_eng`, `kpk_eng`,
+#  `punjab_eng`, `sindh_eng` (HTML fragments) + `id`.  Roughly 3 KB
+#  total; PMD refreshes ~twice daily.  We normalize to a friendlier
+#  {provinces: [{id, code, title, text}]} shape the frontend can
+#  render straight into tabs without upstream-specific renames.
+#
+#  Cache: 30 min primary + 3 h stale fallback (same pattern as the
+#  PMD Monitor endpoints above).  If upstream is down we serve last-
+#  known-good with `_stale: true` so the UI can badge it.
+# ==================================================================
+class PmdDailyForecastProAPIView(APIView):
+    UPSTREAM   = "https://pmd.gov.pk/phpapi/daily-forecastpro.php"
+    CACHE_KEY  = "pmd_daily_forecast_pro"
+    STALE_KEY  = "pmd_daily_forecast_pro_stale"
+    PRIMARY_TTL = 30 * 60          # 30 min
+    STALE_TTL   = 6 * 60 * 60      # 6 h
+    TIMEOUT     = 15
+
+    # File-name → operator-friendly identifier + PMD province code (both
+    # extracted live from the vendor SPA at CityForecastRight-*.js).
+    _PROVINCES = [
+        ("bal_eng",     "Balochistan", "5"),
+        ("gb_eng",      "GB",          "7"),
+        ("isb_eng",     "Islamabad",   "6"),
+        ("kashmir_eng", "Kashmir",     "9"),
+        ("kpk_eng",     "KPk",         "1"),
+        ("punjab_eng",  "Punjab",      "3"),
+        ("sindh_eng",   "Sindh",       "4"),
+    ]
+
+    def _normalize(self, upstream):
+        row = (upstream[0] if isinstance(upstream, list) and upstream else {}) or {}
+        provinces = []
+        for file_name, title, code in self._PROVINCES:
+            text = (row.get(file_name) or "").strip()
+            provinces.append({
+                "id":    title,
+                "code":  code,
+                "title": title,
+                "text":  text,           # raw HTML fragment — frontend sanitises
+                "empty": not text,
+            })
+        return {
+            "id":           row.get("id"),
+            "provinces":    provinces,
+            "generated_at": int(time.time()),
+            "upstream":     "pmd.gov.pk/phpapi/daily-forecastpro.php",
+        }
+
+    def get(self, request):
+        # Honour cache-buster query param — the frontend passes _=<epoch>
+        # so a re-toggle of the Story panel triggers a fresh proxy fetch
+        # once the 30-min TTL expires.
+        hit = cache.get(self.CACHE_KEY)
+        if hit is not None:
+            return JsonResponse(hit)
+        try:
+            r = requests.get(
+                self.UPSTREAM,
+                timeout=self.TIMEOUT,
+                headers={"User-Agent": "NCOP/1.0",
+                         "Accept": "application/json"},
+            )
+            r.raise_for_status()
+            payload = self._normalize(r.json())
+            cache.set(self.CACHE_KEY, payload, self.PRIMARY_TTL)
+            cache.set(self.STALE_KEY, payload, self.STALE_TTL)
+            return JsonResponse(payload)
+        except Exception as e:
+            stale = cache.get(self.STALE_KEY)
+            if stale is not None:
+                return JsonResponse({**stale, "_stale": True,
+                                     "_error": str(e)[:200]})
+            return JsonResponse(
+                {"error": f"provincial forecast unavailable: {str(e)[:200]}"},
+                status=502,
+            )

@@ -123,8 +123,18 @@ function _recomputeDateInset() {
   // pills the budget per label is roughly containerWidth / (N - 1) — that's
   // the gap between two adjacent tick centers. If the widest label (plus a
   // small breathing gap) exceeds that budget, two labels will overlap.
+  //
+  // Count only spans that will actually render — empty spans (used by
+  // thinning-based loaders like PMD Forecast that emit "" for skipped
+  // indices to preserve 1:1 span-to-frame indexing) collapse via CSS
+  // `span:empty { padding: 0; … }` and don't need a slot in the width
+  // budget.  For layers whose every span has text, `visibleN` equals
+  // `spans.length` so behaviour is unchanged.  Falls back to the total
+  // count in the pathological "all-empty" case so we never divide by 0.
   const containerWidth = yearLabelsDiv.clientWidth || 0;
-  const n = spans.length;
+  let visibleN = 0;
+  spans.forEach((s) => { if (s.textContent) visibleN += 1; });
+  const n = visibleN || spans.length;
   if (containerWidth > 0 && n > 1) {
     const slotWidth = containerWidth / (n - 1);
     const GAP = 4;             // px of breathing room between adjacent labels

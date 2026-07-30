@@ -3770,16 +3770,23 @@ const _PMD_PRED_CACHE = new Map(); // elementKey → Array<entry>
 // Slider label thinner — the temporal slider renders one <span> per frame,
 // so with 20-30 steps the labels cascade into an unreadable strip.  Solution
 // that doesn't touch the shared slider code: emit a formatted date only for
-// a small, evenly-spaced subset of indices (first + last + every-Nth), and
-// return an empty string for the rest.  Empty spans still get created (so
-// step indexing stays 1:1 with frames and click-to-jump keeps working), but
-// they render as 0-width elements — visually silent, functionally intact.
-// Target ~8 visible labels regardless of frame count.
+// a small, evenly-spaced subset of indices, and return an empty string for
+// the rest.  Empty spans still get created (so step indexing stays 1:1
+// with frames and click-to-jump keeps working) but render as 0-width via
+// _temporal.css's `span:empty` rule — visually silent, functionally intact.
+//
+// Uses linear interpolation across [0, total-1] so picks are ALWAYS evenly
+// spaced with the first + last positions guaranteed and minimum gap =
+// (total-1)/(target-1).  The earlier "force total-1 into a stepping loop"
+// approach produced a collision at the right edge (e.g. picks 28 AND 29
+// for total=30 → labels overlapping at 3.4 % apart in the slider strip).
 function _pmdPickLabelIndices(total, target = 8) {
   if (total <= target) return null; // null = show every label
-  const step = Math.max(1, Math.ceil(total / target));
-  const picks = new Set([0, total - 1]);
-  for (let i = 0; i < total; i += step) picks.add(i);
+  const picks = new Set();
+  const divisor = target - 1;
+  for (let i = 0; i < target; i++) {
+    picks.add(Math.round((i * (total - 1)) / divisor));
+  }
   return picks;
 }
 

@@ -656,7 +656,7 @@
                 <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
                 <a href="#new-gis-layers" class="sidebar-link">New GIS Layers &mdash; Hydrology / Geology / Seismology</a>
                 <a href="#agriculture-monitoring" class="sidebar-link">Agriculture Monitoring &mdash; IPC &amp; PBS Crops</a>
-                <a href="#pmd-predictions" class="sidebar-link">PMD Predictions &mdash; WRFPRS / GDFS Forecasts</a>
+                <a href="#pmd-predictions" class="sidebar-link">PMD Forecast &mdash; WRFPRS / GDFS Rasters</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
                 <a href="#station-layers" class="sidebar-link">Station Layers</a>
@@ -810,13 +810,13 @@
                 <ol class="doc-steps">
                     <li><b>Click the hamburger menu</b> (top-left corner). The sidebar slides in with every category available.</li>
                     <li><b>Expand an accordion</b> &mdash; GIS Layers, Weather Systems, Flood Monitoring, Air Quality, Agriculture Monitoring, Ocean &amp; Coastal, or Early Warning.</li>
-                    <li><b>Expand a subcategory</b> inside it (e.g. Weather Systems &rarr; PMD Predictions).</li>
+                    <li><b>Expand a subcategory</b> inside it (e.g. Weather Systems &rarr; PMD Forecast).</li>
                     <li><b>Toggle a layer</b> &mdash; either a switch (for &ldquo;always-on&rdquo; layers like boundaries) or a click-tile (for &ldquo;time-aware&rdquo; layers where the bottom slider lights up).</li>
                     <li><b>Search</b> &mdash; if you know the layer name, type it in the sidebar&rsquo;s search box to filter every category instantly.</li>
                 </ol>
 
                 <figure class="doc-figure">
-                    <img src="{% static 'docs_images/layers_on_off.png' %}" alt="Sidebar accordion open, PMD Predictions subcategory expanded, one layer being toggled on" loading="lazy">
+                    <img src="{% static 'docs_images/layers_on_off.png' %}" alt="Sidebar accordion open, PMD Forecast subcategory expanded, one layer being toggled on" loading="lazy">
                     <figcaption>The sidebar tree. Categories &rarr; Subcategories &rarr; Layers. Filter cards (like the 121-crop selector or the 13-hazard PMD Warnings filter) appear <em>above</em> the toggles they govern.</figcaption>
                 </figure>
 
@@ -832,7 +832,7 @@
                 </ol>
 
                 <figure class="doc-figure">
-                    <img src="{% static 'docs_images/temporal.png' %}" alt="Bottom temporal slider active on a PMD Predictions layer, showing play button, speed, timeline with visible date labels, gradient legend, opacity control" loading="lazy">
+                    <img src="{% static 'docs_images/temporal.png' %}" alt="Bottom temporal slider active on a PMD Forecast layer, showing play button, speed, timeline with visible date labels, gradient legend, opacity control" loading="lazy">
                     <figcaption>The temporal slider. Top row: transport controls, timeline with click-to-jump date labels, drag handle. Bottom row: remove button + layer title + current timestep, colour ramp legend, opacity control.</figcaption>
                 </figure>
 
@@ -1418,7 +1418,7 @@ sudo journalctl -u ncop-waitress.service -f
                                 <td><b>Image Frame</b></td>
                                 <td>Time-aware raster where each forecast hour is a single pre-rendered PNG pinned to 4 corner coordinates.</td>
                                 <td>Django proxy fetches the raw GeoTIFF from an authenticated source, warps + colorizes via GDAL, caches PNG on disk.</td>
-                                <td>PMD Predictions (WRFPRS / GDFS): precipitation, temperature, cloud cover, humidity.</td>
+                                <td>PMD Forecast (WRFPRS / GDFS): precipitation, temperature, cloud cover, humidity, 24h extreme highs/lows.</td>
                             </tr>
                             <tr>
                                 <td><b>Feature Popup Layer</b></td>
@@ -1431,7 +1431,7 @@ sudo journalctl -u ncop-waitress.service -f
                 </div>
 
                 <h3 class="subsection-title">The request lifecycle for a single layer</h3>
-                <p>When an operator toggles a layer &mdash; e.g. &ldquo;PMD Predictions &mdash; 3h Precipitation&rdquo; &mdash; here&rsquo;s exactly what happens in order:</p>
+                <p>When an operator toggles a layer &mdash; e.g. the &ldquo;3h Precipitation&rdquo; toggle under PMD Forecast &mdash; here&rsquo;s exactly what happens in order:</p>
                 <div class="flow-diagram">
                     <div class="flow-node flow-node--accent"><b>1 · Click</b><span>Sidebar checkbox fires; <code>handleTemporalInteraction</code> called.</span></div>
                     <div class="flow-arrow">→</div>
@@ -1503,7 +1503,7 @@ sudo journalctl -u ncop-waitress.service -f
                         </thead>
                         <tbody>
                             <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers <em>(expanded)</em>, Geology <em>(new)</em>, Seismology <em>(new)</em></td><td>National / provincial / district / tehsil boundaries; airports, schools, settlements; rivers, dams, watersheds AND 20 pre-computed flood-extent polygons across 6 major river basins &times; 3 severities; geological formations + PGA zones; fault lines, seismic source zones, seismic hazard map. See <a href="#new-gis-layers">New GIS Layers</a> for the full breakdown.</td></tr>
-                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, PMD Predictions <em>(new)</em>, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, seven PMD-Monitor forecast rasters (WRFPRS + GDFS &mdash; see <a href="#pmd-predictions">PMD Predictions</a>), Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
+                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, PMD Forecast <em>(new)</em>, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, nine PMD-Monitor forecast rasters (WRFPRS + GDFS &mdash; see <a href="#pmd-predictions">PMD Forecast</a>), Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
                             <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
                             <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
                             <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast</td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO.</td></tr>
@@ -1937,14 +1937,14 @@ seismological_global:seismic_hazard_map
             <!-- ============================================================ -->
             <section id="guided-tour">
                 <h2 class="section-title">Guided Tour (58 steps) <span class="section-anchor">#</span></h2>
-                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>58 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section + the PMD Predictions step under Weather Systems) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
+                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>58 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section + the PMD Forecast step under Weather Systems) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
 
                 <h3 class="subsection-title">Section flow</h3>
                 <ol>
                     <li><strong>Orientation</strong> (2 steps) &mdash; NCOP header + mini globe.</li>
                     <li><strong>Sidebar layer catalogue</strong> (3 steps) &mdash; hamburger menu, sidebar panel overview, search box.</li>
                     <li><strong>GIS Layers accordion</strong> (6 steps) &mdash; Administrative Boundaries &rarr; Infrastructure &rarr; Hydrological Layers &rarr; Geology <em>(new)</em> &rarr; Seismology <em>(new)</em>.</li>
-                    <li><strong>Weather Systems accordion</strong> (8 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations &rarr; <strong>PMD Predictions</strong> <em>(new)</em>.</li>
+                    <li><strong>Weather Systems accordion</strong> (8 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations &rarr; <strong>PMD Forecast</strong> <em>(new)</em>.</li>
                     <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
                     <li><strong>Air Quality accordion</strong> (2 steps).</li>
                     <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
@@ -2105,8 +2105,8 @@ seismological_global:seismic_hazard_map
 
             <!-- ============================================================ -->
             <section id="pmd-predictions">
-                <h2 class="section-title">PMD Predictions <span class="section-anchor">#</span></h2>
-                <p>Seven authenticated forecast rasters from the PMD Monitor portal at <code>115.186.56.181:12304</code>, fetched as raw single-band GeoTIFFs, warped + colorized server-side via GDAL, and served as ready-to-consume PNG frames the standard <code>#temp-slider1</code> controller plays as Mapbox <code>image</code> sources. Lives as a new subcategory under Weather Systems (see <a href="#sidebar-menu">Sidebar Menu</a>).</p>
+                <h2 class="section-title">PMD Forecast <span class="section-anchor">#</span></h2>
+                <p>Nine authenticated forecast rasters from the PMD Monitor portal at <code>115.186.56.181:12304</code>, fetched as raw single-band GeoTIFFs, warped + colorized server-side via GDAL, and served as ready-to-consume PNG frames the standard <code>#temp-slider1</code> controller plays as Mapbox <code>image</code> sources. Lives as a new subcategory under Weather Systems (see <a href="#sidebar-menu">Sidebar Menu</a>). <em>(Anchor <code>#pmd-predictions</code> is preserved for backwards-compat with older bookmarks / links.)</em></p>
 
                 <h3 class="subsection-title">Layer catalogue</h3>
                 <div class="table-wrap">
