@@ -135,6 +135,17 @@ const HAZARDS_BY_CODE = Object.fromEntries(
   (HAZARD_TYPES || []).map((h) => [h.code, h])
 );
 
+// Deliberate playback order for the Story sub-chapters.  Life-safety before
+// property: flood/rain/storm/lightning first, then temperature extremes, then
+// wind, then visibility-only hazards.  Any hazard NOT in this list is skipped
+// during playback; any hazard here that has no polygons on a given day is
+// silently omitted.  Reorder freely to change the briefing sequence.
+const HAZARD_PLAYBACK_ORDER = [
+  "FLD", "RAINSTORM", "HRAIN", "TSTM", "LTNG",
+  "SNOW", "HEATWAVE", "COLD", "GALE", "CONV",
+  "HAIL", "DUST", "FOG",
+];
+
 // Given a feature's properties, return the FIRST HAZARD_TYPES code it
 // matches (element short-code first, element_label pattern fallback), or
 // null if it belongs to no known hazard.  Mirrors pmd-warnings-filter.js's
@@ -2708,6 +2719,12 @@ function _extractHazardCodesFrom(text) {
 //   { id, date, dow, text, provinces:[...], districts:[...], hazards:[...] }
 function _buildChaptersFromOutlook(outlookData) {
   const days = Array.isArray(outlookData?.days) ? outlookData.days : [];
+  // Local-calendar YYYY-MM-DD for "today" — PMD outlook dates are Pakistan
+  // local calendar dates, so we compare on local YYYY-MM-DD strings rather
+  // than epoch-ms (avoids off-by-one drift when the browser is in a
+  // different timezone from the data source).
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return days.map((d, i) => {
     const dateStr = String(d?.date || "").trim();
     // "29 July, 2026 Wednesday" → dow = "Wednesday"; abbreviate to 3 chars
@@ -2724,7 +2741,16 @@ function _buildChaptersFromOutlook(outlookData) {
       districts: _extractDistrictNames(text),
       hazards:   _extractHazardCodesFrom(text),
     };
-  }).filter((c) => c.text);   // drop days with no narrative
+  })
+    .filter((c) => c.text)      // drop days with no narrative
+    .filter((c) => {
+      // Drop days whose calendar date is strictly before today.  Today
+      // itself is kept — the outlook for the current day is still
+      // actionable.  A chapter whose date string doesn't parse is kept
+      // (better to show an ambiguous day than silently disappear it).
+      const iso = _chapterDateISO(c.date);
+      return !iso || iso >= todayISO;
+    });
 }
 
 // Build the flat playback list from the day chapters.  Each day contributes
@@ -2768,7 +2794,12 @@ function _buildPlaybackList(chapters) {
     const MAX_PER_HAZARD    = 5;
     const MAX_PER_CHAPTER   = 12;
     let subCount = 0;
-    for (const [code, feats] of byHazard) {
+    // Iterate in the deliberate HAZARD_PLAYBACK_ORDER (life-safety first)
+    // rather than the arbitrary Map insertion order, which was whatever
+    // the raw PMD API happened to serialise first.
+    const orderedCodes = HAZARD_PLAYBACK_ORDER.filter((code) => byHazard.has(code));
+    for (const code of orderedCodes) {
+      const feats = byHazard.get(code);
       if (subCount >= MAX_PER_CHAPTER) break;
       const room = MAX_PER_CHAPTER - subCount;
       const take = feats.slice(0, Math.min(MAX_PER_HAZARD, room));
