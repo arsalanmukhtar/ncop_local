@@ -1118,7 +1118,7 @@ export function generateGDPSRelHumLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_RelativeHumidity_2m`,
         ],
       },
       layers: [
@@ -1164,7 +1164,7 @@ export function generateGDPSSpecHumLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_HU_2m`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SpecificHumidity_2m`,
         ],
       },
       layers: [
@@ -1226,7 +1226,7 @@ export function generateGDPSAccPreciLayers() {
         tileSize: 256,
         tiles: [
           // Using dayIndex for the time parameter
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_ConvectivePrecip-Accum`,
         ],
       },
       layers: [
@@ -1278,7 +1278,7 @@ export function generateGDPSPreciTypesLayers() {
         type: "raster",
         tileSize: 256,
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.DIAG_NW_PT1H`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_PrecipType-Significant3h`,
         ],
       },
       layers: [
@@ -1316,7 +1316,7 @@ export function generateSnowDensityWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_DN.3h`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SnowDensity`,
         ],
       },
       layers: [
@@ -1351,7 +1351,7 @@ export function generateSnowDepthWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_SD`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_SnowDepth`,
         ],
       },
       layers: [
@@ -1388,7 +1388,7 @@ export function generateSnowfallHourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Snow-Prob`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_Snow-Prob`,
         ],
       },
       layers: [
@@ -1425,7 +1425,7 @@ export function generateThunderstormProbability3HourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_Thunderstorm-Prob`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_Thunderstorm-Prob`,
         ],
       },
       layers: [
@@ -1463,7 +1463,7 @@ export function generateLiquidFogProbability3HourlyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS-WEonG_15km_LiquidFogVisibility`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=CAPS-WEonG_3km_LiquidFogVisibility`,
         ],
       },
       layers: [
@@ -1498,7 +1498,7 @@ export function generateConvectivePrecipitationWeeklyLayers() {
         id: sourceId,
         type: "raster",
         tiles: [
-          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS.ETA_PR`,
+          `https://geo.weather.gc.ca/geomet?bbox={bbox-epsg-3857}&format=image/png&service=WMS&version=1.1.1&request=GetMap&srs=EPSG:3857&transparent=true&width=256&height=256&time=${timeParam}&layers=GDPS_15km_ConvectivePrecip-Accum`,
         ],
       },
       layers: [
@@ -3562,4 +3562,332 @@ export function generateMBX_IMERGPrecipRateLayers() {
   });
 
   return out;
+}
+
+// ============================================================================
+// RainViewer — radar precipitation + satellite infrared
+// ----------------------------------------------------------------------------
+// Both data products are exposed as async frame-builders that return the
+// standard temporal-layer shape ([{ source, layers, date }, ...]) so the
+// regular #temp-slider1 controller can drive them just like DWD / IMERG /
+// ECMWF / etc. The descriptor JSON (`weather-maps.json`) rotates every ~10
+// min upstream so a short in-module cache keeps a re-toggle cheap without
+// going stale.
+// ============================================================================
+
+const RAINVIEWER_DESCRIPTOR_URL =
+  "https://api.rainviewer.com/public/weather-maps.json";
+const RAINVIEWER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const RAINVIEWER_FETCH_TIMEOUT_MS = 8000;
+
+// Hard caps tuned for the RainViewer free tier:
+//   * Tile fetches scale ~linearly with frame count because every frame is
+//     its own raster source. The previous engine capped at 6 to stay under
+//     the per-IP rate limit (~20 req/sec); newer descriptors return up to
+//     13 past frames which trips 429s instantly. Re-imposing the same cap.
+//   * The free tile endpoint stops serving above z≈8; passing maxzoom into
+//     both the source AND each layer tells Mapbox to overzoom z=8 tiles
+//     instead of requesting ones that would 404 / 429.
+const RAINVIEWER_MAX_FRAMES = 6;
+const RAINVIEWER_MAXZOOM = 8;
+
+// Pick `n` indices evenly across [0..arr.length-1], always including the
+// first and last entry so the slider's start / end labels match the
+// requested range exactly.
+function evenSampleArray(arr, n) {
+  if (!Array.isArray(arr) || arr.length === 0) return [];
+  if (arr.length <= n) return arr.slice();
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    const idx = Math.round((i * (arr.length - 1)) / (n - 1));
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    out.push(arr[idx]);
+  }
+  return out;
+}
+
+let _rvDescriptorCache = null; // { ts, data }
+let _rvInflight = null;        // Promise<data>
+
+async function fetchRainViewerDescriptor() {
+  const now = Date.now();
+  if (_rvDescriptorCache && now - _rvDescriptorCache.ts < RAINVIEWER_CACHE_TTL_MS) {
+    return _rvDescriptorCache.data;
+  }
+  if (_rvInflight) return _rvInflight;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RAINVIEWER_FETCH_TIMEOUT_MS);
+  _rvInflight = fetch(RAINVIEWER_DESCRIPTOR_URL, { signal: ctrl.signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`RainViewer HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((data) => {
+      _rvDescriptorCache = { ts: Date.now(), data };
+      _rvInflight = null;
+      return data;
+    })
+    .catch((err) => {
+      _rvInflight = null;
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+  return _rvInflight;
+}
+
+function rvFormatPKTLabel(unixSeconds) {
+  const pktTime = new Date(unixSeconds * 1000 + 5 * 60 * 60 * 1000);
+  const day = String(pktTime.getUTCDate()).padStart(2, "0");
+  const MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const mon = MONTHS[pktTime.getUTCMonth()];
+  const h = pktTime.getUTCHours();
+  const m = pktTime.getUTCMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${mon} ${day} - ${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function rvCollectFrames(node, key) {
+  // Support both newer ({ past, nowcast }) and older ({ infrared, past, frames })
+  // descriptor shapes. Returns an array of {time, path} sorted by time.
+  if (!node || typeof node !== "object") return [];
+  const pools = [];
+  if (key === "radar") {
+    if (Array.isArray(node.past)) pools.push(node.past);
+    if (Array.isArray(node.nowcast)) pools.push(node.nowcast);
+  } else if (key === "satellite") {
+    if (Array.isArray(node.infrared)) pools.push(node.infrared);
+    if (Array.isArray(node.past) && pools.length === 0) pools.push(node.past);
+    if (Array.isArray(node.frames) && pools.length === 0) pools.push(node.frames);
+  }
+  if (pools.length === 0) {
+    // Last-resort: any array of {time, path} on the node
+    for (const v of Object.values(node)) {
+      if (
+        Array.isArray(v) &&
+        v.length &&
+        v.some((it) => it && typeof it === "object" && it.time && it.path)
+      ) {
+        pools.push(v);
+        break;
+      }
+    }
+  }
+  const flat = pools.flat().filter(
+    (f) => f && typeof f.time === "number" && typeof f.path === "string"
+  );
+  flat.sort((a, b) => a.time - b.time);
+  return flat;
+}
+
+function rvBuildEntry(host, frame, kind) {
+  // kind: "radar" -> color scheme 2, options 1_1 (smooth + snow)
+  //       "satellite" -> color scheme 0, options 0_0 (default IR ramp)
+  const tail = kind === "radar" ? "2/1_1" : "0/0_0";
+  const tile = `${host}${frame.path}/256/{z}/{x}/{y}/${tail}.png`;
+  const id = `rv_${kind}_${frame.time}`;
+  return {
+    source: {
+      id,
+      type: "raster",
+      tileSize: 256,
+      tiles: [tile],
+      // Cap source overzoom so Mapbox uses z=8 tiles for higher zooms instead
+      // of requesting tiles the free tier won't serve.
+      maxzoom: RAINVIEWER_MAXZOOM,
+    },
+    layers: [
+      {
+        id,
+        type: "raster",
+        source: id,
+        layout: { visibility: "visible" },
+        paint: {
+          "raster-opacity": 0,
+          "raster-fade-duration": 200,
+        },
+        maxzoom: RAINVIEWER_MAXZOOM,
+      },
+    ],
+    date: rvFormatPKTLabel(frame.time),
+  };
+}
+
+export async function generateRainViewerRadarLayers() {
+  const data = await fetchRainViewerDescriptor();
+  const host = data?.host;
+  if (!host) throw new Error("RainViewer descriptor missing host");
+  const allFrames = rvCollectFrames(data.radar, "radar");
+  // Empty (rare for radar) → return [] so the slider stays closed silently
+  // instead of surfacing a hard error.
+  if (!allFrames.length) return [];
+  const frames = evenSampleArray(allFrames, RAINVIEWER_MAX_FRAMES);
+  return frames.map((f) => rvBuildEntry(host, f, "radar"));
+}
+
+export async function generateRainViewerSatelliteIRLayers() {
+  const data = await fetchRainViewerDescriptor();
+  const host = data?.host;
+  if (!host) throw new Error("RainViewer descriptor missing host");
+  const allFrames = rvCollectFrames(data.satellite, "satellite");
+  // Upstream's `satellite.infrared` array is sometimes briefly empty.
+  // Treat as a graceful no-op rather than a thrown error.
+  if (!allFrames.length) return [];
+  const frames = evenSampleArray(allFrames, RAINVIEWER_MAX_FRAMES);
+  return frames.map((f) => rvBuildEntry(host, f, "satellite"));
+}
+
+
+// ===========================================================================
+// PMD Predictions (WRFPRS precipitation forecast rasters)
+// ---------------------------------------------------------------------------
+// The backend endpoint /api/pmd/monitor/predictions/<element_key>/ fetches
+// authenticated GeoTIFFs from the vendor PMD Monitor system, warps them to
+// EPSG:3857, colorizes via GDAL, and returns one {date, url, coordinates}
+// per forecast hour.  Here we map that into the temporal-slider entry shape
+// the rest of NCOP uses — one Mapbox `image` source per step, one `raster`
+// layer referencing it, only step 0 rendered opaque at load.
+//
+// Wired into the sidebar as a `() => Promise<Array<entry>>` factory (see
+// map-layers.js).  The temporal dispatcher (mapbox-functions.js) treats
+// factory + promise the same as static arrays — invokes the factory,
+// awaits the resulting promise, hands the resolved frames to
+// updateTempSliderAsync which finally calls updateTempSlider.
+//
+// Session cache: the loader memoises its most-recent successful result
+// per elementKey so re-toggling the same layer during one session doesn't
+// re-fetch the whole frame list from the backend.  A different elementKey
+// is cached independently; the memo is cleared on the first fetch error.
+// ===========================================================================
+const _PMD_PRED_CACHE = new Map(); // elementKey → Array<entry>
+
+// Slider label thinner — the temporal slider renders one <span> per frame,
+// so with 20-30 steps the labels cascade into an unreadable strip.  Solution
+// that doesn't touch the shared slider code: emit a formatted date only for
+// a small, evenly-spaced subset of indices, and return an empty string for
+// the rest.  Empty spans still get created (so step indexing stays 1:1
+// with frames and click-to-jump keeps working) but render as 0-width via
+// _temporal.css's `span:empty` rule — visually silent, functionally intact.
+//
+// Uses linear interpolation across [0, total-1] so picks are ALWAYS evenly
+// spaced with the first + last positions guaranteed and minimum gap =
+// (total-1)/(target-1).  The earlier "force total-1 into a stepping loop"
+// approach produced a collision at the right edge (e.g. picks 28 AND 29
+// for total=30 → labels overlapping at 3.4 % apart in the slider strip).
+function _pmdPickLabelIndices(total, target = 8) {
+  if (total <= target) return null; // null = show every label
+  const picks = new Set();
+  const divisor = target - 1;
+  for (let i = 0; i < target; i++) {
+    picks.add(Math.round((i * (total - 1)) / divisor));
+  }
+  return picks;
+}
+
+function _pmdPredBuildEntry(step, index, itemKey, showLabel) {
+  const id = `${itemKey}_${index}`;
+  const fullLabel = _pmdPredFormatDate(step.date);
+  return {
+    source: {
+      id,
+      // Mapbox `image` source (one static PNG pinned to 4 corner coords).
+      // Correct primitive for pre-rendered raster steps — `raster` would
+      // want a {z}/{x}/{y} tile template which we do not have here.
+      type: "image",
+      url: step.url,
+      coordinates: step.coordinates,
+    },
+    layers: [
+      {
+        id,
+        type: "raster", // layer type stays `raster` — it renders both
+                        // raster-tile AND image sources; not a typo.
+        source: id,
+        layout: { visibility: "visible" },
+        paint: {
+          "raster-opacity": index === 0 ? 0.85 : 0,
+          "raster-fade-duration": 500,
+        },
+      },
+    ],
+    // Empty date on skipped indices => 0-width slider-label span (thinning).
+    date: showLabel ? fullLabel : "",
+    // `dateFull` is always populated so the dynamic current-step display
+    // in .ts-variable can show a date for every frame, including the ones
+    // whose slider-label span was intentionally left empty for the thin.
+    dateFull: fullLabel,
+  };
+}
+
+function _pmdPredFormatDate(iso) {
+  // Convert 2026-07-27T03:00:00 → "Jul 27 - 08:00 AM" in PKT (UTC+5),
+  // matching the label style used by DWD / IMERG entries so the shared
+  // timeline year-labels renderer displays them consistently.
+  if (!iso) return "";
+  try {
+    const utc = new Date(iso);
+    if (Number.isNaN(utc.getTime())) return String(iso);
+    const pkt = new Date(utc.getTime() + 5 * 60 * 60 * 1000);
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const day = String(pkt.getUTCDate()).padStart(2, "0");
+    const mon = MONTHS[pkt.getUTCMonth()];
+    let h = pkt.getUTCHours();
+    const m = String(pkt.getUTCMinutes()).padStart(2, "0");
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${mon} ${day} - ${String(h).padStart(2, "0")}:${m} ${ampm}`;
+  } catch (_) {
+    return String(iso);
+  }
+}
+
+/**
+ * Factory: returns a builder function that, when invoked, fetches the
+ * per-element frame list from the Django proxy and resolves it into the
+ * temporal-slider entry shape.  Assign the returned function (not its
+ * result) to `window[itemKey]` — the temporal dispatcher calls it lazily
+ * on the user's first click, so no boot-time network cost.
+ *
+ * @param {"hourtpe"|"sixtpe"|"twelvetpe"|"daytpe"} elementKey
+ * @param {string} itemKey  window key + sidebar data-item-key (e.g. "pmd_pred_hourtpe")
+ * @returns {() => Promise<Array<entry>>}
+ */
+export function generatePmdPredictionsLoader(elementKey, itemKey) {
+  return async function _loadPmdPredictions() {
+    if (_PMD_PRED_CACHE.has(elementKey)) {
+      return _PMD_PRED_CACHE.get(elementKey);
+    }
+    const url = `${window.location.origin}/api/pmd/monitor/predictions/${elementKey}/`;
+    let data;
+    try {
+      const r = await fetch(url, { credentials: "same-origin" });
+      if (!r.ok) {
+        console.warn(`[pmd-predictions] ${elementKey} → HTTP ${r.status}`);
+        return [];
+      }
+      data = await r.json();
+    } catch (e) {
+      console.warn(`[pmd-predictions] ${elementKey} fetch failed:`, e);
+      return [];
+    }
+    const steps = Array.isArray(data?.steps) ? data.steps : [];
+    if (!steps.length) {
+      console.info(`[pmd-predictions] ${elementKey} returned no frames`);
+      return [];
+    }
+    // Decide which indices should show a real label before we walk the list
+    // — computed once per layer load rather than per-entry.
+    const showAt = _pmdPickLabelIndices(steps.length, 8);
+    const frames = steps.map((s, i) =>
+      _pmdPredBuildEntry(s, i, itemKey, showAt === null || showAt.has(i))
+    );
+    _PMD_PRED_CACHE.set(elementKey, frames);
+    return frames;
+  };
 }

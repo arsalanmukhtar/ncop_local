@@ -1,13 +1,31 @@
-from .base import *
+"""
+Production settings — HTTPS, HSTS, manifest-backed static files.
 
+Entry point: ``ncop_project.wsgi:application`` behind Gunicorn + Nginx.
+"""
+
+from .base import *  # noqa: F401,F403
+
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
 DEBUG = False
-
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["your.production.host"])
 
-# Use built bundles only
+# Django 5 requires these for cross-origin POSTs over HTTPS (e.g. when the
+# app is served behind a reverse proxy with a different external hostname).
+# Comma-separated full-origin list, e.g.
+#   CSRF_TRUSTED_ORIGINS=https://ncop.ndma.gov.pk,https://www.ncop.ndma.gov.pk
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+# ---------------------------------------------------------------------------
+# Vite — always use the built manifest in production.
+# ---------------------------------------------------------------------------
 DJANGO_VITE["default"]["dev_mode"] = False
 
-# Security hardening for production
+# ---------------------------------------------------------------------------
+# Security hardening
+# ---------------------------------------------------------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

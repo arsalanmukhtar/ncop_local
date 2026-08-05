@@ -1,5 +1,5 @@
 // frontend/vite.config.js
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
@@ -8,9 +8,17 @@ import tailwindcss from "@tailwindcss/vite";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const HMR_HOST = process.env.VITE_HMR_HOST || "localhost";
+// Load repo-root .env so we share one source of truth with Django.
+// Vite's own .env loader only scans `envDir` (defaults to this config's
+// directory) and only exposes VITE_* to client code — not to config-time
+// process.env. loadEnv() with the repo root gives us both Node-level access
+// and keeps the values aligned with what django-environ reads.
+const REPO_ROOT = resolve(__dirname, "..");
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, REPO_ROOT, "");
+  const HMR_HOST = env.VITE_HMR_HOST || "localhost";
+  return {
   // CRITICAL FIX: Use "/" in dev, "/static/" in production
   base: command === "serve" ? "/" : "/static/",
 
@@ -59,4 +67,5 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-}));
+  };
+});

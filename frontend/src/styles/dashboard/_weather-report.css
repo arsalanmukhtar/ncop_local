@@ -1,0 +1,2332 @@
+/* =========================================================================
+   Weather Report Panel
+   -------------------------------------------------------------------------
+   Slide-from-right panel anchored to its rail button by anchorRailPanels-
+   ToButtons() (see dashboard.js).  Theming uses the same NCOP custom
+   properties the rest of the rail panels rely on, so day/night flip
+   automatically via [data-theme="night"] overrides at the bottom.
+   ========================================================================= */
+
+/* The wrapper only exists so the rail builder has a known parent to pull
+   the button out of — once `buildUnifiedRightRail` reparents the button,
+   the wrapper is dead weight, so we hide it.  Mirrors the geocoder
+   wrapper pattern in _controls.css. */
+.custom-weather-report-control {
+    display: none !important;
+}
+
+/* Resting background — explicit `var(--secondary-bg)` + blur so the
+   button looks identical to its neighbours against the rail's tinted
+   background.  Without the pair, the browser default `<button>` paint
+   shows through as a lighter tile (this is the same reason geocoder
+   reproduces these rules at _controls.css:1033-1037). */
+.map-right-rail > .custom-weather-report-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: var(--white) !important;
+    cursor: pointer;
+}
+
+/* Hover — matches the unified hover effect, but scoped so my active
+   state isn't overpainted. */
+.map-right-rail > .custom-weather-report-btn:hover:not(.active-weather-report) {
+    background: var(--primary-bg) !important;
+}
+
+/* Night-mode resting — mirror the geocoder pattern so the rail stays
+   visually homogeneous in both themes. */
+[data-theme="night"] .map-right-rail > .custom-weather-report-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="night"] .map-right-rail > .custom-weather-report-btn:hover:not(.active-weather-report) {
+    background: var(--glass-highlight) !important;
+}
+
+/* Active state — the panel is open.  Match the geocoder's NDMA-blue
+   selected fill so the rail's "this is on" affordance is consistent. */
+.map-right-rail > .custom-weather-report-btn.active-weather-report {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ---------- Panel shell ---------- */
+/* Switched from `max-height` to a definite `height` because flex-child
+   layout math is unreliable when the parent's height is "up to N" rather
+   than exactly N — Chromium in particular leaks content height into
+   `flex: 1 1 auto` children and the inner scroll never gets a bounded
+   height.  Definite height = deterministic layout. */
+.weather-report-panel {
+    position: absolute;
+    top: 0;
+    right: 42px;
+    /* Widened from 425 → 580 so the PMD Weekly Forecast table (6
+       columns incl. weather-emoji temperature ranges) renders without
+       horizontal clipping.  Panel is now user-resizable via the corner
+       grip; the JS enforces a 460 px min-width so it can shrink back to
+       roughly the old footprint if the user prefers a slimmer read.
+       max-width guards against overflowing the map on narrow viewports. */
+    width: 580px;
+    max-width: calc(100vw - 80px);
+    height: min(620px, calc(100vh - 240px)) !important;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 12px;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px var(--shadow-soft, rgba(0, 0, 0, 0.4));
+    color: var(--text-primary);
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    z-index: 1001;
+}
+
+/* ---------- Drag handle on the header ---------- */
+/* The whole .wrp-header row is the grab target; the 3-line grip is a
+   pure visual cue.  cursor:grab / grabbing gives the drag affordance,
+   user-select:none stops the header text from being selected during
+   the drag gesture. */
+.weather-report-panel .wrp-header[data-wrp-drag] {
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.weather-report-panel.is-dragging .wrp-header[data-wrp-drag] {
+    cursor: grabbing;
+}
+
+/* Drag grip — three horizontal bars on the LEFT of the header.  Made
+   visually prominent so the affordance is obvious (subtle 55% opacity
+   left users unsure whether the header was interactive at all).
+   pointer-events: none so the grip doesn't intercept the pointer —
+   the whole `.wrp-header[data-wrp-drag]` catches the gesture. */
+.weather-report-panel .wrp-drag-grip {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 6px;
+    padding: 4px 2px;
+    border-radius: 4px;
+    opacity: 0.85;
+    pointer-events: none;
+    transition: opacity 0.18s ease, background 0.18s ease;
+}
+.weather-report-panel .wrp-header:hover .wrp-drag-grip {
+    opacity: 1;
+    background: rgba(148, 163, 184, 0.12);
+}
+.weather-report-panel.is-dragging .wrp-drag-grip {
+    opacity: 1;
+    background: rgba(70, 178, 255, 0.18);
+}
+.weather-report-panel .wrp-drag-grip span {
+    display: block;
+    height: 2.5px;
+    border-radius: 2px;
+    background: var(--text-secondary, rgba(203, 213, 225, 0.95));
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Resize handle (bottom-right corner) ---------- */
+.weather-report-panel .wrp-resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    color: var(--text-muted, rgba(148, 163, 184, 0.7));
+    opacity: 0.55;
+    transition: opacity 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    z-index: 4;
+    touch-action: none;
+    pointer-events: auto;
+}
+.weather-report-panel .wrp-resize:hover {
+    opacity: 1;
+    color: var(--ndma-blue, #46b2ff);
+    transform: scale(1.08);
+}
+.weather-report-panel .wrp-resize svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+.weather-report-panel.is-resizing .wrp-resize {
+    opacity: 1;
+    color: var(--ndma-blue, #46b2ff);
+}
+
+.weather-report-panel .wrp-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 8px;
+}
+.weather-report-panel .wrp-header-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+.weather-report-panel .wrp-subtitle {
+    margin: 3px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Threshold strip — sits directly under the subtitle so the user knows
+   at a glance which numeric bar a district has to clear before its
+   card flips into the red animated alert state.  Allows wrapping
+   because long thresholds (AQI, NO₂, etc. with their parenthetical
+   citations) wouldn't fit on one line at the panel's 425 px width
+   and were being silently ellipsised down to "...". */
+.weather-report-panel .wrp-threshold {
+    margin: 5px 0 0;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+}
+.weather-report-panel .wrp-threshold[hidden] {
+    display: none;
+}
+.weather-report-panel .wrp-threshold-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    /* flex `gap` on the parent handles spacing now */
+    flex: 0 0 auto;
+}
+/* Pill-style: dark backdrop + white text + red border so the threshold
+   number is legible against any panel background variant.  Day-mode
+   panel bg is dark glass and night-mode is light glass — both work
+   with this pill because it carries its own backdrop. */
+.weather-report-panel .wrp-threshold-value {
+    display: inline-block;
+    padding: 1px 9px;
+    background: rgba(120, 0, 0, 0.85);
+    border: 1px solid var(--ndma-red);
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.4;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+/* Header actions cluster — groups the two export buttons with the
+   close button so the drag-header layout stays tidy at every panel
+   width.  Buttons share a common 28×28 chrome (see .wrp-close-btn
+   base rules).  Export buttons flip to a subtle NDMA-blue accent on
+   hover to signal they're download actions distinct from the red-
+   tinted close button. */
+.weather-report-panel .wrp-header-actions {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.weather-report-panel .wrp-export-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.12s ease;
+}
+
+.weather-report-panel .wrp-export-btn i,
+.weather-report-panel .wrp-export-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.weather-report-panel .wrp-export-btn:hover:not(:disabled) {
+    background: rgba(70, 178, 255, 0.14);
+    border-color: rgba(70, 178, 255, 0.55);
+    color: var(--ndma-blue, #46b2ff);
+    transform: translateY(-1px);
+}
+
+.weather-report-panel .wrp-export-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
+}
+
+.weather-report-panel .wrp-export-btn:disabled {
+    opacity: 0.40;
+    cursor: not-allowed;
+}
+
+/* -------- Export progress overlay ------------------------------------
+   Full-panel modal shown while the Word / PDF report is being built +
+   handed to the OS download layer.  Reuses the existing @keyframes
+   wrp-loader-spin so no new animation is registered.  z-index sits
+   above .wrp-body/.wrp-scroll but below the header drag layer so the
+   panel can still be moved while a build is in flight (rare — the
+   spin is <50ms — but it stays consistent).  is-error swaps the
+   accent to the NDMA red palette for failure surfacing. */
+.weather-report-panel .wrp-export-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-bg);
+    background: color-mix(in srgb, var(--primary-bg) 88%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+    border-radius: inherit;
+}
+.weather-report-panel .wrp-export-overlay.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.weather-report-panel .wrp-export-overlay__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 28px;
+    max-width: 80%;
+    text-align: center;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    color: var(--text-primary);
+}
+
+.weather-report-panel .wrp-export-overlay__spinner {
+    width: 44px;
+    aspect-ratio: 1;
+    display: grid;
+}
+.weather-report-panel .wrp-export-overlay__spinner::before,
+.weather-report-panel .wrp-export-overlay__spinner::after {
+    content: "";
+    grid-area: 1 / 1;
+    --wrp-loader-c: var(--ndma-blue, #46b2ff);
+    --c: no-repeat radial-gradient(farthest-side, var(--wrp-loader-c) 92%, transparent);
+    background:
+        var(--c) 50% 0,
+        var(--c) 50% 100%,
+        var(--c) 100% 50%,
+        var(--c) 0 50%;
+    background-size: 10px 10px;
+    animation: wrp-loader-spin 1s infinite;
+}
+.weather-report-panel .wrp-export-overlay__spinner::before {
+    margin: 4px;
+    filter: hue-rotate(45deg);
+    background-size: 7px 7px;
+    animation-timing-function: linear;
+}
+
+.weather-report-panel .wrp-export-overlay__text {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+}
+
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__spinner {
+    display: none;
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__card {
+    border-color: rgba(239, 68, 68, 0.55);
+    background:
+        linear-gradient(135deg, rgba(127, 29, 29, 0.30), transparent 60%),
+        var(--secondary-bg);
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__text {
+    color: #fecaca;
+    font-weight: 500;
+}
+.weather-report-panel .wrp-export-overlay.is-error .wrp-export-overlay__card::before {
+    content: "⚠️";
+    font-size: 28px;
+    line-height: 1;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.weather-report-panel .wrp-close-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.weather-report-panel .wrp-close-btn:hover {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+.weather-report-panel .wrp-close-btn svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+/* ---------- Body (flex column, no scroll itself) ----------
+   Body owns layout but NOT overflow.  It splits into three rows:
+     .wrp-fixed   — pinned reference data (summary + hotspot)
+     .wrp-scroll  — the only scrolling region (per-province district list)
+     .wrp-footer  — pinned bottom strip
+   Padding sits on the body so the scrollbar of .wrp-scroll runs flush
+   against the panel edge instead of indented under the padding. */
+/* ---- Panel body uses CSS GRID, not flex --------------------------------
+   Two prior flex-based attempts to solve the "scroll doesn't work"
+   regression both leaked enough content height into the scroll row that
+   the scrollbar never appeared.  Grid is deterministic here:
+     grid-template-rows: auto 1fr → first row sizes to .wrp-fixed's
+     content; second row gets EXACTLY the remaining height.  Combined
+     with min-height: 0 + overflow on the 1fr child, the scrollbar
+     appears the moment .wrp-scroll's content exceeds that row.  No
+     flex-grow heuristics, no implicit shrinking, no surprises. */
+.weather-report-panel .wrp-body {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    min-width: 0;
+    overflow: hidden !important;
+    padding: 10px 13px 13px;
+    display: grid !important;
+    grid-template-rows: auto 1fr !important;
+    grid-row-gap: 9px;
+}
+
+/* ---------- Tabs ---------- */
+/* Sits between the header and the two body containers.  Only one body
+   is visible at a time (see [hidden] on the inactive one). */
+.weather-report-panel .wrp-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px 13px 0;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-tab {
+    flex: 1;
+    padding: 7px 10px;
+    background: transparent;
+    color: var(--text-secondary, #cbd2e0);
+    border: 1px solid transparent;
+    border-radius: 6px 6px 0 0;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.weather-report-panel .wrp-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+}
+.weather-report-panel .wrp-tab.is-active {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.14);
+    border-bottom-color: transparent;
+}
+
+/* The PMD Overview body shares the layout rules of the Dynamic body — it's
+   just a second grid container inside the same panel.  [hidden] is
+   respected by wrp-body's !important display via the browser default. */
+.weather-report-panel .wrp-body--pmd[hidden] { display: none !important; }
+
+/* ============================================================
+   PMD Overview tab — Layout Overview
+   ------------------------------------------------------------
+   .wrp-body--pmd  (grid: auto | 1fr, inherited from .wrp-body)
+     ├─ .wrp-fixed  (hero card — auto row, never scrolls)
+     └─ .wrp-scroll.wrp-pmd-scroll  (1fr row, OUTER scroll)
+          └─ .wrp-pmd-section  (bordered card, flex column)
+               ├─ .wrp-pmd-section-head  (sticky top of the card)
+               └─ .wrp-pmd-section-body  (capped max-height, INNER scroll)
+
+   Two-scroll rule: the outer .wrp-pmd-scroll owns "too many
+   sections", each section's body owns "too much content in this
+   one section".  Both play nice because the inner scroll is
+   height-capped so it never fights the outer scroll.
+   ============================================================ */
+
+/* ---------- Hero card ---------- */
+.weather-report-panel .wrp-pmd-hero {
+    padding: 9px 11px;
+    background: linear-gradient(135deg, rgba(79,159,255,0.14), rgba(45,212,191,0.10));
+    border: 1px solid rgba(79,159,255,0.35);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.weather-report-panel .wrp-pmd-hero-badge {
+    align-self: flex-start;
+    font-size: 9.5px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    background: rgba(79,159,255,0.25);
+    color: #cfe4ff;
+    border-radius: 10px;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-hero-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+    line-height: 1.25;
+}
+.weather-report-panel .wrp-pmd-hero-sub {
+    font-size: 11px;
+    color: var(--text-muted, #9aa4b9);
+    line-height: 1.35;
+}
+
+/* ---------- Outer scroll container ---------- */
+.weather-report-panel .wrp-pmd-scroll {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ---------- Section shell ---------- */
+.weather-report-panel .wrp-pmd-section {
+    display: flex;
+    flex-direction: column;
+    background: var(--secondary-bg, rgba(255,255,255,0.03));
+    border: 1px solid var(--border-dark, rgba(255,255,255,0.08));
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+
+/* ---------- Section header ---------- */
+.weather-report-panel .wrp-pmd-section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border-dark, rgba(255,255,255,0.08));
+    flex: 0 0 auto;
+}
+/* Lucide renders SVGs with inline width="24" height="24" attributes.
+   Force size explicitly so the icons don't blow past the header height. */
+.weather-report-panel .wrp-pmd-section-head svg.wrp-pmd-section-icon,
+.weather-report-panel .wrp-pmd-section-icon {
+    width: 15px !important;
+    height: 15px !important;
+    flex: 0 0 15px;
+    color: #79b3ff;
+}
+.weather-report-panel .wrp-pmd-section-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+    letter-spacing: 0.2px;
+    line-height: 1.3;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+}
+
+/* ---------- Section body — capped, flex, internal scroll ---------- */
+.weather-report-panel .wrp-pmd-section-body {
+    padding: 8px 10px 10px;
+    font-size: 12px;
+    color: var(--text-secondary, #cbd2e0);
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+.weather-report-panel .wrp-pmd-empty {
+    margin: 0;
+    color: var(--text-muted, #9aa4b9);
+    font-size: 11.5px;
+    font-style: italic;
+}
+
+/* ---------- Outlook (weekly) ---------- */
+.weather-report-panel .wrp-pmd-outlook {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.weather-report-panel .wrp-pmd-outlook-item {
+    padding: 6px 9px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    border-left: 3px solid #4f9fff;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-outlook-date {
+    font-size: 11px;
+    font-weight: 600;
+    color: #cfe4ff;
+}
+.weather-report-panel .wrp-pmd-outlook-body {
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--text-secondary, #cbd2e0);
+    text-align: justify;
+    hyphens: auto;
+}
+
+/* Hazard-keyword highlighting inside outlook prose — matches the
+   GCOP feature: rain / wind / storm / flood / warning etc. are
+   marked to speed up scanning.  Amber-tinted underline so it reads
+   as a highlight, not a link. */
+.weather-report-panel .wrp-pmd-hz {
+    background: rgba(251,191,36,0.18);
+    color: #ffe8a3;
+    padding: 0 3px;
+    border-radius: 2px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: rgba(251,191,36,0.55);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* ============================================================
+   Collapsible section shell — <details>/<summary> variant
+   Used by verbose sections (FFD Bulletins, Rainfall Reports,
+   Press Releases, PMD Public Forecast) so the tab lands on the
+   priority sections first (Outlook, Daily Forecast, Max Temps,
+   Active Layers) without a wall of link rows below the fold.
+   ============================================================ */
+.weather-report-panel .wrp-pmd-section-head--summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.weather-report-panel .wrp-pmd-section-head--summary::-webkit-details-marker { display: none; }
+.weather-report-panel .wrp-pmd-section-head--summary::marker { content: ""; }
+.weather-report-panel .wrp-pmd-section-head--summary:hover {
+    background: rgba(255,255,255,0.05);
+}
+.weather-report-panel .wrp-pmd-section-chevron {
+    margin-left: auto;
+    color: var(--text-muted, #9aa4b9);
+    font-size: 11px;
+    line-height: 1;
+    flex: 0 0 auto;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+.weather-report-panel .wrp-pmd-section--collapsible[open] .wrp-pmd-section-chevron {
+    transform: rotate(90deg);
+    color: #79b3ff;
+}
+.weather-report-panel .wrp-pmd-section--collapsible[open] {
+    background: rgba(79,159,255,0.04);
+    border-color: rgba(79,159,255,0.18);
+}
+
+/* ============================================================
+   NWFC Daily Forecast — weather emoji + extreme-value chips
+   Thresholds follow documented WMO / PMD / IMD ladders (see
+   #thresholdClass in weather-report-control.js for the rules).
+   ============================================================ */
+.weather-report-panel .wrp-pmd-city-emoji {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1;
+    margin-right: 4px;
+    vertical-align: -1px;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* Per-day forecast cell emoji — small, right of the value, same
+   emoji-font stack so it renders in colour on every platform. */
+.weather-report-panel .wrp-pmd-cell-emoji {
+    display: inline-block;
+    font-size: 11px;
+    line-height: 1;
+    margin-right: 3px;
+    vertical-align: -1px;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+.weather-report-panel .wrp-pmd-city-name {
+    font-weight: 600;
+    color: #cfe4ff;
+}
+
+/* Cell colour ramps for documented meteorological thresholds. */
+.weather-report-panel .wrp-pmd-x-extreme-hot {
+    background: rgba(127,29,29,0.55) !important;
+    color: #ffe0e0 !important;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-x-very-hot {
+    background: rgba(220,38,38,0.45) !important;
+    color: #ffecec !important;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-x-hot {
+    background: rgba(249,115,22,0.35) !important;
+    color: #fff2e0 !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-pmd-x-cold {
+    background: rgba(59,130,246,0.30) !important;
+    color: #dbeafe !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-pmd-x-freezing {
+    background: rgba(37,99,235,0.55) !important;
+    color: #ffffff !important;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-x-humid {
+    background: rgba(14,165,233,0.28) !important;
+    color: #cfeeff !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-pmd-x-dry {
+    background: rgba(234,179,8,0.25) !important;
+    color: #fff2b8 !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-pmd-x-strong-wind {
+    background: rgba(139,92,246,0.34) !important;
+    color: #ede2ff !important;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-x-mod-wind {
+    background: rgba(139,92,246,0.18) !important;
+    color: #ded1ff !important;
+}
+.weather-report-panel .wrp-pmd-x-heavy-rain {
+    background: rgba(6,182,212,0.30) !important;
+    color: #cffafe !important;
+    font-weight: 700;
+}
+.weather-report-panel .wrp-pmd-x-mod-rain {
+    background: rgba(6,182,212,0.16) !important;
+    color: #bef4fb !important;
+}
+
+/* Legend strip under the forecast table */
+.weather-report-panel .wrp-pmd-x-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(255,255,255,0.06);
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-x-legend-swatch {
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    border-radius: 3px;
+}
+
+/* ---------- Link rows (bulletins / reports) ---------- */
+.weather-report-panel .wrp-pmd-link-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 8px;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-pmd-link-row:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.14);
+}
+.weather-report-panel .wrp-pmd-link-kind {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    padding: 3px 6px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-link-kind--bulletin { background: rgba(79,159,255,0.20); color: #cfe4ff; }
+.weather-report-panel .wrp-pmd-link-kind--advisory { background: rgba(251,146,60,0.20); color: #ffd6b3; }
+.weather-report-panel .wrp-pmd-link-kind--report   { background: rgba(45,212,191,0.20); color: #b7f2e6; }
+.weather-report-panel .wrp-pmd-link-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.weather-report-panel .wrp-pmd-link-title {
+    font-size: 11.5px;
+    color: var(--text-primary, #ffffff);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-pmd-link-meta {
+    font-size: 10px;
+    color: var(--text-muted, #9aa4b9);
+}
+/* Force link-row external-link icons small — same story as section icons */
+.weather-report-panel .wrp-pmd-link-row svg.wrp-pmd-link-icon,
+.weather-report-panel .wrp-pmd-link-icon {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 13px;
+    color: var(--text-muted, #9aa4b9);
+}
+
+/* External-link right-side chip inside the split reports layout */
+.weather-report-panel .wrp-pmd-link-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    color: var(--text-muted, #9aa4b9);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    text-decoration: none;
+    flex: 0 0 24px;
+    transition: background-color 0.14s ease, color 0.14s ease;
+}
+.weather-report-panel .wrp-pmd-link-open:hover {
+    background: rgba(255,255,255,0.10);
+    color: #ffffff;
+}
+.weather-report-panel .wrp-pmd-link-open svg {
+    width: 12px !important;
+    height: 12px !important;
+    display: block;
+}
+
+/* Kind badges for the two split report sections */
+.weather-report-panel .wrp-pmd-link-kind--release {
+    background: rgba(196,181,253,0.20);
+    color: #dccfff;
+}
+
+/* ---------- Press Release "Read" (inline PDF text expand) ---------- */
+.weather-report-panel .wrp-pmd-read-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    background: rgba(79,159,255,0.14);
+    color: #cfe4ff;
+    border: 1px solid rgba(79,159,255,0.30);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: background-color 0.14s ease, color 0.14s ease;
+}
+.weather-report-panel .wrp-pmd-read-btn:hover:not(:disabled) {
+    background: rgba(79,159,255,0.28);
+    color: #ffffff;
+}
+.weather-report-panel .wrp-pmd-read-btn:disabled { opacity: 0.6; cursor: progress; }
+.weather-report-panel .wrp-pmd-read-btn svg {
+    width: 11px !important;
+    height: 11px !important;
+    display: block;
+    color: currentColor;
+}
+.weather-report-panel .wrp-pmd-read-panel {
+    margin: 4px 0 8px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(79,159,255,0.20);
+    border-radius: 5px;
+    max-height: 220px;
+    overflow: auto;
+}
+.weather-report-panel .wrp-pmd-read-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted, #9aa4b9);
+}
+.weather-report-panel .wrp-pmd-read-loading .wrp-loader {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+}
+.weather-report-panel .wrp-pmd-read-error {
+    font-size: 11px;
+    color: #ff9b9b;
+    font-style: italic;
+}
+.weather-report-panel .wrp-pmd-read-text {
+    margin: 0;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: #e6ecf5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    text-align: justify;
+    hyphens: auto;
+}
+
+/* ============================================================
+   §3.4 Drill-down button strip + sub-view chrome
+   ============================================================ */
+.weather-report-panel .wrp-pmd-drill-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255,255,255,0.08);
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-drill-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 6px 8px;
+    background: rgba(79,159,255,0.10);
+    color: #cfe4ff;
+    border: 1px solid rgba(79,159,255,0.24);
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+    min-width: 0;
+}
+.weather-report-panel .wrp-pmd-drill-btn:hover {
+    background: rgba(79,159,255,0.24);
+    border-color: rgba(79,159,255,0.40);
+    color: #ffffff;
+}
+.weather-report-panel .wrp-pmd-drill-btn:active {
+    transform: translateY(1px);
+}
+.weather-report-panel .wrp-pmd-drill-btn > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.weather-report-panel .wrp-pmd-drill-btn svg.wrp-pmd-drill-icon,
+.weather-report-panel .wrp-pmd-drill-icon {
+    width: 12px !important;
+    height: 12px !important;
+    flex: 0 0 12px;
+    color: currentColor;
+}
+
+/* ---- Sub-view header (back button + title + source) ---- */
+.weather-report-panel .wrp-pmd-subview-head {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 11px;
+    background: linear-gradient(135deg, rgba(79,159,255,0.14), rgba(45,212,191,0.08));
+    border: 1px solid rgba(79,159,255,0.30);
+    border-radius: 8px;
+}
+.weather-report-panel .wrp-pmd-back-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    background: rgba(255,255,255,0.08);
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.14s ease;
+}
+.weather-report-panel .wrp-pmd-back-btn:hover {
+    background: rgba(255,255,255,0.16);
+}
+.weather-report-panel .wrp-pmd-back-btn svg {
+    width: 12px !important;
+    height: 12px !important;
+    display: block;
+}
+.weather-report-panel .wrp-pmd-subview-titlewrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.weather-report-panel .wrp-pmd-subview-titlewrap svg.wrp-pmd-subview-icon,
+.weather-report-panel .wrp-pmd-subview-icon {
+    width: 16px !important;
+    height: 16px !important;
+    flex: 0 0 16px;
+    color: #79b3ff;
+}
+.weather-report-panel .wrp-pmd-subview-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary, #ffffff);
+    letter-spacing: 0.2px;
+}
+.weather-report-panel .wrp-pmd-subview-source {
+    font-size: 10px;
+    color: var(--text-muted, #9aa4b9);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding-left: 24px;
+}
+.weather-report-panel .wrp-pmd-subview-issued {
+    font-size: 10.5px;
+    color: var(--text-muted, #9aa4b9);
+    font-style: italic;
+    margin-bottom: 6px;
+}
+.weather-report-panel .wrp-pmd-subview-body {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.weather-report-panel .wrp-pmd-subview-error {
+    padding: 8px 12px;
+    background: rgba(220,38,38,0.10);
+    border: 1px solid rgba(220,38,38,0.32);
+    border-radius: 6px;
+    color: #ff9b9b;
+    font-size: 11.5px;
+}
+
+/* Full-view tables — allow more room since the drill-down owns
+   the whole panel body (no compact side-by-side with other cards). */
+.weather-report-panel .wrp-pmd-fc-table--full {
+    font-size: 11px;
+}
+.weather-report-panel .wrp-pmd-fc-table--full thead th {
+    font-size: 10px;
+    padding: 6px 8px;
+}
+.weather-report-panel .wrp-pmd-fc-table--full tbody td {
+    padding: 5px 8px;
+}
+.weather-report-panel .wrp-pmd-outlook-item--full .wrp-pmd-outlook-body {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* ---------- Export strip (Download HTML / CSV) ---------- */
+.weather-report-panel .wrp-pmd-download-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 9px 11px;
+    background: linear-gradient(135deg, rgba(79,159,255,0.10), rgba(45,212,191,0.06));
+    border: 1px solid rgba(79,159,255,0.28);
+    border-radius: 8px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-download-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #cfe4ff;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.weather-report-panel .wrp-pmd-download-buttons {
+    display: flex;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(79,159,255,0.20);
+    color: #ffffff;
+    border: 1px solid rgba(79,159,255,0.34);
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: background-color 0.14s ease, transform 0.14s ease;
+}
+.weather-report-panel .wrp-pmd-download-btn:hover {
+    background: rgba(79,159,255,0.36);
+}
+.weather-report-panel .wrp-pmd-download-btn:active {
+    transform: translateY(1px);
+}
+.weather-report-panel .wrp-pmd-download-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    display: block;
+    color: currentColor;
+}
+
+/* ---------- Record rows (max temps) ---------- */
+.weather-report-panel .wrp-pmd-records {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.weather-report-panel .wrp-pmd-record-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 5px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-record-name {
+    font-size: 12px;
+    color: var(--text-primary, #ffffff);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-pmd-record-meta {
+    font-size: 10.5px;
+    color: var(--text-muted, #9aa4b9);
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-record-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ff9080;
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+}
+
+/* ---------- Raw JSON block (public forecast passthrough) ---------- */
+.weather-report-panel .wrp-pmd-pre {
+    margin: 0;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 5px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: #cbd2e0;
+    /* Body already caps height + scrolls; the pre stays flex-child sized. */
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    white-space: pre;
+}
+
+/* ============================================================
+   PMD Overview — Active Layers block
+   ------------------------------------------------------------
+   Sits at the top of the .wrp-pmd-scroll column, ABOVE the static
+   sections.  Rewritten whenever a tracked layer is toggled or its
+   source hydrates.  Empty state renders when zero tracked layers
+   are active on the map.
+   ============================================================ */
+.weather-report-panel .wrp-pmd-active-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.weather-report-panel .wrp-pmd-active-layers:empty { display: none; }
+
+.weather-report-panel .wrp-pmd-active-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.14);
+    border-radius: 8px;
+    color: var(--text-muted, #9aa4b9);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+.weather-report-panel .wrp-pmd-active-empty-icon,
+.weather-report-panel svg.wrp-pmd-active-empty-icon {
+    width: 16px !important;
+    height: 16px !important;
+    flex: 0 0 16px;
+    color: #79b3ff;
+    margin-top: 1px;
+}
+.weather-report-panel .wrp-pmd-active-empty-text b {
+    color: var(--text-primary, #ffffff);
+}
+
+/* ---------- Layer section (dynamic) ---------- */
+/* Reuses the .wrp-pmd-section shell but with tighter head padding and
+   a colored icon chip instead of a Lucide glyph. */
+.weather-report-panel .wrp-pmd-layer-head {
+    padding: 6px 10px;
+    gap: 8px;
+}
+.weather-report-panel .wrp-pmd-layer-icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border: 1px solid rgba(0,0,0,0.35);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.10);
+}
+.weather-report-panel .wrp-pmd-layer-icon--circle { border-radius: 50%; }
+.weather-report-panel .wrp-pmd-layer-icon--square { border-radius: 2px; }
+.weather-report-panel .wrp-pmd-layer-count {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted, #9aa4b9);
+    padding: 2px 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-layer-body {
+    padding: 8px 10px 10px;
+}
+
+/* ---------- Legend chips ---------- */
+.weather-report-panel .wrp-pmd-layer-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(255,255,255,0.06);
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px 2px 4px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    font-size: 9.5px;
+    color: var(--text-secondary, #cbd2e0);
+    letter-spacing: 0.2px;
+}
+.weather-report-panel .wrp-pmd-legend-swatch {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 8px;
+    border: 1px solid rgba(0,0,0,0.35);
+}
+.weather-report-panel .wrp-pmd-legend-label {
+    line-height: 1;
+}
+
+/* ---------- Layer data table ---------- */
+.weather-report-panel .wrp-pmd-layer-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: rgba(0,0,0,0.20);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 5px;
+    overflow: hidden;
+    font-size: 10.5px;
+    table-layout: auto;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-layer-caption {
+    caption-side: bottom;
+    text-align: right;
+    padding: 4px 8px;
+    font-size: 9.5px;
+    color: var(--text-muted, #9aa4b9);
+    font-style: italic;
+}
+.weather-report-panel .wrp-pmd-layer-table thead th {
+    background: rgba(79,159,255,0.14);
+    color: #cfe4ff;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 5px 7px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+.weather-report-panel .wrp-pmd-layer-table tbody td {
+    padding: 4px 7px;
+    color: var(--text-secondary, #cbd2e0);
+    line-height: 1.35;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+.weather-report-panel .wrp-pmd-layer-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+.weather-report-panel .wrp-pmd-layer-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.015);
+}
+.weather-report-panel .wrp-pmd-cell-empty {
+    color: var(--text-muted, #9aa4b9);
+    font-style: italic;
+}
+.weather-report-panel .wrp-pmd-unit {
+    color: var(--text-muted, #9aa4b9);
+    font-size: 9.5px;
+    margin-left: 1px;
+}
+
+/* ---------- Level pills (chip="level" columns) ---------- */
+.weather-report-panel .wrp-pmd-level-chip {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-radius: 3px;
+    color: #ffffff;
+}
+/* PMD Monitor warning level palette (colour names come from the API) */
+.weather-report-panel .wrp-pmd-level-chip--red    { background: #dc2626; }
+.weather-report-panel .wrp-pmd-level-chip--orange { background: #f97316; }
+.weather-report-panel .wrp-pmd-level-chip--yellow { background: #eab308; color: #1a1a1a; }
+.weather-report-panel .wrp-pmd-level-chip--blue   { background: #3b82f6; }
+.weather-report-panel .wrp-pmd-level-chip--gust,
+.weather-report-panel .wrp-pmd-level-chip--thunderstorm { background: #7c3aed; }
+
+/* FFD flood-classification palette (from §2.1 upstream schema) —
+   Normal / Low / Medium / High / Very High / Exceptionally High. */
+.weather-report-panel .wrp-pmd-level-chip--normal    { background: #28a745; }
+.weather-report-panel .wrp-pmd-level-chip--low       { background: #17a2b8; }
+.weather-report-panel .wrp-pmd-level-chip--medium    { background: #ffc107; color: #1a1a1a; }
+.weather-report-panel .wrp-pmd-level-chip--high      { background: #fd7e14; }
+.weather-report-panel .wrp-pmd-level-chip--very-high { background: #dc3545; }
+.weather-report-panel .wrp-pmd-level-chip--ex-high   { background: #6f42c1; }
+
+/* GLOF alert-label palette (from §3.5 upstream schema) —
+   NORMAL / WATCH / WARNING / EMERGENCY. */
+.weather-report-panel .wrp-pmd-level-chip--watch     { background: #facc15; color: #1a1a1a; }
+.weather-report-panel .wrp-pmd-level-chip--warning   { background: #f97316; }
+.weather-report-panel .wrp-pmd-level-chip--emergency { background: #dc2626; }
+
+/* Grey neutral pill for station_type / passthrough enum fields */
+.weather-report-panel .wrp-pmd-kind-chip {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.10);
+    color: var(--text-primary, #ffffff);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Compact chip for array / opaque-object cells so they don't leak
+   [object Object] — hover title reveals the underlying summary. */
+.weather-report-panel .wrp-pmd-cell-array {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border-radius: 3px;
+    background: rgba(79,159,255,0.14);
+    color: #cfe4ff;
+    cursor: help;
+}
+
+/* ---------- City Forecast per-city accordions ---------- */
+/* Sits below the summary table inside the pmd_city_forecast section.
+   Each <details> is one city; body is a scrollable fc[] table. */
+.weather-report-panel .wrp-pmd-city-drills {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255,255,255,0.08);
+}
+.weather-report-panel .wrp-pmd-city-drills-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #cfe4ff;
+    margin-bottom: 2px;
+}
+.weather-report-panel .wrp-pmd-city-drill {
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 5px;
+    background: rgba(255,255,255,0.02);
+    overflow: hidden;
+}
+.weather-report-panel .wrp-pmd-city-drill[open] {
+    background: rgba(79,159,255,0.05);
+    border-color: rgba(79,159,255,0.20);
+}
+.weather-report-panel .wrp-pmd-city-drill-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+/* Kill the default marker (Chrome / Safari / Firefox) so our own
+   chevron controls the visual "expandable" affordance. */
+.weather-report-panel .wrp-pmd-city-drill-head::-webkit-details-marker { display: none; }
+.weather-report-panel .wrp-pmd-city-drill-head::marker { content: ""; }
+.weather-report-panel .wrp-pmd-city-drill-name {
+    flex: 1 1 auto;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-primary, #ffffff);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-pmd-city-drill-meta {
+    font-size: 9.5px;
+    color: var(--text-muted, #9aa4b9);
+    letter-spacing: 0.3px;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-city-drill-chevron {
+    color: var(--text-muted, #9aa4b9);
+    font-size: 10px;
+    transition: transform 0.2s ease;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-city-drill[open] .wrp-pmd-city-drill-chevron {
+    transform: rotate(90deg);
+    color: #79b3ff;
+}
+.weather-report-panel .wrp-pmd-city-drill-body {
+    padding: 0 6px 8px;
+    max-height: 200px;
+    overflow: auto;
+}
+
+/* ---------- Report fc[] table ---------- */
+/* Fixed table layout + auto sizing so the 6-column PMD weekly forecast
+   distributes cell widths evenly.  Column widths are set below so
+   long city names get more room than the numeric temp columns. */
+.weather-report-panel .wrp-pmd-fc-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 10px;
+    background: rgba(0,0,0,0.30);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+}
+/* City name column gets ~30% for readable "MUZAFFARABAD CITY" and
+   "CHAKLALA- RAWALPINDI"; the 5 data columns split the rest. */
+.weather-report-panel .wrp-pmd-fc-table--full th:nth-child(1),
+.weather-report-panel .wrp-pmd-fc-table--full td:nth-child(1) {
+    width: 30%;
+}
+.weather-report-panel .wrp-pmd-fc-table--full th:not(:first-child),
+.weather-report-panel .wrp-pmd-fc-table--full td:not(:first-child) {
+    width: 14%;
+}
+.weather-report-panel .wrp-pmd-fc-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: rgba(79,159,255,0.20);
+    color: #cfe4ff;
+    padding: 4px 5px;
+    text-align: left;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+    /* Allow wrap ONLY on the header so "Wednesday°C" can break to two
+       lines in a narrow column instead of stretching the column. */
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.15;
+}
+.weather-report-panel .wrp-pmd-fc-table tbody td {
+    padding: 3px 5px;
+    color: var(--text-secondary, #cbd2e0);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    /* Numeric cells (34-36, ☀️ 35-37) stay on one line and never
+       squish — the fixed column width handles the rest. */
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* City name cell — the ONLY cell allowed to wrap in the body row so
+   long names like "CHAKLALA- RAWALPINDI" or "MUZAFFARABAD CITY" fit
+   without ellipsising them. */
+.weather-report-panel .wrp-pmd-fc-table tbody td.wrp-pmd-fc-time {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+}
+/* Keep the city-emoji + name pair on the same visual line by using
+   inline-flex with a small gap. */
+.weather-report-panel .wrp-pmd-city-name {
+    display: inline;
+}
+.weather-report-panel .wrp-pmd-fc-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.02);
+}
+.weather-report-panel .wrp-pmd-fc-table tbody tr:last-child td { border-bottom: 0; }
+.weather-report-panel .wrp-pmd-fc-time {
+    color: #cfe4ff !important;
+    font-weight: 600;
+    font-size: 9.5px;
+}
+.weather-report-panel .wrp-pmd-city-drill-body::-webkit-scrollbar { width: 6px; height: 6px; }
+.weather-report-panel .wrp-pmd-city-drill-body::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.14);
+    border-radius: 3px;
+}
+.weather-report-panel .wrp-pmd-city-drill-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.30);
+}
+
+/* ---------- Public Forecast table ---------- */
+/* Three-column table with a distinct gradient title row, a sub-header
+   row that splits into Today / Tomorrow columns, and full-width rows
+   (colspan=2) for narrative fields. `table-layout: fixed` keeps the
+   label column at 80px and prevents long words from blowing out the
+   panel width. */
+.weather-report-panel .wrp-pmd-forecast-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    overflow: hidden;
+    table-layout: fixed;
+    flex: 0 0 auto;
+}
+.weather-report-panel .wrp-pmd-forecast-table + .wrp-pmd-forecast-table {
+    margin-top: 8px;
+}
+
+/* Title row — solid gradient, uppercase, high contrast */
+.weather-report-panel .wrp-pmd-forecast-title {
+    background: linear-gradient(135deg, rgba(79,159,255,0.42), rgba(45,212,191,0.28));
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 7px 10px;
+    text-align: left;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+}
+
+/* Sub-header row — Today / Tomorrow column labels */
+.weather-report-panel .wrp-pmd-forecast-subhead th {
+    background: rgba(79,159,255,0.12);
+    color: #cfe4ff;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 5px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+    letter-spacing: 0.3px;
+    vertical-align: middle;
+}
+.weather-report-panel .wrp-pmd-forecast-subhead th:first-child {
+    width: 80px;
+    background: rgba(255,255,255,0.04);
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+.weather-report-panel .wrp-pmd-forecast-subhead th + th {
+    border-left: 1px solid rgba(255,255,255,0.06);
+}
+.weather-report-panel .wrp-pmd-forecast-date {
+    display: block;
+    margin-top: 1px;
+    color: var(--text-muted, #9aa4b9);
+    font-weight: 400;
+    font-size: 9.5px;
+    letter-spacing: 0;
+}
+
+/* Body cells — narrative uses pre-line for newline honouring */
+.weather-report-panel .wrp-pmd-forecast-table td,
+.weather-report-panel .wrp-pmd-forecast-table tbody th {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    vertical-align: top;
+    line-height: 1.42;
+    color: var(--text-secondary, #cbd2e0);
+    font-size: 11px;
+    white-space: pre-line;
+    text-align: justify;
+    hyphens: auto;
+    word-break: break-word;
+}
+.weather-report-panel .wrp-pmd-forecast-table tbody tr:last-child td,
+.weather-report-panel .wrp-pmd-forecast-table tbody tr:last-child th {
+    border-bottom: 0;
+}
+.weather-report-panel .wrp-pmd-forecast-table tbody th {
+    background: rgba(255,255,255,0.04);
+    color: #cfe4ff;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: left;
+    letter-spacing: 0.4px;
+    width: 80px;
+    text-transform: uppercase;
+    white-space: normal;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    vertical-align: top;
+}
+
+/* Cell divider between Today and Tomorrow */
+.weather-report-panel .wrp-pmd-forecast-split td + td {
+    border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Subtle zebra striping on tbody rows */
+.weather-report-panel .wrp-pmd-forecast-table tbody tr:nth-child(even) td,
+.weather-report-panel .wrp-pmd-forecast-table tbody tr:nth-child(even) th {
+    background-color: rgba(255,255,255,0.015);
+}
+.weather-report-panel .wrp-pmd-forecast-table tbody tr:nth-child(even) th {
+    background-color: rgba(255,255,255,0.045);
+}
+
+/* ---------- Scrollbar polish (Webkit) ---------- */
+.weather-report-panel .wrp-pmd-scroll::-webkit-scrollbar,
+.weather-report-panel .wrp-pmd-section-body::-webkit-scrollbar,
+.weather-report-panel .wrp-pmd-pre::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.weather-report-panel .wrp-pmd-scroll::-webkit-scrollbar-thumb,
+.weather-report-panel .wrp-pmd-section-body::-webkit-scrollbar-thumb,
+.weather-report-panel .wrp-pmd-pre::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+}
+.weather-report-panel .wrp-pmd-scroll::-webkit-scrollbar-thumb:hover,
+.weather-report-panel .wrp-pmd-section-body::-webkit-scrollbar-thumb:hover,
+.weather-report-panel .wrp-pmd-pre::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.24);
+}
+
+.weather-report-panel .wrp-fixed {
+    /* Auto row of the body grid — sizes to content. */
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+}
+
+/* The ONLY scrolling region in the panel.  `!important` on the overflow
+   pair guarantees no later rule can suppress it.  `min-height: 0` is
+   the magic that lets a grid 1fr row actually be smaller than its
+   intrinsic content height — without it, the row grows to fit content
+   and there's nothing to overflow. */
+.weather-report-panel .wrp-scroll {
+    min-height: 0 !important;
+    min-width: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-right: -5px;
+    padding-right: 5px;
+}
+.weather-report-panel .wrp-scroll > .wrp-group {
+    flex: 0 0 auto !important;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar-thumb {
+    background: var(--ndma-red-light);
+    border-radius: 4px;
+}
+.weather-report-panel .wrp-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--ndma-red);
+}
+
+/* ---------- Loading state ---------- */
+/* Centered spinner + label.  Spinner colors hook into the NDMA palette
+   so day/night flips automatically; the inner ring is a hue-rotated
+   variant for two-tone motion.  Dimensions kept compact so the spinner
+   sits comfortably even when the panel max-height is constrained on
+   short viewports. */
+.weather-report-panel .wrp-loading {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 35px 20px;
+    color: var(--text-secondary);
+}
+.weather-report-panel .wrp-loader {
+    width: 52px;
+    aspect-ratio: 1;
+    display: grid;
+}
+.weather-report-panel .wrp-loader::before,
+.weather-report-panel .wrp-loader::after {
+    content: "";
+    grid-area: 1 / 1;
+    --wrp-loader-c: var(--ndma-blue);
+    --c: no-repeat radial-gradient(farthest-side, var(--wrp-loader-c) 92%, transparent);
+    background:
+        var(--c) 50% 0,
+        var(--c) 50% 100%,
+        var(--c) 100% 50%,
+        var(--c) 0 50%;
+    background-size: 12px 12px;
+    animation: wrp-loader-spin 1s infinite;
+}
+.weather-report-panel .wrp-loader::before {
+    margin: 5px;
+    filter: hue-rotate(45deg);
+    background-size: 9px 9px;
+    animation-timing-function: linear;
+}
+.weather-report-panel .wrp-loading-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+}
+
+@keyframes wrp-loader-spin {
+    100% {
+        transform: rotate(0.5turn);
+    }
+}
+
+/* Night theme — switch to NDMA green for the spinner so it pops against
+   the lighter glass background; hue-rotate gives a complementary teal
+   for the inner ring. */
+[data-theme="night"] .weather-report-panel .wrp-loader::before,
+[data-theme="night"] .weather-report-panel .wrp-loader::after {
+    --wrp-loader-c: var(--ndma-green);
+}
+
+/* ---------- Empty state ---------- */
+.weather-report-panel .wrp-empty {
+    padding: 15px 13px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    text-align: left;
+}
+.weather-report-panel .wrp-empty h4 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.weather-report-panel .wrp-empty p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* ---------- Summary stats ---------- */
+.weather-report-panel .wrp-summary {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 6px;
+}
+.weather-report-panel .wrp-stat {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    padding: 7px 5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.weather-report-panel .wrp-stat strong {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1;
+}
+.weather-report-panel .wrp-stat span {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* ---------- Hotspot ---------- */
+/* The hotspot is *always* the most extreme reading on the active step,
+   so it's always "critical" in a relative sense — keep it permanently
+   red-toned to match that semantics.  `.is-alert` only deepens the
+   gradient when the value also crosses an absolute threshold. */
+.weather-report-panel .wrp-hotspot {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.08) 0%,
+        var(--secondary-bg) 75%
+    );
+    border: 1px solid var(--border-dark);
+    border-left: 4px solid var(--ndma-red);
+    border-radius: 8px;
+    padding: 9px 11px;
+}
+
+/* When the hotspot is in alert state, swap its translucent gradient for
+   the same solid dark crimson the alert cards use.  Halo pulse lives
+   in ::before with `inset: -6px` so it never overlaps the text. */
+.weather-report-panel .wrp-hotspot.is-alert {
+    background: linear-gradient(135deg, #2a0000 0%, #4a0000 100%);
+    border-color: var(--ndma-red);
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-name,
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-tag {
+    color: #fff !important;
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-meta {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+.weather-report-panel .wrp-hotspot.is-alert .wrp-hotspot-value {
+    color: #ffd6d6 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.weather-report-panel .wrp-hotspot.is-alert::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 9px;
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(255, 0, 0, 0.65) 0%,
+            rgba(255, 0, 0, 0.28) 50%,
+            transparent 80%
+        );
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.4;
+    transform: scale(0.94);
+    transform-origin: center;
+    animation: wrp-alert-pulse 1.2s ease-in-out infinite;
+    will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weather-report-panel .wrp-hotspot.is-alert::before {
+        animation: none;
+        opacity: 0.7;
+        transform: scale(1);
+    }
+}
+.weather-report-panel .wrp-hotspot-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    color: var(--ndma-red);
+    margin-bottom: 4px;
+}
+/* Row layout — district/province on the left, reading on the right.
+   Filling the previously empty right side cuts the card height by ~40%
+   compared to the old stacked layout. */
+.weather-report-panel .wrp-hotspot-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.weather-report-panel .wrp-hotspot-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weather-report-panel .wrp-hotspot-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-hotspot-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-hotspot-value {
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ndma-red);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* ---------- Province group ---------- */
+.weather-report-panel .wrp-group {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+/* Switched from `align-items: baseline` to `center` because mixing the
+   text + the inline-flex aggregate/alert pills with `baseline` gave
+   the pills a half-pixel offset that read as wobble.  Center is
+   pixel-stable. */
+.weather-report-panel .wrp-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed var(--border-dark);
+}
+.weather-report-panel .wrp-group-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-group-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+.weather-report-panel .wrp-group-district-count {
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+/* Province-level aggregate (mean / max across the province's
+   districts).  Default tone is the panel's primary text; alert
+   variant flips to red so the eye picks up provinces that are in
+   trouble even before scanning the alert badge. */
+.weather-report-panel .wrp-group-aggregate {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-group-aggregate.is-alert {
+    background: rgba(120, 0, 0, 0.85);
+    border-color: var(--ndma-red);
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+/* Alert badge: octagon-alert icon + count, red pill.  Replaces the
+   plain "X alerts" text.  Only renders when alerts > 0.
+   --------------------------------------------------------------
+   Alignment fix: Lucide replaces the <i> placeholder with an <svg>
+   that defaults to inline + vertical-align: baseline, which made
+   the icon sit a couple pixels below the count text.  Forcing the
+   icon AND count to `display: flex; align-items: center` with an
+   explicit `line-height: 1` removes the baseline offset entirely. */
+.weather-report-panel .wrp-group-alert-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 9px 3px 7px;
+    background: rgba(255, 0, 0, 0.14);
+    border: 1px solid var(--ndma-red-light);
+    border-radius: 999px;
+    color: var(--ndma-red);
+    font-weight: 600;
+    line-height: 1;
+}
+.weather-report-panel .wrp-group-alert-icon,
+.weather-report-panel .wrp-group-alert-badge svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    color: var(--ndma-red);
+    flex-shrink: 0;
+}
+.weather-report-panel .wrp-group-alert-count {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.weather-report-panel .wrp-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+.weather-report-panel .wrp-card {
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 5px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+/* Alert card — danger pulse, GPU-cheap, LEGIBLE.
+   ----------------------------------------------------------------
+   Earlier versions painted a red radial-gradient glow OVER the card,
+   which made red-on-red text unreadable in both themes.  This pass:
+   1) Card body gets a SOLID dark backdrop (so white text reads)
+   2) The pulsing glow lives in a SEPARATE pseudo-element that sits
+      BEHIND the card AND extends OUTSIDE its perimeter (inset: -6px).
+      The pulse therefore reads as an outer ring/halo around the
+      card, never crossing the text.
+   3) Text is white (high contrast on the dark backdrop)
+   4) Animation still uses only `opacity` + `transform` — both are
+      pure GPU compositor properties so the cumulative paint cost
+      stays at zero regardless of how many cards are alerting. */
+.weather-report-panel .wrp-card.is-alert {
+    position: relative;
+    z-index: 1;
+    border: 1.5px solid var(--ndma-red);
+    /* Solid dark crimson — makes white text pop and stays consistent
+       across day/night themes (the panel bg flips, this stays fixed). */
+    background: linear-gradient(135deg, #2a0000 0%, #4a0000 100%);
+    isolation: isolate;
+}
+
+.weather-report-panel .wrp-card.is-alert::before {
+    content: "";
+    position: absolute;
+    /* -6px so the glow extends well outside the card edge — the pulse
+       reads as a halo around the card, never overlapping the text. */
+    inset: -6px;
+    border-radius: 9px;
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(255, 0, 0, 0.65) 0%,
+            rgba(255, 0, 0, 0.28) 50%,
+            transparent 80%
+        );
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.4;
+    transform: scale(0.94);
+    transform-origin: center;
+    animation: wrp-alert-pulse 1.2s ease-in-out infinite;
+    will-change: opacity, transform;
+}
+
+@keyframes wrp-alert-pulse {
+    0%, 100% {
+        opacity: 0.35;
+        transform: scale(0.94);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.12);
+    }
+}
+
+/* Text inside an alert card — high-contrast white-on-dark.  No
+   animation on text properties: animating color/text-shadow forces
+   text re-rasterisation every frame and was visibly costly with
+   many alerts on screen. */
+.weather-report-panel .wrp-card.is-alert .wrp-card-name {
+    color: #fff !important;
+    font-weight: 600;
+}
+.weather-report-panel .wrp-card.is-alert .wrp-card-value {
+    color: #ffd6d6 !important;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Reduced-motion fallback — keep the glow visible without the pulse. */
+@media (prefers-reduced-motion: reduce) {
+    .weather-report-panel .wrp-card.is-alert::before {
+        animation: none;
+        opacity: 0.7;
+        transform: scale(1);
+    }
+}
+
+/* Click-to-fly affordance — every element with a bbox gets pointer
+   cursor + a background tint shift on hover.  No transform/translate
+   so the row stays put; only the fill changes.  Keyboard focus ring
+   lives on the same hook. */
+.weather-report-panel .wrp-card[data-fly-bbox],
+.weather-report-panel .wrp-hotspot[data-fly-bbox],
+.weather-report-panel .wrp-group-head[data-fly-bbox] {
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+/* Province header hover — subtle bg tint so the strip reads as
+   interactive without dominating the alert/aggregate spans. */
+.weather-report-panel .wrp-group-head[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.08));
+    border-radius: 4px;
+    margin: 0 -4px 4px;
+    padding: 0 4px 4px;
+}
+.weather-report-panel .wrp-group-head[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+/* Non-alert card hover — slightly lighter glass so the row visibly
+   responds without changing layout. */
+.weather-report-panel .wrp-card[data-fly-bbox]:hover {
+    background-color: var(--frost-bg, rgba(255, 255, 255, 0.12));
+    border-color: var(--ndma-blue-light);
+}
+/* Alert card hover — preserve the dark-crimson alert bg but lift the
+   tint a touch so the row still reads as interactive on hover. */
+.weather-report-panel .wrp-card.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+/* Hotspot hover — same logic, separate tier. */
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:hover {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.18) 0%,
+        var(--frost-bg, rgba(255, 255, 255, 0.12)) 75%
+    );
+}
+.weather-report-panel .wrp-hotspot.is-alert[data-fly-bbox]:hover {
+    background: linear-gradient(135deg, #3a0000 0%, #5e0000 100%);
+}
+.weather-report-panel .wrp-card[data-fly-bbox]:focus-visible,
+.weather-report-panel .wrp-hotspot[data-fly-bbox]:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+.weather-report-panel .wrp-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-card-value {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.2;
+}
+.weather-report-panel .wrp-card.is-alert .wrp-card-value {
+    color: var(--ndma-red);
+    font-weight: 600;
+}
+
+/* Extras row — secondary readings from station layers (e.g. WAQI) when
+   a temporal layer is the primary source.  Compact tag style; alert
+   tags get the same red treatment as the primary value. */
+.weather-report-panel .wrp-card-extras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+.weather-report-panel .wrp-card-extra {
+    font-size: 10px;
+    line-height: 1.1;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.weather-report-panel .wrp-card-extra.is-alert {
+    background: rgba(255, 0, 0, 0.1);
+    border-color: var(--ndma-red-light);
+    color: var(--ndma-red);
+    font-weight: 600;
+}
+
+/* ---------- Footer (panel-level chrome strip) ---------- */
+/* Footer is a sibling of .wrp-body, so it lives OUTSIDE the scrolling
+   region entirely — solid border + tinted background read as chrome,
+   not as the tail of the scroll list.  Hidden by default until a real
+   report populates it via .is-visible. */
+.weather-report-panel .wrp-footer {
+    flex: 0 0 auto;
+    display: none;
+    padding: 8px 13px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    border-top: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+}
+.weather-report-panel .wrp-footer.is-visible {
+    display: block;
+}
+
+/* =========================================================================
+   Night theme — inherit from --primary-bg / --text-* tokens (already
+   redefined under [data-theme="night"]) so most rules need no override.
+   Only the alert-tinted backgrounds need a slightly different mix because
+   the night palette is light glass on dark, not dark glass on light.
+   ========================================================================= */
+[data-theme="night"] .weather-report-panel .wrp-hotspot {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.12) 0%,
+        var(--secondary-bg) 75%
+    );
+}
+[data-theme="night"] .weather-report-panel .wrp-hotspot.is-alert {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.22) 0%,
+        var(--secondary-bg) 75%
+    );
+}
+[data-theme="night"] .weather-report-panel .wrp-card.is-alert {
+    background: rgba(255, 0, 0, 0.1);
+}

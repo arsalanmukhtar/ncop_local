@@ -2,15 +2,12 @@
 
 /**
  * Handles the Mapbox map instance and core map interactions (labels, projection, terrain).
- * Assumes mapboxgl and ncop_storage are available globally or managed by the caller.
  */
 export class MapControls {
     #map;
-    #storage;
 
-    constructor(mapInstance, storageInstance) {
+    constructor(mapInstance) {
         this.#map = mapInstance;
-        this.#storage = storageInstance;
     }
 
     /**
@@ -45,10 +42,6 @@ export class MapControls {
     changeMapProjection(projectionName) {
         try {
             this.#map.setProjection(projectionName);
-            // console.log(`🌍 Changed projection to: ${projectionName}`);
-            if (this.#storage) {
-                this.#storage.saveSetting("mapProjection", projectionName);
-            }
         } catch (error) {
             console.error("Error changing projection:", error);
             this.#map.setProjection("mercator");
@@ -86,10 +79,6 @@ export class MapControls {
             bearing: -17.6,
             duration: 1000,
         });
-
-        if (this.#storage) {
-            this.#storage.saveSetting("terrainEnabled", true);
-        }
     }
 
     /**
@@ -114,10 +103,6 @@ export class MapControls {
             }
         }, 200);
 
-        const currentProjection = this.#storage
-            ? this.#storage.getSetting("mapProjection") || "mercator"
-            : "mercator";
-
         this.#map.easeTo({
             pitch: 0,
             bearing: 0,
@@ -126,17 +111,12 @@ export class MapControls {
 
         setTimeout(() => {
             try {
-                this.#map.setProjection(currentProjection);
-                // console.log("🌍 Projection restored to:", currentProjection);
+                this.#map.setProjection("mercator");
             } catch (error) {
                 console.warn("Error setting projection:", error);
                 this.#map.setProjection("mercator");
             }
         }, 1200);
-
-        if (this.#storage) {
-            this.#storage.saveSetting("terrainEnabled", false);
-        }
     }
 }
 

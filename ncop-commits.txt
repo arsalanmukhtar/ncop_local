@@ -1,0 +1,157 @@
+5451b3c | arsalanmukhtar | 2026-05-04 | feat: add permissions configuration for Bash commands in settings
+2703b4a | arsalanmukhtar | 2026-05-04 | Remove obsolete Mardan weather data from cache
+3e955d2 | arsalanmukhtar | 2026-05-04 | feat: update weather report layout and add backend cache configuration
+9afc7be | arsalanmukhtar | 2026-04-29 | Update heatwave data for Bahawalpur, Mirpur Khas, and Mardan with new temperature, humidity, and wind speed readings as of 2026-04-29T13:45.
+2962216 | arsalanmukhtar | 2026-04-29 | feat: add province-level aggregation and styling for weather report panel
+7294841 | arsalanmukhtar | 2026-04-29 | feat: add click-to-fly functionality and hover effects for weather report cards
+1a2d155 | arsalanmukhtar | 2026-04-29 | Update heatwave data for Mirpur Khas and Mardan with new temperature readings and alert levels
+af8277d | arsalanmukhtar | 2026-04-29 | Update weather data for Bahawalpur, Mirpur Khas, and Mardan with new temperature, humidity, and wind speed readings; adjust alert levels accordingly.
+ef40b21 | arsalanmukhtar | 2026-04-28 | Add district-level weather report control and styles
+ab9f31b | arsalanmukhtar | 2026-04-28 | feat: enhance layer reordering by capturing live layer state before updates
+bd63bd7 | arsalanmukhtar | 2026-04-28 | feat: add loading skeleton to dashboard for improved user experience
+88d475a | arsalanmukhtar | 2026-04-28 | Update weather data for Mardan and remove RainViewer slider from dashboard
+f48fdfa | arsalanmukhtar | 2026-04-28 | Refactor code structure for improved readability and maintainability
+7bd2bde | arsalanmukhtar | 2026-04-28 | feat: add minimalist scale control to map with responsive styling
+3673385 | arsalanmukhtar | 2026-04-28 | feat: improve button hover states for active controls in day and night themes
+5555ed1 | arsalanmukhtar | 2026-04-27 | feat: enhance loading animation and update night theme border styles for improved UI
+a8447b9 | arsalanmukhtar | 2026-04-27 | feat: add loading animation for news fetching with responsive styles
+5a41fad | arsalanmukhtar | 2026-04-27 | feat: enhance news modal with improved layout, styling, and responsive design
+2021030 | arsalanmukhtar | 2026-04-27 | feat: update placeholder text in geocoder input for improved clarity
+a0729ae | arsalanmukhtar | 2026-04-27 | feat: implement strict mutual exclusion for right-rail panels to ensure only one is visible at a time
+e1f36bd | arsalanmukhtar | 2026-04-27 | Add layer style configuration and panel styles for improved UI consistency
+7197590 | arsalanmukhtar | 2026-04-27 | feat: update layer panel styles for improved layout and spacing
+29ae6a3 | arsalanmukhtar | 2026-04-27 | feat: add geocoder control and panel for enhanced location search functionality
+d6a7468 | arsalanmukhtar | 2026-04-27 | feat: add sidebar menu button styles for improved UI consistency in day and night modes
+e29e25d | arsalanmukhtar | 2026-04-27 | feat: update button styles and colors for improved visibility in day and night modes
+b82ac27 | arsalanmukhtar | 2026-04-27 | feat: enhance floating panel layout and styling for improved user experience
+9f75107 | arsalanmukhtar | 2026-04-27 | feat: enhance navigation controls and implement floating panel anchoring for improved UI layout
+679fc3c | arsalanmukhtar | 2026-04-27 | feat: implement unified right-rail control architecture and panel animations for improved UI consistency
+bf59185 | arsalanmukhtar | 2026-04-27 | fix: update layer types from vector to raster for air quality and dust forecasts
+68e26b6 | arsalanmukhtar | 2026-04-23 | refactor: simplify nested grid layout and remove legacy styling for improved consistency
+d307a03 | arsalanmukhtar | 2026-04-23 | feat: implement loading indicators for sidebar items and enhance layer management with default layers
+ddc37ce | arsalanmukhtar | 2026-04-23 | refactor: remove local storage manager and related dependencies from dashboard and map controls
+e1a851b | arsalanmukhtar | 2026-04-23 | feat: add dynamic padding adjustment for timeline panel and custom close button in temporal popup
+ee15e1f | arsalanmukhtar | 2026-04-23 | feat: enhance dashboard functionality and improve layer management with new z-order rules
+5f662ec | arsalanmukhtar | 2026-04-23 | feat: enhance dashboard and basemap functionality with user state persistence
+e498b52 | arsalanmukhtar | 2026-04-23 | feat: dynamically adjust timeline panel padding based on widest date label
+177a591 | arsalanmukhtar | 2026-04-23 | Update ALLOWED_HOSTS to include additional IP address for deployment
+1c5b3a9 | arsalanmukhtar | 2026-04-23 | Update asset filenames in manifest.json and enhance dashboard.html layout
+e175ceb | arsalanmukhtar | 2026-04-22 | style: enhance dashboard and sidebar styles for improved layout and responsiveness
+61fb447 | arsalanmukhtar | 2026-04-22 | feat: Implement unified popup system across navigation and temporal controls
+da216c6 | arsalanmukhtar | 2026-04-22 | Add night mode theme and CSS variables for improved styling
+b080576 | arsalanmukhtar | 2026-04-22 | Refactor code structure for improved readability and maintainability
+60e1b28 | arsalanmukhtar | 2026-04-22 | Refactor project settings and ASGI/WSGI configurations for improved clarity and structure
+16c1f9d | arsalanmukhtar | 2026-04-22 | github commands update
+1cb1bec | arsalanmukhtar | 2026-04-22 | project setup on HPC
+b63f66b | arsalanmukhtar | 2026-03-30 | Final update for 30th march (added geoglows functioanlity,usgs functioanilty, nasa eonet functionality and meteoblue landslide functionlaity )
+ac8ae62 | arsalanmukhtar | 2026-03-30 | added meteoblue landslide hazard early warning
+4aed24c | arsalanmukhtar | 2026-03-30 | added the geoglows chart as well
+7957c42 | arsalanmukhtar | 2026-03-30 | ncop tour guide added
+3eb4a72 | arsalanmukhtar | 2026-03-30 | added nasa eonet events along with the usgs earthquake and shakemap features
+7297324 | arsalanmukhtar | 2026-03-30 | update
+61f214f | arsalanmukhtar | 2026-03-27 | z-index overlay fix
+103451d | arsalanmukhtar | 2026-03-27 | temporal slider changes and wind particle animation
+0b9a1ac | arsalanmukhtar | 2026-02-13 | updated 13/02/2026
+41fbbc7 | arsalanmukhtar | 2026-01-12 | fixed the static files not found issue by updating vite.config.js
+0d11a08 | arsalanmukhtar | 2026-01-07 | new layers: cams, radar, sir, meteoblue AQ and radar layers fixed with separate temporal legend
+70cd1ff | arsalanmukhtar | 2025-12-04 | bass kardo ab
+9a7efea | arsalanmukhtar | 2025-12-03 | GEE refactoring with updates pending
+46f87d7 | arsalanmukhtar | 2025-11-27 | removed empty files
+ce5516c | arsalanmukhtar | 2025-11-27 | gee data catalog integration
+153da2c | arsalanmukhtar | 2025-11-26 | created and maintained a generic hard coded Google earth enginge chat bot
+54017be | arsalanmukhtar | 2025-11-25 | update: adjusted styles of night mode
+0f76dac | arsalanmukhtar | 2025-11-21 | Merge branch 'stage-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+d5a1e91 | arsalanmukhtar | 2025-11-21 | updated and improved the layer info for temporal layers and improved the styles of data-theme night
+71fff51 | arsalanmukhtar | 2025-11-20 | night mode
+e6f2609 | arsalanmukhtar | 2025-11-20 | update: layer info pannel supports temporal layers
+0aa2102 | arsalanmukhtar | 2025-11-20 | Layer info pannel now supports temporal layer information as well but with some bugs
+fd4d540 | arsalanmukhtar | 2025-11-20 | update: (improved the popup logic to not check for style load, added the nested category and the gdac layers with images and popups)
+f4b565b | arsalanmukhtar | 2025-11-19 | oil slicks have been added
+8a5771c | arsalanmukhtar | 2025-11-19 | updated and fixed some bugs specifically layer info and the layer order bugs
+7a58801 | arsalanmukhtar | 2025-11-14 | merge from staged misc files
+8c120a7 | arsalanmukhtar | 2025-11-14 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into stage-arsalan
+e18610e | arsalanmukhtar | 2025-11-14 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+2be395f | Ahad_Khan09 | 2025-11-14 | Updated Layers of Acc. Prec. & Flood Summaries
+1f60d87 | Ahad_Khan09 | 2025-11-14 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+645f5e7 | arsalanmukhtar | 2025-11-14 | minor tweaks with glofas and home button extent fix
+b56778f | Ahad_Khan09 | 2025-11-12 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+8b6583a | arsalanmukhtar | 2025-11-12 | latest pull from dev-arsalan
+47d1dd7 | arsalanmukhtar | 2025-11-12 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into stage-arsalan
+a4299f9 | arsalanmukhtar | 2025-11-12 | updated misc folder and base.py ignore for prod
+f475c5f | arsalanmukhtar | 2025-11-12 | updated production document
+1d4525a | arsalanmukhtar | 2025-11-12 | added some new documentations
+bd80c9f | Ahad_Khan09 | 2025-11-06 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+c489a69 | arsalanmukhtar | 2025-11-06 | Merge branch 'stage-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+2e259ea | arsalanmukhtar | 2025-11-06 | stage branch created and it works fine
+53024a5 | arsalanmukhtar | 2025-11-06 | Merge branch 'stage-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+542e1c8 | arsalanmukhtar | 2025-11-06 | dev staging config
+1590890 | arsalanmukhtar | 2025-11-06 | config for stage branch
+eae9d58 | arsalanmukhtar | 2025-11-06 | stage initial commit
+68a2663 | arsalanmukhtar | 2025-11-06 | updated views
+dc8b3c0 | Ahad_Khan09 | 2025-11-06 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+acdbfb0 | arsalanmukhtar | 2025-11-03 | story mode integrated, popup fixed and views set
+15dafda | arsalanmukhtar | 2025-11-03 | added the background giff
+afa5bc1 | arsalanmukhtar | 2025-11-03 | static layers addition and opacity slider functionality
+0402591 | arsalanmukhtar | 2025-10-31 | layer legends config added
+3acfe3d | arsalanmukhtar | 2025-10-30 | waqi, ffd integration and popup adjustments, chart integration, imerg layers
+390b846 | Ahad_Khan09 | 2025-10-30 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+95ad0e1 | arsalanmukhtar | 2025-10-30 | addd meteoblue temporal layers
+64180e5 | arsalanmukhtar | 2025-10-30 | style tweaks
+f5d0182 | arsalanmukhtar | 2025-10-28 | Merge branch 'dev-talharizwan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+8f2334a | ttalha5621 | 2025-10-28 | temporal layers addition for GDPS and Ocean/Coastal
+0960609 | arsalanmukhtar | 2025-10-28 | updated function for ffd
+58f235f | arsalanmukhtar | 2025-10-28 | local news functionality integrated
+8bdd0db | ttalha5621 | 2025-10-27 | base project setted and commited
+5297d07 | Ahad_Khan09 | 2025-10-24 | Merge branch 'dev-arsalan' of https://github.com/arsalanmukhtar/ncop_local into dev-ahadkhan
+e0f9b9e | arsalanmukhtar | 2025-10-24 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+c2cc3ba | Ahad_Khan09 | 2025-10-24 | Updated title to NCOPS
+df39395 | arsalanmukhtar | 2025-10-24 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+56026eb | Ahad_Khan09 | 2025-10-24 | Updated Title NCOP
+c3b247f | arsalanmukhtar | 2025-10-24 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+27c10d8 | Ahad_Khan09 | 2025-10-24 | Updated to NCAAP
+557f212 | arsalanmukhtar | 2025-10-24 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+6d30edf | Ahad_Khan09 | 2025-10-24 | Updated title to NCOOOOOP
+31b7ae3 | Arsalan Mukhtar | 2025-10-24 | Merge pull request #7 from arsalanmukhtar/dev-ahadkhan
+86cb607 | Ahad_Khan09 | 2025-10-24 | Updated title to NCOP
+a64ac30 | arsalanmukhtar | 2025-10-24 | Merge branch 'dev-ahadkhan' of https://github.com/arsalanmukhtar/ncop_local into dev-arsalan
+f932f37 | Ahad_Khan09 | 2025-10-24 | Updated Title
+dff79c2 | Arsalan Mukhtar | 2025-10-24 | Merge pull request #5 from arsalanmukhtar/dev-ahadkhan
+f778998 | arsalanmukhtar | 2025-10-24 | tweaks
+f2be094 | Ahad_Khan09 | 2025-10-24 | Added ECMWF Layers
+5f51f22 | Arsalan Mukhtar | 2025-10-24 | Merge pull request #4 from arsalanmukhtar/dev-ahadkhan
+5b7cfe6 | Ahad_Khan09 | 2025-10-24 | Testing for PR
+6d34da4 | arsalanmukhtar | 2025-10-24 | added drag and resize functionality for slider
+2bdf954 | Ahad_Khan09 | 2025-10-23 | Updated for pr testing
+e68d955 | Ahad_Khan09 | 2025-10-23 | updated command to take pull
+f5370cd | Ahad_Khan09 | 2025-10-23 | updated setup commands
+3125b4f | Ahad_Khan09 | 2025-10-23 | test
+1db7a61 | sarimazeem | 2025-10-23 | updated env template and created dev-ahadkhan branch
+6cbcec5 | sarimazeem | 2025-10-23 | modified req.txt
+c125a22 | arsalanmukhtar | 2025-10-23 | pmd weather station icon resize
+fb19278 | arsalanmukhtar | 2025-10-23 | popup broken logic redefined
+3721a1a | arsalanmukhtar | 2025-10-23 | view addition, dew polygons error handling and old popup disabled
+3a9d63f | arsalanmukhtar | 2025-10-23 | bug resolve
+0130116 | arsalanmukhtar | 2025-10-23 | dropdown styling and debugging
+5d454d6 | arsalanmukhtar | 2025-10-22 | popup handling and style updated
+9a9b45d | arsalanmukhtar | 2025-10-22 | chore: added geojson features for dew polygons and their popup
+57beb3a | arsalanmukhtar | 2025-10-22 | chore: dew api exposures dropdown designing
+15eba40 | arsalanmukhtar | 2025-10-22 | legend styling fixed
+2f545e4 | arsalanmukhtar | 2025-10-21 | legend styling
+5beece9 | arsalanmukhtar | 2025-10-21 | chore: added aiq quality cams layers
+f158580 | arsalanmukhtar | 2025-10-21 | slider styling functionality
+f997a1f | arsalanmukhtar | 2025-10-21 | chore: temporal slider and legend functionality feature
+55d09ce | arsalanmukhtar | 2025-10-20 | created time slider functionality for temporal layers
+7c67e63 | arsalanmukhtar | 2025-10-20 | added thumbnails for temporal layers
+963e0d5 | arsalanmukhtar | 2025-10-20 | gdal geodjango migration from ubuntu to windows
+aa92d73 | arsalanmukhtar | 2025-10-20 | gdal windows dependency and virtual env migration
+2cdd5b4 | arsalanmukhtar | 2025-10-17 | chore: migration from django node to django node vite
+f5aff4b | arsalanmukhtar | 2025-10-16 | noob
+d41c3cb | arsalanmukhtar | 2025-10-16 | test
+587b08f | arsalanmukhtar | 2025-10-16 | test
+ea69ab5 | arsalanmukhtar | 2025-10-16 | Ignore virtual environment
+cacc1bf | developerndma | 2025-10-16 | refactor: djangoenv not ignored
+c625d1f | developerndma | 2025-10-16 | chore: django project setup
+14187e9 | arsalanmukhtar | 2025-10-16 | chore: github token ignore
+1a5338f | arsalanmukhtar | 2025-10-16 | refactor: gitignore update
+a56dc2d | arsalanmukhtar | 2025-10-16 | chore: initial repo
+47dc128 | arsalanmukhtar | 2025-10-16 | chore: initial repo
