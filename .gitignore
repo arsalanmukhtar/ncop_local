@@ -195,3 +195,9 @@ project/media/pmd_predictions/
 
 # Backend cache (heatwave / weather snapshots)
 project/cache/
+
+# graphifyy working cache (raw extraction cache, not the graph deliverables
+# themselves — graph.json/graph.html/GRAPH_REPORT.md are regenerable in a
+# couple minutes via `graphify update .` but are kept committed so
+# CONTEXT.md's graph links work without re-running the tool)
+graphify-out/cache/
