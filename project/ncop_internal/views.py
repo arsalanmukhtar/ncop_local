@@ -8376,3 +8376,368 @@ class PmdDailyForecastProAPIView(APIView):
                 {"error": f"provincial forecast unavailable: {str(e)[:200]}"},
                 status=502,
             )
+
+
+# ==================================================================
+#  NWFC Daily Rainfall Report — discovered, downloaded, and parsed
+#  ----------------------------------------------------------------
+#  Built for the "Dynamic Weather Report" cinematic Story Mode's
+#  Chapter 1 (precipitation briefing). Unlike every other NWFC/PMD
+#  surface in this app, the rainfall report only ever existed as a
+#  PDF *link* (see getNwfcReports() / #buildRainfallFullView in
+#  weather-report-control.js) — nothing parsed it into structured
+#  data before this endpoint.
+#
+#  Discovery: GCOP already indexes these PDFs at
+#  {GCOP_BASE_URL}/api/pmd/nwfc/reports/ (same host the frontend's
+#  gcop-api-cache.js talks to directly for map data — no server-side
+#  GCOP config exists yet in this backend, so the base URL is
+#  hardcoded here to match frontend/src/modules/gcop-api-cache.js:18
+#  exactly). We take the newest entry whose kind is "Daily Rainfall".
+#  If GCOP is unreachable, we fall back to constructing today's (then
+#  the last few days') URL directly from PMD's own stable naming
+#  pattern, which we've confirmed live:
+#    https://weather.gov.pk/storage/uploads/nwfc/daily_rainfall/pdf/DD-MM-YYYY.pdf
+#
+#  Parsing: the PDF is a single-page table with three sections —
+#  rainfall (grouped under ALL-CAPS province header rows, each
+#  district either a bare number, "Trace", a "SubName NN" pair, or a
+#  parenthesised multi-station list), "Maximum Wind Reported", and
+#  "Maximum Water Level at Nullah Lai". Confirmed against a real
+#  05-08-2026 report during development — see conversation history
+#  for the raw pdfplumber dump this parser is built against. Any row
+#  shape we don't recognise is skipped rather than guessed at, so a
+#  format drift degrades the output instead of raising.
+#
+#  Derived fields the source PDF does NOT print explicitly (PMD's
+#  table has no literal national or provincial total):
+#    total_mm   = sum of every individual station's mm reading
+#                 nationwide. Trace/NIL contribute 0.
+#    summary_mm = the same sum, restricted to one province's stations.
+#
+#  Cache: 4h primary + 24h stale fallback — PMD publishes this once
+#  daily, matching getNwfcReports()'s own 4h client-side cache.
+# ==================================================================
+
+_RAINFALL_GCOP_BASE_URL = "http://172.18.7.21:8000"  # mirrors gcop-api-cache.js:18
+
+_RAINFALL_PROVINCE_DISPLAY = {
+    "PUNJAB": "Punjab",
+    "SINDH": "Sindh",
+    "KHYBER PAKHTUNKHWA": "Khyber Pakhtunkhwa",
+    "BALOCHISTAN": "Balochistan",
+    "GILGIT BALTISTAN": "Gilgit-Baltistan",
+    "KASHMIR": "Kashmir",
+    "ISLAMABAD": "Islamabad",
+    "ISLAMABAD CAPITAL TERRITORY": "Islamabad",
+}
+
+_RAINFALL_SUBSTATION_RE = re.compile(r"([A-Za-z][A-Za-z .&\-]*?)\s+(\d+(?:\.\d+)?)\s*(?:,|$)")
+_RAINFALL_NAMED_VALUE_RE = re.compile(r"^([A-Za-z][A-Za-z .]*?)\s+(\d+(?:\.\d+)?)$")
+
+
+def _rainfall_to_float(raw):
+    try:
+        return float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_nwfc_rainfall_pdf(pdf_bytes, report_date, source_url):
+    """Parse one NWFC Daily Rainfall PDF (bytes) into structured JSON.
+    See the module-level comment above this class for the field
+    definitions and the exact table shape this is built against."""
+    import pdfplumber
+    import io
+
+    provinces = {}       # display_name -> {"stations": [...], "summary_mm": float, "nil": bool}
+    wind = []
+    water_level = []
+    water_level_normal = True
+    section = None
+    current_province = None
+
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables():
+                for row in table:
+                    cells = [(c.strip() if isinstance(c, str) else c) for c in (row or [])]
+                    first = cells[0] or "" if cells else ""
+                    rest = [c for c in cells[1:] if c]
+
+                    low = first.lower()
+                    if low.startswith("total rainfall"):
+                        continue  # title row — date already known from the reports index
+                    if first == "Stations" and any("rainfall" in (c or "").lower() for c in cells):
+                        section = "rainfall"
+                        continue
+                    if low.startswith("maximum wind"):
+                        section = "wind"
+                        continue
+                    if first == "Stations" and section == "wind":
+                        continue  # wind header row
+                    if low.startswith("maximum water level"):
+                        section = "water_level"
+                        continue
+                    if first == "Station" and section == "water_level":
+                        continue  # water-level header row
+                    if not first:
+                        continue
+
+                    if section == "rainfall":
+                        upper = first.upper()
+                        if upper in _RAINFALL_PROVINCE_DISPLAY and not rest:
+                            current_province = _RAINFALL_PROVINCE_DISPLAY[upper]
+                            provinces.setdefault(current_province, {
+                                "stations": [], "summary_mm": 0.0, "nil": False,
+                            })
+                            continue
+                        if first == "NIL" and current_province:
+                            provinces[current_province]["nil"] = True
+                            continue
+                        if current_province is None:
+                            continue
+                        prov = provinces[current_province]
+                        value_cell = rest[0] if rest else ""
+                        if value_cell.startswith("("):
+                            inner = value_cell.strip("() \n").replace("\n", " ")
+                            for m in _RAINFALL_SUBSTATION_RE.finditer(inner):
+                                name, val = m.group(1).strip(), float(m.group(2))
+                                prov["stations"].append({
+                                    "name": f"{first} - {name}", "mm": val, "trace": False,
+                                })
+                                prov["summary_mm"] += val
+                        elif value_cell.lower() == "trace":
+                            prov["stations"].append({"name": first, "mm": 0.0, "trace": True})
+                        else:
+                            m = _RAINFALL_NAMED_VALUE_RE.match(value_cell)
+                            if m:
+                                sub, val = m.group(1).strip(), float(m.group(2))
+                                prov["stations"].append({
+                                    "name": f"{first} {sub}", "mm": val, "trace": False,
+                                })
+                                prov["summary_mm"] += val
+                            else:
+                                val = _rainfall_to_float(value_cell)
+                                if val is not None:
+                                    prov["stations"].append({"name": first, "mm": val, "trace": False})
+                                    prov["summary_mm"] += val
+                                # else: unrecognised cell shape — skip, don't guess
+
+                    elif section == "wind":
+                        if len(rest) >= 2:
+                            wind.append({
+                                "station":   first,
+                                "wind_kt":   _rainfall_to_float(rest[0]),
+                                "wind_kmh":  _rainfall_to_float(rest[1]) if len(rest) > 1 else None,
+                                "direction": rest[2] if len(rest) > 2 else None,
+                                "time_pst":  rest[-1] if rest else None,
+                            })
+
+                    elif section == "water_level":
+                        if low == "normal water level":
+                            continue
+                        water_level_normal = False
+                        water_level.append({
+                            "station":         first,
+                            "level_ft":        _rainfall_to_float(rest[0]) if rest else None,
+                            "time_pst":        rest[1] if len(rest) > 1 else None,
+                            "flood_situation": rest[2] if len(rest) > 2 else None,
+                        })
+
+    total_mm = 0.0
+    for prov in provinces.values():
+        prov["summary_mm"] = round(prov["summary_mm"], 1)
+        total_mm += prov["summary_mm"]
+
+    trace_stations = [s["name"] for p in provinces.values() for s in p["stations"] if s["trace"]]
+    nil_provinces = [name for name, p in provinces.items() if p["nil"]]
+    top_stations = sorted(
+        (s for p in provinces.values() for s in p["stations"] if not s["trace"]),
+        key=lambda s: s["mm"], reverse=True,
+    )[:15]
+
+    return {
+        "date":            report_date,
+        "source_url":      source_url,
+        "generated_at":    int(time.time()),
+        "total_mm":        round(total_mm, 1),
+        "provinces":       provinces,
+        "trace_stations":  trace_stations,
+        "nil_provinces":   nil_provinces,
+        "top_stations":    top_stations,
+        "wind":            wind,
+        "water_level":     {"normal": water_level_normal, "observations": water_level},
+    }
+
+
+def _merge_rainfall_reports(daily_payloads):
+    """Aggregate N single-day parsed reports (see _parse_nwfc_rainfall_pdf)
+    into a district-level and province-level multi-day view.
+
+    Per district, a day's representative reading is the MAX among that
+    district's own stations — multiple gauges within one district are
+    different monitoring points, not additive sub-areas (see the parser's
+    own comment on composite "District - SubStation" entries). The
+    district's multi-day figure is then the SUM of those daily maxima —
+    a genuine accumulation across the window, e.g. 2 days = 48h."""
+    district_totals = {}  # (province, district) -> mm
+    for payload in daily_payloads:
+        for province, pdata in (payload.get("provinces") or {}).items():
+            day_district_max = {}
+            for station in pdata.get("stations") or []:
+                if station.get("trace"):
+                    continue
+                district = station["name"].split(" - ")[0]
+                day_district_max[district] = max(day_district_max.get(district, 0.0), station["mm"])
+            for district, mm in day_district_max.items():
+                key = (province, district)
+                district_totals[key] = district_totals.get(key, 0.0) + mm
+
+    districts = [
+        {"name": district, "province": province, "mm_total": round(mm, 1)}
+        for (province, district), mm in district_totals.items()
+    ]
+    districts.sort(key=lambda d: d["mm_total"], reverse=True)
+
+    province_totals = {}
+    for d in districts:
+        province_totals[d["province"]] = province_totals.get(d["province"], 0.0) + d["mm_total"]
+    provinces = [{"name": name, "mm_total": round(mm, 1)} for name, mm in province_totals.items()]
+    provinces.sort(key=lambda p: p["mm_total"], reverse=True)
+
+    return {
+        "districts": districts,
+        "provinces": provinces,
+        "total_mm": round(sum(p["mm_total"] for p in provinces), 1),
+    }
+
+
+class NwfcRainfallReportAPIView(APIView):
+    """GET /api/pmd/nwfc/rainfall-report/  →  parsed NWFC Daily Rainfall
+    report(s) (see module comment above for the single-day shape + field
+    defs). Also aggregates the most recent REPORT_WINDOW_DAYS reports into
+    a district/province multi-day view under `districts_multiday` /
+    `provinces_multiday` / `total_mm_multiday` / `window_hours` / `reports`
+    — all top-level single-day fields (date/source_url/total_mm/provinces/
+    top_stations/wind/water_level/...) are UNCHANGED and still describe
+    the single latest day, so existing consumers of this endpoint are
+    unaffected; the multi-day fields are purely additive."""
+
+    CACHE_KEY   = "nwfc_rainfall_report_parsed"
+    STALE_KEY   = "nwfc_rainfall_report_parsed_stale"
+    PRIMARY_TTL = 4 * 60 * 60       # 4 h — matches getNwfcReports()'s own client cache
+    STALE_TTL   = 24 * 60 * 60      # 24 h
+    TIMEOUT     = 20
+    REPORT_WINDOW_DAYS = 2           # 48h — "two latest PDFs", per the operational brief
+
+    def _discover_latest_urls(self, count):
+        """Primary discovery path: GCOP's own report index (authoritative,
+        already used elsewhere in the app). Returns up to `count`
+        (date_str, pdf_url) tuples for the most recent Daily Rainfall
+        entries, newest first."""
+        r = requests.get(
+            f"{_RAINFALL_GCOP_BASE_URL}/api/pmd/nwfc/reports/",
+            timeout=self.TIMEOUT,
+        )
+        r.raise_for_status()
+        reports = (r.json() or {}).get("reports") or []
+        out = []
+        for item in reports:
+            if (item.get("kind") or "").strip().lower() == "daily rainfall" and item.get("url"):
+                out.append((item.get("date") or "", item["url"]))
+                if len(out) >= count:
+                    break
+        if not out:
+            raise ValueError("no Daily Rainfall entry in GCOP reports index")
+        return out
+
+    def _fallback_url_candidates(self):
+        """If GCOP itself is unreachable, PMD's own naming pattern is
+        stable enough to construct directly (confirmed live during
+        development) — try today, then walk back a few days in case
+        today's hasn't been published yet."""
+        from datetime import datetime, timedelta
+        today = datetime.utcnow()  # PST is UTC+5; a day early only means
+        # one extra (harmless) 404 attempt before landing on the real date
+        out = []
+        for delta in range(0, 6):
+            d = today - timedelta(days=delta)
+            date_str = d.strftime("%d-%m-%Y")
+            out.append((d.strftime("%d %B %Y"), (
+                "https://weather.gov.pk/storage/uploads/nwfc/"
+                f"daily_rainfall/pdf/{date_str}.pdf"
+            )))
+        return out
+
+    def _fetch_pdf(self, url):
+        r = requests.get(url, timeout=self.TIMEOUT, headers={"User-Agent": "NCOP/1.0"})
+        r.raise_for_status()
+        return r.content
+
+    def _fetch_recent_daily_payloads(self):
+        """Fetch + parse up to REPORT_WINDOW_DAYS most recent Daily
+        Rainfall reports, newest first. Tries GCOP's index first; falls
+        back to constructing dated URLs directly against PMD if GCOP
+        itself is unreachable. Individual day fetch/parse failures are
+        skipped rather than aborting the whole request — a comprehensive
+        multi-day view degrades gracefully to however many days actually
+        came through, never below 1 if anything is reachable at all."""
+        payloads = []
+        try:
+            for date_str, url in self._discover_latest_urls(self.REPORT_WINDOW_DAYS):
+                try:
+                    payloads.append(_parse_nwfc_rainfall_pdf(self._fetch_pdf(url), date_str, url))
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        if not payloads:
+            for candidate_date, candidate_url in self._fallback_url_candidates():
+                if len(payloads) >= self.REPORT_WINDOW_DAYS:
+                    break
+                try:
+                    payloads.append(_parse_nwfc_rainfall_pdf(
+                        self._fetch_pdf(candidate_url), candidate_date, candidate_url,
+                    ))
+                except Exception:
+                    continue
+
+        if not payloads:
+            raise ValueError("rainfall report unreachable via GCOP or direct fallback")
+        return payloads
+
+    def get(self, request):
+        hit = cache.get(self.CACHE_KEY)
+        if hit is not None:
+            return JsonResponse(hit)
+
+        try:
+            daily_payloads = self._fetch_recent_daily_payloads()
+
+            # Every existing single-day field (date/source_url/total_mm/
+            # provinces/top_stations/wind/water_level/...) stays exactly
+            # what the LATEST day alone produces — unchanged for whatever
+            # already consumes this endpoint.
+            payload = dict(daily_payloads[0])
+            payload["reports"] = [
+                {"date": p["date"], "source_url": p["source_url"]} for p in daily_payloads
+            ]
+            payload["window_hours"] = 24 * len(daily_payloads)
+            merged = _merge_rainfall_reports(daily_payloads)
+            payload["districts_multiday"] = merged["districts"]
+            payload["provinces_multiday"] = merged["provinces"]
+            payload["total_mm_multiday"] = merged["total_mm"]
+
+            cache.set(self.CACHE_KEY, payload, self.PRIMARY_TTL)
+            cache.set(self.STALE_KEY, payload, self.STALE_TTL)
+            return JsonResponse(payload)
+        except Exception as e:
+            stale = cache.get(self.STALE_KEY)
+            if stale is not None:
+                return JsonResponse({**stale, "_stale": True, "_error": str(e)[:200]})
+            return JsonResponse(
+                {"error": f"rainfall report unavailable: {str(e)[:200]}"},
+                status=502,
+            )

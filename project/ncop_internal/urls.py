@@ -42,6 +42,7 @@ from .views import (
     CropGeoJSONAPIView,
     PmdMonitorPredictionsAPIView,
     PmdDailyForecastProAPIView,
+    NwfcRainfallReportAPIView,
 
 
 )
@@ -116,5 +117,16 @@ urlpatterns = [
         "api/pmd/monitor/daily-forecast-pro/",
         PmdDailyForecastProAPIView.as_view(),
         name="pmd-daily-forecast-pro",
+    ),
+
+    # NWFC Daily Rainfall Report, discovered + downloaded + parsed
+    # server-side (PDF -> structured JSON). Feeds Chapter 1 of the
+    # cinematic Dynamic Weather Report story
+    # (frontend/src/modules/story-precipitation-briefing.js).  4 h
+    # cache + 24 h stale fallback baked into the view.
+    path(
+        "api/pmd/nwfc/rainfall-report/",
+        NwfcRainfallReportAPIView.as_view(),
+        name="nwfc-rainfall-report",
     ),
 ]

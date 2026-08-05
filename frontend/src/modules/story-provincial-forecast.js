@@ -419,6 +419,13 @@ let _story = {
 
   // Map popup for the current chapter
   chapterPopup:   null,   // mapboxgl.Popup instance
+
+  // Gate: the outlook no longer auto-fetches/auto-plays the instant the
+  // Story panel opens — it shows a Start prompt and waits for an explicit
+  // click. Stays true for the rest of the session once started (reopening
+  // the panel later resumes normally), so this is a one-time-per-session
+  // opt-in, not a repeated interruption.
+  started: false,
 };
 
 
@@ -629,6 +636,29 @@ function _injectStyles() {
       animation: pf-spin 0.9s linear infinite;
     }
     @keyframes pf-spin { to { transform: rotate(360deg); } }
+
+    /* ---- Start-briefing prompt (opt-in gate) ----------------------- */
+    #${CARD_ID} .pf-start-wrap {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+      padding: 10px 2px 4px;
+    }
+    #${CARD_ID} .pf-start-copy {
+      font-size: 12px; line-height: 1.5;
+      color: rgba(234, 234, 234, 0.75);
+      margin: 0;
+    }
+    #${CARD_ID} .pf-start-btn {
+      appearance: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
+      color: #fff;
+      background: var(--ndma-blue, #46b2ff);
+      border: none; border-radius: 999px;
+      transition: filter 0.15s ease;
+    }
+    #${CARD_ID} .pf-start-btn:hover { filter: brightness(1.12); }
+    #${CARD_ID} .pf-start-btn svg { width: 13px; height: 13px; }
 
     /* ---- Map popup for the current chapter ------------------------ */
     .ncop-story-popup.mapboxgl-popup { max-width: 340px !important; z-index: 5; }
@@ -1493,6 +1523,7 @@ function _bindCardEvents(card) {
   btn(".pf-btn--prev").addEventListener("click", () => _goto(_story.index - 1, /*byUser*/ true));
   btn(".pf-btn--next").addEventListener("click", () => _goto(_story.index + 1, /*byUser*/ true));
   btn(".pf-refresh").addEventListener("click", () => {
+    _story.started = true; // refreshing is an implicit start if it hadn't happened yet
     if (_inFlightFetch) return;
     _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
   });
@@ -2953,6 +2984,31 @@ function _renderStatus(card, msg, isError) {
   card.querySelector(".pf-progress-fill").style.width = "0%";
 }
 
+// Opt-in gate — the outlook used to auto-fetch/auto-play the instant the
+// Story panel opened; it now waits here for an explicit click so it
+// doesn't compete for attention with whatever else the operator opened
+// the panel to look at (e.g. picking Dynamic Weather Report right away).
+function _renderStartPrompt(card) {
+  card.querySelector(".pf-chapter-title").textContent = "7-Day Weather Outlook";
+  card.querySelector(".pf-chapter-counter").textContent = "";
+  card.querySelector(".pf-dots").innerHTML = "";
+  card.querySelector(".pf-progress-fill").style.width = "0%";
+  card.querySelector(".pf-body").innerHTML = `
+    <div class="pf-start-wrap">
+      <p class="pf-start-copy">PMD weather warnings, station highlights, and daily narration for the week ahead.</p>
+      <button type="button" class="pf-start-btn">${ICON_PLAY}<span>Start Briefing</span></button>
+    </div>
+  `;
+  const btn = card.querySelector(".pf-start-btn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      _story.started = true;
+      if (_inFlightFetch) return;
+      _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
+    }, { once: true });
+  }
+}
+
 // Scan free-text prose for province mentions using our PROVINCE_ALIASES
 // table (case-insensitive substring match).  Returns canonical province
 // titles (Balochistan, GB, Islamabad, Kashmir, KPk, Punjab, Sindh) in
@@ -3303,7 +3359,7 @@ function _regroupCitiesSentence(sentence) {
     const district = mm[1].trim();
     const province = mm[2].trim();
     const standalone = district.toLowerCase() === province.toLowerCase();
-    const key = standalone ? " standalone" : province;
+    const key = standalone ? " standalone" : province;
     if (!groups.has(key)) groups.set(key, { province: standalone ? null : province, names: [] });
     const g = groups.get(key);
     if (!g.names.includes(district)) g.names.push(district);
@@ -3725,6 +3781,17 @@ async function _fetchAndBuild(card) {
     if (savedPref === "on")  _story.ttsEnabled = true;
     else if (savedPref === "off") _story.ttsEnabled = false;
 
+    // This fetch can take up to ~60s on a cold first open. If the
+    // operator switched to Dynamic Weather Report (which hides this card
+    // via window.ncopProvincialForecast.hide()) while it was in flight,
+    // don't resurrect anything on completion — _renderChapter would
+    // repopulate the (invisible) card fine, but _showChapterPopup/_play
+    // would still show the floating briefing popup and restart the
+    // camera/blink loop, since that popup is a SEPARATE element outside
+    // this card and isn't hidden by card.style.display alone. The data
+    // itself is still cached in _story.* for whenever hide→restore runs.
+    if (card.style.display === "none") return;
+
     _renderDots(card);
     _renderChapter(card, { fade: false });
 
@@ -3737,6 +3804,7 @@ async function _fetchAndBuild(card) {
       const choice = await _showTtsPrompt(card);
       _saveTtsPref(choice);
       _story.ttsEnabled = choice === "on";
+      if (card.style.display === "none") return; // hidden during the prompt's own await
       // Re-render so the speaker button reflects the new state and
       // (if enabled) TTS speaks the current chapter now.
       _renderChapter(card, { fade: false });
@@ -3758,6 +3826,10 @@ function _handlePanelVisible() {
   const root = document.getElementById(ROOT_ID);
   if (!root) return;
   const card = _ensureCard(root);
+  if (!_story.started) {
+    _renderStartPrompt(card);
+    return;
+  }
   if (_inFlightFetch) return;
   _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
 }
@@ -3815,6 +3887,10 @@ function _restoreCardExternally() {
   const card = document.getElementById(CARD_ID);
   if (!card) return;
   card.style.display = "";
+  if (!_story.started) {
+    _renderStartPrompt(card);
+    return;
+  }
   if (_story.playable.length) {
     _renderChapter(card, { fade: false });
     if (_wasPlayingBeforeExternalHide) _play();
