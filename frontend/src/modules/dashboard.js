@@ -51,6 +51,12 @@ import "./temporal-current-step.js";
 // forecast-pro/ on every open; auto-inits on DOMContentLoaded.
 import "./story-provincial-forecast.js";
 
+// Side-effect import: adds "Dynamic Weather Report" as a #storySelect
+// option (alongside demostory/hydrological/meteorological) — a separate,
+// independent story from the provincial forecast above. Auto-inits on
+// DOMContentLoaded; does nothing until picked from the dropdown.
+import "./story-dynamic-weather.js";
+
 
 // ---- Mapbox token handling ----
 // The entry (dashboard_main.js) already set mapboxgl.accessToken when possible.

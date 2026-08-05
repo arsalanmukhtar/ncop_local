@@ -132,7 +132,15 @@
       "Bash(./ncopenv311/Scripts/graphify.exe cluster-only *)",
       "Bash(./ncopenv311/Scripts/graphify.exe god-nodes *)",
       "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)",
-      "Bash(Get-Content -TotalCount 40 \"D:\\\\muhammad_arsalan\\\\ncop_v1\\\\ncop_local\\\\project\\\\templates\\\\dashboard.html\")"
+      "Bash(Get-Content -TotalCount 40 \"D:\\\\muhammad_arsalan\\\\ncop_v1\\\\ncop_local\\\\project\\\\templates\\\\dashboard.html\")",
+      "Bash(curl -s -m 20 \"http://172.18.7.21:8000/api/pmd/monitor/warnings/\" -o /tmp/pmd_warnings.json -w \"HTTP_STATUS:%{http_code} SIZE:%{size_download} TIME:%{time_total}\\\\n\")",
+      "Bash(curl -s -m 20 \"http://172.18.7.21:8000/api/pmd/monitor/warnings/\" -o tmp_pmd_warnings.json -w \"HTTP_STATUS:%{http_code} SIZE:%{size_download}\\\\n\")",
+      "Bash(./ncopenv311/Scripts/python.exe -c ' *)",
+      "Bash(node --check src/modules/story-provincial-forecast.js)",
+      "Bash(node tmp_test_cleanup.mjs)",
+      "Bash(node tmp_test_geom.mjs)",
+      "Bash(node --check src/modules/weather-report-control.js)",
+      "Bash(node --check src/modules/story-dynamic-weather.js)"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",

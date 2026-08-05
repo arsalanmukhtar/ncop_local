@@ -135,15 +135,13 @@ const HAZARDS_BY_CODE = Object.fromEntries(
   (HAZARD_TYPES || []).map((h) => [h.code, h])
 );
 
-// Deliberate playback order for the Story sub-chapters.  Life-safety before
-// property: flood/rain/storm/lightning first, then temperature extremes, then
-// wind, then visibility-only hazards.  Any hazard NOT in this list is skipped
-// during playback; any hazard here that has no polygons on a given day is
-// silently omitted.  Reorder freely to change the briefing sequence.
+// Deliberate playback order for the Story sub-chapters.  Any hazard NOT in
+// this list is skipped during playback; any hazard here that has no
+// polygons on a given day is silently omitted.  Reorder freely to change
+// the briefing sequence.
 const HAZARD_PLAYBACK_ORDER = [
-  "FLD", "RAINSTORM", "HRAIN", "TSTM", "LTNG",
-  "SNOW", "HEATWAVE", "COLD", "GALE", "CONV",
-  "HAIL", "DUST", "FOG",
+  "HEATWAVE", "RAINSTORM", "CONV", "HRAIN", "TSTM", "LTNG",
+  "COLD", "SNOW", "HAIL", "DUST", "FLD", "FOG", "GALE",
 ];
 
 // Given a feature's properties, return the FIRST HAZARD_TYPES code it
@@ -582,6 +580,25 @@ function _injectStyles() {
     #${CARD_ID} .pf-dot.is-empty { opacity: 0.35; cursor: not-allowed; }
 
     /* ---- Footer meta ----------------------------------------------- */
+    /* Level-colour legend — always visible so the colour-coded pills on
+       every warning step (pf-warning-level / nsp-level / the "also active"
+       chips) are self-explanatory without hovering anything. Built from
+       LEVEL_COLORS itself so it can never drift out of sync with the
+       colours actually used elsewhere. */
+    #${CARD_ID} .pf-legend {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 10px; color: rgba(234, 234, 234, 0.55);
+    }
+    #${CARD_ID} .pf-legend-item {
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    #${CARD_ID} .pf-legend-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
     #${CARD_ID} .pf-meta {
       display: flex; justify-content: space-between; align-items: center;
       gap: 8px; margin-top: 8px;
@@ -971,6 +988,23 @@ function _injectStyles() {
       color: #7fdfec;
       border: 1px solid rgba(77, 208, 225, 0.40);
       border-radius: 999px;
+    }
+
+    /* "Also active in this area" — same-hazard warnings folded into this
+       step instead of getting their own slide (see _buildPlaybackList).
+       Shared markup/classes between the fixed card and the map popup;
+       each surface just supplies its own chip class for the level pills. */
+    #${CARD_ID} .pf-also-warnings,
+    .ncop-story-popup .pf-also-warnings {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.15);
+    }
+    #${CARD_ID} .pf-also-label,
+    .ncop-story-popup .pf-also-label {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;
+      color: rgba(234, 234, 234, 0.55);
+      text-transform: uppercase;
     }
 
     /* Focus-mode CHAPTER popup on the map — swaps the header for the
@@ -1442,6 +1476,7 @@ function _ensureCard(root) {
       <span class="pf-hint">Overview 10s · Warning focus 14s</span>
     </div>
     <div class="pf-dots" role="tablist"></div>
+    ${_legendHtml()}
     <div class="pf-meta">
       <span class="pf-source">Source: PMD NWFC · weather.gov.pk</span>
       <span class="pf-stale" title="Serving last-known-good; upstream unavailable">STALE</span>
@@ -1724,6 +1759,30 @@ function _buildDayChapterHtml(chapter) {
   `;
 }
 
+// Render the "also active here" line for warnings that were folded into
+// this step instead of getting their own slide (see _buildPlaybackList's
+// per-hazard grouping). `chipClass` lets the two callers (fixed card vs
+// map popup) reuse their own existing pill styling instead of new CSS.
+function _alsoWarningsHtml(item, chipClass) {
+  const also = item.alsoWarnings;
+  if (!also || !also.length) return "";
+  const meta = item.hazardMeta || HAZARDS_BY_CODE[item.hazardCode] || {};
+  const label = _escapeHtml(meta.label || item.hazardCode || "warning");
+  const chips = also.map((f) => {
+    const lvl = String(f.properties?.level || "").trim();
+    if (!lvl) return "";
+    const c = _colorForLevel(lvl, meta.badgeBg);
+    return `<span class="${chipClass}" style="background:${c.bg};color:${c.fg};border-color:${c.bg};">${_escapeHtml(lvl)}</span>`;
+  }).filter(Boolean).join("");
+  const n = also.length;
+  return `
+    <div class="pf-also-warnings">
+      <span class="pf-also-label">Also active in this area — ${n} more ${label} ${n === 1 ? "warning" : "warnings"}:</span>
+      ${chips}
+    </div>
+  `;
+}
+
 // Focus-mode card body — shrunk outlook context on top, then a prominent
 // "Live Warning" block with the feature's own hazard chip, level pill,
 // message + facts.  Reads like a briefing slide: context → threat → data.
@@ -1778,6 +1837,7 @@ function _buildFocusChapterHtml(item) {
       </dl>
       ${provinceChips ? `<div class="pf-prov-chips">${provinceChips}</div>` : ""}
       ${districtChips ? `<div class="pf-dist-chips" title="Affected districts (highlighted on map)">${districtChips}</div>` : ""}
+      ${_alsoWarningsHtml(item, "pf-dist-chip")}
     </div>
   `;
 }
@@ -1865,6 +1925,7 @@ function _focusPopupHtml(item) {
     ${richMsgHtml ? `<div class="nsp-body nsp-focus-msg">${richMsgHtml}</div>` : ""}
     ${provChips ? `<div class="nsp-provs">${provChips}</div>` : ""}
     ${distChips ? `<div class="nsp-districts">${distChips}</div>` : ""}
+    ${_alsoWarningsHtml(item, "nsp-chip")}
   `;
 }
 
@@ -1890,6 +1951,46 @@ const LEVEL_COLORS = {
 function _colorForLevel(level, fallback) {
   const key = String(level || "").trim().toLowerCase();
   return LEVEL_COLORS[key] || { bg: fallback || "#666", fg: "#ffffff" };
+}
+
+// Severity rank derived from LEVEL_COLORS' own declared order (blue <
+// yellow < orange < red is PMD's documented escalation; thunderstorm/gust
+// sit after red as CONVECTIVE's two special severities — see the comment
+// above LEVEL_COLORS). Unknown/missing levels rank lowest so they never
+// crowd out a level we can actually grade.
+const _LEVEL_RANK = Object.fromEntries(Object.keys(LEVEL_COLORS).map((k, i) => [k, i]));
+function _levelRank(feature) {
+  const key = String(feature?.properties?.level || "").trim().toLowerCase();
+  return _LEVEL_RANK[key] ?? -1;
+}
+
+// Do two "<District> in <Province>" location sets (as returned by
+// _parseMessageLocations) refer to overlapping geography? District-level
+// match wins when both features name districts; falls back to province
+// overlap when either side has no district names in its message.
+function _locationsOverlap(a, b) {
+  if (!a || !b) return false;
+  const aDist = new Set((a.districts || []).map((d) => d.toLowerCase()));
+  const bDist = new Set((b.districts || []).map((d) => d.toLowerCase()));
+  if (aDist.size && bDist.size) {
+    for (const d of aDist) if (bDist.has(d)) return true;
+    return false;
+  }
+  const aProv = new Set((a.provinces || []).map((p) => p.toLowerCase()));
+  const bProv = new Set((b.provinces || []).map((p) => p.toLowerCase()));
+  for (const p of aProv) if (bProv.has(p)) return true;
+  return false;
+}
+
+// Legend row for the 6 PMD severity levels, generated straight from
+// LEVEL_COLORS so it can't fall out of sync with the colours the level
+// pills actually use elsewhere in the card/popup.
+function _legendHtml() {
+  const dots = Object.entries(LEVEL_COLORS).map(([key, c]) => {
+    const label = key.charAt(0).toUpperCase() + key.slice(1);
+    return `<span class="pf-legend-item"><span class="pf-legend-dot" style="background:${c.bg};"></span>${_escapeHtml(label)}</span>`;
+  }).join("");
+  return `<div class="pf-legend" title="PMD warning severity levels">${dots}</div>`;
 }
 
 // Fixed top offset for the briefing card — chosen (188.2 px) so the card
@@ -2267,6 +2368,116 @@ function _matchAnyExpr(candidates) {
   return ["match", _lowerNameExpr(), unique, true, false];
 }
 
+// ---- Lightweight polygon-intersection (no turf dependency) --------------
+// @turf/turf is a listed dependency but deliberately unused elsewhere in
+// this codebase (see weather-report-control.js's bbox-only comment) —
+// matching that convention here rather than pulling turf into this
+// module for the first time. Good enough for "should this district also
+// blink", not meant as survey-grade geometry.
+
+function _geometryBBox(geometry) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const visit = (coords) => {
+    if (typeof coords[0] === "number") {
+      const [x, y] = coords;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      return;
+    }
+    for (const c of coords) visit(c);
+  };
+  try { visit(geometry.coordinates); } catch (_) { return null; }
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null;
+  return [minX, minY, maxX, maxY];
+}
+
+// Outer ring only (holes ignored) — for a "does this touch that" check,
+// treating a donut hole as solid only ever makes us over- rather than
+// under-inclusive, which is the safe direction for a blink heuristic.
+function _geometryOuterRings(geometry) {
+  if (!geometry) return [];
+  const { type, coordinates } = geometry;
+  if (type === "Polygon" && coordinates?.[0]) return [coordinates[0]];
+  if (type === "MultiPolygon") return (coordinates || []).map((poly) => poly[0]).filter(Boolean);
+  return [];
+}
+
+function _pointInRing(pt, ring) {
+  const [x, y] = pt;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const crosses = (yi > y) !== (yj > y) &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function _orientation(p, q, r) {
+  const val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1]);
+  if (Math.abs(val) < 1e-12) return 0;
+  return val > 0 ? 1 : 2;
+}
+function _onSegment(p, q, r) {
+  return Math.min(p[0], r[0]) <= q[0] && q[0] <= Math.max(p[0], r[0]) &&
+         Math.min(p[1], r[1]) <= q[1] && q[1] <= Math.max(p[1], r[1]);
+}
+function _segmentsIntersect(p1, p2, p3, p4) {
+  const o1 = _orientation(p1, p2, p3);
+  const o2 = _orientation(p1, p2, p4);
+  const o3 = _orientation(p3, p4, p1);
+  const o4 = _orientation(p3, p4, p2);
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && _onSegment(p1, p3, p2)) return true;
+  if (o2 === 0 && _onSegment(p1, p4, p2)) return true;
+  if (o3 === 0 && _onSegment(p3, p1, p4)) return true;
+  if (o4 === 0 && _onSegment(p3, p2, p4)) return true;
+  return false;
+}
+function _ringsEdgesIntersect(ringA, ringB) {
+  for (let i = 0; i < ringA.length - 1; i++) {
+    for (let j = 0; j < ringB.length - 1; j++) {
+      if (_segmentsIntersect(ringA[i], ringA[i + 1], ringB[j], ringB[j + 1])) return true;
+    }
+  }
+  return false;
+}
+
+// bbox reject → vertex-containment either way (catches full containment)
+// → edge-crossing either way (catches partial overlap neither vertex set
+// falls inside the other for, e.g. a "plus" overlap).
+function _geometriesIntersect(geomA, geomB) {
+  const bboxA = _geometryBBox(geomA);
+  const bboxB = _geometryBBox(geomB);
+  if (!bboxA || !bboxB) return false;
+  if (bboxA[2] < bboxB[0] || bboxB[2] < bboxA[0] || bboxA[3] < bboxB[1] || bboxB[3] < bboxA[1]) {
+    return false;
+  }
+  const ringsA = _geometryOuterRings(geomA);
+  const ringsB = _geometryOuterRings(geomB);
+  for (const ringA of ringsA) {
+    for (const ringB of ringsB) {
+      if (ringA.length && _pointInRing(ringA[0], ringB)) return true;
+      if (ringB.length && _pointInRing(ringB[0], ringA)) return true;
+      if (_ringsEdgesIntersect(ringA, ringB)) return true;
+    }
+  }
+  return false;
+}
+
+function _firstNameProp(feature) {
+  const props = feature?.properties || {};
+  for (const k of NAME_KEYS) {
+    const v = props[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+}
+
 // One-shot diagnostic — logs the property keys carried by real tiles the
 // first time a chapter runs so a property-name mismatch is visible in the
 // console instead of silently rendering an empty filter.  Cheap: uses
@@ -2385,7 +2596,7 @@ function _ensureOverlayLayers() {
       "source-layer": DIST_SRC_LAYER,
       filter: ["has", "___ncop_never___"],
       paint: {
-        "fill-color": "#4dd0e1",
+        "fill-color": "#ffffff",
         "fill-opacity": 0.18,
       },
     });
@@ -2404,6 +2615,10 @@ function _ensureOverlayLayers() {
   }
 }
 
+// Province stays a STATIC highlight (whatever _ensureOverlayLayers set it
+// to at creation — line-width 3 / opacity 1) — only the district layer
+// blinks now, both its outline (as before) and its white fill (a subtle
+// opacity pulse, low enough not to wash out the basemap underneath).
 function _startBlink() {
   _stopBlink();
   const map = window.ncop_map;
@@ -2413,13 +2628,12 @@ function _startBlink() {
     _story.blinkPhase = !_story.blinkPhase;
     const wide = _story.blinkPhase;
     try {
-      if (map.getLayer(HL_PROV_LINE_ID)) {
-        map.setPaintProperty(HL_PROV_LINE_ID, "line-width", wide ? 5 : 2.5);
-        map.setPaintProperty(HL_PROV_LINE_ID, "line-opacity", wide ? 1 : 0.45);
-      }
       if (map.getLayer(HL_DIST_LINE_ID)) {
         map.setPaintProperty(HL_DIST_LINE_ID, "line-width", wide ? 4 : 2);
         map.setPaintProperty(HL_DIST_LINE_ID, "line-opacity", wide ? 1 : 0.5);
+      }
+      if (map.getLayer(HL_DIST_FILL_ID)) {
+        map.setPaintProperty(HL_DIST_FILL_ID, "fill-opacity", wide ? 0.28 : 0.10);
       }
     } catch (_) { /* best-effort */ }
   }, 550);
@@ -2474,6 +2688,38 @@ function _messageProvincesToAliases(rawList) {
   return Array.from(set);
 }
 
+// Districts whose boundary geometry intersects the warning polygon —
+// on top of (never instead of) the message-text-derived list. Reads
+// whatever district tiles are already cached, with a short poll since
+// the district source may have JUST been added for this chapter.
+async function _expandDistrictsByGeometry(item, baseDistricts) {
+  const warnGeom = item.feature?.geometry;
+  if (!warnGeom) return baseDistricts;
+  const map = window.ncop_map;
+  if (!map) return baseDistricts;
+
+  let feats = [];
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (!map.getSource(DIST_SRC)) return baseDistricts;
+    feats = map.querySourceFeatures(DIST_SRC, { sourceLayer: DIST_SRC_LAYER }) || [];
+    if (feats.length) break;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  if (!feats.length) return baseDistricts;
+
+  const seen = new Set(baseDistricts.map((d) => d.toLowerCase()));
+  const extra = [];
+  for (const f of feats) {
+    const name = _firstNameProp(f);
+    if (!name || seen.has(name.toLowerCase())) continue;
+    if (_geometriesIntersect(warnGeom, f.geometry)) {
+      seen.add(name.toLowerCase());
+      extra.push(name);
+    }
+  }
+  return extra.length ? [...baseDistricts, ...extra] : baseDistricts;
+}
+
 async function _applyChapterHighlightDay(item) {
   const map = window.ncop_map;
   if (!map) return;
@@ -2498,8 +2744,13 @@ async function _applyChapterHighlightDay(item) {
     ? (item.featureDistricts || [])
     : (c.districts || []);
 
+  // A focus warning polygon can cover districts the message text never
+  // names — geometry expansion below needs the district source loaded
+  // even when text-matching alone found nothing.
+  const canExpandByGeometry = isFocus && !!item.feature?.geometry;
+
   await _waitForSource(PROV_SRC, 3000);
-  if (districts.length) await _ensureDistrictSource(true);
+  if (districts.length || canExpandByGeometry) await _ensureDistrictSource(true);
 
   _ensureOverlayLayers();
 
@@ -2523,6 +2774,22 @@ async function _applyChapterHighlightDay(item) {
       map.setFilter(HL_DIST_LINE_ID, ["has", "___ncop_never___"]);
       map.setFilter(HL_DIST_FILL_ID, ["has", "___ncop_never___"]);
     }
+  }
+
+  // Districts that geometrically intersect the warning polygon join the
+  // blink set shortly after — needs tile data, so it can't land in the
+  // same synchronous pass as the text-matched set above. Purely additive:
+  // only ever grows the filter, never removes what's already blinking.
+  if (canExpandByGeometry) {
+    const highlightIndex = _story.index;
+    _expandDistrictsByGeometry(item, districts).then((expanded) => {
+      if (expanded.length <= districts.length) return;
+      if (_story.index !== highlightIndex) return; // moved to another chapter
+      if (!map.getLayer(HL_DIST_LINE_ID)) return;
+      const expr = _matchAnyExpr(expanded);
+      map.setFilter(HL_DIST_LINE_ID, expr);
+      map.setFilter(HL_DIST_FILL_ID, expr);
+    }).catch(() => {});
   }
 
   _startBlink();
@@ -2789,10 +3056,10 @@ function _buildPlaybackList(chapters) {
     }
 
     // Per-hazard cap: 5 features per bucket ("13 rainstorms → show 5").
-    // Per-chapter overall cap: 12 total sub-chapters (day of dense
-    // warnings shouldn't play for 3 minutes straight).
+    // Per-chapter overall cap: 14 total sub-chapters (day of dense
+    // warnings shouldn't play for 3+ minutes straight).
     const MAX_PER_HAZARD    = 5;
-    const MAX_PER_CHAPTER   = 12;
+    const MAX_PER_CHAPTER   = 14;
     let subCount = 0;
     // Iterate in the deliberate HAZARD_PLAYBACK_ORDER (life-safety first)
     // rather than the arbitrary Map insertion order, which was whatever
@@ -2802,8 +3069,36 @@ function _buildPlaybackList(chapters) {
       const feats = byHazard.get(code);
       if (subCount >= MAX_PER_CHAPTER) break;
       const room = MAX_PER_CHAPTER - subCount;
-      const take = feats.slice(0, Math.min(MAX_PER_HAZARD, room));
-      take.forEach((f, i) => {
+      const bucket = feats.slice(0, Math.min(MAX_PER_HAZARD, room));
+
+      // A bucket of >2 warnings for one hazard/day plays only its 2 most
+      // severe as full steps; any other bucket member whose message names
+      // the SAME area as one of those 2 is folded into that step as a
+      // textual "also active here" mention instead of burning its own
+      // slide. A member that matches neither shown area's geography still
+      // gets its own step — geography mismatch, so it can't be silently
+      // folded in and can't be silently dropped either.
+      let toRender = bucket;
+      let alsoByFeature = null;
+      if (bucket.length > 2) {
+        const bySeverity = bucket.slice().sort((a, b) => _levelRank(b) - _levelRank(a));
+        const shown = bySeverity.slice(0, 2);
+        const rest = bySeverity.slice(2);
+        const shownLoc = shown.map((f) => _parseMessageLocations(f.properties?.message || ""));
+        alsoByFeature = new Map(shown.map((f) => [f, []]));
+        const overflow = [];
+        for (const f of rest) {
+          const loc = _parseMessageLocations(f.properties?.message || "");
+          const matchIdx = shownLoc.findIndex((sLoc) => _locationsOverlap(loc, sLoc));
+          if (matchIdx >= 0) alsoByFeature.get(shown[matchIdx]).push(f);
+          else overflow.push(f);
+        }
+        // Restore chronological (data_time) order for what actually plays
+        // — _selectWarningFeatures already sorted `feats` that way.
+        toRender = [...shown, ...overflow].sort((a, b) => bucket.indexOf(a) - bucket.indexOf(b));
+      }
+
+      toRender.forEach((f, i) => {
         const { provinces, districts } = _parseMessageLocations(f.properties?.message || "");
         list.push({
           type: "focus",
@@ -2816,9 +3111,10 @@ function _buildPlaybackList(chapters) {
           featureDistricts: districts,
           ordinal: i + 1,
           totalInHazard: feats.length,
+          alsoWarnings: alsoByFeature ? (alsoByFeature.get(f) || []) : [],
         });
       });
-      subCount += take.length;
+      subCount += toRender.length;
     }
   });
   return list;
@@ -2930,7 +3226,7 @@ function _hoistBoundariesAboveWarnings() {
   if (!map) return;
   // Order matters: hoist bottom-up so the resulting z-order is
   //   ... (map base) → warn fill/line → prov fill/outline
-  //     → dist fill/outline → HL prov (blinking gold) → HL dist (blinking cyan)
+  //     → dist fill/outline → HL prov (static gold highlight) → HL dist (blinking white)
   const order = [
     "provincial_boundary-fill",
     "provincial_boundary-outline",
@@ -2963,17 +3259,102 @@ function _applyChapterWarningsOverlay() {
   _hoistBoundariesAboveWarnings();
 }
 
+// PMD's vendor feed still uses the retired province name "N.W.F.P."
+// (renamed to Khyber Pakhtunkhwa in 2010) — relabel it wherever it shows
+// up in message prose.
+// No trailing \b here deliberately — with it, the optional trailing "."
+// in "N.W.F.P." never gets consumed (a boundary can't sit between two
+// non-word chars, i.e. "." then ","), leaving a stray period behind.
+const NWFP_RE = /\bN\.?\s?W\.?\s?F\.?\s?P\.?/gi;
+
+// Occasionally the feed pairs a name with itself — "Azad Kashmir in Azad
+// Kashmir", "Kashmir in Kashmir" — a redundant "district in province"
+// where both sides are literally the same string. Collapse to one name.
+const SELF_REF_RE = /\b([A-Z][A-Za-z.\-]*(?:\s+[A-Z][A-Za-z.\-]*){0,2})\s+in\s+\1\b/g;
+
+// Same "<District> in <Province>" shape the popup's chip-parser
+// (_parseMessageLocations) already relies on, just ordered/undeduped so
+// we can regroup rather than just list.
+const LOCATION_PAIR_RE = /([A-Z][A-Za-z.\-]*(?:\s+[A-Z][A-Za-z.\-]*){0,2})\s+in\s+([A-Z][A-Za-z.\-]*(?:\s+[A-Z][A-Za-z.\-]*){0,2})/g;
+
+function _joinWithAmpersand(names) {
+  if (names.length <= 1) return names[0] || "";
+  return `${names.slice(0, -1).join(",")} & ${names[names.length - 1]}`;
+}
+
+// The "... cities affected include A in P1,B in P1,C in P2 and D in P1."
+// sentence reads as a flat list even though several names share the same
+// province. Regroup it into "A,B & D in Province P1; C in Province P2."
+// Leaves the sentence untouched if it can't parse any pairs — never drop
+// data we can't confidently restructure.
+function _regroupCitiesSentence(sentence) {
+  const hadTrailingPeriod = /\.\s*$/.test(sentence);
+  const body = sentence.replace(/\.\s*$/, "");
+  const m = body.match(/^(.*?\bcities affected include\s+)([\s\S]+)$/i);
+  if (!m) return sentence;
+  const [, lead, listStr] = m;
+
+  LOCATION_PAIR_RE.lastIndex = 0;
+  const groups = new Map();
+  let mm;
+  let matchedAny = false;
+  while ((mm = LOCATION_PAIR_RE.exec(listStr)) !== null) {
+    matchedAny = true;
+    const district = mm[1].trim();
+    const province = mm[2].trim();
+    const standalone = district.toLowerCase() === province.toLowerCase();
+    const key = standalone ? " standalone" : province;
+    if (!groups.has(key)) groups.set(key, { province: standalone ? null : province, names: [] });
+    const g = groups.get(key);
+    if (!g.names.includes(district)) g.names.push(district);
+  }
+  if (!matchedAny) return sentence;
+
+  const parts = [];
+  for (const g of groups.values()) {
+    const joined = _joinWithAmpersand(g.names);
+    parts.push(g.province ? `${joined} in Province ${g.province}` : joined);
+  }
+  return `${lead}${parts.join("; ")}${hadTrailingPeriod ? "." : ""}`;
+}
+
+// Shared prose cleanup applied once, upstream of both the fixed-card
+// plain message and the rich popup's wm-content — so the two surfaces
+// never drift out of sync on this. Renames N.W.F.P., collapses
+// self-referential "X in X" pairs, and regroups the affected-cities list
+// by province.
+function _cleanupWarningProse(rawMsg) {
+  let text = String(rawMsg == null ? "" : rawMsg);
+  if (!text) return text;
+  text = text.replace(NWFP_RE, "Khyber Pakhtunkhwa");
+
+  const sentences = text.split(/(?<=\.)\s+(?=[A-Z])/);
+  for (let i = 0; i < sentences.length; i++) {
+    if (/cities affected include/i.test(sentences[i])) {
+      sentences[i] = _regroupCitiesSentence(sentences[i]);
+    }
+  }
+  text = sentences.join(" ");
+
+  // Catch any remaining self-referential pair outside the cities clause
+  // (the clause's own standalone entries are already handled above).
+  text = text.replace(SELF_REF_RE, "$1");
+  return text;
+}
+
 // Message often has "Prevention Measures: 1. … 2. …" — split at that
 // marker so we can render warning-prose and advisories with distinct
 // styling.  Also strip PMD's `###` separator character, common HTML
 // entities, and collapse extra whitespace/newlines.
 function _splitWarningMessage(msg) {
-  const raw = String(msg || "")
-    .replace(/\r/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/#{2,}/g, "")          // strip ## / ### / #### separator junk
-    .replace(/\s{2,}/g, " ")        // collapse runs of whitespace
-    .trim();
+  const raw = _cleanupWarningProse(
+    String(msg || "")
+      .replace(/\r/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/#{2,}/g, "")          // strip ## / ### / #### separator junk
+      .replace(/\s{2,}/g, " ")        // collapse runs of whitespace
+      .trim()
+  );
   if (!raw) return { warning: "", advisory: "" };
   const [before, ...afterParts] = raw.split(/prevention\s+measures\s*:/i);
   const warning  = (before || "").trim();
@@ -3047,11 +3428,42 @@ function _decorateWarningText(rawEscaped) {
   return s;
 }
 
-// Compose warning text: escape → inline-emoji → decorate marks.  Order
-// matters: emoji sits BEFORE the mark-wrapped tokens, so highlights stay
-// intact.
+// Some upstream PMD Monitor warning messages arrive as a Chinese vendor
+// template with only the (locally-inserted) affected-cities list rendered
+// in English — the surrounding advisory prose is untranslated Chinese.  We
+// deliberately do NOT machine-translate safety-critical text here (a wrong
+// translation reaching an operator is worse than no translation); instead
+// we detect CJK runs and collapse each contiguous run into one neutral
+// flag so the briefing stays readable instead of showing raw Chinese.
+const CJK_RE = /[　-〿㐀-䶿一-鿿豈-﫿＀-￯]/;
+const UNTRANSLATED_CJK_NOTE = "⚠️ [additional advisory text from source system not available in English]";
+function _flagUntranslatedCjk(raw) {
+  const text = String(raw == null ? "" : raw);
+  if (!CJK_RE.test(text)) return text;
+  // Split into sentence-like chunks on CJK/Latin sentence enders, keeping
+  // the delimiter attached so we don't need to re-punctuate afterwards.
+  const parts = text.split(/(?<=[。！？.!?])\s*/);
+  const out = [];
+  let flaggedRun = false;
+  for (const part of parts) {
+    if (!part) continue;
+    if (CJK_RE.test(part)) {
+      if (!flaggedRun) out.push(UNTRANSLATED_CJK_NOTE);
+      flaggedRun = true; // swallow further CJK chunks into the same note
+    } else {
+      out.push(part);
+      flaggedRun = false;
+    }
+  }
+  return out.join(" ").replace(/\s+/g, " ").trim();
+}
+
+// Compose warning text: flag untranslated CJK → escape → inline-emoji →
+// decorate marks.  Order matters: emoji sits BEFORE the mark-wrapped
+// tokens, so highlights stay intact.
 function _composeWarningText(raw) {
-  const escaped = _escapeHtml(raw);
+  const cjkFlagged = _flagUntranslatedCjk(raw);
+  const escaped = _escapeHtml(cjkFlagged);
   const withEmoji = _injectInlineEmoji(escaped);
   return _decorateWarningText(withEmoji);
 }
@@ -3381,6 +3793,38 @@ function _handlePanelHidden() {
   // Remove the fixed briefing card from the map container.
   _removeBriefingCard();
 }
+
+// Public control surface — used ONLY by story-dynamic-weather.js so it can
+// hide/pause this card while ITS OWN Dynamic Weather Report is showing (a
+// separate, independent story picked from #storySelect), and restore this
+// one when the operator closes back out. This calls the exact same
+// teardown/render functions the #story-modal visibility observer already
+// uses below — nothing about this card's own playback logic changes for
+// its normal (visible, story-modal-driven) lifecycle.
+let _wasPlayingBeforeExternalHide = false;
+
+function _hideCardExternally() {
+  const card = document.getElementById(CARD_ID);
+  if (!card || card.style.display === "none") return;
+  _wasPlayingBeforeExternalHide = _story.isPlaying;
+  _handlePanelHidden();
+  card.style.display = "none";
+}
+
+function _restoreCardExternally() {
+  const card = document.getElementById(CARD_ID);
+  if (!card) return;
+  card.style.display = "";
+  if (_story.playable.length) {
+    _renderChapter(card, { fade: false });
+    if (_wasPlayingBeforeExternalHide) _play();
+  }
+}
+
+window.ncopProvincialForecast = {
+  hide: _hideCardExternally,
+  restore: _restoreCardExternally,
+};
 
 function _wireVisibilityObserver() {
   const modal = document.getElementById(MODAL_ID);

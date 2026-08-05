@@ -284,7 +284,7 @@ const T = {
 // drives signal interpretation (rainfall vs snowfall vs temperature etc.).
 // `sourceLayers` lists the mapbox vector "source-layer" names whose
 // features hold the numeric reading on the `minValue` property.
-const LAYER_KIND_MAP = {
+export const LAYER_KIND_MAP = {
   weekly_precipitation_2m_above_ground: {
     kind: "precipitation",
     label: "Weekly Precipitation",
@@ -579,6 +579,12 @@ export class WeatherReportControl {
     this.#render();
     this.#wireToggle();
     // Listeners attach lazily on panel open — see #attachListeners.
+
+    // Expose the instance so other modules (the story panel's Dynamic
+    // Weather Report mode) can reuse the sampling primitives below
+    // without duplicating them. Purely additive — nothing here reads
+    // this back, so it can't affect the Dynamic Report tab itself.
+    window.ncopWeatherReportControl = this;
   }
 
   // -------------------------------------------------------------- DOM build
@@ -1213,6 +1219,90 @@ export class WeatherReportControl {
       generatedAt: new Date(),
     };
     this.#setExportEnabled(true);
+  }
+
+  // Public, pure-computation sibling of #renderReport() — samples the
+  // per-district temporal reading for an ARBITRARY frame (e.g. a
+  // different day of the same layer's forecast) instead of "whatever the
+  // slider currently says". #renderReport() is completely untouched and
+  // keeps reading window.getCurrentTemporalState() for "now" exactly as
+  // before; this method exists purely so the story panel's Dynamic
+  // Weather Report mode can preview other days without moving the
+  // slider. No DOM is written here — station fallback/extras are
+  // intentionally out of scope (stations are live point observations,
+  // not a multi-day forecast, so they don't fit a day-by-day story).
+  //
+  // Returns:
+  //   { rows, meta }  — rows sorted by score desc, same shape as #lastReport.rows
+  //   "loading"       — this frame's tiles/sources aren't ready yet
+  //   null            — nothing to show (no layer, raster-only, boundaries
+  //                     hidden, no districts in view, or no signal)
+  getDistrictReportForFrame(frame, layerKey) {
+    const tempMeta = layerKey ? LAYER_KIND_MAP[layerKey] : null;
+    if (!tempMeta || tempMeta.kind === "raster") return null;
+
+    if (!this.#anyLayerVisible(DISTRICT_LAYER_IDS) || !this.#anyLayerVisible(PROVINCE_LAYER_IDS)) {
+      return null;
+    }
+
+    const targetLayerIds = (frame?.layers || [])
+      .map((l) => l.id)
+      .filter((id) => this.#map.getLayer(id))
+      .filter((id) => {
+        const lyr = this.#map.getLayer(id);
+        if (!lyr) return false;
+        if (lyr.type === "raster") return false;
+        const sl = lyr["source-layer"] || lyr.sourceLayer;
+        return tempMeta.sourceLayers.length === 0 || tempMeta.sourceLayers.includes(sl);
+      });
+    if (!targetLayerIds.length) return null;
+
+    const frameSourceIds = this.#frameSourceIds(frame);
+    if (frameSourceIds.length && !frameSourceIds.every((id) => this.#sourceIsLoaded(id))) {
+      return "loading";
+    }
+
+    const districtQueryLayers = DISTRICT_LAYER_IDS.filter((id) => this.#map.getLayer(id)).slice(0, 1);
+    const districtFeatures = this.#dedupedFeaturesByName(
+      this.#map.queryRenderedFeatures({ layers: districtQueryLayers }),
+      DISTRICT_NAME_KEYS
+    );
+    if (!districtFeatures.length) return null;
+
+    const sampleHasProvince = districtFeatures.some((d) => this.#firstProp(d, DISTRICT_PROVINCE_PROP_KEYS));
+    const provinceFeatures = sampleHasProvince
+      ? []
+      : this.#dedupedFeaturesByName(
+          this.#map.queryRenderedFeatures({
+            layers: PROVINCE_LAYER_IDS.filter((id) => this.#map.getLayer(id)).slice(0, 1),
+          }),
+          PROVINCE_NAME_KEYS
+        );
+
+    const rows = [];
+    for (const district of districtFeatures) {
+      const districtName = this.#firstProp(district, DISTRICT_NAME_KEYS);
+      if (!districtName) continue;
+      const center = this.#featureCenter(district);
+      if (!center) continue;
+      const provinceName =
+        this.#firstProp(district, DISTRICT_PROVINCE_PROP_KEYS) ||
+        this.#provinceForCenter(center, provinceFeatures) ||
+        "Unknown";
+      const sampled = this.#sampleAt(center, targetLayerIds);
+      const reading = this.#aggregateReading(sampled, tempMeta.kind, tempMeta);
+      if (!reading) continue;
+      rows.push({
+        district: districtName,
+        province: provinceName,
+        bbox: this.#featureBbox(district),
+        reading,
+        extras: [],
+      });
+    }
+    if (!rows.length) return null;
+    rows.sort((a, b) => b.reading.score - a.reading.score);
+    return { rows, meta: tempMeta };
   }
 
   // -------------------------------------------------------------- station helpers
