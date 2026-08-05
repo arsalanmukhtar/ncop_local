@@ -124,7 +124,15 @@
       "Bash(python3 -c \"import json; d=json.load\\(open\\('/tmp/warnings.json'\\)\\); print\\('keys:', list\\(d.keys\\(\\)\\)\\); print\\('count:', d.get\\('count'\\)\\); print\\('features:', len\\(d.get\\('features',[]\\)\\)\\)\")",
       "Bash(python3 -c ' *)",
       "Bash(node --input-type=module -e ' *)",
-      "Bash(curl -s http://172.18.7.21:8000/api/pmd/monitor/warnings/ -o C:/Users/USER/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-local/1a37e4c8-41f6-47a5-8a71-2a50d4bc2fda/scratchpad/warnings2.json -w 'HTTP=%{http_code} bytes=%{size_download} time=%{time_total}s\\\\n')"
+      "Bash(curl -s http://172.18.7.21:8000/api/pmd/monitor/warnings/ -o C:/Users/USER/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-local/1a37e4c8-41f6-47a5-8a71-2a50d4bc2fda/scratchpad/warnings2.json -w 'HTTP=%{http_code} bytes=%{size_download} time=%{time_total}s\\\\n')",
+      "WebFetch(domain:pypi.org)",
+      "Bash(./ncopenv311/Scripts/pip.exe install *)",
+      "Bash(./ncopenv311/Scripts/graphify.exe --help)",
+      "Bash(./ncopenv311/Scripts/graphify.exe update *)",
+      "Bash(./ncopenv311/Scripts/graphify.exe cluster-only *)",
+      "Bash(./ncopenv311/Scripts/graphify.exe god-nodes *)",
+      "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)",
+      "Bash(Get-Content -TotalCount 40 \"D:\\\\muhammad_arsalan\\\\ncop_v1\\\\ncop_local\\\\project\\\\templates\\\\dashboard.html\")"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",
