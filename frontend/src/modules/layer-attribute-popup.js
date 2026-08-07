@@ -3382,6 +3382,15 @@ function handleHeatwavePopupClick(e) {
 }
 // ========== END HEATWAVE MONITORING ==========
 
+// Additive named exports — the real heatwave stats modal (chart, drag/resize,
+// forecast/seasonal/climate tabs) is otherwise entirely module-private.
+// Exposing these two lets other callers (e.g. Story Mode) open the SAME
+// modal for a specific city on demand instead of re-implementing it or
+// depending on the delegated click handler having already been installed
+// by a prior real popup click. No existing behavior changes — these were
+// already fully self-contained functions, just not exported before.
+export { showHeatwaveModalForCity, hideHeatwaveModal };
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;

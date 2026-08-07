@@ -280,6 +280,80 @@ const T = {
   AOD_ALERT: 0.5, // unitless, visibility/health concern
 };
 
+// =========================================================================
+// PMD Forecast raster layers (pmd_pred_*) — separate from LAYER_KIND_MAP
+// above on purpose. Those Meteoblue-branded entries are VECTOR tiles with
+// a `minValue` feature property, sampled via queryRenderedFeatures — the
+// existing Dynamic Report tab explicitly treats any `kind: "raster"`
+// temporal as a dead end for per-district numbers (see the "raster-only"
+// branch in #renderReport) because there was historically nothing to
+// sample. pmd_pred_* layers ARE rasters (Mapbox `image` sources, colorized
+// server-side from WRFPRS/GDFS GeoTIFFs — see map-layers.js:522-538), but
+// the backend now separately exposes their real numeric grid via
+// /api/pmd/monitor/predictions/<element>/value/?lat=&lon=&step_index=
+// (PmdMonitorPredictionValueAPIView), so they get their own map + their
+// own PMD-Overview-tab section below instead of being folded into the
+// vector-only Dynamic Report path.
+// itemKey → elementKey is a straight `pmd_pred_` prefix strip (verified
+// against every window.pmd_pred_* registration in map-layers.js); `kind`
+// selects which T.* threshold this element's alert styling uses.
+// =========================================================================
+const PMD_FORECAST_ELEMENT_MAP = {
+  pmd_pred_hourtpe:       { elementKey: "hourtpe",       kind: "precip_hourly" },
+  pmd_pred_sixtpe:        { elementKey: "sixtpe",        kind: "precip_hourly" },
+  pmd_pred_twelvetpe:     { elementKey: "twelvetpe",     kind: "precip_daily" },
+  pmd_pred_daytpe:        { elementKey: "daytpe",        kind: "precip_daily" },
+  pmd_pred_temp2m:        { elementKey: "temp2m",        kind: "temperature" },
+  pmd_pred_cloud_cover:   { elementKey: "cloud_cover",   kind: "neutral" },
+  pmd_pred_rel_humidity:  { elementKey: "rel_humidity",  kind: "neutral" },
+  pmd_pred_ext_high_temp: { elementKey: "ext_high_temp", kind: "temperature" },
+  pmd_pred_ext_low_temp:  { elementKey: "ext_low_temp",  kind: "temperature_cold" },
+};
+
+// Point-value cache for the endpoint above — keyed coarsely (2 decimal
+// places ≈ 1.1km, well under a district's size) so nearby district
+// centroids across repeated renders/tab-switches share one entry instead
+// of re-hitting the backend (which itself does real GDAL file I/O per
+// call). 30 min TTL: long enough that switching tabs back and forth or
+// re-opening the panel doesn't re-fetch, short enough to pick up the
+// next PMD model run (~4x/day) within a session.
+const PMD_FORECAST_VALUE_TTL_MS = 30 * 60 * 1000;
+const _pmdForecastValueCache = new Map();
+async function _fetchPmdForecastValue(elementKey, lat, lon, stepIndex) {
+  const key = `${elementKey}|${stepIndex}|${lat.toFixed(2)}|${lon.toFixed(2)}`;
+  const hit = _pmdForecastValueCache.get(key);
+  if (hit && Date.now() - hit.ts < PMD_FORECAST_VALUE_TTL_MS) return hit.data;
+  const url = `${window.location.origin}/api/pmd/monitor/predictions/${elementKey}/value/`
+    + `?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&step_index=${encodeURIComponent(stepIndex)}`;
+  let data = null;
+  try {
+    const r = await fetch(url, { credentials: "same-origin" });
+    if (r.ok) data = await r.json();
+  } catch {
+    data = null;
+  }
+  _pmdForecastValueCache.set(key, { data, ts: Date.now() });
+  return data;
+}
+
+// Small bounded-concurrency map — caps in-flight requests to the value
+// endpoint (each one does real backend GDAL file I/O) instead of firing
+// one fetch per district in the viewport at once.
+async function _mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+  return results;
+}
+
 // Map of temporal layer key → { kind, label, sourceLayers[] }.  `kind`
 // drives signal interpretation (rainfall vs snowfall vs temperature etc.).
 // `sourceLayers` lists the mapbox vector "source-layer" names whose
@@ -517,6 +591,21 @@ export class WeatherReportControl {
   #activeLayersEl = null;
   #activeLayersTimerId = null;
   #activeLayersFingerprint = "";
+
+  // Container for the "PMD Forecast — Active Layer" block — per-district
+  // numeric samples of whichever pmd_pred_* raster layer is on the
+  // temporal slider. Same lazily-populated-placeholder pattern as
+  // #activeLayersEl above: written into a fixed empty <div> right after
+  // the sync PMD Overview render, filled in async afterward so slow
+  // per-district sampling never blocks the rest of the tab's paint.
+  #pmdForecastEl = null;
+  // Generation counter guarding the async sampling pass below — unlike
+  // #refreshActiveLayers (synchronous, no await, so no interleaving is
+  // possible), this one does real network round-trips. Without this, a
+  // slow in-flight refresh (e.g. from a tab switch that's since been
+  // superseded by another switch back, or a rapid double-click on
+  // Refresh) could resolve after a newer pass and stomp its result.
+  #pmdForecastGen = 0;
 
   // Snapshot of every endpoint result from the last PMD Overview
   // render — the Download HTML / CSV buttons pull from here so the
@@ -2090,6 +2179,7 @@ export class WeatherReportControl {
       </div>
       <div class="wrp-scroll wrp-pmd-scroll">
         <div class="wrp-pmd-active-layers" id="weatherReportActiveLayers"></div>
+        <div class="wrp-pmd-forecast-section" id="weatherReportPmdForecast"></div>
         ${sections.filter(Boolean).join("")}
         ${this.#renderDownloadStrip()}
       </div>
@@ -2098,6 +2188,8 @@ export class WeatherReportControl {
     // First pass — force fingerprint refresh so we always paint on entry
     this.#activeLayersFingerprint = "";
     this.#refreshActiveLayers();
+    this.#pmdForecastEl = this.#pmdContentEl.querySelector("#weatherReportPmdForecast");
+    this.#refreshPmdForecastSection();
 
     // Wire delegation on the PMD content once — every Read / Download
     // button uses `data-pmd-action` so the handler stays generic.
@@ -2105,6 +2197,16 @@ export class WeatherReportControl {
     // survives every subsequent tab render.
     if (!this.#pmdClickBound) {
       this.#pmdContentEl.addEventListener("click", (ev) => this.#onPmdClick(ev));
+      // Keyboard activation for the PMD Forecast table's row="button"
+      // cells (real <button> elements elsewhere in this tab already get
+      // this for free from the browser) — scoped to fly-bbox only so it
+      // can't double-fire alongside a real button's native Enter/Space click.
+      this.#pmdContentEl.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        if (!ev.target.closest('[data-pmd-action="fly-bbox"]')) return;
+        ev.preventDefault();
+        this.#onPmdClick(ev);
+      });
       this.#pmdClickBound = true;
     }
 
@@ -2160,6 +2262,151 @@ export class WeatherReportControl {
 
   #pmdEmptyBody(text) {
     return `<p class="wrp-pmd-empty">${escapeHtml(text)}</p>`;
+  }
+
+  // ---- PMD Forecast (pmd_pred_*) active-layer section -------------------
+  // Async placeholder-fill, same two-phase pattern as #refreshActiveLayers:
+  // #renderPmdOverviewTab already painted the rest of the tab synchronously
+  // by the time this runs, so a slow district-sampling pass here never
+  // delays the other 7 sections.
+  async #refreshPmdForecastSection() {
+    if (!this.#pmdForecastEl) return;
+    const gen = ++this.#pmdForecastGen;
+    this.#pmdForecastEl.innerHTML = this.#pmdSectionShell(
+      "PMD Forecast — Active Layer",
+      `<div class="wrp-loading" role="status" aria-live="polite">
+        <div class="wrp-loader" aria-hidden="true"></div>
+        <div class="wrp-loading-text">Checking active layer…</div>
+      </div>`,
+      "layers"
+    );
+    const html = await this.#renderPmdForecastSection();
+    // Bail if a newer refresh started while this one was sampling (rapid
+    // Refresh clicks, or a tab-away-and-back), OR the panel/tab moved on
+    // entirely — #pmdForecastEl is nulled out in exactly that case (see
+    // #renderPmdSubView).
+    if (gen !== this.#pmdForecastGen) return;
+    if (!this.#pmdForecastEl) return;
+    this.#pmdForecastEl.innerHTML = html;
+    if (window.lucide?.createIcons) {
+      try { window.lucide.createIcons(); } catch {}
+    }
+  }
+
+  #pmdForecastAlert(kind, value) {
+    if (!Number.isFinite(value)) return false;
+    switch (kind) {
+      case "temperature":      return value >= T.TEMP_HOT;
+      case "temperature_cold": return value <= T.TEMP_COLD;
+      case "precip_hourly":    return value >= T.RAIN_HOURLY_HEAVY;
+      case "precip_daily":     return value >= T.RAIN_DAILY_HEAVY;
+      default:                 return false; // cloud_cover / rel_humidity — informational only
+    }
+  }
+
+  async #renderPmdForecastSection() {
+    const ICON = "layers";
+    const TITLE = "PMD Forecast — Active Layer";
+
+    const state = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
+    const fmeta = state?.layerKey ? PMD_FORECAST_ELEMENT_MAP[state.layerKey] : null;
+    if (!fmeta) {
+      return this.#pmdSectionShell(TITLE, this.#pmdEmptyBody(
+        "Toggle a PMD Forecast raster layer (2m Temperature, 3h/6h/12h/24h Precipitation, " +
+        "Cloud Cover, Relative Humidity, or 24h Extreme High/Low Temperature) to populate " +
+        "district-level values here."
+      ), ICON);
+    }
+
+    const districtVisible = this.#anyLayerVisible(DISTRICT_LAYER_IDS);
+    const provinceVisible = this.#anyLayerVisible(PROVINCE_LAYER_IDS);
+    if (!districtVisible || !provinceVisible) {
+      return this.#pmdSectionShell(TITLE, this.#pmdEmptyBody(
+        "Enable both District Boundary and Provincial Boundary in the sidebar to sample per-district values."
+      ), ICON);
+    }
+
+    const districtQueryLayers = DISTRICT_LAYER_IDS.filter((id) => this.#map.getLayer(id)).slice(0, 1);
+    const districtFeatures = this.#dedupedFeaturesByName(
+      this.#map.queryRenderedFeatures({ layers: districtQueryLayers }),
+      DISTRICT_NAME_KEYS
+    );
+    if (!districtFeatures.length) {
+      return this.#pmdSectionShell(TITLE, this.#pmdEmptyBody(
+        "No districts in view — pan or zoom so district polygons are visible."
+      ), ICON);
+    }
+
+    // Bound the number of backend value-endpoint calls per render — each
+    // one is real GDAL file I/O server-side, not a cheap lookup.
+    const SAMPLE_CAP = 24;
+    const sampled = districtFeatures.slice(0, SAMPLE_CAP);
+    const overflow = districtFeatures.length - sampled.length;
+    const stepIndex = state.currentIndex || 0;
+
+    const results = await _mapLimit(sampled, 4, async (district) => {
+      const name = this.#firstProp(district, DISTRICT_NAME_KEYS);
+      const center = this.#featureCenter(district);
+      if (!name || !center) return null;
+      const [lon, lat] = center;
+      const data = await _fetchPmdForecastValue(fmeta.elementKey, lat, lon, stepIndex);
+      if (!data || data.value == null || !Number.isFinite(data.value)) return null;
+      return {
+        district: name,
+        province: this.#firstProp(district, DISTRICT_PROVINCE_PROP_KEYS) || "Unknown",
+        bbox: this.#featureBbox(district),
+        value: data.value,
+        unit: data.unit || "",
+        label: data.label || "",
+        date: data.date || "",
+        alert: this.#pmdForecastAlert(fmeta.kind, data.value),
+      };
+    });
+
+    const rows = results.filter(Boolean).sort((a, b) => b.value - a.value);
+    if (!rows.length) {
+      return this.#pmdSectionShell(TITLE, this.#pmdEmptyBody(
+        "No values could be sampled for the districts in view — try a different step or region."
+      ), ICON);
+    }
+
+    const label = rows[0].label || fmeta.elementKey;
+    const dateTxt = rows[0].date || "";
+    const alertCount = rows.filter((r) => r.alert).length;
+
+    const tableRows = rows.map((r) => `
+      <tr class="wrp-pmd-forecast-row${r.alert ? " is-alert" : ""}"
+          data-pmd-action="fly-bbox" data-pmd-bbox="${r.bbox ? escapeHtml(r.bbox.join(",")) : ""}"
+          role="button" tabindex="0" title="Fly to ${escapeHtml(r.district)}">
+        <td>${escapeHtml(r.district)}</td>
+        <td>${escapeHtml(r.province)}</td>
+        <td>${escapeHtml(r.value.toFixed(1))}${escapeHtml(r.unit)}</td>
+      </tr>
+    `).join("");
+
+    const overflowNote = overflow > 0
+      ? `<p class="wrp-pmd-empty">+${overflow} more district${overflow === 1 ? "" : "s"} in view not sampled — zoom in to narrow the list.</p>`
+      : "";
+
+    const body = `
+      <button class="wrp-pmd-read-btn" type="button" data-pmd-action="refresh-pmd-forecast" title="Re-sample the current view">
+        <i data-lucide="refresh-cw"></i>
+        <span>Refresh</span>
+      </button>
+      <div class="wrp-summary">
+        <div class="wrp-stat"><strong>${rows.length}</strong><span>Districts</span></div>
+        <div class="wrp-stat"><strong>${alertCount}</strong><span>Alerts</span></div>
+      </div>
+      <table class="wrp-pmd-layer-table">
+        <thead><tr><th>District</th><th>Province</th><th>Value</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      ${overflowNote}
+    `;
+
+    // #pmdSectionShell escapes `title` itself — pass raw text, not pre-escaped.
+    const titleWithMeta = `${TITLE} — ${label}${dateTxt ? ` · ${dateTxt}` : ""}`;
+    return this.#pmdSectionShell(titleWithMeta, body, ICON);
   }
 
   #renderOutlookSection(res) {
@@ -2775,6 +3022,7 @@ export class WeatherReportControl {
       </div>
     `;
     this.#activeLayersEl = null;
+    this.#pmdForecastEl = null;
     if (this.#footerEl) {
       this.#footerEl.innerHTML = `${escapeHtml(meta.title)} · ${escapeHtml(meta.source)}`;
       this.#footerEl.classList.add("is-visible");
@@ -3116,6 +3364,29 @@ export class WeatherReportControl {
     const target = ev.target.closest("[data-pmd-action]");
     if (!target) return;
     const action = target.getAttribute("data-pmd-action");
+
+    // PMD Forecast section: re-sample the current view / step on demand.
+    if (action === "refresh-pmd-forecast") {
+      ev.preventDefault();
+      this.#refreshPmdForecastSection();
+      return;
+    }
+    // PMD Forecast section: click a district row to fly to its bbox —
+    // same fitBounds call the Dynamic Report tab's data-fly-bbox handler
+    // uses, just routed through this tab's own delegated listener.
+    if (action === "fly-bbox") {
+      ev.preventDefault();
+      const raw = target.getAttribute("data-pmd-bbox");
+      if (!raw) return;
+      const [w, s, e, n] = raw.split(",").map(Number);
+      if (![w, s, e, n].every(Number.isFinite)) return;
+      try {
+        this.#map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 900, maxZoom: 10 });
+      } catch (err) {
+        console.warn("[WeatherReport] fitBounds failed:", err);
+      }
+      return;
+    }
 
     // §3.4 drill-down navigation
     if (action === "drill") {

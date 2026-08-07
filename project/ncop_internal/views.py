@@ -8175,12 +8175,101 @@ def _mon_pred_convert_step(element_key, item):
         _log_fail(f"FAIL: {e}")
         return None
     finally:
-        for p in (src_path, warped_path):
-            try:
-                if os.path.exists(p):
-                    os.remove(p)
-            except Exception:
-                pass
+        # `src_path` (original-projection fetch) is pure scratch — always
+        # discard it. `warped_path` (EPSG:3857, still numeric — color-relief
+        # only ever READS it, never mutates it) used to be discarded too;
+        # it's now kept so PmdMonitorPredictionValueAPIView can sample real
+        # values at a lat/lon from the exact same grid the PNG was rendered
+        # from, without re-fetching/re-warping. Purely additive: the PNG
+        # this function returns is unaffected either way.
+        try:
+            if os.path.exists(src_path):
+                os.remove(src_path)
+        except Exception:
+            pass
+
+
+def _mon_pred_ensure_warped(element_key, item):
+    """Return the path to this step's EPSG:3857 warped GeoTIFF, rendering
+    it (via the normal _mon_pred_convert_step pipeline) if it isn't on disk
+    yet. Steps rendered before warped-TIFF retention was added only have a
+    PNG/JSON pair cached — in that case the PNG+JSON are removed so
+    _mon_pred_convert_step's disk-cache short-circuit is skipped and it
+    does a full re-render (same PNG output, now also keeping the warped
+    TIFF). Returns None if the step can't be rendered at all."""
+    import re
+    run = (item.get("data_time")     or "").replace("-", "").replace(":", "").replace("T", "")
+    fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element_key}_{run}_{fh}")
+    out_dir = os.path.join(settings.MEDIA_ROOT, _PRED_MEDIA_SUBDIR)
+    warped_path = os.path.join(out_dir, f"{safe}_3857.tif")
+    if os.path.exists(warped_path):
+        return warped_path
+
+    png_path  = os.path.join(out_dir, f"{safe}.png")
+    meta_path = os.path.join(out_dir, f"{safe}.json")
+    for p in (png_path, meta_path):
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
+    _mon_pred_convert_step(element_key, item)
+    return warped_path if os.path.exists(warped_path) else None
+
+
+def _mon_pred_sample(warped_path, lat, lon):
+    """Read the numeric value of a warped forecast GeoTIFF at one lat/lon
+    point. Returns a float, or None if the point falls outside the raster
+    or on a nodata pixel.
+
+    Deliberately uses Band.ReadRaster() + struct.unpack rather than the
+    more common Band.ReadAsArray() — ReadAsArray requires osgeo.gdal_array,
+    which links against numpy's C-API at the version GDAL was built
+    against; this env's GDAL build predates NumPy 2's ABI break (confirmed:
+    `from osgeo import gdal_array` raises "numpy.core.multiarray failed to
+    import" here even though `import numpy` alone works fine). Raw-byte
+    unpacking sidesteps that mismatch entirely — same pixel value either
+    way, just without the numpy bridge."""
+    import math, struct
+    from osgeo import gdal
+    ds = gdal.Open(warped_path)
+    if ds is None:
+        return None
+    band = ds.GetRasterBand(1)
+    gt = ds.GetGeoTransform()
+
+    # Forward Web-Mercator projection — inverse of the _lon()/_lat() helpers
+    # _mon_pred_convert_step already uses to turn its warped bounds back
+    # into lat/lon (same R=6378137 sphere, same formula run in reverse).
+    _MERC_MAX = 20037508.3427892
+    x = lon * _MERC_MAX / 180.0
+    y = math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * 6378137.0
+
+    # Assumes north-up, unrotated geotransform — the same assumption
+    # _mon_pred_convert_step's own corner-bounds math makes (gt[2]/gt[4]
+    # are the rotation terms and are 0 for every GDAL Warp output here).
+    px = int((x - gt[0]) / gt[1])
+    py = int((y - gt[3]) / gt[5])
+    if px < 0 or py < 0 or px >= ds.RasterXSize or py >= ds.RasterYSize:
+        return None
+
+    _STRUCT_FMT = {
+        gdal.GDT_Byte: "B", gdal.GDT_UInt16: "H", gdal.GDT_Int16: "h",
+        gdal.GDT_UInt32: "I", gdal.GDT_Int32: "i",
+        gdal.GDT_Float32: "f", gdal.GDT_Float64: "d",
+    }
+    fmt = _STRUCT_FMT.get(band.DataType)
+    if fmt is None:
+        return None
+    raw = band.ReadRaster(px, py, 1, 1, buf_type=band.DataType)
+    if not raw:
+        return None
+    value = float(struct.unpack(fmt, raw)[0])
+    nodata = band.GetNoDataValue()
+    if nodata is not None and value == nodata:
+        return None
+    return value
 
 
 def _mon_cached(key, ttl, fetch_fn, fallback_key=None):
@@ -8287,6 +8376,127 @@ class PmdMonitorPredictionsAPIView(APIView):
             "unit":    cfg.get("unit", ""),
             "run":     run,
             "steps":   steps,
+        })
+
+
+class PmdMonitorPredictionValueAPIView(APIView):
+    """GET /api/pmd/monitor/predictions/<element_key>/value/?lat=&lon=&step_index=&date=
+    → {element, label, unit, date, lat, lon, value}
+
+    Point-sample companion to PmdMonitorPredictionsAPIView above. That
+    endpoint only ever ships colorized PNGs to the browser — the numeric
+    grid values are otherwise discarded once color-relief renders them
+    (see _mon_pred_convert_step). This endpoint samples the same warped
+    EPSG:3857 GeoTIFF at a single lat/lon instead, for callers that need
+    an actual number rather than a picture (e.g. Story Mode narration,
+    the Weather Report panel's PMD Forecast section). Purely additive:
+    does not change what the list endpoint returns or how its PNGs are
+    produced.
+
+    Step selection, in priority order:
+      1. `step_index` — position in the same thinned step list the list
+         endpoint returns (and the frontend's temporal slider indexes
+         1:1 via getCurrentTemporalState().currentIndex).
+      2. `date` — one of the `forecast_time` values the list endpoint
+         already returns as each step's `date` field.
+      3. Neither/no match — earliest available step."""
+
+    def get(self, request, element_key):
+        cfg = _MON_PRED_ELEMENTS.get(element_key)
+        if not cfg:
+            return JsonResponse(
+                {"error": f"Unknown element_key {element_key!r}",
+                 "valid": sorted(_MON_PRED_ELEMENTS.keys())},
+                status=404,
+            )
+
+        try:
+            lat = float(request.GET.get("lat"))
+            lon = float(request.GET.get("lon"))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "lat and lon query params are required"}, status=400)
+
+        try:
+            from osgeo import gdal  # noqa — availability probe before any work
+        except Exception as e:
+            return JsonResponse({"error": f"GDAL is required: {e}"}, status=500)
+
+        data_type, element = cfg["data_type"], cfg["element"]
+        date_param = request.GET.get("date")
+        step_index_param = request.GET.get("step_index")
+
+        def _latest_run():
+            resp = _mon_get("/api/modelTimeList",
+                            {"data_type": data_type, "element": element})
+            times = (resp or {}).get("data") or []
+            if not times:
+                raise ValueError("no model runs available")
+            return times[0]["data_time"]
+
+        try:
+            run = _mon_cached(f"pmd_pred_run_{element_key}", 1800,
+                              _latest_run, f"pmd_pred_run_{element_key}_last")
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        def _frames():
+            resp = _mon_get("/api/model",
+                            {"data_type": data_type, "element": element, "date_time": run})
+            return (resp or {}).get("ds") or []
+
+        try:
+            frame_list = _mon_cached(
+                f"pmd_pred_frames_{element_key}_{run}", 10800,
+                _frames, f"pmd_pred_frames_{element_key}_{run}_last",
+            )
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        selected = _mon_pred_select_steps(frame_list)
+        if not selected:
+            return JsonResponse({"error": "no forecast steps available"}, status=502)
+
+        # `step_index` (position in the SAME thinned `selected` list the
+        # frontend's own layersDef array is built 1:1 from — see
+        # generatePmdPredictionsLoader/_pmdPredBuildEntry in
+        # time-functions.js) is preferred over `date` when both are given:
+        # the temporal slider only exposes a human-formatted display string
+        # for `date` (e.g. "Jul 27 - 08:00 AM"), not the raw forecast_time
+        # ISO string this endpoint would need to match against, so callers
+        # driven by the slider's currentIndex use step_index instead.
+        item = None
+        if step_index_param is not None:
+            try:
+                idx = int(step_index_param)
+                if 0 <= idx < len(selected):
+                    item = selected[idx]
+            except (TypeError, ValueError):
+                pass
+        if item is None and date_param:
+            item = next((it for it in selected if it.get("forecast_time") == date_param), None)
+        if item is None:
+            item = selected[0]
+
+        try:
+            warped_path = _mon_pred_ensure_warped(element_key, item)
+        except Exception as e:
+            return JsonResponse({"error": f"could not render forecast raster: {e}"}, status=502)
+        if not warped_path:
+            return JsonResponse({"error": "could not render forecast raster for this step"}, status=502)
+
+        try:
+            value = _mon_pred_sample(warped_path, lat, lon)
+        except Exception as e:
+            return JsonResponse({"error": f"sampling failed: {e}"}, status=502)
+
+        return JsonResponse({
+            "element": element_key,
+            "label":   cfg["label"],
+            "unit":    cfg.get("unit", ""),
+            "date":    item.get("forecast_time"),
+            "lat":     lat,
+            "lon":     lon,
+            "value":   value,
         })
 
 

@@ -41,6 +41,7 @@ from .views import (
     CropMapAPIView,
     CropGeoJSONAPIView,
     PmdMonitorPredictionsAPIView,
+    PmdMonitorPredictionValueAPIView,
     PmdDailyForecastProAPIView,
     NwfcRainfallReportAPIView,
 
@@ -106,6 +107,15 @@ urlpatterns = [
         "api/pmd/monitor/predictions/<str:element_key>/",
         PmdMonitorPredictionsAPIView.as_view(),
         name="pmd-monitor-predictions",
+    ),
+
+    # Point-sample companion to the above — returns the actual numeric
+    # value (not a picture) at one lat/lon, read from the same warped
+    # GeoTIFF the PNG above was rendered from. See PmdMonitorPredictionValueAPIView.
+    path(
+        "api/pmd/monitor/predictions/<str:element_key>/value/",
+        PmdMonitorPredictionValueAPIView.as_view(),
+        name="pmd-monitor-predictions-value",
     ),
 
     # PMD Provincial Daily Forecast — proxy for the public

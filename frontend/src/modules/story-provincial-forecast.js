@@ -2121,6 +2121,13 @@ const HAZARD_EFFECTS = {
 };
 
 function _applyHazardEffect(hazardCode) {
+  // Disabled — this mode only needs district blinking + province
+  // highlighting (handled entirely separately, via _startBlink and the
+  // HL_PROV_*/HL_DIST_* filters — neither goes through this function).
+  // Rain/snow/fog polygon-simulation effects below are switched off
+  // rather than deleted, so re-enabling later is a one-line revert.
+  return;
+  // eslint-disable-next-line no-unreachable
   const map = window.ncop_map;
   if (!map) return;
   if (_story.hazardEffectActive === hazardCode) return;
@@ -3830,11 +3837,35 @@ function _handlePanelVisible() {
     _renderStartPrompt(card);
     return;
   }
+  // Already loaded from an earlier open — resume in place instead of
+  // re-fetching + rebuilding from scratch. Same resume-in-place pattern
+  // _restoreCardExternally already uses for the cross-story-switch case
+  // just below; this path (the story-modal's own show/hide, watched by
+  // _wireVisibilityObserver) fell through to an unconditional re-fetch
+  // instead, which — every time the operator closed and reopened the
+  // panel mid-briefing — spun up a second overlapping fetch/playback/
+  // TTS/timer cycle on top of the one already running, racing the two
+  // for control of the shared _story state. That's the freeze/"stuck
+  // step" behaviour: repeated re-renders of the same chapter piling up
+  // until the tab locks up.
+  if (_story.playable.length) {
+    if (_inFlightFetch) return;
+    _renderChapter(card, { fade: false });
+    if (_wasPlayingBeforeExternalHide) _play();
+    return;
+  }
   if (_inFlightFetch) return;
   _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
 }
 
 function _handlePanelHidden() {
+  // Capture play state before _pause() below clears it — read by
+  // _handlePanelVisible's resume-in-place branch above. _hideCardExternally
+  // (the cross-story-switch path) already captures this itself before
+  // calling here; re-capturing it is a harmless no-op for that path and
+  // is what makes it available for THIS function's other caller (the
+  // story-modal visibility observer), which had no equivalent before.
+  _wasPlayingBeforeExternalHide = _story.isPlaying;
   // Stop the timer when the story panel closes — no reason to keep advancing
   // frames the operator can't see, and this also prevents surprise map flies
   // triggering while they're using another panel.

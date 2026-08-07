@@ -34,10 +34,23 @@
 // fetched with a plain same-origin fetch(), not gcop-api-cache.js's
 // fetchGcopCached (which is GCOP_BASE_URL-specific).
 //
-// Chapter 2 (temperature/heatwave) is intentionally not built yet — see
-// the stopping-point notes from this feature's build session. Selecting
-// this story currently plays Chapter 1 only, then holds on the national
-// assessment.
+// CHAPTER 2 — Temperature Outlook:
+//   1. Past-24-hour scene: 2m Temperature layer fades in while narration
+//      covers the past day's highs/lows (Heatwave Monitoring's temp_max/
+//      temp_min, Open-Meteo-derived server-side, cross-checked against
+//      historical Max Temp Records where a station has one on file).
+//   2. Current-conditions tour: flies to the hottest currently-reporting
+//      Heatwave Monitoring stations (one per province, filled to >=5),
+//      opens a popup styled after the app's real heatwave marker popup
+//      (alert badge + "now" readout) with the actual `.heatwave-open-
+//      stats` button — if the app's own delegated click handler for that
+//      button has already been installed this session, it opens the real
+//      stats modal; if not, the click is a harmless no-op.
+//   3. Closing national temperature assessment.
+// Deferred: a direct scrape of weather.gov.pk's FAWS station page and a
+// PMD Weather Stations cross-check — Heatwave Monitoring's own Open-
+// Meteo backing already covers "fall back to a free source" without a
+// second integration.
 //
 // Integration with #storySelect (owned by StoryManager in map-controls.js,
 // which we never modify) is unchanged from the previous version of this
@@ -55,8 +68,9 @@
 //      a code change).
 // ==========================================================================
 
-import { getNwfcObservations } from "./gcop-api-cache.js";
+import { getNwfcObservations, getNwfcMaxTemperatures } from "./gcop-api-cache.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
+import { showHeatwaveModalForCity, hideHeatwaveModal } from "./layer-attribute-popup.js";
 import {
   wait,
   cinematicFlyTo,
@@ -86,14 +100,17 @@ const STYLE_ID  = "ncop-dynamic-weather-style";
 // doesn't 400/404 at the zoom levels this chapter's camera work needs.
 const RADAR_ITEM_KEY = "dwd_satellite_infrared";
 const OBS_ITEM_KEY   = "nwfc_observations";
-// CHAPTER 2 — Temperature Outlook. Reuses the live NWFC observations feed
-// already fetched for Chapter 1 (per-station `properties.temperature`) —
-// no new backend endpoint needed. Province attribution for those live
-// stations comes from the rainfall report's own province->station-name
-// directory (report.provinces[x].stations[].name), since the live feed
-// itself carries no province field — a second, independent use of data
-// already on hand, not a new fetch.
+// CHAPTER 2 — Temperature Outlook. Data source is Heatwave Monitoring
+// (NCOP's own /get-heatwave-monitoring/ endpoint, same-origin fetch —
+// see _fetchHeatwaveMonitoring) plus Max Temp Records (GCOP-backed, see
+// _fetchMaxTempRecords) for past-24h historical context — NOT the live
+// NWFC observations feed Chapter 1 uses. Each Heatwave Monitoring
+// feature already carries its own province and alert_level, so unlike
+// Chapter 1's rainfall report no separate province lookup is needed.
 const TEMP_ITEM_KEY = "pmd_pred_temp2m";
+// TOGGLE item (same pattern as OBS_ITEM_KEY in Chapter 1) — displayed
+// alongside/on top of the temperature raster during the station tour.
+const HEATWAVE_ITEM_KEY = "heatwave_monitoring";
 
 // District-boundary blink overlay — same `district_boundary` vector
 // source story-provincial-forecast.js highlights, but a fully separate
@@ -119,7 +136,7 @@ const SPEED_LEVELS = [1, 2, 3, 4, 5];
 
 const _state = {
   isPlaying:   false,
-  ttsEnabled:  true,
+  ttsEnabled:  false, // muted by default — operator opts IN to narration via the mute button
   runToken:    0,        // bumped on every _hide()/_teardown() so an in-flight
                          // async sequence recognises it's stale and stops.
   sceneSeq:    0,        // bumped on every _gotoScene() call, incl. prev/next
@@ -129,10 +146,13 @@ const _state = {
   index:       0,
   report:      null,     // parsed rainfall report ({ total_mm, provinces, ... })
   observations: null,    // live NWFC FeatureCollection
+  newsArticles: [],       // recent GDELT articles for the opening scene's context section
   popupEl:     null,
   tickTimer:   null,     // advance timer — TTS completion poll, or the fixed 20s dwell
   progRaf:     null,     // rAF handle for the progress-bar animation
   discussedDistricts: [], // top rainfall districts (>=5, all provinces) chapter 1 is covering
+  heatwaveStations: null, // Heatwave Monitoring FeatureCollection — chapter 2's primary station source
+  maxTempRecords: [],     // historical on-record max temperatures, best-effort (see _fetchMaxTempRecords)
   hottestStations: [],   // top temperature stations (>=5, all provinces) chapter 2 is covering
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
   blinkTimer:  null,     // district-boundary blink interval
@@ -146,8 +166,11 @@ const _state = {
 
 // Standard dwell when narration is muted. When narration IS on, the
 // scene instead waits for the utterance to actually finish (see
-// _scheduleAdvance) — this is just the no-TTS fallback pace.
-const DWELL_MS_NO_TTS = 20000;
+// _scheduleAdvance) — that pacing is correct as-is, since it's tied to
+// real speech duration. With narration OFF there's nothing to wait for,
+// so this is deliberately much shorter than the TTS case — just enough
+// to read the caption, not a fixed 20s regardless of content.
+const DWELL_MS_NO_TTS = 6000;
 
 // ---- Small helpers -------------------------------------------------------
 function _escapeHtml(s) {
@@ -327,8 +350,19 @@ function _injectStyles() {
       color: rgba(234, 234, 234, 0.6);
     }
 
+    #${CARD_ID} .dwr-progress-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px;
+    }
+    #${CARD_ID} .dwr-progress-row .dwr-progress-track { flex: 1 1 auto; margin-top: 0; }
+    #${CARD_ID} .dwr-progress-timer {
+      flex: 0 0 auto;
+      min-width: 38px; text-align: right;
+      font-size: 10px; font-variant-numeric: tabular-nums;
+      color: rgba(234, 234, 234, 0.55);
+    }
     #${CARD_ID} .dwr-progress-track {
-      height: 3px; margin-top: 10px;
+      height: 3px;
       background: rgba(255, 255, 255, 0.08);
       border-radius: 999px; overflow: hidden;
     }
@@ -430,6 +464,33 @@ function _injectStyles() {
       padding: 2px 8px; border-radius: 999px;
       background: rgba(255, 255, 255, 0.08);
     }
+    #${POPUP_ID} .dwrp-badge--normal   { background: rgba(34, 197, 94, 0.20);  color: #86efac; }
+    #${POPUP_ID} .dwrp-badge--elevated { background: rgba(234, 179, 8, 0.20);  color: #fde047; }
+    #${POPUP_ID} .dwrp-badge--high     { background: rgba(249, 115, 22, 0.22); color: #fdba74; }
+    #${POPUP_ID} .dwrp-badge--severe   { background: rgba(220, 38, 38, 0.22);  color: #fca5a5; }
+    #${POPUP_ID} .dwrp-badge--extreme  { background: rgba(147, 51, 234, 0.25); color: #d8b4fe; }
+    #${POPUP_ID} .dwrp-heatwave-now {
+      display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 8px;
+    }
+    #${POPUP_ID} .dwrp-heatwave-now-value {
+      font-size: 24px; font-weight: 800; color: #fff; line-height: 1;
+    }
+    #${POPUP_ID} .dwrp-heatwave-now-sub {
+      font-size: 10.5px; color: rgba(234, 234, 234, 0.6);
+    }
+    #${POPUP_ID} .heatwave-open-stats {
+      appearance: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 10.5px; font-weight: 700;
+      padding: 6px 12px;
+      background: rgba(70, 178, 255, 0.18);
+      border: 1px solid rgba(70, 178, 255, 0.35);
+      border-radius: 999px;
+      color: #eaeaea;
+      transition: background 0.15s ease;
+    }
+    #${POPUP_ID} .heatwave-open-stats:hover { background: rgba(70, 178, 255, 0.32); color: #fff; }
     #${POPUP_ID} .dwrp-body { padding: 10px 12px; color: #eaeaea; font-size: 12px; line-height: 1.55; }
     #${POPUP_ID} .dwrp-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 10px; }
     #${POPUP_ID} .dwrp-chip {
@@ -478,6 +539,27 @@ function _injectStyles() {
     #${POPUP_ID} .dwrp-live-note {
       font-size: 9.5px; font-weight: 400; font-style: italic;
       color: #7fdfec;
+    }
+    #${POPUP_ID} .dwrp-news-list {
+      padding: 0 12px 10px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    #${POPUP_ID} .dwrp-news-item {
+      display: flex; flex-direction: column; gap: 1px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      text-decoration: none;
+      transition: background 0.15s ease;
+    }
+    #${POPUP_ID} .dwrp-news-item:hover { background: rgba(70, 178, 255, 0.15); }
+    #${POPUP_ID} .dwrp-news-title {
+      font-size: 11px; font-weight: 600; line-height: 1.35;
+      color: #eaeaea;
+    }
+    #${POPUP_ID} .dwrp-news-meta {
+      font-size: 9.5px; color: rgba(234, 234, 234, 0.5);
+      text-transform: uppercase; letter-spacing: 0.02em;
     }
     #${POPUP_ID} .dwrp-pdf-list {
       border-top: 1px solid rgba(255, 255, 255, 0.10);
@@ -549,7 +631,7 @@ function _ensureCard(root) {
         <span>Dynamic Weather Report</span>
       </div>
       <div class="dwr-head-actions">
-        <button type="button" class="dwr-mute" aria-label="Mute narration" title="Mute narration">${ICON_TTS_ON}</button>
+        <button type="button" class="dwr-mute is-muted" aria-label="Unmute narration" title="Unmute narration">${ICON_TTS_OFF}</button>
         <button type="button" class="dwr-close" aria-label="Close Dynamic Weather Report" title="Close and return to 7-Day Outlook">✕</button>
       </div>
     </div>
@@ -558,7 +640,10 @@ function _ensureCard(root) {
       <div class="dwr-chapter-counter"></div>
     </div>
     <div class="dwr-body" role="region" aria-live="polite"></div>
-    <div class="dwr-progress-track"><div class="dwr-progress-fill"></div></div>
+    <div class="dwr-progress-row">
+      <div class="dwr-progress-track"><div class="dwr-progress-fill"></div></div>
+      <span class="dwr-progress-timer">0.0s</span>
+    </div>
     <div class="dwr-transport">
       <button type="button" class="dwr-btn dwr-btn--rw" title="Rewind (cycles 1x-5x)" aria-label="Rewind">${ICON_RW}<span class="dwr-speed-label"></span></button>
       <button type="button" class="dwr-btn dwr-btn--prev" title="Previous scene" aria-label="Previous">${ICON_PREV}</button>
@@ -601,6 +686,9 @@ function _bindCardEvents(card) {
     const m = btn(".dwr-mute");
     m.classList.toggle("is-muted", !_state.ttsEnabled);
     m.innerHTML = _state.ttsEnabled ? ICON_TTS_ON : ICON_TTS_OFF;
+    const label = _state.ttsEnabled ? "Mute narration" : "Unmute narration";
+    m.setAttribute("aria-label", label);
+    m.setAttribute("title", label);
   });
   card.querySelector(".dwr-dots").addEventListener("click", (e) => {
     const dot = e.target.closest(".dwr-dot");
@@ -617,6 +705,116 @@ async function _fetchRainfallReport() {
   const res = await fetch("/api/pmd/nwfc/rainfall-report/");
   if (!res.ok) throw new Error(`rainfall report HTTP ${res.status}`);
   return res.json();
+}
+
+// Recent news/context for the opening scene — reuses NCOP's own existing
+// GDELT endpoint (project/ncop_internal/views.py: GdeltNewsEventsApi,
+// already consumed elsewhere by navigation-panel.js's news ticker with
+// the same `include_social_media=false` pattern) rather than a new
+// backend route. A short client-side timeout and a broad try/catch make
+// this purely additive — the briefing plays exactly the same with zero
+// articles if GDELT is slow/unavailable, it just skips the news section.
+//
+// Module-level cache (survives across story open/close within the same
+// page load, not just within one _loadAndPlay call) — the backend's own
+// cache is bucketed in 10-minute windows, so re-fetching sooner than that
+// can only ever return the same data anyway. Reopening the story, hitting
+// Prev back to scene 1, etc. all reuse this instead of hitting the
+// network again. The empty/error result gets cached too, for the same
+// TTL — GDELT being rate-limited shouldn't mean every reopen retries it.
+let _newsCache = { articles: null, fetchedAt: 0 };
+const NEWS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+async function _fetchGdeltNews() {
+  const now = Date.now();
+  if (_newsCache.articles !== null && (now - _newsCache.fetchedAt) < NEWS_CACHE_TTL_MS) {
+    return _newsCache.articles;
+  }
+  let articles = [];
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch("/get-gdelt-news-events/?include_social_media=false&days=2&max_records=10", {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const geojson = await res.json();
+      if (!geojson?.metadata?.error) {
+        articles = (geojson.features || [])
+          .map((f) => f.properties || {})
+          .filter((p) => p.title && p.url)
+          .sort((a, b) => new Date(b.seendate || 0) - new Date(a.seendate || 0))
+          .slice(0, 4);
+      }
+    }
+  } catch (_) {
+    // best-effort — the briefing works fine with zero articles; falls
+    // through to caching the empty result below rather than retrying
+    // immediately on the next call.
+  }
+  _newsCache = { articles, fetchedAt: now };
+  return articles;
+}
+
+// Chapter 2's primary station data source — NCOP's own Heatwave
+// Monitoring endpoint (same-origin, NOT a GCOP endpoint — it's wired
+// directly as a Mapbox GeoJSON source URL elsewhere in the app, so this
+// is a plain fetch() mirroring that, not fetchGcopCached). Backed by
+// Open-Meteo server-side, so its temp_max/temp_min fields already are
+// the "use open-meteo or any free source" fallback the operational brief
+// asked for — no separate direct Open-Meteo integration needed. Best-
+// effort: returns null on any failure, never throws.
+async function _fetchHeatwaveMonitoring() {
+  try {
+    const res = await fetch("/get-heatwave-monitoring/");
+    if (!res.ok) return null;
+    const geojson = await res.json();
+    return geojson && Array.isArray(geojson.features) ? geojson : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Historical record-maximum temperatures per station (GCOP-backed, 24h
+// cache — same helper weather-report-control.js's "Max Temp Records"
+// drill view already uses). The upstream schema isn't guaranteed, so
+// this probes the same envelope/column aliases that view's own defensive
+// extraction does, and degrades to an empty list rather than throwing on
+// anything unexpected.
+async function _fetchMaxTempRecords() {
+  try {
+    const raw = await getNwfcMaxTemperatures();
+    return _extractMaxTempRows(raw);
+  } catch (_) {
+    return [];
+  }
+}
+function _extractMaxTempRows(raw) {
+  if (!raw) return [];
+  let arr = null;
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (typeof raw === "object") {
+    for (const key of ["items", "data", "stations", "records", "results", "max_temperatures", "max_temps", "list", "rows"]) {
+      if (Array.isArray(raw[key])) { arr = raw[key]; break; }
+    }
+  }
+  if (!arr) return [];
+  const nameKeys = ["name", "station", "station_name", "city", "location", "site"];
+  const tempKeys = ["max_temp_c", "temperature", "max_temperature", "max_temp", "maxTemp", "max", "record_max", "record_temp", "record", "value", "temp", "tmax"];
+  const dateKeys = ["date", "recorded_on", "record_date", "when", "at", "observed_on"];
+  const rows = [];
+  for (const row of arr) {
+    if (!row || typeof row !== "object") continue;
+    const name = nameKeys.map((k) => row[k]).find((v) => v != null);
+    const tempRaw = tempKeys.map((k) => row[k]).find((v) => v != null);
+    const temp = Number(tempRaw);
+    if (!name || !Number.isFinite(temp)) continue;
+    const date = dateKeys.map((k) => row[k]).find((v) => v != null) || null;
+    rows.push({ name: String(name), temp, date: date != null ? String(date) : null });
+  }
+  return rows.sort((a, b) => b.temp - a.temp);
 }
 
 function _normName(name) {
@@ -703,42 +901,110 @@ function _topDistrictsAcrossProvinces(report) {
   return picked.sort((a, b) => b.mm_total - a.mm_total);
 }
 
+// Same province-diverse-first ordering as _topDistrictsAcrossProvinces,
+// but with NO cap — every district the PDF reported a measurable (non-
+// trace) reading for gets included, so the station tour actually visits
+// every station in the source report, not just a top-5 summary. The
+// narrative/popup text still uses the capped top-5 version above for
+// readability; this uncapped list drives the CAMERA TOUR only. Districts
+// where every station is trace-only are still surfaced — just narratively
+// (report.trace_stations), not with an individual flyover, since there's
+// no numeric reading to rank or report at that location.
+function _allWetDistrictsAcrossProvinces(report) {
+  const all = _districtRankingFromDay(report).filter((d) => d.mm_total > 0); // already sorted desc
+  if (!all.length) return [];
+  const picked = [];
+  const seenProvince = new Set();
+  for (const d of all) {
+    if (seenProvince.has(d.province)) continue;
+    seenProvince.add(d.province);
+    picked.push(d);
+  }
+  const pickedKeys = new Set(picked.map((d) => `${d.province}||${d.name}`));
+  for (const d of all) {
+    const key = `${d.province}||${d.name}`;
+    if (pickedKeys.has(key)) continue;
+    picked.push(d);
+    pickedKeys.add(key);
+  }
+  return picked.sort((a, b) => b.mm_total - a.mm_total);
+}
+
 function _joinDistrictList(list) {
   const parts = list.map((d) => `${d.name} (${d.mm_total} mm, ${d.province})`);
   if (parts.length === 1) return parts[0];
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-// ==========================================================================
-// CHAPTER 2 data — live NWFC station temperatures (already fetched for
-// Chapter 1 as _state.observations; no new backend endpoint needed). The
-// live feed carries no province field of its own, so province attribution
-// reuses the rainfall report's own province -> station-name directory
-// (report.provinces[x].stations[].name) purely as a name/province lookup
-// — a second, independent use of data already on hand.
-// ==========================================================================
-function _buildStationProvinceLookup(report) {
-  const lookup = new Map();
-  for (const [province, p] of Object.entries(report?.provinces || {})) {
-    for (const station of p.stations || []) {
-      const district = station.name.split(" - ")[0];
-      lookup.set(_normName(district), province);
-    }
-  }
-  return lookup;
+// Same join, without repeating the province tag on every item — used for
+// province-scoped lists (the province-overview scene) where the province
+// is already the subject of the sentence.
+function _joinDistrictNames(list) {
+  const parts = list.map((d) => `${d.name} (${d.mm_total} mm)`);
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-// Same province-diversity rule as _topDistrictsAcrossProvinces — one
+// Every wet district, grouped by province (each array sorted desc by
+// mm_total, since it's filtered straight out of the already-sorted
+// _districtRankingFromDay). Drives the per-province tour structure: top
+// 3 districts get an individual zoom-in scene each, the rest are folded
+// into that province's closing overview scene instead of also getting a
+// full flyover — applied uniformly to every reporting province.
+function _districtsGroupedByProvince(report) {
+  const byProvince = new Map();
+  for (const d of _districtRankingFromDay(report).filter((x) => x.mm_total > 0)) {
+    if (!byProvince.has(d.province)) byProvince.set(d.province, []);
+    byProvince.get(d.province).push(d);
+  }
+  return byProvince;
+}
+
+// Closes out a province's district tour — the "zoom out to show the
+// whole province" beat. Names the top districts just toured, then
+// narrates whatever additional stations reported beyond those three
+// (never invents a number for them — every mm value here already came
+// through _districtRankingFromDay the same as the top 3 did).
+function _provinceOverviewNarrative(province, top3, rest) {
+  const bits = [];
+  if (top3.length) {
+    bits.push(`That covers ${province}'s leading districts — ${_joinDistrictNames(top3)}.`);
+  }
+  if (rest.length) {
+    bits.push(`Elsewhere across the province, ${_joinDistrictNames(rest)} also reported measurable rainfall.`);
+  } else if (top3.length) {
+    bits.push(`No other district in ${province} reported measurable rainfall beyond these.`);
+  }
+  return bits.join(" ");
+}
+
+// ==========================================================================
+// CHAPTER 2 data — Heatwave Monitoring stations (_fetchHeatwaveMonitoring,
+// NCOP's own endpoint), NOT the live NWFC observations feed Chapter 1
+// uses. Each feature already carries its own province and an alert_level
+// ("Normal"|"Elevated"|"High"|"Severe"|"Extreme"), so no separate
+// province lookup is needed here the way Chapter 1's rainfall report
+// required one. Cross-referenced against Max Temp Records
+// (_fetchMaxTempRecords) for "past 24 hours" historical context in the
+// opening scene. Deferred (out of scope for this pass): a direct scrape
+// of weather.gov.pk's FAWS station page and a PMD Weather Stations
+// cross-check — Heatwave Monitoring's temp_max/temp_min already come
+// from Open-Meteo server-side, which covers the "use a free open source
+// if nothing else is available" requirement without a second integration.
+// ==========================================================================
+
+// Same province-diversity rule Chapter 1 uses for districts — one
 // hottest station per province first, then filled to >=5 overall with
-// the next-highest readings, so Chapter 2 also represents the whole
-// country rather than whichever province happened to run hottest.
-function _hottestStationsAcrossProvinces(observationsFC, lookup) {
-  const withTemp = (observationsFC?.features || [])
+// the next-highest readings, so the CURRENT-conditions tour represents
+// the whole country rather than whichever province happened to run hottest.
+function _hottestHeatwaveStations(heatwaveFC) {
+  const withTemp = (heatwaveFC?.features || [])
     .filter((f) => Number.isFinite(f.properties?.temperature))
     .map((f) => ({
       feature: f,
       temp: f.properties.temperature,
-      province: lookup.get(_normName(f.properties?.name)) || null,
+      province: f.properties.province || null,
+      alert: f.properties.alert_level || "Normal",
     }))
     .sort((a, b) => b.temp - a.temp);
   if (!withTemp.length) return [];
@@ -767,36 +1033,57 @@ function _joinTempList(list) {
 }
 
 function _chapter2IntroNarrative() {
-  return "Chapter 2: the Temperature Outlook. Using live station observations, cross-checked against the PMD 2-metre temperature prediction layer, this chapter surveys the hottest conditions currently reported across the country, one reading from every province.";
+  return "Chapter 2: the Temperature Outlook, built from PMD's Heatwave Monitoring network and historical Max Temperature Records, cross-checked against the PMD 2-metre temperature prediction layer.";
 }
 
-function _tempLayerNarrative(hottest) {
-  const lead = hottest[0];
-  const headline = lead
-    ? `The hottest conditions currently reported are at ${lead.feature.properties?.name}${lead.province ? ` in ${lead.province}` : ""}, at ${lead.temp}°C.`
-    : "No live temperature readings are currently available.";
-  const spread = hottest.length > 1
-    ? ` Elevated readings also extend to ${_joinTempList(hottest.slice(1, 5))}.`
-    : "";
-  return `${headline}${spread} The 2m Temperature prediction layer is shown for visual context on the wider thermal pattern only — live station observations remain the authoritative reading.`;
+// Opening scene — PAST 24 HOURS, not current conditions. Prefers each
+// station's own temp_max/temp_min (already Open-Meteo-derived server-
+// side), backed with a historical on-record maximum where Max Temp
+// Records has a match for that station name.
+function _pastDayNarrative(heatwaveFC, maxTempRecords) {
+  const feats = (heatwaveFC?.features || [])
+    .filter((f) => Number.isFinite(f.properties?.temp_max))
+    .map((f) => ({ name: f.properties.name, province: f.properties.province, tempMax: f.properties.temp_max, tempMin: f.properties.temp_min }))
+    .sort((a, b) => b.tempMax - a.tempMax);
+  if (!feats.length) {
+    return "Past-24-hour temperature context is not currently available from any connected source.";
+  }
+  const lead = feats[0];
+  const bits = [
+    `Over the past 24 hours, the highest reading nationwide was at ${lead.name}${lead.province ? ` in ${lead.province}` : ""}, reaching ${lead.tempMax}°C${Number.isFinite(lead.tempMin) ? ` (low of ${lead.tempMin}°C)` : ""}.`,
+  ];
+  const others = feats.slice(1, 4);
+  if (others.length) {
+    bits.push(`Also running hot: ${others.map((f) => `${f.name} (${f.tempMax}°C)`).join(", ")}.`);
+  }
+  const record = (maxTempRecords || []).find((r) => _normName(r.name) === _normName(lead.name));
+  if (record) {
+    bits.push(`For reference, ${lead.name}'s on-record historical maximum is ${record.temp}°C${record.date ? ` (${record.date})` : ""}.`);
+  }
+  return bits.join(" ");
 }
 
 function _tempStationNarrative(entry, hottest) {
   const props = entry.feature.properties || {};
   const rank = hottest.findIndex((x) => x.feature === entry.feature) + 1;
-  const bits = [`${props.name} is currently reporting ${entry.temp}°C.`];
-  if (props.weather) bits.push(`Conditions: ${props.weather}.`);
-  if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) bits.push(`Wind ${props.wind_speed} kt.`);
-  if (entry.province) bits.push(`${entry.province} — ranked ${rank ? `#${rank}` : "unranked"} nationally by current temperature among reporting stations.`);
+  const bits = [`${props.name} is currently reporting ${entry.temp}°C, alert level ${entry.alert}.`];
+  if (Number.isFinite(props.apparent_temperature)) bits.push(`Feels like ${props.apparent_temperature}°C.`);
+  if (Number.isFinite(props.humidity)) bits.push(`Relative humidity ${props.humidity}%.`);
+  if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) bits.push(`Wind ${props.wind_speed} km/h.`);
+  if (entry.province) bits.push(`${entry.province} — ranked ${rank ? `#${rank}` : "unranked"} nationally by current temperature among monitored stations.`);
   return bits.join(" ");
 }
 
 function _tempAssessmentNarrative(hottest) {
   const bits = ["National temperature assessment:"];
   bits.push(hottest.length
-    ? `the heaviest heat currently centers on ${_joinTempList(hottest.slice(0, 3))}.`
+    ? `current heat centers on ${_joinTempList(hottest.slice(0, 3))}.`
     : "no significant heat signal is present in current station reports.");
-  bits.push("Live station observations, cross-checked against the PMD prediction layer, remain the authoritative record.");
+  const anyAlert = hottest.find((x) => x.alert && x.alert !== "Normal");
+  bits.push(anyAlert
+    ? `${anyAlert.feature.properties?.name} is under a ${anyAlert.alert.toLowerCase()} heat alert — continued monitoring is warranted.`
+    : "No station is currently under an elevated heat alert.");
+  bits.push("Heatwave Monitoring station data, cross-checked against the PMD prediction layer, remains the authoritative record.");
   bits.push("Operational readiness: routine monitoring posture recommended based on current data.");
   return bits.join(" ");
 }
@@ -837,8 +1124,11 @@ function _radarNarrative(report) {
 
 // Shown once, at the very start of Chapter 1 — orients the operator on
 // what this briefing is, before the data-driven narration begins.
-function _introNarrative() {
-  return "Welcome to the Dynamic Weather Report — a cinematic, data-driven operational briefing built entirely from live PMD and NWFC sources, with no invented figures. This is Chapter 1: the Precipitation Outlook, covering the past 24 hours nationwide. The sequence ahead moves from a national radar sweep, through a guided tour of the heaviest rainfall districts across every province, to a closing operational assessment.";
+function _introNarrative(newsArticles) {
+  const newsNote = (newsArticles && newsArticles.length)
+    ? " Recent news context is included alongside this briefing where available."
+    : "";
+  return `Welcome to the Dynamic Weather Report — a cinematic, data-driven operational briefing built entirely from live PMD and NWFC sources, with no invented figures. This is Chapter 1: the Precipitation Outlook, covering the past 24 hours nationwide. The sequence ahead moves from a national radar sweep, through a guided tour of the heaviest rainfall districts across every province, to a closing operational assessment.${newsNote}`;
 }
 
 // Strips the "District - " prefix a report station name carries, leaving
@@ -908,54 +1198,90 @@ function _assessmentNarrative(report) {
 // ==========================================================================
 // Scene construction — a flat, ordered list built once the data loads.
 // ==========================================================================
-function _buildScenes(report, observationsFC) {
+function _buildScenes(report, observationsFC, newsArticles) {
   const liveFeatures = observationsFC?.features || [];
   const scenes = [
-    { kind: "intro", chapter: 1, caption: _introNarrative() },
+    { kind: "intro", chapter: 1, caption: _introNarrative(newsArticles) },
     { kind: "radar", chapter: 1, caption: _radarNarrative(report) },
   ];
 
-  // District-diverse ranking (one top district per province, filled to
-  // >=5 overall) — so the station tour covers the whole country, not
-  // just whichever province happened to log the single highest reading.
-  // A district with multiple gauges (e.g. Rawalpindi's Gawalmandi +
-  // Katcheri stations) becomes ONE scene — a stations summary — rather
-  // than a separate scene per gauge, or silently picking just the
-  // highest and dropping the rest. Skipped only if NONE of a district's
-  // stations can be matched to a live coordinate — nowhere real to fly
-  // the camera — per the existing "never guess" philosophy.
-  const topDistricts = _topDistrictsAcrossProvinces(report);
-  _state.discussedDistricts = topDistricts;
-  let added = 0;
-  for (const d of topDistricts) {
-    if (added >= 8) break;
-    const allStations = (report?.provinces?.[d.province]?.stations || [])
-      .filter((s) => s.name.split(" - ")[0] === d.name);
-    if (!allStations.length) continue;
-    const withLive = allStations.map((s) => ({ station: s, live: _matchLiveStation(s.name, liveFeatures) }));
-    if (!withLive.some((x) => x.live)) continue;
+  // Per-province tour: for EVERY province that reported rainfall, zoom
+  // into its top 3 districts individually (same multi-gauge grouping as
+  // before — a district with several stations, e.g. Islamabad's Golra/
+  // Saidpur/Zero Point/Airport, is still ONE scene that zooms to one and
+  // narrates the rest), then a single province-overview scene that zooms
+  // OUT to the province's whole extent and names whatever additional
+  // stations reported beyond those top 3. Applied uniformly to every
+  // reporting province, not just the wettest ones. A district is skipped
+  // only if NONE of its stations can be matched to a live coordinate —
+  // nowhere real to fly the camera — per the existing "never guess"
+  // philosophy; _state.discussedDistricts (for the boundary-blink
+  // overlay) still covers every wet district regardless, top-3 or not.
+  _state.discussedDistricts = _allWetDistrictsAcrossProvinces(report);
+  const byProvince = _districtsGroupedByProvince(report);
+  const provinceOrder = _provinceRanking(report).map((p) => p.name).filter((name) => byProvince.has(name));
+  for (const province of provinceOrder) {
+    const districts = byProvince.get(province); // already sorted desc by mm_total
+    const top3 = districts.slice(0, 3);
+    const rest = districts.slice(3);
+    const provinceLiveCoords = [];
+
+    for (const d of top3) {
+      const allStations = (report?.provinces?.[d.province]?.stations || [])
+        .filter((s) => s.name.split(" - ")[0] === d.name);
+      if (!allStations.length) continue;
+      const withLive = allStations.map((s) => ({ station: s, live: _matchLiveStation(s.name, liveFeatures) }));
+      withLive.forEach((x) => { if (x.live) provinceLiveCoords.push(x.live.geometry.coordinates); });
+      if (!withLive.some((x) => x.live)) continue;
+      scenes.push({
+        kind: "station",
+        chapter: 1,
+        district: d,
+        stations: withLive,
+        caption: _districtStationsNarrative(d, withLive, report),
+      });
+    }
+
+    // The "rest" districts don't get their own flyover, but their live
+    // coordinates (where matched) still widen the province-overview
+    // shot so it genuinely shows the province's full extent, not just
+    // wherever the top 3 happen to sit.
+    for (const d of rest) {
+      const allStations = (report?.provinces?.[d.province]?.stations || [])
+        .filter((s) => s.name.split(" - ")[0] === d.name);
+      for (const s of allStations) {
+        const live = _matchLiveStation(s.name, liveFeatures);
+        if (live) provinceLiveCoords.push(live.geometry.coordinates);
+      }
+    }
+
     scenes.push({
-      kind: "station",
+      kind: "province-overview",
       chapter: 1,
-      district: d,
-      stations: withLive,
-      caption: _districtStationsNarrative(d, withLive, report),
+      province,
+      topDistricts: top3,
+      remainingDistricts: rest,
+      coords: provinceLiveCoords,
+      caption: _provinceOverviewNarrative(province, top3, rest),
     });
-    added += 1;
   }
 
   scenes.push({ kind: "assessment", chapter: 1, caption: _assessmentNarrative(report) });
 
   // ---- CHAPTER 2 — Temperature Outlook ------------------------------
-  // Reuses the SAME report + live observations already fetched for
-  // Chapter 1 — the province lookup and hottest-station ranking are the
-  // only new computation, no new fetch.
-  const provinceLookup = _buildStationProvinceLookup(report);
-  const hottest = _hottestStationsAcrossProvinces(observationsFC, provinceLookup);
+  // Heatwave Monitoring stations + Max Temp Records, both already
+  // fetched in _loadAndPlay (_state.heatwaveStations / .maxTempRecords)
+  // — a fully separate data source from Chapter 1's rainfall report and
+  // NWFC observations feed.
+  const heatwaveFC = _state.heatwaveStations;
+  const maxTempRecords = _state.maxTempRecords;
+  const hottest = _hottestHeatwaveStations(heatwaveFC);
   _state.hottestStations = hottest;
 
   scenes.push({ kind: "ch2-intro", chapter: 2, caption: _chapter2IntroNarrative() });
-  scenes.push({ kind: "temp-layer", chapter: 2, caption: _tempLayerNarrative(hottest) });
+  // "temp-layer" is the PAST-24-HOUR scene — current conditions are the
+  // station tour that follows, not this one.
+  scenes.push({ kind: "temp-layer", chapter: 2, caption: _pastDayNarrative(heatwaveFC, maxTempRecords) });
   let addedTemp = 0;
   for (const entry of hottest) {
     if (addedTemp >= 8) break;
@@ -990,9 +1316,10 @@ function _sceneTitle(scene) {
     case "intro":           return "Chapter 1 — Precipitation Outlook";
     case "radar":           return "Satellite Infrared — Previous 24 Hours";
     case "station":         return `District Focus — ${scene.district.name} (${scene.district.province})`;
+    case "province-overview": return `${scene.province} — Province Overview`;
     case "assessment":      return "National Rainfall Assessment";
     case "ch2-intro":       return "Chapter 2 — Temperature Outlook";
-    case "temp-layer":      return "2m Temperature — Current Conditions";
+    case "temp-layer":      return "2m Temperature — Past 24 Hours";
     case "temp-station":    return `Station Focus — ${scene.entry.feature.properties?.name}${scene.entry.province ? ` (${scene.entry.province})` : ""}`;
     case "temp-assessment": return "National Temperature Assessment";
     default:                return "Dynamic Weather Report";
@@ -1020,6 +1347,9 @@ function _renderSceneBody(card, scene) {
   let factsHtml = "";
   if (scene.kind === "station") {
     factsHtml = `<div class="dwr-facts">${_factPillsForDistrictStations(scene).map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>`;
+  } else if (scene.kind === "province-overview") {
+    const pills = (scene.topDistricts || []).map((d) => `${d.name}: ${d.mm_total} mm`);
+    factsHtml = pills.length ? `<div class="dwr-facts">${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>` : "";
   } else if (scene.kind === "radar" || scene.kind === "temp-layer") {
     factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill dwr-frame-pill">Frame <span class="dwr-frame-value">—</span></span></div>`;
   } else if (scene.kind === "assessment") {
@@ -1028,10 +1358,13 @@ function _renderSceneBody(card, scene) {
     factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill">${_hlNum(`${total} mm`)} national total (24h)</span></div>`;
   } else if (scene.kind === "temp-station") {
     const props = scene.entry.feature.properties || {};
+    const alert = scene.entry.alert || "Normal";
     const pills = [`${scene.entry.temp}°C`];
-    if (props.weather) pills.push(props.weather);
-    if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) pills.push(`Wind ${props.wind_speed} kt`);
-    factsHtml = `<div class="dwr-facts">${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>`;
+    if (Number.isFinite(props.apparent_temperature)) pills.push(`Feels ${props.apparent_temperature}°C`);
+    if (Number.isFinite(props.humidity)) pills.push(`RH ${props.humidity}%`);
+    if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) pills.push(`Wind ${props.wind_speed} km/h`);
+    const alertPillClass = alert !== "Normal" ? "dwr-fact-pill is-alert" : "dwr-fact-pill";
+    factsHtml = `<div class="dwr-facts"><span class="${alertPillClass}">${_escapeHtml(alert)}</span>${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>`;
   } else if (scene.kind === "temp-assessment") {
     const lead = _state.hottestStations?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill is-alert">${_hlNum(`${lead.temp}°C`)} peak reading</span></div>` : "";
@@ -1124,19 +1457,22 @@ function _startDistrictBlink() {
   const map = window.ncop_map;
   if (!map) return;
   _state.blinkPhase = false;
+  // Faster interval + a wider swing on both line-width and fill-opacity
+  // than before — the pulse needs to read clearly while the camera is
+  // busy flying/orbiting into a district, not just on a static frame.
   _state.blinkTimer = setInterval(() => {
     _state.blinkPhase = !_state.blinkPhase;
     const wide = _state.blinkPhase;
     try {
       if (map.getLayer(HL_DIST_LINE_ID)) {
-        map.setPaintProperty(HL_DIST_LINE_ID, "line-width", wide ? 4 : 2);
-        map.setPaintProperty(HL_DIST_LINE_ID, "line-opacity", wide ? 1 : 0.5);
+        map.setPaintProperty(HL_DIST_LINE_ID, "line-width", wide ? 6 : 2.5);
+        map.setPaintProperty(HL_DIST_LINE_ID, "line-opacity", wide ? 1 : 0.55);
       }
       if (map.getLayer(HL_DIST_FILL_ID)) {
-        map.setPaintProperty(HL_DIST_FILL_ID, "fill-opacity", wide ? 0.26 : 0.10);
+        map.setPaintProperty(HL_DIST_FILL_ID, "fill-opacity", wide ? 0.45 : 0.15);
       }
     } catch (_) { /* best-effort */ }
-  }, 550);
+  }, 420);
 }
 
 function _stopDistrictBlink() {
@@ -1179,6 +1515,26 @@ async function _runIntro(map, token, seq) {
 // answering what this story is, how many chapters exist so far, and what
 // layers/data feed it, in plain operator-facing terms. Replaced by the
 // radar's own stats popup a few seconds later (same shared popup shell).
+// News rows for the opening popup's "Recent news & context" section —
+// GDELT articles fetched alongside the rainfall report in _loadAndPlay
+// (see _fetchGdeltNews). Renders nothing if the fetch came back empty
+// (slow/unavailable GDELT, or genuinely no recent matching coverage) —
+// purely additive, never blocks or alters the rest of the briefing.
+function _newsSectionHtml() {
+  const articles = _state.newsArticles || [];
+  if (!articles.length) return "";
+  const rows = articles.map((a) => `
+    <a class="dwrp-news-item" href="${_escapeHtml(a.url)}" target="_blank" rel="noopener">
+      <span class="dwrp-news-title">${_escapeHtml(a.title)}</span>
+      <span class="dwrp-news-meta">${_escapeHtml(a.domain || a.sourcecountry || "")}${a.formatted_date ? ` · ${_escapeHtml(a.formatted_date)}` : ""}</span>
+    </a>
+  `).join("");
+  return `
+    <div class="dwrp-table-label">Recent news &amp; context</div>
+    <div class="dwrp-news-list">${rows}</div>
+  `;
+}
+
 function _showIntroPopup() {
   _presentPopup(`
     <div class="dwrp-head">
@@ -1203,6 +1559,7 @@ function _showIntroPopup() {
       3. Chapter 2 — 2m temperature outlook, then a tour of the hottest reporting stations<br>
       4. Closing operational assessment for each chapter
     </div>
+    ${_newsSectionHtml()}
     <div class="dwrp-body" style="font-size:10.5px;color:rgba(234,234,234,0.55);font-style:italic;">
       More chapters are planned — this briefing will keep growing.
     </div>
@@ -1336,29 +1693,27 @@ async function _runRadar(map, token, seq) {
 }
 
 // The native #temp-slider1 autoplay (temporal-controls.js's own
-// playAnimation()) only offers fixed 0.5x/1x/2x/3x speeds — all far too
-// fast for a slow-generating layer: stepping frames that quickly asks the
-// active raster layer's tile provider for a new frame every ~300-2000ms,
-// which is what produced the repeated 400/404 tile errors against
-// meteoblue's precipitation_radar (dropped for this exact reason). So this
-// drives the SAME slider element itself, but at our own much slower,
-// explicit cadence (0.05x of the native 1x baseline, i.e. one frame
-// roughly every 20s) — one frame gets plenty of time to load and be seen
-// before the next is requested. Shared by every "layer" scene (radar in
-// Chapter 1, temperature in Chapter 2), not radar-specific despite the name.
-// Setting `.value` alone doesn't invoke the slider's own frame-rendering
-// logic (showTimeStepLayers, private to temporal-controls.js), so a
-// synthetic "input" event is dispatched — the exact event its own
-// listener (temporal-controls.js) is already wired to, just triggered by
-// us instead of a native pointer drag. Runs in the background (not
-// awaited by the caller) for as long as this scene stays active; stops
-// the instant the scene goes stale (operator moved to another scene) —
-// the layer itself is never faded out here, only this stepping stops.
-// Also sets _state.pendingMinDwellMs (read once by _gotoScene's next
-// _scheduleAdvance call) so the scene holds long enough to actually SHOW
-// a full lap of frames rather than moving on after showing just one.
+// playAnimation()) only offers fixed 0.5x/1x/2x/3x speeds. This drives the
+// SAME slider element itself instead, at our own explicit cadence — 0.5x
+// of the native baseline (one frame every 2000ms) so an 8-frame lap takes
+// ~16s, slow enough to actually read each frame rather than blur past it.
+// Shared by every "layer" scene (radar in Chapter 1, temperature in
+// Chapter 2), not radar-specific despite the name. Setting `.value` alone
+// doesn't invoke the slider's own frame-rendering logic (showTimeStepLayers,
+// private to temporal-controls.js), so a synthetic "input" event is
+// dispatched — the exact event its own listener (temporal-controls.js) is
+// already wired to, just triggered by us instead of a native pointer drag.
+// Runs in the background (not awaited by the caller) for as long as this
+// scene stays active; stops the instant the scene goes stale (operator
+// moved to another scene) — the layer itself is never faded out here,
+// only this stepping stops. Also sets _state.pendingMinDwellMs (read once
+// by _gotoScene's next _scheduleAdvance call) so the scene holds long
+// enough to actually SHOW a full lap of frames rather than moving on
+// after showing just one — at this cadence that's usually a few seconds,
+// well under the normal TTS/dwell time, so it rarely has to stretch the
+// scene at all.
 const TEMPORAL_STEP_BASE_MS = 1000; // matches temporal-controls.js's own 1x baseline
-const TEMPORAL_STEP_SPEED = 0.05;   // requested playback speed for these layer scenes
+const TEMPORAL_STEP_SPEED = 0.5;    // playback speed for these layer scenes — half normal
 function _playTemporalLoop(token, seq) {
   const slider = document.getElementById("slider1");
   if (!slider) return;
@@ -1366,7 +1721,7 @@ function _playTemporalLoop(token, seq) {
   const maxVal = parseInt(slider.max, 10);
   if (!Number.isFinite(maxVal) || maxVal < 1) return; // only one frame — nothing to step through
 
-  const stepMs = TEMPORAL_STEP_BASE_MS / TEMPORAL_STEP_SPEED; // 20,000ms/frame at 0.05x
+  const stepMs = TEMPORAL_STEP_BASE_MS / TEMPORAL_STEP_SPEED; // 2000ms/frame at 0.5x
   _state.pendingMinDwellMs = Math.min(maxVal * stepMs, 60000); // capped — don't hold forever on a huge frame count
   _runTemporalLoop(slider, maxVal, stepMs, token, seq); // fire-and-forget
 }
@@ -1421,10 +1776,49 @@ async function _ensureObservationsOn() {
   }
 }
 
+// Reverses _ensureObservationsOn — Chapter 1's NWFC Station Observations
+// markers have no business staying on the map once Chapter 2's own
+// Heatwave Monitoring markers take over the same visual role; leaving both
+// on clutters the view with two overlapping marker sets. Best-effort, same
+// pattern as _ensureHeatwaveLayerOn.
+async function _ensureObservationsOff() {
+  if (!window.sourceLayerControl || typeof window.sourceLayerControl.removeLayerByKey !== "function") return;
+  try { window.sourceLayerControl.removeLayerByKey(OBS_ITEM_KEY); } catch (_) { /* best-effort */ }
+}
+
+// Chapter 2's equivalent of _ensureObservationsOn — turns on the
+// Heatwave Monitoring TOGGLE layer so its markers are visible alongside
+// the 2m Temperature raster during the station tour. Renders via a real
+// GL circle layer (unlike nwfc_observations' DOM markers), so no CSS
+// marker-fade class is applied here — best-effort, matches the existing
+// TOGGLE-item activation pattern.
+async function _ensureHeatwaveLayerOn() {
+  if (!window.sourceLayerControl || typeof window.sourceLayerControl.addLayerByKey !== "function") return;
+  try { await window.sourceLayerControl.addLayerByKey(HEATWAVE_ITEM_KEY); } catch (_) { /* best-effort */ }
+}
+
 function _centroid(coords) {
   const n = coords.length;
   const sum = coords.reduce((acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat], [0, 0]);
   return [sum[0] / n, sum[1] / n];
+}
+
+// Fades the currently-active temporal layer's raster-opacity to `to`,
+// reading whatever it's CURRENTLY painted at as the fade start (rather
+// than assuming a fixed value) — this gets called both to dim the layer
+// while zoomed into a district and to restore it on the province-wide
+// zoom-out, so it needs to work from either starting point.
+async function _setActiveLayerOpacity(map, to, durationMs = 700) {
+  const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
+  const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
+  await Promise.all(layerIds.map((id) => {
+    let from = 0.85;
+    try {
+      const cur = map.getPaintProperty(id, "raster-opacity");
+      if (typeof cur === "number") from = cur;
+    } catch (_) { /* best-effort */ }
+    return fadeLayerOpacity(map, id, "raster-opacity", from, to, _dur(durationMs));
+  }));
 }
 
 // Frames a district's matched station coordinate(s) at a FIXED, moderate
@@ -1467,15 +1861,28 @@ async function _runStation(map, scene, token, seq) {
   if (!coords.length) return;
   const hasRain = scene.stations.some((s) => (s.station?.mm || 0) > 0);
 
+  // Narrow the boundary-blink overlay to JUST this district — the
+  // previous district (or the whole-province set from a prior overview
+  // scene) stops blinking the instant this filter is applied. Blinking
+  // itself keeps running (_startDistrictBlink was already started back
+  // in _runRadar); this only changes WHICH districts match its filter.
+  _prepareDistrictHighlight([scene.district]);
+
   // One fixed aerial zoom for every district, regardless of rainfall —
   // no extra zoom-in step. See _frameDistrictCluster for why: any closer
   // and the still-visible DWD Satellite Infrared layer starts requesting
-  // tile zooms its provider may not serve.
-  await _frameDistrictCluster(map, coords, {
-    pitch: 40,
-    bearing: (Math.random() * 30) - 15, // gentle scene-to-scene bearing variety, not a random spin
-    duration: 2600,
-  });
+  // tile zooms its provider may not serve. The layer's opacity also dims
+  // to <=0.5 while zoomed into a district, so the raster doesn't compete
+  // visually with the district focus — restored on the province-overview
+  // zoom-out (_runProvinceOverview).
+  await Promise.all([
+    _frameDistrictCluster(map, coords, {
+      pitch: 40,
+      bearing: (Math.random() * 30) - 15, // gentle scene-to-scene bearing variety, not a random spin
+      duration: 2600,
+    }),
+    _setActiveLayerOpacity(map, 0.4),
+  ]);
   if (_isStale(token, seq)) return;
 
   // Mapbox's rain example (setRain) for districts that actually recorded
@@ -1507,6 +1914,75 @@ async function _runStation(map, scene, token, seq) {
   _showStationPopup(scene);
 }
 
+// Wide establishing shot for a whole province, once its top-3 district
+// tour is done — bounds over every matched station in that province
+// (top 3 + the rest), padded generously and capped at a much lower zoom
+// than _frameDistrictCluster, so it reads as "here's the extent of the
+// whole province", not another district close-up.
+async function _frameProvinceExtent(map, coords, opts = {}) {
+  if (!coords.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [lng, lat] of coords) {
+    if (lng < minX) minX = lng;
+    if (lng > maxX) maxX = lng;
+    if (lat < minY) minY = lat;
+    if (lat > maxY) maxY = lat;
+  }
+  const padDeg = 0.5;
+  return cinematicFitBounds(map, [[minX - padDeg, minY - padDeg], [maxX + padDeg, maxY + padDeg]], {
+    pitch: opts.pitch ?? 25,
+    bearing: opts.bearing ?? 0,
+    duration: _dur(opts.duration ?? 2800),
+    maxZoom: opts.maxZoom ?? 6.5,
+  });
+}
+
+async function _runProvinceOverview(map, scene, token, seq) {
+  // Widen the boundary-blink overlay to every affected district in this
+  // province (the top 3 just toured PLUS the rest that only got a
+  // mention) — a single-district filter would leave the zoomed-out shot
+  // looking like only one district in the whole province mattered.
+  const allProvinceDistricts = [...(scene.topDistricts || []), ...(scene.remainingDistricts || [])];
+  _prepareDistrictHighlight(allProvinceDistricts);
+
+  await Promise.all([
+    _frameProvinceExtent(map, scene.coords || []),
+    _setActiveLayerOpacity(map, 0.85), // restore — the dim from _runStation was district-focus-only
+    disableRainEffect(map), // any per-district rain flourish doesn't belong on a province-wide shot
+  ]);
+  if (_isStale(token, seq)) return;
+  _showProvinceOverviewPopup(scene);
+}
+
+function _showProvinceOverviewPopup(scene) {
+  const top3 = scene.topDistricts || [];
+  const rest = scene.remainingDistricts || [];
+  const topRows = top3.map((d) => `<tr><td>${_escapeHtml(d.name)}</td><td>${_hlNum(`${d.mm_total} mm`)}</td></tr>`).join("");
+  const restRows = rest.map((d) => `<tr><td>${_escapeHtml(d.name)}</td><td>${_hlNum(`${d.mm_total} mm`)}</td></tr>`).join("");
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">${_escapeHtml(scene.province)} — Province Overview</span>
+      <span class="dwrp-badge">${top3.length + rest.length} districts</span>
+    </div>
+    <div class="dwrp-body">
+      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${topRows ? `
+      <div class="dwrp-table-label">Districts just toured</div>
+      <table class="dwrp-table">
+        <thead><tr><th>District</th><th>Rainfall</th></tr></thead>
+        <tbody>${topRows}</tbody>
+      </table>` : ""}
+      ${restRows ? `
+      <div class="dwrp-table-label">Also reporting rainfall</div>
+      <table class="dwrp-table">
+        <thead><tr><th>District</th><th>Rainfall</th></tr></thead>
+        <tbody>${restRows}</tbody>
+      </table>` : ""}
+    </div>
+  `);
+}
+
 async function _runAssessment(map) {
   _closePopup();
   _clearDistrictOverlay();
@@ -1530,12 +2006,19 @@ async function _runAssessment(map) {
 // at the hottest stations instead of rainfall districts.
 // ==========================================================================
 async function _runChapter2Intro(map, token, seq) {
+  // Chapter 1's own layer (NWFC Station Observations) has no reason to
+  // stay on once we've moved past the rainfall chapter — Chapter 2 brings
+  // its own station layer (Heatwave Monitoring) for the same role.
+  _ensureObservationsOff();
   // Chapter 1's assessment already leaves the camera at a national
   // fitBounds view — just a brief re-settle, no new fly-in needed.
   await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: -8, duration: _dur(2000) });
 }
 
 async function _runTempLayer(map, token, seq) {
+  // National-scale scene, not zoomed to any one district — close any stats
+  // panel left open from a station scene reached via Prev/Next navigation.
+  try { hideHeatwaveModal(); } catch (_) {}
   await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.7, pitch: 15, bearing: 0, duration: _dur(1800) });
   if (_isStale(token, seq)) return;
 
@@ -1548,7 +2031,7 @@ async function _runTempLayer(map, token, seq) {
   });
   _setLayerLoadingNote(card, null);
   if (_isStale(token, seq)) return;
-  if (!ready) { _showTempLayerPopup(_state.hottestStations); return; }
+  if (!ready) { _showTempLayerPopup(); return; }
 
   const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
   const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
@@ -1571,7 +2054,7 @@ async function _runTempLayer(map, token, seq) {
     .filter((d) => d.name);
   _prepareDistrictHighlight(hotNames).then(() => { if (!_isStale(token, seq)) _startDistrictBlink(); });
 
-  _showTempLayerPopup(_state.hottestStations);
+  _showTempLayerPopup();
 }
 
 async function _runTempStation(map, scene, token, seq) {
@@ -1603,6 +2086,7 @@ async function _runTempStation(map, scene, token, seq) {
 
 async function _runTempAssessment(map) {
   _closePopup();
+  try { hideHeatwaveModal(); } catch (_) {}
   _clearDistrictOverlay();
   disableRainEffect(map);
   await _deactivateTemporalLayer(map, TEMP_ITEM_KEY);
@@ -1765,49 +2249,107 @@ function _showRadarPopup(report) {
 // National temperature overview popup — mirrors _showRadarPopup's shape
 // (one table, one summary line) but for Chapter 2's live-station ranking
 // instead of the parsed rainfall report.
-function _showTempLayerPopup(hottest) {
-  const list = hottest || [];
-  const rows = list.slice(0, 8).map((x) => {
-    const props = x.feature.properties || {};
+// Past-24-hour popup — temp_max/temp_min per station (Heatwave Monitoring,
+// Open-Meteo-derived) cross-referenced against Max Temp Records where a
+// historical on-record match exists. Reads straight from _state since
+// this scene isn't about "the current top 5", it's every station with a
+// past-day reading, most-recent-fetch data only — never invents a figure.
+function _showTempLayerPopup() {
+  const feats = (_state.heatwaveStations?.features || [])
+    .filter((f) => Number.isFinite(f.properties?.temp_max))
+    .map((f) => ({ name: f.properties.name, province: f.properties.province, tempMax: f.properties.temp_max, tempMin: f.properties.temp_min }))
+    .sort((a, b) => b.tempMax - a.tempMax);
+  const records = _state.maxTempRecords || [];
+  const rows = feats.slice(0, 8).map((f) => {
+    const record = records.find((r) => _normName(r.name) === _normName(f.name));
+    const recordNote = record ? `<div class="dwrp-live-note">On-record max: ${_hlNum(`${record.temp}°C`)}${record.date ? ` (${_escapeHtml(record.date)})` : ""}</div>` : "";
     return `
       <tr>
-        <td>${_escapeHtml(props.name || "")}<div class="dwrp-district-prov">${_escapeHtml(x.province || "")}</div></td>
-        <td>${_hlNum(`${x.temp}°C`)}</td>
+        <td>${_escapeHtml(f.name || "")}<div class="dwrp-district-prov">${_escapeHtml(f.province || "")}</div></td>
+        <td>${_hlNum(`${f.tempMax}°C`)}${Number.isFinite(f.tempMin) ? ` / ${_hlNum(`${f.tempMin}°C`)}` : ""}${recordNote}</td>
       </tr>
     `;
   }).join("");
   _presentPopup(`
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
-      <span class="dwrp-title">Current Temperature Outlook</span>
-      <span class="dwrp-badge">Live</span>
+      <span class="dwrp-title">Past 24 Hours — Temperature</span>
+      <span class="dwrp-badge">High / Low</span>
     </div>
     <div class="dwrp-body">
       ${rows ? `
-      <div class="dwrp-table-label">Hottest stations — one per province first</div>
+      <div class="dwrp-table-label">Hottest stations, past 24h</div>
       <table class="dwrp-table">
-        <thead><tr><th>Station</th><th>Temperature</th></tr></thead>
+        <thead><tr><th>Station</th><th>High / Low</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>` : `<div class="dwrp-summary-line">No live temperature readings are currently available.</div>`}
-      <div class="dwrp-summary-line dwrp-summary-secondary">Layer: PMD 2m Temperature prediction — visual context only, live stations are authoritative.</div>
+      </table>` : `<div class="dwrp-summary-line">No past-24-hour temperature data is currently available from any connected source.</div>`}
+      <div class="dwrp-summary-line dwrp-summary-secondary">Source: PMD Heatwave Monitoring (Open-Meteo-derived) + historical Max Temp Records. Layer: PMD 2m Temperature prediction, shown for visual context only.</div>
     </div>
   `);
 }
 
+// Current-conditions popup — mirrors the REAL heatwave marker popup's
+// look (alert badge, "now" readout) and includes the actual
+// `.heatwave-open-stats` button with the same data-lat/data-lon/data-name/
+// data-province/data-alert/data-variant attributes the real one uses. The
+// app's own global click handler for that class (layer-attribute-popup.js)
+// is delegated on document, so if it's already been installed (i.e. any
+// heatwave popup has been opened at least once this session) clicking it
+// opens the SAME real stats modal — a bonus, not a dependency: if that
+// handler was never installed, the click is a harmless no-op (delegated
+// listeners never throw on an unmatched/unregistered case).
+function _heatwaveAlertVariant(alert) {
+  const key = String(alert || "Normal").toLowerCase();
+  return ["normal", "elevated", "high", "severe", "extreme"].includes(key) ? key : "normal";
+}
 function _showTempStationPopup(scene) {
   const props = scene.entry.feature.properties || {};
-  const chips = [`${scene.entry.temp}°C`];
-  if (props.weather) chips.push(props.weather);
-  if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) chips.push(`Wind ${props.wind_speed} kt`);
+  const [lng, lat] = scene.entry.feature.geometry?.coordinates || [];
+  const alert = scene.entry.alert || "Normal";
+  const variant = `heatwave-${_heatwaveAlertVariant(alert)}`;
+  const subParts = [];
+  if (Number.isFinite(props.apparent_temperature)) subParts.push(`Feels ${props.apparent_temperature}°`);
+  if (Number.isFinite(props.temp_max) && Number.isFinite(props.temp_min)) subParts.push(`${props.temp_max}° / ${props.temp_min}°`);
+  if (Number.isFinite(props.humidity)) subParts.push(`RH ${props.humidity}%`);
+  const chips = [];
+  if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) chips.push(`Wind ${props.wind_speed} km/h`);
+  if (props.updated) chips.push(String(props.updated));
   _presentPopup(`
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
       <span class="dwrp-title">${_escapeHtml(props.name || "")}</span>
-      <span class="dwrp-badge">${_escapeHtml(props.obs_time || "")}</span>
+      <span class="dwrp-badge dwrp-badge--${_escapeHtml(_heatwaveAlertVariant(alert))}">${_escapeHtml(alert)}</span>
     </div>
-    <div class="dwrp-body">${_highlightNumbers(_escapeHtml(scene.caption || ""))}</div>
-    <div class="dwrp-chips">${chips.map((p) => `<span class="dwrp-chip">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>
+    <div class="dwrp-body">
+      <div class="dwrp-heatwave-now">
+        <span class="dwrp-heatwave-now-value">${_hlNum(`${scene.entry.temp}°C`)}</span>
+        ${subParts.length ? `<span class="dwrp-heatwave-now-sub">${_escapeHtml(subParts.join(" · "))}</span>` : ""}
+      </div>
+      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+    </div>
+    ${chips.length ? `<div class="dwrp-chips">${chips.map((p) => `<span class="dwrp-chip">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>` : ""}
+    <div class="dwrp-pdf-list">
+      <button type="button" class="heatwave-open-stats"
+        data-lat="${Number.isFinite(lat) ? lat : ""}" data-lon="${Number.isFinite(lng) ? lng : ""}"
+        data-name="${_escapeHtml(props.name || "")}" data-province="${_escapeHtml(scene.entry.province || "")}"
+        data-alert="${_escapeHtml(alert)}" data-variant="${_escapeHtml(variant)}">
+        Open Stats Panel
+      </button>
+    </div>
   `);
+
+  // Auto-open the REAL heatwave stats panel (16-day forecast chart, drag/
+  // resize, tab switching — all core logic, untouched) for THIS station by
+  // default, instead of waiting on an operator click. showHeatwaveModalForCity
+  // just updates the existing modal instance in place if one's already open,
+  // so hopping station-to-station during the tour reads as one panel
+  // updating, not a stack of new ones. Best-effort: never let a stats-panel
+  // hiccup break scene playback.
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    try {
+      showHeatwaveModalForCity({ lat, lon: lng, name: props.name || "City", province: scene.entry.province || "", alert, variant, props });
+    } catch (_) { /* best-effort — story playback must never depend on this */ }
+  }
 }
 
 function _closePopup() {
@@ -1858,7 +2400,7 @@ async function _enterScene(card, scene, token, seq) {
     } else if (scene.kind === "station") {
       if (_isStale(token, seq)) return;
       const prevKind = _state.scenes[_state.index - 1]?.kind;
-      if (prevKind === "radar") {
+      if (prevKind === "radar" || prevKind === "province-overview") {
         // The radar layer itself stays ON — _playTemporalLoop already
         // paused it at its current frame the moment this scene became
         // active (its own staleness check). Only the popup content swaps.
@@ -1867,9 +2409,15 @@ async function _enterScene(card, scene, token, seq) {
       }
       // Only turn observations on once, entering the station-tour phase —
       // not on every single station-to-station hop within the tour.
-      if (prevKind !== "station") await _ensureObservationsOn();
+      if (prevKind !== "station" && prevKind !== "province-overview") await _ensureObservationsOn();
       if (_isStale(token, seq)) return;
       await _runStation(map, scene, token, seq);
+    } else if (scene.kind === "province-overview") {
+      if (_isStale(token, seq)) return;
+      _closePopup();
+      await wait(320);
+      if (_isStale(token, seq)) return;
+      await _runProvinceOverview(map, scene, token, seq);
     } else if (scene.kind === "assessment") {
       if (_isStale(token, seq)) return;
       await _runAssessment(map);
@@ -1886,7 +2434,7 @@ async function _enterScene(card, scene, token, seq) {
         _closePopup();
         await wait(320);
       }
-      if (prevKind !== "temp-station" && prevKind !== "station") await _ensureObservationsOn();
+      if (prevKind !== "temp-station") await _ensureHeatwaveLayerOn();
       if (_isStale(token, seq)) return;
       await _runTempStation(map, scene, token, seq);
     } else if (scene.kind === "temp-assessment") {
@@ -1921,6 +2469,8 @@ async function _gotoScene(rawIdx, byUser) {
   const seq = ++_state.sceneSeq;
   const fill = card.querySelector(".dwr-progress-fill");
   if (fill) fill.style.width = "0%";
+  const timerEl = card.querySelector(".dwr-progress-timer");
+  if (timerEl) timerEl.textContent = "0.0s";
   const scene = _state.scenes[_state.index];
   await _enterScene(card, scene, token, seq);
   if (_isStale(token, seq)) return; // superseded by a newer navigation, or hidden/torn down mid-scene
@@ -1947,12 +2497,22 @@ function _scheduleAdvance(card, token, seq, caption, minDwellMs = 0) {
   const base = (_state.ttsEnabled ? _estimateSpeechMs(caption) : DWELL_MS_NO_TTS) / (_state.speed || 1);
   const dwellMs = Math.max(base, minDwellMs);
   const fill = card.querySelector(".dwr-progress-fill");
+  const timerEl = card.querySelector(".dwr-progress-timer");
+  const totalSec = dwellMs / 1000;
   const start = performance.now();
 
+  // Small "3.2s / 8.0s" readout next to the bar — makes the actual step
+  // duration visible instead of just an abstract fill percentage. Both
+  // the bar and the displayed seconds are clamped at the allotted total —
+  // if TTS runs long (advanceOrRecheck below keeps polling past dwellMs),
+  // this holds at "45.0s / 45.0s" rather than counting past it, since the
+  // allotted time is exactly that: a ceiling, not a live stopwatch.
   const tickProgress = () => {
     if (_isStale(token, seq) || !_state.isPlaying) return;
-    const pct = Math.min(100, ((performance.now() - start) / dwellMs) * 100);
+    const elapsedMs = Math.min(performance.now() - start, dwellMs);
+    const pct = (elapsedMs / dwellMs) * 100;
     if (fill) fill.style.width = `${pct}%`;
+    if (timerEl) timerEl.textContent = `${(elapsedMs / 1000).toFixed(1)}s / ${totalSec.toFixed(1)}s`;
     if (pct < 100) _state.progRaf = requestAnimationFrame(tickProgress);
   };
   _state.progRaf = requestAnimationFrame(tickProgress);
@@ -2049,11 +2609,14 @@ async function _loadAndPlay(card) {
   card.querySelector(".dwr-chapter-title").textContent = "Dynamic Weather Report";
   card.querySelector(".dwr-chapter-counter").textContent = "";
 
-  let report, observations;
+  let report, observations, newsArticles, heatwaveStations, maxTempRecords;
   try {
-    [report, observations] = await Promise.all([
+    [report, observations, newsArticles, heatwaveStations, maxTempRecords] = await Promise.all([
       _fetchRainfallReport(),
       getNwfcObservations().catch(() => null),
+      _fetchGdeltNews(), // best-effort — never rejects, resolves [] on any failure
+      _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
+      _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
     ]);
   } catch (e) {
     if (token !== _state.runToken) return;
@@ -2068,7 +2631,10 @@ async function _loadAndPlay(card) {
 
   _state.report = report;
   _state.observations = observations;
-  _state.scenes = _buildScenes(report, observations); // also sets _state.discussedDistricts / hottestStations
+  _state.newsArticles = newsArticles || [];
+  _state.heatwaveStations = heatwaveStations;
+  _state.maxTempRecords = maxTempRecords || [];
+  _state.scenes = _buildScenes(report, observations, newsArticles); // also sets _state.discussedDistricts / hottestStations
   _state.index = 0;
   _setSpeed(1, 1); // fresh load always starts at normal forward speed, regardless of a prior session
   _prepareDistrictHighlight(_state.discussedDistricts);
@@ -2098,6 +2664,7 @@ function _hide() {
   _state.runToken += 1; // stop any in-flight async scene choreography
   _pause();
   _closePopup();
+  try { hideHeatwaveModal(); } catch (_) {}
   _clearDistrictOverlay();
   const map = window.ncop_map;
   // Both chapters now keep their layer on-but-paused between scenes (see
@@ -2117,6 +2684,7 @@ function _teardown() {
   _state.runToken += 1;
   _pause();
   _closePopup();
+  try { hideHeatwaveModal(); } catch (_) {}
   _removePopup();
   _clearDistrictOverlay();
   const map = window.ncop_map;
