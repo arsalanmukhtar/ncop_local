@@ -61,6 +61,7 @@ async function ensureRiversLayer(map) {
         try { map.setLayoutProperty(id, "visibility", "visible"); } catch {}
       }
     }
+    _registerRiversZOrder();
     return;
   }
   let geo;
@@ -130,6 +131,26 @@ async function ensureRiversLayer(map) {
       console.warn("[FFD Rivers] line addLayer failed:", err);
     }
   }
+
+  _registerRiversZOrder();
+}
+
+// Registers the rivers fill/line layer IDs in the shared NCOP layer
+// registry (the same one temporal-controls.js's _ncopAddLayerInOrder
+// populates for every other NCOP vector layer) — without this,
+// computeBeforeId()'s temporal branch doesn't know these two layers
+// exist and skips them when placing a newly-activated temporal raster,
+// which can slot the raster ABOVE these translucent basin polygons and
+// visually bury them (this is exactly what "vectors always cover
+// rasters" is meant to prevent for every other NCOP layer). addLayer
+// itself already positions them correctly on first add (beforeId =
+// ffd_data-circle); this just makes that positioning stick against
+// later insertions.
+function _registerRiversZOrder() {
+  try {
+    window.__ncop_layer_registry?.add(RIVERS_FILL_ID);
+    window.__ncop_layer_registry?.add(RIVERS_LINE_ID);
+  } catch {}
 }
 
 /**
@@ -141,6 +162,10 @@ function teardownRiversLayer(map) {
     try { if (map.getLayer(id)) map.removeLayer(id); } catch {}
   }
   try { if (map.getSource(RIVERS_SOURCE_ID)) map.removeSource(RIVERS_SOURCE_ID); } catch {}
+  try {
+    window.__ncop_layer_registry?.delete(RIVERS_FILL_ID);
+    window.__ncop_layer_registry?.delete(RIVERS_LINE_ID);
+  } catch {}
 }
 
 /**

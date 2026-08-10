@@ -3391,6 +3391,14 @@ function handleHeatwavePopupClick(e) {
 // already fully self-contained functions, just not exported before.
 export { showHeatwaveModalForCity, hideHeatwaveModal };
 
+// Same additive-export reasoning as the heatwave pair above, for the FFD
+// popup's content builder + its delegated "Show Graph" click handler.
+// Both were already fully self-contained (buildFfdPopupContent takes raw
+// properties and returns HTML strings; setupFfdPopupEventHandlers wires
+// one idempotent document-level listener) — exporting them changes
+// nothing about how the real map-click popup path behaves.
+export { buildFfdPopupContent, setupFfdPopupEventHandlers };
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;

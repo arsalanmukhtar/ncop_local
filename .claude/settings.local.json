@@ -240,7 +240,11 @@
       "Bash(awk -F'[= ]' '{print $3, $0}')",
       "Bash(sort -k1,1 -n -u -t'\"')",
       "Bash(awk '!seen[$NF]++')",
-      "Bash(NCOP_TEST_USER=arsalan NCOP_TEST_PASS=6243 node test-outlook.js \"http://127.0.0.1:8000/\" 900000 on run-tts-on-long.log)"
+      "Bash(NCOP_TEST_USER=arsalan NCOP_TEST_PASS=6243 node test-outlook.js \"http://127.0.0.1:8000/\" 900000 on run-tts-on-long.log)",
+      "Bash(python3 -)",
+      "Bash(python -)",
+      "Bash(curl -s -o /dev/null -w \"layer-attribute-popup.js: %{http_code}\\\\n\" \"http://localhost:5173/src/modules/layer-attribute-popup.js\")",
+      "Bash(curl -s -m 10 -o /dev/null -w \"django root: %{http_code}\\\\n\" \"http://127.0.0.1:8000/\")"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",

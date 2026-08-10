@@ -281,6 +281,15 @@ export function orbitAroundPoint(map, center, opts = {}) {
  * Resolves once the flythrough completes; no-ops safely (resolves
  * immediately) if the free-camera API isn't available or fewer than 2
  * waypoints are given.
+ *
+ * Paced with EASE_SINE by default rather than a cubic ease — a lower
+ * peak rate of change reads as a gentle, gliding "drone" pass instead of
+ * the punchier snap-to-cruise-then-brake feel a cubic ease gives. Pass a
+ * denser `waypoints` array (more points along the intended curve, not
+ * just the start/end) for smoother turns — this function paces by
+ * cumulative distance across however many points it's given, so a dense
+ * curve turns gradually while a sparse one still corners hard at each
+ * point.
  */
 export function flyAlongPath(map, waypoints, opts = {}) {
   return new Promise((resolve) => {
@@ -290,12 +299,13 @@ export function flyAlongPath(map, waypoints, opts = {}) {
       return;
     }
     const {
-      durationMs = 6000,
+      durationMs = 8000,
       altitudeMeters = 3500,
       // Fraction of the TOTAL path length the camera looks ahead of its
-      // own position. Smaller = steeper/more downward pitch; larger =
-      // shallower, more horizon-facing.
-      lookAheadFrac = 0.08,
+      // own position. Smaller = steeper/more downward pitch, calmer;
+      // larger = shallower, more horizon-facing, faster-reading pan.
+      lookAheadFrac = 0.1,
+      easing = EASE_SINE,
     } = opts;
 
     // Segment distances via the same small-angle equirectangular approx
@@ -338,7 +348,7 @@ export function flyAlongPath(map, waypoints, opts = {}) {
     function frame(now) {
       if (done) return;
       const t = Math.min(1, (now - start) / durationMs);
-      const dist = EASE_IN_OUT_CUBIC(t) * total;
+      const dist = easing(t) * total;
       const here  = pointAtDistance(dist);
       const ahead = pointAtDistance(Math.min(total, dist + total * lookAheadFrac));
       try {

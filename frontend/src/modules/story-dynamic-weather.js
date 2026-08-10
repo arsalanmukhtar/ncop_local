@@ -68,9 +68,9 @@
 //      a code change).
 // ==========================================================================
 
-import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels } from "./gcop-api-cache.js";
+import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels, getFfdRivers } from "./gcop-api-cache.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
-import { showHeatwaveModalForCity, hideHeatwaveModal } from "./layer-attribute-popup.js";
+import { showHeatwaveModalForCity, hideHeatwaveModal, buildFfdPopupContent, setupFfdPopupEventHandlers } from "./layer-attribute-popup.js";
 import {
   wait,
   cinematicFlyTo,
@@ -114,15 +114,20 @@ const TEMP_ITEM_KEY = "pmd_pred_temp2m";
 const HEATWAVE_ITEM_KEY = "heatwave_monitoring";
 
 // CHAPTER 3 — Forecasted Precipitation Outlook. Two independent halves:
-// (a) the 12h Precipitation WRF raster (pmd_pred_twelvetpe), sampled for
-// real district-level values via the value-endpoint built for exactly
-// this purpose (PmdMonitorPredictionValueAPIView — see
-// _fetchPmdForecastValue below), and (b) a north-to-south cinematic tour
-// of FFD barrages/dams (TOGGLE item, same activation pattern as
-// HEATWAVE_ITEM_KEY) using their live inflow/outflow readings plus a
-// best-effort discharge history (see _fetchFfdHistory).
-const PRECIP_ITEM_KEY = "pmd_pred_twelvetpe";
+// (a) Meteoblue's own weekly precipitation layer (the REAL layer, shown
+// visually via the normal single-active-temporal mechanism this time —
+// see METEOBLUE_WEEKLY_ITEM_KEY), turned off again once the FFD tour
+// begins; its district-level mm figures come from the cached step-sample
+// pass (_sampleMeteoblueAllSteps/_fetchPrecipSamples), independent of
+// whatever the visual layer happens to be showing at any moment — and
+// (b) a north-to-south cinematic tour of FFD barrages/dams (TOGGLE item,
+// same activation pattern as HEATWAVE_ITEM_KEY) using their live inflow/
+// outflow readings plus a best-effort discharge history (see
+// _fetchFfdHistory).
 const FFD_ITEM_KEY = "ffd_data";
+// Below this, a district's forecast reads as a trace amount, not worth a
+// dedicated camera flyover — see _buildChapter3Scenes.
+const PRECIP_DISTRICT_ZOOM_THRESHOLD_MM = 5;
 
 // District-boundary blink overlay — same `district_boundary` vector
 // source story-provincial-forecast.js highlights, but a fully separate
@@ -167,7 +172,12 @@ const _state = {
   maxTempRecords: [],     // historical on-record max temperatures, best-effort (see _fetchMaxTempRecords)
   hottestStations: [],   // top temperature stations (>=5, all provinces) chapter 2 is covering
   ffdStations: null,       // live FFD waterlevels FeatureCollection — chapter 3's barrage-tour source
-  topPrecipDistricts: [], // districts with the highest sampled 12h-precip forecast (see _fetchPrecipSamples)
+  ffdRivers: null,         // FFD catchment-polygon FeatureCollection (NOT river channels — see _curvedStationPath) — kept only for the on-map visual layer, never used for camera pathing
+  meteoblueWeekly: null,   // Map<districtName, {name,province,coords,mm,unit,date,series}> — weekly (daily-sum) Meteoblue samples, ALL 8 steps queried once and cached; series[0] ("today") is the 24h total used as the primary precip value
+  meteoblueHourly: null,   // Map<districtName, {name,province,coords,series}> — hourly Meteoblue samples, ALL ~11 steps queried once and cached; supporting/peak-hour context only, never the headline number
+  meteoblueSampledOnce: false, // true once _sampleMeteoblueAllSteps has run for this story session — never re-samples (never re-hits Meteoblue's tiles) on repeat Chapter 3 entries, per "preserve calls for meteoblue" constraint
+  chapter3ScenesBuilt: false,   // guards _buildChapter3Scenes/splice from running again if the operator navigates back to ch3-intro a second time
+  topPrecipDistricts: [], // districts with the highest sampled 24h-precip forecast (see _fetchPrecipSamples)
   ffdWaypoints: [],        // FFD barrages/dams sorted north-to-south, chapter 3's camera-path tour
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
   blinkTimer:  null,     // district-boundary blink interval
@@ -966,61 +976,138 @@ async function _fetchFfdStations() {
   }
 }
 
-// Point-value cache for the PMD Forecast value-endpoint — same purpose
-// and TTL reasoning as weather-report-control.js's identically-named
-// helper (a separate module, so not shared code, but deliberately the
-// same shape): each call is real backend GDAL file I/O, so nearby
-// samples across scene-build + any later re-render share one entry
-// instead of re-hitting the network. No step_index is passed — omitting
-// it makes the backend default to the earliest available forecast step,
-// which is exactly the "outlook starting now" framing this chapter wants.
-const PRECIP_VALUE_TTL_MS = 30 * 60 * 1000;
-const _precipValueCache = new Map();
-async function _fetchPmdForecastValue(elementKey, lat, lon) {
-  const key = `${elementKey}|${lat.toFixed(2)}|${lon.toFixed(2)}`;
-  const hit = _precipValueCache.get(key);
-  if (hit && Date.now() - hit.ts < PRECIP_VALUE_TTL_MS) return hit.data;
-  let data = null;
-  try {
-    const url = `${window.location.origin}/api/pmd/monitor/predictions/${elementKey}/value/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-    const r = await fetch(url, { credentials: "same-origin" });
-    if (r.ok) data = await r.json();
-  } catch (_) {
-    data = null;
-  }
-  _precipValueCache.set(key, { data, ts: Date.now() });
-  return data;
+// Meteoblue's weekly/hourly precipitation layers are published as plain,
+// already-resolved arrays on window[layerKey] — see map-layers.js
+// ("window.weekly_precipitation_2m_above_ground = nems_layers_weeklycloudprecip",
+// "window.hourly_precipitation_2m_above_ground = mbx_hourly_cloudprecip")
+// built by generateMeteoblueNEMSCloudPrecipLayers/generateMBX_MeteoblueHourlyCloudPrecipLayers
+// (time-functions.js). Each entry already carries its own {source, layers,
+// date} — a fixed vector-tile source + a "precip" source-layer fill layer
+// whose features expose the numeric reading via `minValue`. Reading these
+// arrays directly means Chapter 3 never has to go through
+// handleTemporalInteraction()/#temp-slider1 at all: no sidebar
+// "is-selected" flash, no legend swap, no hijacking the app's single
+// shared "active temporal layer" slot — genuinely just fetching tiles and
+// querying them, never "turning the layer on" in the UI sense.
+const METEOBLUE_LAYER_KEYS = ["weekly_precipitation_2m_above_ground", "hourly_precipitation_2m_above_ground"];
+// The weekly layer is also Chapter 3's VISUAL centerpiece (see
+// _runChapter3Intro/_runPrecipLayer/_runPrecipAssessment) — activated for
+// real, through the normal single-active-temporal mechanism, unlike the
+// values-only pass above which never touches it. Same string as
+// METEOBLUE_LAYER_KEYS[0], kept as its own named constant since it's used
+// for a genuinely different purpose (display, not step-sampling).
+const METEOBLUE_WEEKLY_ITEM_KEY = METEOBLUE_LAYER_KEYS[0];
+function _meteoblueEntries(layerKey) {
+  const raw = window[layerKey];
+  return Array.isArray(raw) ? raw : [];
 }
 
-// Bounded-concurrency map — caps in-flight requests to the value
-// endpoint (real GDAL file I/O per call) instead of firing one fetch per
-// candidate district at once. Local to this module — weather-report-
-// control.js has its own identically-shaped copy, not shared code.
-async function _mapLimit(items, limit, fn) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const idx = cursor++;
-      results[idx] = await fn(items[idx], idx);
+// Adds EVERY step of BOTH Meteoblue precipitation layers to the map as
+// its own source + a single invisible ("fill-opacity": 0, kept
+// layout-visible only so queryRenderedFeatures can see it) "precip" fill
+// layer, waits for their vector tiles to load, samples every candidate
+// district against all of them in one queryRenderedFeatures pass, then
+// removes everything it added. This is the "iterate through all steps and
+// store values in cache" approach — no layer is ever toggled/shown, no
+// step is ever the app's "current" step, and nothing is left behind
+// afterwards. Called at most ONCE per story session (see
+// _state.meteoblueSampledOnce in _runChapter3Intro) so a re-entry into
+// Chapter 3 never re-hits Meteoblue's tile API a second time.
+async function _sampleMeteoblueAllSteps(map, candidates) {
+  const weekly = new Map();
+  const hourly = new Map();
+  if (!map || !candidates.length) return { weekly, hourly };
+
+  const jobs = [];
+  for (const layerKey of METEOBLUE_LAYER_KEYS) {
+    for (const entry of _meteoblueEntries(layerKey)) {
+      const precipDef = (entry.layers || []).find((l) => l["source-layer"] === "precip");
+      if (!precipDef || !entry.source) continue;
+      jobs.push({ layerKey, date: entry.date, source: entry.source, layerId: precipDef.id, layerDef: precipDef });
     }
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
+  if (!jobs.length) return { weekly, hourly };
+
+  const addedLayerIds = [];
+  const addedSourceIds = [];
+  for (const j of jobs) {
+    try {
+      if (!map.getSource(j.source.id)) {
+        map.addSource(j.source.id, j.source);
+        addedSourceIds.push(j.source.id);
+      }
+    } catch (_) { continue; }
+    try {
+      if (!map.getLayer(j.layerId)) {
+        map.addLayer({ ...j.layerDef, layout: { ...j.layerDef.layout, visibility: "visible" }, paint: { ...j.layerDef.paint, "fill-opacity": 0 } });
+        addedLayerIds.push(j.layerId);
+      } else {
+        map.setLayoutProperty(j.layerId, "visibility", "visible");
+      }
+    } catch (_) {}
+  }
+
+  const sourceIds = [...new Set(jobs.map((j) => j.source.id))];
+  for (let i = 0; i < 60; i++) {
+    const allLoaded = sourceIds.every((sid) => { try { return map.isSourceLoaded(sid); } catch (_) { return true; } });
+    if (allLoaded) break;
+    await wait(200);
+  }
+
+  const allLayerIds = jobs.map((j) => j.layerId);
+  const jobByLayerId = new Map(jobs.map((j) => [j.layerId, j]));
+  // These layers render CONTOUR BANDS — each polygon's `minValue` is the
+  // lower bound of a range (e.g. one polygon for "1-2mm", the next for
+  // "2-3mm"), so a single point exactly at a district's gauge coordinate
+  // can land in a low band even when heavier rain is forecast a few km
+  // away within the same district. Query a small bounding box around the
+  // district (~20km radius) instead of one pixel, so the district's
+  // WORST forecast band in its own vicinity is what gets picked up, not
+  // whatever happens to sit under the exact gauge pin.
+  const DISTRICT_SAMPLE_RADIUS_DEG = 0.18;
+  for (const c of candidates) {
+    let box, feats;
+    try {
+      const [lng, lat] = c.coords;
+      const p1 = map.project([lng - DISTRICT_SAMPLE_RADIUS_DEG, lat + DISTRICT_SAMPLE_RADIUS_DEG]);
+      const p2 = map.project([lng + DISTRICT_SAMPLE_RADIUS_DEG, lat - DISTRICT_SAMPLE_RADIUS_DEG]);
+      box = [[Math.min(p1.x, p2.x), Math.min(p1.y, p2.y)], [Math.max(p1.x, p2.x), Math.max(p1.y, p2.y)]];
+    } catch (_) { continue; }
+    try { feats = map.queryRenderedFeatures(box, { layers: allLayerIds }); } catch (_) { continue; }
+    const bestByLayer = new Map();
+    for (const f of feats || []) {
+      const lid = f.layer?.id;
+      const v = Number(f?.properties?.minValue);
+      if (!lid || !Number.isFinite(v)) continue;
+      if (!bestByLayer.has(lid) || v > bestByLayer.get(lid)) bestByLayer.set(lid, v);
+    }
+    for (const [lid, mm] of bestByLayer) {
+      const job = jobByLayerId.get(lid);
+      if (!job) continue;
+      const target = job.layerKey === "weekly_precipitation_2m_above_ground" ? weekly : hourly;
+      if (!target.has(c.name)) target.set(c.name, { name: c.name, province: c.province, coords: c.coords, series: [] });
+      target.get(c.name).series.push({ date: job.date, mm });
+    }
+  }
+
+  for (const id of addedLayerIds) { if (map.getLayer(id)) { try { map.removeLayer(id); } catch (_) {} } }
+  for (const sid of addedSourceIds) { if (map.getSource(sid)) { try { map.removeSource(sid); } catch (_) {} } }
+
+  return { weekly, hourly };
 }
 
-// Samples 12h Precipitation forecast values at a bounded, nationally-
-// representative set of district centroids — up to 3 per province (reusing
-// _districtsGroupedByProvince purely as a geographic candidate pool; its
-// own mm_total-based ordering doesn't matter here since districts get
-// RE-ranked below by their sampled FORECAST value, not observed rain).
-// Coordinates come from the same live-station matching Chapter 1 already
-// relies on (_matchLiveStation) — a district only becomes a sample point
-// if it resolves to a real coordinate, same "never guess a location"
-// rule the rest of this file follows. Returns every successfully-sampled
-// district (sorted desc by forecast mm) — callers decide how many to
-// actually tour.
-async function _fetchPrecipSamples(report, liveFeatures) {
+// Nationally-representative candidate district list for precipitation
+// sampling — up to 3 per province (reusing _districtsGroupedByProvince
+// purely as a geographic candidate pool; its own mm_total-based ordering
+// doesn't matter here since districts get RE-ranked by sampled FORECAST
+// value elsewhere). Coordinates come from the same live-station matching
+// Chapter 1 already relies on (_matchLiveStation) — a district only
+// becomes a candidate if it resolves to a real coordinate, same "never
+// guess a location" rule the rest of this file follows. Shared by both
+// the Meteoblue step-sampling pass (_sampleMeteoblueAllSteps) and
+// _fetchPrecipSamples below, so the two always agree on which districts
+// are in play.
+function _precipCandidateDistricts(report, liveFeatures) {
   const byProvince = _districtsGroupedByProvince(report);
   const candidates = [];
   for (const [province, districts] of byProvince) {
@@ -1033,13 +1120,46 @@ async function _fetchPrecipSamples(report, liveFeatures) {
       }
     }
   }
+  return candidates;
+}
+
+// Precipitation VALUES for Chapter 3 come exclusively from the cached
+// Meteoblue samples (_state.meteoblueWeekly/_state.meteoblueHourly,
+// populated once by _sampleMeteoblueAllSteps during _runChapter3Intro) —
+// independent of the separately-activated VISUAL Meteoblue weekly layer
+// (METEOBLUE_WEEKLY_ITEM_KEY, see _runPrecipLayer), which can be stepped/
+// toggled/torn down without affecting these already-cached numbers. The
+// weekly layer's "today" step is a proper 24h daily-sum forecast, so it's
+// the headline mm figure; the hourly layer (next ~10-11 hours, per-hour
+// readings) supplies the peak-hour context alongside it. A district with
+// no weekly sample is simply omitted.
+async function _fetchPrecipSamples(report, liveFeatures) {
+  const candidates = _precipCandidateDistricts(report, liveFeatures);
   if (!candidates.length) return [];
 
-  const results = await _mapLimit(candidates, 4, async (c) => {
-    const [lng, lat] = c.coords;
-    const data = await _fetchPmdForecastValue(PRECIP_ITEM_KEY, lat, lng);
-    if (!data || data.value == null || !Number.isFinite(data.value)) return null;
-    return { name: c.name, province: c.province, coords: c.coords, mm: data.value, unit: data.unit || "mm", date: data.date || "" };
+  const weekly = _state.meteoblueWeekly;
+  const hourly = _state.meteoblueHourly;
+  const results = candidates.map((c) => {
+    const w = weekly?.get(c.name);
+    if (!w || !w.series?.length) return null;
+    const today = w.series[0];
+    const h = hourly?.get(c.name);
+    let peakHour = null;
+    if (h?.series?.length) {
+      peakHour = h.series.reduce((best, s) => (best === null || s.mm > best.mm ? s : best), null);
+    }
+    return {
+      name: c.name,
+      province: c.province,
+      coords: c.coords,
+      mm: today.mm,
+      unit: "mm",
+      date: today.date,
+      source: "Meteoblue weekly (NEMS)",
+      weeklySeries: w.series,
+      hourlySeries: h?.series || [],
+      peakHour,
+    };
   });
   return results.filter(Boolean).sort((a, b) => b.mm - a.mm);
 }
@@ -1060,23 +1180,189 @@ async function _fetchFfdHistory(name) {
   }
 }
 
-// FFD stations sorted north-to-south (descending latitude) — the
-// intended tour order per the operational brief ("north barrages into
-// the south one by one"). Real Pakistani barrage geography runs roughly
-// north-south along the Indus/tributaries, so plain latitude ordering is
-// a faithful, data-driven stand-in for a hand-curated route — no
-// hardcoded station list to keep in sync with whatever GCOP actually
-// returns.
+// GeoGLOWS river-discharge forecast for one FFD barrage/dam — reuses the
+// SAME backend endpoints the standalone GeoGLOWS Forecast panel
+// (navigation-panel.js's #loadGeoGlowsForecast) already exposes and
+// already works from (get-geoglows-riverid/, get-geoglows-forecast/<id>/),
+// just called from here too. That panel's own state/UI is never touched
+// — this is a separate, additive read using the barrage's own coordinate
+// to resolve the nearest SIMULATED GeoGLOWS reach, which is why every
+// caller of this must present it as an approximation, not a gauge
+// reading. Session-lifetime cache keyed by station name (barrages don't
+// move mid-story, no TTL needed). Best-effort: resolves null on any
+// failure/no-match — callers show "not available", never break playback.
+// The barrage scene AWAITS this (see _runFfdBarrage) so playback holds on
+// a station until its GeoGLOWS forecast has actually loaded — bounded by
+// GEOGLOWS_FETCH_TIMEOUT_MS per request so an unreachable/slow upstream
+// can't stall the whole story indefinitely.
+const _geoglowsCache = new Map();
+const CMS_TO_CUSECS = 35.3147; // 1 m3/s = 35.3147 ft3/s — converted so this lines up with FFD's own cusecs convention
+const GEOGLOWS_FETCH_TIMEOUT_MS = 15000;
+function _fetchWithTimeout(url, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(url, { credentials: "same-origin", signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+async function _fetchGeoglowsForecast(wp) {
+  if (_geoglowsCache.has(wp.name)) return _geoglowsCache.get(wp.name);
+  const result = await (async () => {
+    try {
+      const [lng, lat] = wp.center;
+      const idRes = await _fetchWithTimeout(`/get-geoglows-riverid/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, GEOGLOWS_FETCH_TIMEOUT_MS);
+      if (!idRes.ok) return null;
+      const idData = await idRes.json();
+      const riverId = idData?.river_id;
+      if (!Number.isFinite(riverId)) return null;
+
+      const fcRes = await _fetchWithTimeout(`/get-geoglows-forecast/${riverId}/`, GEOGLOWS_FETCH_TIMEOUT_MS);
+      if (!fcRes.ok) return null;
+      const fcData = await fcRes.json();
+      const raw = fcData?.raw;
+      const datetimes = Array.isArray(raw?.datetime) ? raw.datetime : [];
+      const median = Array.isArray(raw?.flow_median) ? raw.flow_median : [];
+      const lower = Array.isArray(raw?.flow_uncertainty_lower) ? raw.flow_uncertainty_lower : [];
+      const upper = Array.isArray(raw?.flow_uncertainty_upper) ? raw.flow_uncertainty_upper : [];
+      if (!datetimes.length || !median.length) return null;
+
+      const points = datetimes
+        .map((dt, i) => ({ date: dt, cms: Number(median[i]), lowCms: Number(lower[i]), highCms: Number(upper[i]) }))
+        .filter((p) => Number.isFinite(p.cms));
+      if (!points.length) return null;
+
+      const nowMs = Date.now();
+      const nearestTo = (hoursAhead) => {
+        const targetMs = nowMs + hoursAhead * 3600 * 1000;
+        let best = points[0], bestDiff = Infinity;
+        for (const p of points) {
+          const diff = Math.abs(new Date(p.date).getTime() - targetMs);
+          if (diff < bestDiff) { bestDiff = diff; best = p; }
+        }
+        return best;
+      };
+      const peak = points.reduce((a, b) => (b.cms > a.cms ? b : a), points[0]);
+
+      return {
+        riverId,
+        now: nearestTo(0),
+        day1: nearestTo(24),
+        day3: nearestTo(72),
+        day7: nearestTo(168),
+        peak,
+      };
+    } catch (_) {
+      return null;
+    }
+  })();
+  _geoglowsCache.set(wp.name, result);
+  return result;
+}
+function _cusecs(cms) {
+  return Number.isFinite(cms) ? Math.round(cms * CMS_TO_CUSECS).toLocaleString() : "—";
+}
+
+// FFD stations ordered by REAL hydrological connectivity, not geometry.
+// /get-ffd-rivers/ was curled and inspected directly — it returns 27
+// catchment/basin POLYGONS (one per station, colored by status, up to
+// ~2.3° across), not river-channel LineStrings, so there is no line to
+// trace a tour along. /get-ffd-waterlevels/, however, publishes exactly
+// the connectivity a tour actually needs: each station's `from` (its
+// upstream source station name(s)) and `area_name` (river system). This
+// is a multi-source topological walk over that `from` graph — a station
+// only becomes eligible once every upstream source still in the dataset
+// has already been placed, so confluences (e.g. Guddu, fed by both
+// Taunsa and Panjnad) are visited only after both of their sources, and
+// a real chain like Besham → Tarbela Dam → Chashma → Taunsa → Guddu
+// falls out in that exact order because each one's `from` names the
+// last. Station names in `from` are matched whitespace/case-insensitive
+// (_normStationName) — the raw feed itself is inconsistent about this
+// ("Besham " vs "Besham", "Kalabagh" vs "Kala Bagh"), which would
+// otherwise silently break the graph. Stations that become eligible in
+// the same pass are grouped by river system then north-to-south, so a
+// tributary's own stations stay together instead of interleaving with an
+// unrelated river; any station with missing/unresolvable upstream data
+// just falls back into that same north-to-south ordering rather than
+// blocking the walk.
+function _normStationName(s) {
+  return String(s || "").toLowerCase().replace(/\s+/g, "");
+}
 function _buildFfdWaypoints(ffdFC) {
   const feats = (ffdFC?.features || []).filter((f) => f?.geometry?.coordinates);
-  return feats
-    .map((f) => ({
-      name: f.properties?.name || "Station",
+  const byName = new Map();
+  for (const f of feats) {
+    const name = f.properties?.name || "Station";
+    byName.set(name, {
+      name,
       province: f.properties?.province || "",
+      area: (f.properties?.area_name && f.properties.area_name !== "N/A") ? f.properties.area_name : "",
       center: f.geometry.coordinates,
       properties: f.properties || {},
-    }))
-    .sort((a, b) => b.center[1] - a.center[1]); // lat descending = north first
+      from: Array.isArray(f.properties?.from) ? f.properties.from.map(_normStationName) : [],
+    });
+  }
+
+  const remaining = new Map(byName);
+  const remainingNorm = new Set([...byName.keys()].map(_normStationName));
+  const ordered = [];
+  const maxPasses = remaining.size + 1;
+  for (let pass = 0; pass < maxPasses && remaining.size; pass++) {
+    let ready = [...remaining.values()].filter((wp) => wp.from.every((up) => !remainingNorm.has(up)));
+    if (!ready.length) ready = [...remaining.values()]; // cycle/unresolved refs — flush rather than loop forever
+    ready.sort((a, b) => (a.area || "").localeCompare(b.area || "") || b.center[1] - a.center[1]);
+    for (const wp of ready) {
+      ordered.push(wp);
+      remaining.delete(wp.name);
+      remainingNorm.delete(_normStationName(wp.name));
+    }
+  }
+  return ordered;
+}
+
+// /get-ffd-rivers/ has no channel geometry to follow (see above), so the
+// travel leg between two consecutive barrages is a gently bowed arc
+// rather than a ruler-straight line — it reads as a followed corridor
+// instead of a straight teleport, without pretending to trace a real
+// river course the data doesn't provide. The bow is a gentle perpendicular
+// offset scaled to the leg's own length (short hops bow only slightly,
+// long hops are capped so it never looks like a detour) — one consistent
+// side rather than alternating, since there's no data to know which way
+// any given reach actually bends. Densely sampled (`samples` points) so
+// flyAlongPath's distance-paced camera turns gradually along the curve
+// instead of pivoting hard at just two endpoints.
+function _curvedStationPath(from, to, samples = 24, bowFrac = 0.12) {
+  const [lng1, lat1] = from;
+  const [lng2, lat2] = to;
+  const dx = lng2 - lng1;
+  const dy = lat2 - lat1;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 1e-6) return [from, to];
+  const px = -dy / dist;
+  const py = dx / dist;
+  const bow = Math.min(dist * bowFrac, 0.6); // capped in degrees (~65km at this latitude)
+  const midLng = (lng1 + lng2) / 2 + px * bow;
+  const midLat = (lat1 + lat2) / 2 + py * bow;
+  const pts = [];
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const omt = 1 - t;
+    pts.push([
+      omt * omt * lng1 + 2 * omt * t * midLng + t * t * lng2,
+      omt * omt * lat1 + 2 * omt * t * midLat + t * t * lat2,
+    ]);
+  }
+  return pts;
+}
+
+// Cheap path length in degrees — used only to scale flyAlongPath's
+// duration so a longer leg covers its (longer) real distance at roughly
+// the same visual pace as a shorter one, not faster.
+function _pathLengthDeg(coords) {
+  let total = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const dx = coords[i + 1][0] - coords[i][0];
+    const dy = coords[i + 1][1] - coords[i][1];
+    total += Math.sqrt(dx * dx + dy * dy);
+  }
+  return total;
 }
 
 // Nearest sampled precip district to a barrage — simple planar distance
@@ -1229,7 +1515,7 @@ function _joinDistrictNames(list) {
 // Every wet district, grouped by province (each array sorted desc by
 // mm_total, since it's filtered straight out of the already-sorted
 // _districtRankingFromDay). Drives the per-province tour structure: top
-// 3 districts get an individual zoom-in scene each, the rest are folded
+// 2 districts get an individual zoom-in scene each, the rest are folded
 // into that province's closing overview scene instead of also getting a
 // full flyover — applied uniformly to every reporting province.
 function _districtsGroupedByProvince(report) {
@@ -1243,17 +1529,17 @@ function _districtsGroupedByProvince(report) {
 
 // Closes out a province's district tour — the "zoom out to show the
 // whole province" beat. Names the top districts just toured, then
-// narrates whatever additional stations reported beyond those three
+// narrates whatever additional stations reported beyond those two
 // (never invents a number for them — every mm value here already came
-// through _districtRankingFromDay the same as the top 3 did).
-function _provinceOverviewNarrative(province, top3, rest) {
+// through _districtRankingFromDay the same as the top 2 did).
+function _provinceOverviewNarrative(province, top2, rest) {
   const bits = [];
-  if (top3.length) {
-    bits.push(`That covers ${province}'s leading districts — ${_joinDistrictNames(top3)}.`);
+  if (top2.length) {
+    bits.push(`That covers ${province}'s leading districts — ${_joinDistrictNames(top2)}.`);
   }
   if (rest.length) {
     bits.push(`Elsewhere across the province, ${_joinDistrictNames(rest)} also reported measurable rainfall.`);
-  } else if (top3.length) {
+  } else if (top2.length) {
     bits.push(`No other district in ${province} reported measurable rainfall beyond these.`);
   }
   return bits.join(" ");
@@ -1481,7 +1767,7 @@ function _assessmentNarrative(report) {
 // ValueAPIView) or a live FFD reading — same "never invent a number"
 // discipline as Chapters 1 and 2. ----------------------------------------
 function _chapter3IntroNarrative() {
-  return "Chapter 3: the Forecasted Precipitation Outlook, drawn from PMD's 12-hour Precipitation WRF forecast, followed by a north-to-south tour of the FFD's monitored barrages and dams and how the outlook may affect their inflows.";
+  return "Chapter 3: the Forecasted Precipitation Outlook, drawing district-level 24-hour precipitation values from Meteoblue's forecast layers, followed by a north-to-south tour of the FFD's monitored barrages and dams and how the outlook may affect their inflows.";
 }
 
 function _joinPrecipList(list) {
@@ -1492,11 +1778,11 @@ function _joinPrecipList(list) {
 
 function _precipLayerNarrative(precipSamples) {
   if (!precipSamples.length) {
-    return "The 12-hour precipitation forecast is not currently returning sampled values for any monitored district — the layer is shown for visual reference only.";
+    return "The 24-hour precipitation forecast is not currently returning sampled values for any monitored district — the layer is shown for visual reference only.";
   }
   const lead = precipSamples[0];
   const bits = [
-    `The 12-hour precipitation forecast points to the heaviest activity at ${lead.name} in ${lead.province}, at ${lead.mm} ${lead.unit}.`,
+    `The 24-hour precipitation forecast points to the heaviest activity at ${lead.name} in ${lead.province}, at ${lead.mm} ${lead.unit}.`,
   ];
   const others = precipSamples.slice(1, 4).filter((d) => d.mm > 0);
   if (others.length) bits.push(`Also expected to see rainfall: ${_joinPrecipList(others)}.`);
@@ -1507,7 +1793,7 @@ function _precipLayerNarrative(precipSamples) {
 
 function _precipDistrictNarrative(entry, precipSamples) {
   const rank = precipSamples.findIndex((x) => x === entry) + 1;
-  const bits = [`${entry.name}, ${entry.province}, is forecast ${entry.mm} ${entry.unit} of precipitation over the next 12 hours.`];
+  const bits = [`${entry.name}, ${entry.province}, is forecast ${entry.mm} ${entry.unit} of precipitation over the next 24 hours.`];
   bits.push(rank ? `Ranked #${rank} nationally among sampled districts.` : "");
   bits.push(entry.mm >= 25
     ? "This crosses the threshold PMD classifies as heavy rainfall — downstream river levels and low-lying areas warrant monitoring."
@@ -1526,7 +1812,7 @@ function _precipAssessmentNarrative(precipSamples) {
   bits.push(heavy
     ? `${heavy.name} crosses PMD's heavy-rainfall threshold — the FFD barrage tour that follows checks whether this outlook reaches any monitored catchment.`
     : "No sampled district currently crosses the heavy-rainfall threshold.");
-  bits.push("Values are sampled directly from the 12-hour Precipitation WRF forecast raster, not estimated.");
+  bits.push("Values are sampled directly from Meteoblue's weekly and hourly precipitation forecasts, not estimated.");
   return bits.join(" ");
 }
 
@@ -1583,27 +1869,27 @@ async function _buildScenes(report, observationsFC, newsArticles) {
   ];
 
   // Per-province tour: for EVERY province that reported rainfall, zoom
-  // into its top 3 districts individually (same multi-gauge grouping as
+  // into its top 2 districts individually (same multi-gauge grouping as
   // before — a district with several stations, e.g. Islamabad's Golra/
   // Saidpur/Zero Point/Airport, is still ONE scene that zooms to one and
   // narrates the rest), then a single province-overview scene that zooms
   // OUT to the province's whole extent and names whatever additional
-  // stations reported beyond those top 3. Applied uniformly to every
+  // stations reported beyond those top 2. Applied uniformly to every
   // reporting province, not just the wettest ones. A district is skipped
   // only if NONE of its stations can be matched to a live coordinate —
   // nowhere real to fly the camera — per the existing "never guess"
   // philosophy; _state.discussedDistricts (for the boundary-blink
-  // overlay) still covers every wet district regardless, top-3 or not.
+  // overlay) still covers every wet district regardless, top-2 or not.
   _state.discussedDistricts = _allWetDistrictsAcrossProvinces(report);
   const byProvince = _districtsGroupedByProvince(report);
   const provinceOrder = _provinceRanking(report).map((p) => p.name).filter((name) => byProvince.has(name));
   for (const province of provinceOrder) {
     const districts = byProvince.get(province); // already sorted desc by mm_total
-    const top3 = districts.slice(0, 3);
-    const rest = districts.slice(3);
+    const top2 = districts.slice(0, 2);
+    const rest = districts.slice(2);
     const provinceLiveCoords = [];
 
-    for (const d of top3) {
+    for (const d of top2) {
       const allStations = (report?.provinces?.[d.province]?.stations || [])
         .filter((s) => s.name.split(" - ")[0] === d.name);
       if (!allStations.length) continue;
@@ -1636,10 +1922,10 @@ async function _buildScenes(report, observationsFC, newsArticles) {
       kind: "province-overview",
       chapter: 1,
       province,
-      topDistricts: top3,
+      topDistricts: top2,
       remainingDistricts: rest,
       coords: provinceLiveCoords,
-      caption: _provinceOverviewNarrative(province, top3, rest),
+      caption: _provinceOverviewNarrative(province, top2, rest),
     });
   }
 
@@ -1669,22 +1955,43 @@ async function _buildScenes(report, observationsFC, newsArticles) {
   scenes.push({ kind: "temp-assessment", chapter: 2, caption: _tempAssessmentNarrative(hottest) });
 
   // ---- CHAPTER 3 — Forecasted Precipitation Outlook ------------------
-  // Two independent halves, built from data neither Chapter 1 nor 2
-  // touches: (a) sampled 12h-precipitation forecast values per district
-  // (_fetchPrecipSamples — the only scene-build step in this whole file
-  // that awaits a network call, since the value-endpoint has to be
-  // sampled per candidate district rather than coming pre-resolved like
-  // Chapters 1/2's report-based data), and (b) the live FFD barrage/dam
-  // feed already fetched in _loadAndPlay (_state.ffdStations).
+  // Only the intro stub is built here — unlike Chapters 1/2, Chapter 3's
+  // actual content depends on its OWN layers being loaded first (Meteoblue
+  // weekly (visual), FFD + rivers, Meteoblue sampled for values), and per
+  // the operational brief those only load once Chapter 2 ends, not upfront
+  // alongside everything else. _runChapter3Intro does that preload, then
+  // calls _buildChapter3Scenes and splices the result in right after this
+  // stub — see there for the rest of what used to be built here.
+  scenes.push({ kind: "ch3-intro", chapter: 3, caption: _chapter3IntroNarrative() });
+
+  return scenes;
+}
+
+// The rest of Chapter 3 — split out of _buildScenes because it can only
+// be built AFTER Chapter 3's own layers (Meteoblue weekly, FFD + rivers,
+// Meteoblue-for-values) have loaded, which now happens at Chapter 3's
+// own start (_runChapter3Intro), not upfront with everything else. Same
+// two halves as before: sampled 24h-precipitation values per district
+// (_fetchPrecipSamples reads _state.meteoblueWeekly/_state.meteoblueHourly,
+// populated by the preload that runs just before this is called) and the live FFD
+// barrage/dam tour (_state.ffdStations, fetched much earlier in
+// _loadAndPlay — that part never needed the layers, only the tour
+// SCENES built from it are deferred here for consistency).
+async function _buildChapter3Scenes(report, liveFeatures) {
+  const scenes = [];
   const precipSamples = await _fetchPrecipSamples(report, liveFeatures);
   _state.topPrecipDistricts = precipSamples;
 
-  scenes.push({ kind: "ch3-intro", chapter: 3, caption: _chapter3IntroNarrative() });
   scenes.push({ kind: "precip-layer", chapter: 3, precipSamples, caption: _precipLayerNarrative(precipSamples) });
+  // Only districts forecasting a meaningful amount get an individual
+  // zoom-in — a 1mm trace reading isn't worth a dedicated flyover.
+  // precipSamples is already sorted desc by mm, so this naturally keeps
+  // the top (up to 6) districts that clear the bar, in order.
   let addedPrecip = 0;
   for (const entry of precipSamples) {
     if (addedPrecip >= 6) break;
     if (!entry.coords) continue; // nowhere real to fly the camera
+    if (entry.mm < PRECIP_DISTRICT_ZOOM_THRESHOLD_MM) continue;
     scenes.push({ kind: "precip-district", chapter: 3, entry, precipSamples, caption: _precipDistrictNarrative(entry, precipSamples) });
     addedPrecip += 1;
   }
@@ -1743,7 +2050,7 @@ function _sceneTitle(scene) {
     case "temp-station":    return `Station Focus — ${scene.entry.feature.properties?.name}${scene.entry.province ? ` (${scene.entry.province})` : ""}`;
     case "temp-assessment": return "National Temperature Assessment";
     case "ch3-intro":       return "Chapter 3 — Forecasted Precipitation Outlook";
-    case "precip-layer":    return "12h Precipitation Forecast";
+    case "precip-layer":    return "24h Precipitation Forecast";
     case "precip-district": return `Forecast Focus — ${scene.entry.name} (${scene.entry.province})`;
     case "precip-assessment": return "Precipitation Outlook Assessment";
     case "ffd-intro":       return "FFD Barrage & Dam Tour";
@@ -1798,7 +2105,7 @@ function _renderSceneBody(card, scene) {
   } else if (scene.kind === "precip-district") {
     const e = scene.entry;
     const pillClass = e.mm >= 25 ? "dwr-fact-pill is-alert" : "dwr-fact-pill";
-    factsHtml = `<div class="dwr-facts"><span class="${pillClass}">${_hlNum(`${e.mm} ${e.unit}`)} forecast (12h)</span></div>`;
+    factsHtml = `<div class="dwr-facts"><span class="${pillClass}">${_hlNum(`${e.mm} ${e.unit}`)} forecast (24h)</span></div>`;
   } else if (scene.kind === "precip-assessment") {
     const lead = (scene.precipSamples || _state.topPrecipDistricts)?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill${lead.mm >= 25 ? " is-alert" : ""}">${_hlNum(`${lead.mm} ${lead.unit}`)} leading forecast</span></div>` : "";
@@ -1938,14 +2245,26 @@ async function _runIntro(map, token, seq) {
   _showIntroPopup();
   enableCinematicAtmosphere(map);
   map.jumpTo(REGIONAL_START); // only non-animated cut in the whole sequence — the deliberate "opening shot" starting position
-  await cinematicFlyTo(map, {
-    center: PAKISTAN_CENTER,
-    zoom: 4.6,
-    pitch: 35,
-    bearing: 0,
-    duration: _dur(4200),
-  });
+  // Chapter 1's own layers (DWD Satellite Infrared, NWFC Station
+  // Observations) load alongside the opening flyover rather than staying
+  // idle until the radar/station scenes reach them individually —
+  // _activateTemporalLayer/_ensureObservationsOn are both idempotent, so
+  // those later scenes' own calls just find everything already ready.
+  const card = document.getElementById(CARD_ID);
+  _setLayerLoadingNote(card, "Loading satellite and station observation layers for Chapter 1…");
+  await Promise.all([
+    cinematicFlyTo(map, {
+      center: PAKISTAN_CENTER,
+      zoom: 4.6,
+      pitch: 35,
+      bearing: 0,
+      duration: _dur(4200),
+    }),
+    _activateTemporalLayer(map, RADAR_ITEM_KEY, "DWD Satellite Infrared", token, seq).catch(() => false),
+    _ensureObservationsOn(),
+  ]);
   if (_isStale(token, seq)) return;
+  _setLayerLoadingNote(card, null);
   // Settle only — no further zoom/orbit motion on this scene. An extra
   // free-camera sweep here just extended the opening without adding
   // information, and any additional camera movement risks pulling the
@@ -1991,7 +2310,7 @@ function _showIntroPopup() {
     <div class="dwrp-chips">
       <span class="dwrp-chip">DWD Satellite Infrared</span>
       <span class="dwrp-chip">2m Temperature</span>
-      <span class="dwrp-chip">12h Precipitation</span>
+      <span class="dwrp-chip">24h Precipitation</span>
       <span class="dwrp-chip">NWFC Station Observations</span>
       <span class="dwrp-chip">Heatwave Monitoring</span>
       <span class="dwrp-chip">FFD Data</span>
@@ -2002,7 +2321,7 @@ function _showIntroPopup() {
       1. Cinematic fly-in to Pakistan<br>
       2. Chapter 1 — satellite sweep + 24-hour rainfall stats, then a tour of the heaviest rainfall districts<br>
       3. Chapter 2 — 2m temperature outlook, then a tour of the hottest reporting stations<br>
-      4. Chapter 3 — 12h precipitation outlook, then a north-to-south flythrough of FFD-monitored barrages and dams<br>
+      4. Chapter 3 — 24h precipitation outlook, then a north-to-south flythrough of FFD-monitored barrages and dams<br>
       5. Closing operational assessment for each chapter
     </div>
     ${_newsSectionHtml()}
@@ -2081,7 +2400,15 @@ async function _activateTemporalLayer(map, itemKey, title, token, seq, opts = {}
 async function _deactivateTemporalLayer(map, itemKey) {
   const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
   const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
-  await Promise.all(layerIds.map((id) => fadeLayerOpacity(map, id, "raster-opacity", 0.85, 0, _dur(1200))));
+  await Promise.all(layerIds.map((id) => {
+    const prop = _opacityPropForLayer(map, id);
+    let from = 0.85;
+    try {
+      const cur = map.getPaintProperty(id, prop);
+      if (typeof cur === "number") from = cur;
+    } catch (_) { /* best-effort */ }
+    return fadeLayerOpacity(map, id, prop, from, 0, _dur(1200));
+  }));
   try {
     if (typeof handleTemporalInteraction === "function") {
       handleTemporalInteraction(null, null, itemKey, false, {});
@@ -2262,21 +2589,41 @@ function _centroid(coords) {
   return [sum[0] / n, sum[1] / n];
 }
 
-// Fades the currently-active temporal layer's raster-opacity to `to`,
-// reading whatever it's CURRENTLY painted at as the fade start (rather
-// than assuming a fixed value) — this gets called both to dim the layer
-// while zoomed into a district and to restore it on the province-wide
-// zoom-out, so it needs to work from either starting point.
+// Resolves the correct opacity paint property for a layer by its actual
+// Mapbox type — "raster-opacity" covers every temporal layer this file
+// used to deal with exclusively (PMD/DWD raster predictions), but
+// Chapter 3's overview now shows Meteoblue's own vector fill layer
+// (weekly_precipitation_2m_above_ground) as its visual, which needs
+// "fill-opacity" instead. Falls back to "raster-opacity" if the layer
+// can't be found/typed, matching this file's prior hardcoded assumption.
+function _opacityPropForLayer(map, id) {
+  const type = map.getLayer(id)?.type;
+  switch (type) {
+    case "fill":    return "fill-opacity";
+    case "circle":  return "circle-opacity";
+    case "line":    return "line-opacity";
+    case "symbol":  return "icon-opacity";
+    case "heatmap": return "heatmap-opacity";
+    default:        return "raster-opacity";
+  }
+}
+
+// Fades the currently-active temporal layer's opacity to `to`, reading
+// whatever it's CURRENTLY painted at as the fade start (rather than
+// assuming a fixed value) — this gets called both to dim the layer while
+// zoomed into a district and to restore it on the province-wide zoom-out,
+// so it needs to work from either starting point.
 async function _setActiveLayerOpacity(map, to, durationMs = 700) {
   const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
   const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
   await Promise.all(layerIds.map((id) => {
+    const prop = _opacityPropForLayer(map, id);
     let from = 0.85;
     try {
-      const cur = map.getPaintProperty(id, "raster-opacity");
+      const cur = map.getPaintProperty(id, prop);
       if (typeof cur === "number") from = cur;
     } catch (_) { /* best-effort */ }
-    return fadeLayerOpacity(map, id, "raster-opacity", from, to, _dur(durationMs));
+    return fadeLayerOpacity(map, id, prop, from, to, _dur(durationMs));
   }));
 }
 
@@ -2373,9 +2720,9 @@ async function _runStation(map, scene, token, seq) {
   _showStationPopup(scene);
 }
 
-// Wide establishing shot for a whole province, once its top-3 district
+// Wide establishing shot for a whole province, once its top-2 district
 // tour is done — bounds over every matched station in that province
-// (top 3 + the rest), padded generously and capped at a much lower zoom
+// (top 2 + the rest), padded generously and capped at a much lower zoom
 // than _frameDistrictCluster, so it reads as "here's the extent of the
 // whole province", not another district close-up.
 async function _frameProvinceExtent(map, coords, opts = {}) {
@@ -2398,7 +2745,7 @@ async function _frameProvinceExtent(map, coords, opts = {}) {
 
 async function _runProvinceOverview(map, scene, token, seq) {
   // Widen the boundary-blink overlay to every affected district in this
-  // province (the top 3 just toured PLUS the rest that only got a
+  // province (the top 2 just toured PLUS the rest that only got a
   // mention) — a single-district filter would leave the zoomed-out shot
   // looking like only one district in the whole province mattered.
   const allProvinceDistricts = [...(scene.topDistricts || []), ...(scene.remainingDistricts || [])];
@@ -2467,11 +2814,27 @@ async function _runAssessment(map) {
 async function _runChapter2Intro(map, token, seq) {
   // Chapter 1's own layer (NWFC Station Observations) has no reason to
   // stay on once we've moved past the rainfall chapter — Chapter 2 brings
-  // its own station layer (Heatwave Monitoring) for the same role.
+  // its own station layer (Heatwave Monitoring) for the same role. Its
+  // temporal raster (DWD) was already torn down by Chapter 1's own
+  // closing "assessment" scene, the step before this one.
   _ensureObservationsOff();
-  // Chapter 1's assessment already leaves the camera at a national
-  // fitBounds view — just a brief re-settle, no new fly-in needed.
-  await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: -8, duration: _dur(2000) });
+
+  // Chapter 2's own layers (2m Temperature, Heatwave Monitoring) load
+  // alongside the re-settle rather than staying idle until the
+  // temperature/station scenes reach them individually —
+  // _activateTemporalLayer/_ensureHeatwaveLayerOn are both idempotent,
+  // so those later scenes' own calls just find everything already ready.
+  const card = document.getElementById(CARD_ID);
+  _setLayerLoadingNote(card, "Loading temperature and heatwave layers for Chapter 2…");
+  await Promise.all([
+    // Chapter 1's assessment already leaves the camera at a national
+    // fitBounds view — just a brief re-settle, no new fly-in needed.
+    cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: -8, duration: _dur(2000) }),
+    _activateTemporalLayer(map, TEMP_ITEM_KEY, "2m Temperature", token, seq).catch(() => false),
+    _ensureHeatwaveLayerOn(),
+  ]);
+  if (_isStale(token, seq)) return;
+  _setLayerLoadingNote(card, null);
 }
 
 async function _runTempLayer(map, token, seq) {
@@ -2561,12 +2924,94 @@ async function _runTempAssessment(map) {
 // which additionally uses flyAlongPath for the north-to-south travel
 // between consecutive stops.
 // ==========================================================================
+// Chapter 3's own layer/scene preload — mirrors what _runIntro does for
+// Chapter 1 and _runChapter2Intro does for Chapter 2: tear down the
+// PREVIOUS chapter's layers first, then load and confirm-display THIS
+// chapter's own layers, and only once that's done does the chapter
+// actually proceed. Chapter 3 additionally has to build its OWN scene
+// list here (_buildChapter3Scenes) rather than upfront in _buildScenes,
+// since those scenes' district values depend on Meteoblue's sampled
+// data, which doesn't exist until this preload runs.
+//
+// Meteoblue's VALUES are sampled via its own standalone source/layer
+// add+query+remove pass (_sampleMeteoblueAllSteps) that never touches the
+// shared #temp-slider1 system at all — that finishes and tears itself
+// down BEFORE the real Meteoblue weekly layer is activated afterward for
+// actual display (METEOBLUE_WEEKLY_ITEM_KEY), so the two never overlap on
+// the app's single "active temporal layer" slot. The visual layer is left
+// active once this returns, ready for Chapter 3's own scenes to fade in
+// later, and torn down again in _runPrecipAssessment before the FFD tour.
+// FFD has no such conflict either (a TOGGLE layer, not a temporal one).
 async function _runChapter3Intro(map, token, seq) {
-  // Chapter 2's own layer (Heatwave Monitoring) has no reason to stay on
-  // into Chapter 3 — same hand-off _ensureObservationsOff already does
-  // between Chapters 1 and 2.
+  // Chapter 2's layers/functionality go away entirely once Chapter 3
+  // starts — same "previous chapter's layers don't linger" hand-off
+  // _runChapter2Intro already does for Chapter 1's.
   _ensureHeatwaveLayerOff();
+  await _deactivateTemporalLayer(map, TEMP_ITEM_KEY);
+  if (_isStale(token, seq)) return;
+
+  const card = document.getElementById(CARD_ID);
+  _setLayerLoadingNote(card, "Loading precipitation, river, and station layers for Chapter 3…");
+
   await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: 6, duration: _dur(2000) });
+  if (_isStale(token, seq)) return;
+
+  await _ensureFfdLayerOn();
+  if (_isStale(token, seq)) return;
+  // ensureRiversLayer (gcop-ffd-integration.js) runs fire-and-forget
+  // inside the addLayerByKey wrapping it uses, so the await above doesn't
+  // actually track when the rivers source finishes loading — poll for it
+  // briefly (same patient-wait convention _activateTemporalLayer itself
+  // uses) rather than assume it's ready the instant addLayerByKey returns.
+  for (let i = 0; i < 30 && !map.getSource("ffd_data-rivers-source"); i++) {
+    await wait(200);
+    if (_isStale(token, seq)) return;
+  }
+
+  // Precipitation VALUES: query every step of both Meteoblue precip
+  // layers directly (never through handleTemporalInteraction/#temp-
+  // slider1 — see _sampleMeteoblueAllSteps) and cache them. Runs once per
+  // story session — a repeat visit to ch3-intro (Prev/dot-click) reuses
+  // the cached Maps instead of re-hitting Meteoblue's tile API again.
+  if (!_state.meteoblueSampledOnce) {
+    _setLayerLoadingNote(card, "Sampling Meteoblue precipitation forecasts for monitored districts…");
+    const candidates = _precipCandidateDistricts(_state.report, _state.observations?.features || []);
+    const sampled = await _sampleMeteoblueAllSteps(map, candidates).catch(() => ({ weekly: new Map(), hourly: new Map() }));
+    _state.meteoblueWeekly = sampled.weekly;
+    _state.meteoblueHourly = sampled.hourly;
+    _state.meteoblueSampledOnce = true;
+    _setLayerLoadingNote(card, null);
+  }
+  if (_isStale(token, seq)) return;
+
+  // Precipitation VISUAL: the actual Meteoblue weekly layer, shown for
+  // real this time (unlike the standalone sampling pass above, this DOES
+  // go through the normal single-active-temporal-layer mechanism, since
+  // it's now meant to be seen). Pre-activating it here means it's already
+  // on by the time _runPrecipLayer's own scene fades it in — same
+  // preload-then-reveal pattern _runIntro/_runChapter2Intro use for
+  // DWD/2m Temperature. Deactivated again in _runPrecipAssessment, right
+  // before the FFD station tour begins.
+  await _activateTemporalLayer(map, METEOBLUE_WEEKLY_ITEM_KEY, "Weekly Precipitation", token, seq).catch(() => false);
+  if (_isStale(token, seq)) return;
+  _setLayerLoadingNote(card, null);
+
+  // Everything Chapter 3 needs is loaded now — build its actual scenes
+  // (deferred out of _buildScenes for exactly this reason) and splice
+  // them in right after this ch3-intro stub, then refresh the dot nav so
+  // it reflects the new total scene count. Guarded to run ONCE per story
+  // load — re-entering ch3-intro via Prev/a dot click after Chapter 3 has
+  // already played would otherwise splice a second copy in every time;
+  // the layer preload above this is fine to repeat (all idempotent), only
+  // the scene-list build+splice needs the guard.
+  if (!_state.chapter3ScenesBuilt) {
+    const newScenes = await _buildChapter3Scenes(_state.report, _state.observations?.features || []);
+    if (_isStale(token, seq)) return;
+    _state.scenes.splice(_state.index + 1, 0, ...newScenes);
+    _state.chapter3ScenesBuilt = true;
+    const cardEl = document.getElementById(CARD_ID);
+    if (cardEl) _renderDots(cardEl);
+  }
 }
 
 async function _runPrecipLayer(map, token, seq) {
@@ -2575,8 +3020,8 @@ async function _runPrecipLayer(map, token, seq) {
   if (_isStale(token, seq)) return;
 
   const card = document.getElementById(CARD_ID);
-  const ready = await _activateTemporalLayer(map, PRECIP_ITEM_KEY, "12h Precipitation", token, seq, {
-    onSlow: () => _setLayerLoadingNote(card, "Generating 12h Precipitation forecast imagery — this can take up to a minute on first load…"),
+  const ready = await _activateTemporalLayer(map, METEOBLUE_WEEKLY_ITEM_KEY, "Weekly Precipitation", token, seq, {
+    onSlow: () => _setLayerLoadingNote(card, "Loading Meteoblue precipitation imagery…"),
   });
   _setLayerLoadingNote(card, null);
   if (_isStale(token, seq)) return;
@@ -2585,11 +3030,11 @@ async function _runPrecipLayer(map, token, seq) {
   const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
   const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
   for (const id of layerIds) {
-    try { map.setPaintProperty(id, "raster-opacity", 0); } catch (_) {}
+    try { map.setPaintProperty(id, _opacityPropForLayer(map, id), 0); } catch (_) {}
   }
   await wait(150);
   if (_isStale(token, seq)) return;
-  await Promise.all(layerIds.map((id) => fadeLayerOpacity(map, id, "raster-opacity", 0, 0.75, _dur(2000))));
+  await Promise.all(layerIds.map((id) => fadeLayerOpacity(map, id, _opacityPropForLayer(map, id), 0, 0.75, _dur(2000))));
   if (_isStale(token, seq)) return;
 
   _playTemporalLoop(token, seq);
@@ -2642,7 +3087,13 @@ async function _runPrecipAssessment(map) {
   _closePopup();
   _clearDistrictOverlay();
   disableRainEffect(map);
-  await _deactivateTemporalLayer(map, PRECIP_ITEM_KEY);
+  // Meteoblue's weekly layer was the precipitation half's visual — turned
+  // off here, before the FFD barrage/dam tour begins, same "previous
+  // chapter's layers don't linger" hand-off used between every other
+  // chapter transition. The cached step values (_state.meteoblueWeekly/
+  // Hourly) are untouched by this — narration keeps reading from those
+  // regardless of whether the layer itself is currently shown.
+  await _deactivateTemporalLayer(map, METEOBLUE_WEEKLY_ITEM_KEY);
   await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
 }
 
@@ -2662,13 +3113,24 @@ async function _runFfdBarrage(map, scene, token, seq) {
   if (scene.prevWaypoint?.center) {
     // The literal "animate camera along a path" technique the operational
     // brief pointed at — https://docs.mapbox.com/mapbox-gl-js/example/free-camera-path/
-    // — flown for the TRAVEL leg between consecutive barrages; each stop
-    // still gets its own settle + orbit + popup below, same beat as every
-    // other scene in this file.
-    await flyAlongPath(map, [
-      { center: scene.prevWaypoint.center, altitude: 12000 },
-      { center: wp.center, altitude: 8000 },
-    ], { durationMs: _dur(4200), lookAheadFrac: 0.35 });
+    // — flown for the TRAVEL leg between consecutive barrages. There is no
+    // river-channel geometry to trace (/get-ffd-rivers/ is catchment
+    // polygons, not lines — see _buildFfdWaypoints), so the leg follows a
+    // gently bowed arc (_curvedStationPath) instead of a dead-straight
+    // line — a slow, low, drone-like pass rather than a fast teleport.
+    const arc = _curvedStationPath(scene.prevWaypoint.center, wp.center);
+    const straightDeg = _pathLengthDeg([scene.prevWaypoint.center, wp.center]);
+    const arcDeg = _pathLengthDeg(arc);
+    const ratio = straightDeg > 0 ? arcDeg / straightDeg : 1;
+    // Slow baseline (a straight-line hop between two nearby barrages
+    // still takes a good ~7s) scaled gently for longer legs, capped so a
+    // very long leg doesn't drag on forever.
+    const durationMs = Math.min(16000, 7000 * Math.max(1, ratio));
+    const pathWaypoints = arc.map((c, i) => ({
+      center: c,
+      altitude: 12000 + (8000 - 12000) * (i / (arc.length - 1)),
+    }));
+    await flyAlongPath(map, pathWaypoints, { durationMs: _dur(durationMs), lookAheadFrac: 0.18 });
   } else {
     await cinematicFlyTo(map, { center: wp.center, zoom: 7.5, pitch: 45, bearing: 0, duration: _dur(2600) });
   }
@@ -2691,7 +3153,7 @@ async function _runFfdBarrage(map, scene, token, seq) {
     mapEl.classList.add("ncop-dwr-pulse-target");
     setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
   }
-  _showFfdBarragePopup(scene, token, seq);
+  await _showFfdBarragePopup(scene, token, seq);
 }
 
 async function _runFfdAssessment(map) {
@@ -2970,24 +3432,50 @@ function _showPrecipLayerPopup() {
   _presentPopup(`
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
-      <span class="dwrp-title">12h Precipitation Forecast</span>
+      <span class="dwrp-title">24h Precipitation Forecast</span>
       <span class="dwrp-badge">Sampled</span>
     </div>
     <div class="dwrp-body">
       ${rows ? `
       <div class="dwrp-table-label">Highest forecast districts (sampled)</div>
       <table class="dwrp-table">
-        <thead><tr><th>District</th><th>Forecast (12h)</th></tr></thead>
+        <thead><tr><th>District</th><th>Forecast (24h)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` : `<div class="dwrp-summary-line">No forecast precipitation values could be sampled for currently reachable districts.</div>`}
-      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled directly from the PMD 12h Precipitation WRF forecast raster at each district's coordinate — same method as the Weather Report panel's PMD Forecast section.</div>
+      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled from Meteoblue's weekly + hourly precipitation forecast layers at each district's vicinity (worst reading within ~20km, not just the exact gauge point). The map layer shown alongside is the same Meteoblue weekly layer.</div>
     </div>
   `);
+}
+
+// "Today", "+1d", ... "+7d" labels for the 8 weekly steps, in order —
+// matches generateMeteoblueNEMSCloudPrecipLayers' idSuffixes ordering
+// (today, onedayahead, twodayahead, ...), which weeklySeries is built
+// from in the same order.
+const _DAY_WISE_LABELS = ["Today", "+1d", "+2d", "+3d", "+4d", "+5d", "+6d", "+7d"];
+function _dayWiseRowsMarkup(weeklySeries) {
+  if (!Array.isArray(weeklySeries) || !weeklySeries.length) return "";
+  const rows = weeklySeries.map((p, i) => `
+    <tr>
+      <td>${_escapeHtml(_DAY_WISE_LABELS[i] || `+${i}d`)}</td>
+      <td>${_escapeHtml(String(p.date || "—"))}</td>
+      <td>${_hlNum(`${p.mm} mm`)}</td>
+    </tr>
+  `).join("");
+  return `
+    <div class="dwrp-table-label">Day-by-day forecast (Meteoblue weekly)</div>
+    <table class="dwrp-table">
+      <thead><tr><th>Day</th><th>Date</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
 
 function _showPrecipDistrictPopup(scene) {
   const e = scene.entry;
   const badgeVariant = e.mm >= 25 ? "severe" : e.mm > 0 ? "elevated" : "normal";
+  const peakLine = e.peakHour
+    ? `<div class="dwrp-summary-line dwrp-summary-secondary">Peak hourly rate (next ~10h): ${_hlNum(`${e.peakHour.mm} mm/h`)} around ${_escapeHtml(e.peakHour.date || "—")}</div>`
+    : "";
   _presentPopup(`
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
@@ -2997,49 +3485,106 @@ function _showPrecipDistrictPopup(scene) {
     <div class="dwrp-body">
       <div class="dwrp-heatwave-now">
         <span class="dwrp-heatwave-now-value">${_hlNum(`${e.mm} ${e.unit}`)}</span>
-        <span class="dwrp-heatwave-now-sub">forecast, next 12h</span>
+        <span class="dwrp-heatwave-now-sub">forecast, next 24h</span>
       </div>
+      ${peakLine}
       ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_dayWiseRowsMarkup(e.weeklySeries)}
     </div>
   `);
 }
 
-// Current inflow/outflow shown immediately (already in hand from the live
-// FFD feed); discharge history is fetched async and fills in below it once
-// available — same two-phase "show now, fill in when ready" pattern as
-// weather-report-control.js's PMD Forecast section. `token`/`seq` guard
-// against the scene having moved on before history resolves — checked
-// via #dwr-ffd-hist-* still existing in the DOM, which _presentPopup's
-// full-innerHTML replacement already guarantees is false once a different
-// scene's popup has replaced this one.
-function _showFfdBarragePopup(scene, token, seq) {
+// Shows the REAL FFD popup — buildFfdPopupContent/setupFfdPopupEventHandlers
+// (exported additively from layer-attribute-popup.js for exactly this) are
+// the SAME code a real map click on an ffd_data gauge uses, so this is the
+// actual popup shell, actual "Show Graph" button with the actual outflow/
+// inflow bar chart, not a lookalike. The graph is auto-opened (dispatching
+// a real click on the button it just rendered) rather than waiting for the
+// operator — same reasoning the heatwave stats panel auto-opens itself.
+// Discharge history is layered in below it, fetched async and filled in
+// once available (unchanged from before): `token`/`seq` guard against the
+// scene having moved on — checked via #dwr-ffd-hist-* still existing in
+// the DOM, which _presentPopup's full-innerHTML replacement already
+// guarantees is false once a different scene's popup has replaced this one.
+async function _showFfdBarragePopup(scene, token, seq) {
   const wp = scene.waypoint;
   const props = wp.properties || {};
-  const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
-  const inflow = props.inflow_discharge ?? "n/a";
-  const status = props.status || "";
+  const { primary, drawer } = buildFfdPopupContent(props);
   const near = _nearestPrecipSample(wp, scene.precipSamples || _state.topPrecipDistricts);
   const precipNote = near
     ? `<div class="dwrp-live-note">Nearby forecast: ${_hlNum(`${near.name} — ${near.mm} ${near.unit}`)}</div>`
     : "";
   const historyId = `dwr-ffd-hist-${Math.random().toString(36).slice(2, 9)}`;
+  const geoglowsId = `dwr-ffd-geoglows-${Math.random().toString(36).slice(2, 9)}`;
   _presentPopup(`
-    <div class="dwrp-head">
-      <span class="dwrp-dot" aria-hidden="true"></span>
-      <span class="dwrp-title">${_escapeHtml(wp.name)}</span>
-      <span class="dwrp-badge">${_escapeHtml(wp.province || status || "FFD")}</span>
+    <div class="ncop-popup__primary">
+      <div class="ncop-popup__primary-content">${primary}</div>
     </div>
-    <div class="dwrp-body">
-      <div class="dwrp-heatwave-now">
-        <span class="dwrp-heatwave-now-value">${_hlNum(`${outflow} cusecs`)}</span>
-        <span class="dwrp-heatwave-now-sub">outflow · inflow ${_escapeHtml(String(inflow))} cusecs</span>
+    <div class="ncop-popup__body-scroll">
+      ${drawer}
+      <div class="dwrp-body">
+        ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+        ${precipNote}
       </div>
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
-      ${precipNote}
+      <div class="dwrp-table-label">Discharge history</div>
+      <div id="${historyId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
+      <div class="dwrp-table-label">GeoGLOWS river forecast</div>
+      <div id="${geoglowsId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
     </div>
-    <div class="dwrp-table-label">Discharge history</div>
-    <div id="${historyId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
   `);
+
+  // Best-effort: never let a graph-rendering hiccup break scene playback.
+  try {
+    setupFfdPopupEventHandlers();
+    const graphBtn = _state.popupEl?.querySelector(".show-ffd-graph");
+    if (graphBtn) graphBtn.click();
+  } catch (_) {}
+
+  // AWAITED (not fire-and-forget, unlike discharge history below) — the
+  // caller (_runFfdBarrage) awaits this whole function, and _gotoScene's
+  // auto-advance timer only starts once scene entry fully resolves, so
+  // the barrage scene holds on this station until the GeoGLOWS forecast
+  // has actually loaded (bounded by GEOGLOWS_FETCH_TIMEOUT_MS so a slow/
+  // unreachable upstream can't stall the story indefinitely).
+  try {
+    const gg = await _fetchGeoglowsForecast(wp);
+    if (_isStale(token, seq)) return;
+    const el = document.getElementById(geoglowsId);
+    if (el) {
+      if (!gg) {
+        el.textContent = "GeoGLOWS forecast unavailable for this location.";
+      } else {
+        const fmt = (iso) => {
+          const d = new Date(iso);
+          return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        };
+        const row = (label, p) => p ? `
+          <tr>
+            <td>${_escapeHtml(label)}</td>
+            <td>${_hlNum(`${_cusecs(p.cms)} cusecs`)}</td>
+            <td>${_escapeHtml(fmt(p.date))}</td>
+          </tr>` : "";
+        el.outerHTML = `
+          <div id="${geoglowsId}">
+            <table class="dwrp-table">
+              <thead><tr><th>Horizon</th><th>Median flow</th><th>Valid</th></tr></thead>
+              <tbody>
+                ${row("Now", gg.now)}
+                ${row("+24h", gg.day1)}
+                ${row("+72h", gg.day3)}
+                ${row("+7d", gg.day7)}
+                ${row("Peak (15d)", gg.peak)}
+              </tbody>
+            </table>
+            <div class="dwrp-summary-line dwrp-summary-secondary">Approximation — from GeoGLOWS' simulated reach nearest this station (river ID ${gg.riverId}), not a direct instrument reading. Uncertainty band at "Now": ${_cusecs(gg.now?.lowCms)}–${_cusecs(gg.now?.highCms)} cusecs.</div>
+          </div>
+        `;
+      }
+    }
+  } catch (_) {
+    const el = document.getElementById(geoglowsId);
+    if (el) el.textContent = "GeoGLOWS forecast unavailable.";
+  }
 
   _fetchFfdHistory(wp.name).then((points) => {
     if (_isStale(token, seq)) return;
@@ -3353,15 +3898,16 @@ async function _loadAndPlay(card) {
   card.querySelector(".dwr-chapter-title").textContent = "Dynamic Weather Report";
   card.querySelector(".dwr-chapter-counter").textContent = "";
 
-  let report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations;
+  let report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations, ffdRivers;
   try {
-    [report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations] = await Promise.all([
+    [report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
       _fetchRainfallReport(),
       getNwfcObservations().catch(() => null),
       _fetchGdeltNews(), // best-effort — never rejects, resolves [] on any failure
       _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
       _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
       _fetchFfdStations(), // best-effort — resolves null on any failure
+      getFfdRivers().catch(() => null), // best-effort — feeds the on-map catchment-polygon visual layer only, not the barrage-tour camera path (see _buildFfdWaypoints)
     ]);
   } catch (e) {
     if (token !== _state.runToken) return;
@@ -3380,12 +3926,20 @@ async function _loadAndPlay(card) {
   _state.heatwaveStations = heatwaveStations;
   _state.maxTempRecords = maxTempRecords || [];
   _state.ffdStations = ffdStations;
-  // Chapter 3's precip-sample step awaits real network calls, so this is
-  // the one scene-build pass in the whole file that isn't instant —
-  // still fast (bounded to ~21 candidate districts at 4x concurrency).
-  _state.scenes = await _buildScenes(report, observations, newsArticles); // also sets _state.discussedDistricts / hottestStations / topPrecipDistricts / ffdWaypoints
+  _state.ffdRivers = ffdRivers;
+
+  // Each chapter loads and confirms-displays ONLY its own layers, at its
+  // own start, and tears down the previous chapter's — see _runIntro
+  // (Chapter 1: DWD + NWFC observations), _runChapter2Intro (Chapter 2:
+  // 2m Temperature + Heatwave Monitoring), and _runChapter3Intro
+  // (Chapter 3: Meteoblue weekly (visual) + FFD/rivers + Meteoblue-for-values, the
+  // last of which is also where Chapter 3's own scenes get built — see
+  // _buildChapter3Scenes — since their district values depend on that
+  // Meteoblue sampling pass having already run).
+  _state.scenes = await _buildScenes(report, observations, newsArticles); // also sets _state.discussedDistricts / hottestStations
   if (token !== _state.runToken) return;
   _state.index = 0;
+  _state.chapter3ScenesBuilt = false; // fresh load — Chapter 3's scenes get (re)built the next time ch3-intro is reached
   _setSpeed(1, 1); // fresh load always starts at normal forward speed, regardless of a prior session
   _prepareDistrictHighlight(_state.discussedDistricts);
 
