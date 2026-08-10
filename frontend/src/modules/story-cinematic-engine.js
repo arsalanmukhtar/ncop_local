@@ -263,6 +263,106 @@ export function orbitAroundPoint(map, center, opts = {}) {
 }
 
 /**
+ * Free-camera flythrough along a path of waypoints — the same technique
+ * as Mapbox's own "Animate camera along a path" example
+ * (https://docs.mapbox.com/mapbox-gl-js/example/free-camera-path/):
+ * map.setFreeCameraOptions + MercatorCoordinate, stepped by elapsed
+ * DISTANCE along the path rather than by waypoint index, so pacing stays
+ * roughly constant even when waypoints are unevenly spaced — real
+ * north-to-south barrage spacing varies a lot along the Indus. The
+ * camera looks a little ahead of its own position (ground-level target,
+ * `lookAheadFrac` of the path further on) rather than straight down,
+ * which is what actually reads as "flying along a route" instead of
+ * hovering in place.
+ *
+ * `waypoints`: [{ center: [lng,lat], altitude? }] — altitude in meters,
+ * falls back to opts.altitudeMeters per-point when omitted so callers
+ * can rise/dip over specific stops without setting it on every point.
+ * Resolves once the flythrough completes; no-ops safely (resolves
+ * immediately) if the free-camera API isn't available or fewer than 2
+ * waypoints are given.
+ */
+export function flyAlongPath(map, waypoints, opts = {}) {
+  return new Promise((resolve) => {
+    const MercatorCoordinate = window.mapboxgl?.MercatorCoordinate;
+    if (!map || typeof map.setFreeCameraOptions !== "function" || typeof map.getFreeCameraOptions !== "function" || !MercatorCoordinate || !Array.isArray(waypoints) || waypoints.length < 2) {
+      resolve();
+      return;
+    }
+    const {
+      durationMs = 6000,
+      altitudeMeters = 3500,
+      // Fraction of the TOTAL path length the camera looks ahead of its
+      // own position. Smaller = steeper/more downward pitch; larger =
+      // shallower, more horizon-facing.
+      lookAheadFrac = 0.08,
+    } = opts;
+
+    // Segment distances via the same small-angle equirectangular approx
+    // orbitAroundPoint uses above — fine at the country-scale spacing
+    // between barrages; no turf dependency needed for this.
+    const segLens = [];
+    let total = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const [lng1, lat1] = waypoints[i].center;
+      const [lng2, lat2] = waypoints[i + 1].center;
+      const metersPerDegLat = 111320;
+      const metersPerDegLng = 111320 * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180)) || 1;
+      const dx = (lng2 - lng1) * metersPerDegLng;
+      const dy = (lat2 - lat1) * metersPerDegLat;
+      segLens.push(Math.sqrt(dx * dx + dy * dy) || 1);
+      total += segLens[segLens.length - 1];
+    }
+    if (total <= 0) { resolve(); return; }
+
+    function pointAtDistance(dist) {
+      let d = Math.max(0, Math.min(total, dist));
+      let i = 0;
+      while (i < segLens.length - 1 && d > segLens[i]) { d -= segLens[i]; i++; }
+      const a = waypoints[i];
+      const b = waypoints[i + 1] || a;
+      const segLen = segLens[i] || 1;
+      const t = segLen ? d / segLen : 0;
+      return {
+        lng: a.center[0] + (b.center[0] - a.center[0]) * t,
+        lat: a.center[1] + (b.center[1] - a.center[1]) * t,
+        alt: (a.altitude ?? altitudeMeters) + ((b.altitude ?? altitudeMeters) - (a.altitude ?? altitudeMeters)) * t,
+      };
+    }
+
+    let done = false;
+    const finish = () => { if (done) return; done = true; resolve(); };
+    const safety = setTimeout(finish, durationMs + 2000);
+    const start = performance.now();
+
+    function frame(now) {
+      if (done) return;
+      const t = Math.min(1, (now - start) / durationMs);
+      const dist = EASE_IN_OUT_CUBIC(t) * total;
+      const here  = pointAtDistance(dist);
+      const ahead = pointAtDistance(Math.min(total, dist + total * lookAheadFrac));
+      try {
+        const camera = map.getFreeCameraOptions();
+        camera.position = MercatorCoordinate.fromLngLat([here.lng, here.lat], here.alt);
+        camera.lookAtPoint({ lng: ahead.lng, lat: ahead.lat });
+        map.setFreeCameraOptions(camera);
+      } catch (_) {
+        clearTimeout(safety);
+        finish();
+        return;
+      }
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        clearTimeout(safety);
+        finish();
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/**
  * Fades in Mapbox GL's built-in precipitation rain effect (map.setRain),
  * gated to zoom 11-13 exactly like Mapbox's own "Add 3D rain" example —
  * an expression on density/vignette ramps it in over that zoom range, so

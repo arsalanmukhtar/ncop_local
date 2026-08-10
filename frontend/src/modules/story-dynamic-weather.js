@@ -68,7 +68,7 @@
 //      a code change).
 // ==========================================================================
 
-import { getNwfcObservations, getNwfcMaxTemperatures } from "./gcop-api-cache.js";
+import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels } from "./gcop-api-cache.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 import { showHeatwaveModalForCity, hideHeatwaveModal } from "./layer-attribute-popup.js";
 import {
@@ -81,6 +81,7 @@ import {
   disableCinematicAtmosphere,
   pulseElement,
   orbitAroundPoint,
+  flyAlongPath,
   enableRainEffect,
   disableRainEffect,
 } from "./story-cinematic-engine.js";
@@ -111,6 +112,17 @@ const TEMP_ITEM_KEY = "pmd_pred_temp2m";
 // TOGGLE item (same pattern as OBS_ITEM_KEY in Chapter 1) — displayed
 // alongside/on top of the temperature raster during the station tour.
 const HEATWAVE_ITEM_KEY = "heatwave_monitoring";
+
+// CHAPTER 3 — Forecasted Precipitation Outlook. Two independent halves:
+// (a) the 12h Precipitation WRF raster (pmd_pred_twelvetpe), sampled for
+// real district-level values via the value-endpoint built for exactly
+// this purpose (PmdMonitorPredictionValueAPIView — see
+// _fetchPmdForecastValue below), and (b) a north-to-south cinematic tour
+// of FFD barrages/dams (TOGGLE item, same activation pattern as
+// HEATWAVE_ITEM_KEY) using their live inflow/outflow readings plus a
+// best-effort discharge history (see _fetchFfdHistory).
+const PRECIP_ITEM_KEY = "pmd_pred_twelvetpe";
+const FFD_ITEM_KEY = "ffd_data";
 
 // District-boundary blink overlay — same `district_boundary` vector
 // source story-provincial-forecast.js highlights, but a fully separate
@@ -154,6 +166,9 @@ const _state = {
   heatwaveStations: null, // Heatwave Monitoring FeatureCollection — chapter 2's primary station source
   maxTempRecords: [],     // historical on-record max temperatures, best-effort (see _fetchMaxTempRecords)
   hottestStations: [],   // top temperature stations (>=5, all provinces) chapter 2 is covering
+  ffdStations: null,       // live FFD waterlevels FeatureCollection — chapter 3's barrage-tour source
+  topPrecipDistricts: [], // districts with the highest sampled 12h-precip forecast (see _fetchPrecipSamples)
+  ffdWaypoints: [],        // FFD barrages/dams sorted north-to-south, chapter 3's camera-path tour
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
   blinkTimer:  null,     // district-boundary blink interval
   blinkPhase:  false,
@@ -817,6 +832,150 @@ function _extractMaxTempRows(raw) {
   return rows.sort((a, b) => b.temp - a.temp);
 }
 
+// Chapter 3's FFD tour source — live inflow/outflow per barrage/dam
+// (same GCOP-backed feed the ffd_data map layer itself uses). Best-
+// effort: returns null on any failure, never throws.
+async function _fetchFfdStations() {
+  try {
+    const fc = await getFfdWaterlevels();
+    return fc && Array.isArray(fc.features) ? fc : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Point-value cache for the PMD Forecast value-endpoint — same purpose
+// and TTL reasoning as weather-report-control.js's identically-named
+// helper (a separate module, so not shared code, but deliberately the
+// same shape): each call is real backend GDAL file I/O, so nearby
+// samples across scene-build + any later re-render share one entry
+// instead of re-hitting the network. No step_index is passed — omitting
+// it makes the backend default to the earliest available forecast step,
+// which is exactly the "outlook starting now" framing this chapter wants.
+const PRECIP_VALUE_TTL_MS = 30 * 60 * 1000;
+const _precipValueCache = new Map();
+async function _fetchPmdForecastValue(elementKey, lat, lon) {
+  const key = `${elementKey}|${lat.toFixed(2)}|${lon.toFixed(2)}`;
+  const hit = _precipValueCache.get(key);
+  if (hit && Date.now() - hit.ts < PRECIP_VALUE_TTL_MS) return hit.data;
+  let data = null;
+  try {
+    const url = `${window.location.origin}/api/pmd/monitor/predictions/${elementKey}/value/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+    const r = await fetch(url, { credentials: "same-origin" });
+    if (r.ok) data = await r.json();
+  } catch (_) {
+    data = null;
+  }
+  _precipValueCache.set(key, { data, ts: Date.now() });
+  return data;
+}
+
+// Bounded-concurrency map — caps in-flight requests to the value
+// endpoint (real GDAL file I/O per call) instead of firing one fetch per
+// candidate district at once. Local to this module — weather-report-
+// control.js has its own identically-shaped copy, not shared code.
+async function _mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Samples 12h Precipitation forecast values at a bounded, nationally-
+// representative set of district centroids — up to 3 per province (reusing
+// _districtsGroupedByProvince purely as a geographic candidate pool; its
+// own mm_total-based ordering doesn't matter here since districts get
+// RE-ranked below by their sampled FORECAST value, not observed rain).
+// Coordinates come from the same live-station matching Chapter 1 already
+// relies on (_matchLiveStation) — a district only becomes a sample point
+// if it resolves to a real coordinate, same "never guess a location"
+// rule the rest of this file follows. Returns every successfully-sampled
+// district (sorted desc by forecast mm) — callers decide how many to
+// actually tour.
+async function _fetchPrecipSamples(report, liveFeatures) {
+  const byProvince = _districtsGroupedByProvince(report);
+  const candidates = [];
+  for (const [province, districts] of byProvince) {
+    for (const d of (districts || []).slice(0, 3)) {
+      const allStations = (report?.provinces?.[province]?.stations || [])
+        .filter((s) => s.name.split(" - ")[0] === d.name);
+      const live = allStations.map((s) => _matchLiveStation(s.name, liveFeatures)).find(Boolean);
+      if (live?.geometry?.coordinates) {
+        candidates.push({ name: d.name, province, coords: live.geometry.coordinates });
+      }
+    }
+  }
+  if (!candidates.length) return [];
+
+  const results = await _mapLimit(candidates, 4, async (c) => {
+    const [lng, lat] = c.coords;
+    const data = await _fetchPmdForecastValue(PRECIP_ITEM_KEY, lat, lng);
+    if (!data || data.value == null || !Number.isFinite(data.value)) return null;
+    return { name: c.name, province: c.province, coords: c.coords, mm: data.value, unit: data.unit || "mm", date: data.date || "" };
+  });
+  return results.filter(Boolean).sort((a, b) => b.mm - a.mm);
+}
+
+// Best-effort discharge history for one FFD barrage/dam — see
+// FfdHistoryAPIView (backend). Returns [] on any failure or when neither
+// backing source has anything yet; callers treat that as "no history",
+// never as an error.
+async function _fetchFfdHistory(name) {
+  try {
+    const url = `/get-ffd-history/?name=${encodeURIComponent(name)}`;
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.points) ? data.points : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+// FFD stations sorted north-to-south (descending latitude) — the
+// intended tour order per the operational brief ("north barrages into
+// the south one by one"). Real Pakistani barrage geography runs roughly
+// north-south along the Indus/tributaries, so plain latitude ordering is
+// a faithful, data-driven stand-in for a hand-curated route — no
+// hardcoded station list to keep in sync with whatever GCOP actually
+// returns.
+function _buildFfdWaypoints(ffdFC) {
+  const feats = (ffdFC?.features || []).filter((f) => f?.geometry?.coordinates);
+  return feats
+    .map((f) => ({
+      name: f.properties?.name || "Station",
+      province: f.properties?.province || "",
+      center: f.geometry.coordinates,
+      properties: f.properties || {},
+    }))
+    .sort((a, b) => b.center[1] - a.center[1]); // lat descending = north first
+}
+
+// Nearest sampled precip district to a barrage — simple planar distance
+// (fine at this scale, same approximation _featureCenter-style helpers
+// elsewhere in the app already use), for the "would forecast
+// precipitation affect this barrage's inflow" cross-reference. Returns
+// null if there are no precip samples at all or none within a loose
+// catchment radius (~2.5° ≈ 275 km — generous, since a barrage's real
+// catchment can span a wide upstream area, not just its own pin).
+function _nearestPrecipSample(waypoint, precipSamples) {
+  if (!precipSamples?.length) return null;
+  let best = null, bestD = Infinity;
+  for (const p of precipSamples) {
+    const dx = p.coords[0] - waypoint.center[0];
+    const dy = p.coords[1] - waypoint.center[1];
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return bestD <= 2.5 ? best : null;
+}
+
 function _normName(name) {
   return String(name || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -1195,10 +1354,106 @@ function _assessmentNarrative(report) {
   return bits.join(" ");
 }
 
+// ---- CHAPTER 3 narrative generation — Forecasted Precipitation Outlook.
+// Every figure here comes from a real sampled value (PmdMonitorPrediction-
+// ValueAPIView) or a live FFD reading — same "never invent a number"
+// discipline as Chapters 1 and 2. ----------------------------------------
+function _chapter3IntroNarrative() {
+  return "Chapter 3: the Forecasted Precipitation Outlook, drawn from PMD's 12-hour Precipitation WRF forecast, followed by a north-to-south tour of the FFD's monitored barrages and dams and how the outlook may affect their inflows.";
+}
+
+function _joinPrecipList(list) {
+  const parts = list.map((d) => `${d.name} (${d.mm} ${d.unit}, ${d.province})`);
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function _precipLayerNarrative(precipSamples) {
+  if (!precipSamples.length) {
+    return "The 12-hour precipitation forecast is not currently returning sampled values for any monitored district — the layer is shown for visual reference only.";
+  }
+  const lead = precipSamples[0];
+  const bits = [
+    `The 12-hour precipitation forecast points to the heaviest activity at ${lead.name} in ${lead.province}, at ${lead.mm} ${lead.unit}.`,
+  ];
+  const others = precipSamples.slice(1, 4).filter((d) => d.mm > 0);
+  if (others.length) bits.push(`Also expected to see rainfall: ${_joinPrecipList(others)}.`);
+  const dryCount = precipSamples.filter((d) => d.mm <= 0.1).length;
+  if (dryCount) bits.push(`${dryCount} of the ${precipSamples.length} sampled districts show no meaningful forecast precipitation.`);
+  return bits.join(" ");
+}
+
+function _precipDistrictNarrative(entry, precipSamples) {
+  const rank = precipSamples.findIndex((x) => x === entry) + 1;
+  const bits = [`${entry.name}, ${entry.province}, is forecast ${entry.mm} ${entry.unit} of precipitation over the next 12 hours.`];
+  bits.push(rank ? `Ranked #${rank} nationally among sampled districts.` : "");
+  bits.push(entry.mm >= 25
+    ? "This crosses the threshold PMD classifies as heavy rainfall — downstream river levels and low-lying areas warrant monitoring."
+    : entry.mm > 0
+      ? "A moderate accumulation, not expected to be operationally significant on its own."
+      : "No meaningful precipitation is forecast at this location for the coming window.");
+  return bits.filter(Boolean).join(" ");
+}
+
+function _precipAssessmentNarrative(precipSamples) {
+  const bits = ["Precipitation outlook assessment:"];
+  bits.push(precipSamples.length
+    ? `forecast rainfall over the coming hours centers on ${_joinPrecipList(precipSamples.slice(0, 3))}.`
+    : "no significant forecast precipitation signal is present in currently sampled districts.");
+  const heavy = precipSamples.find((d) => d.mm >= 25);
+  bits.push(heavy
+    ? `${heavy.name} crosses PMD's heavy-rainfall threshold — the FFD barrage tour that follows checks whether this outlook reaches any monitored catchment.`
+    : "No sampled district currently crosses the heavy-rainfall threshold.");
+  bits.push("Values are sampled directly from the 12-hour Precipitation WRF forecast raster, not estimated.");
+  return bits.join(" ");
+}
+
+function _ffdIntroNarrative(ffdWaypoints) {
+  if (!ffdWaypoints.length) {
+    return "FFD barrage and dam telemetry is not currently available — this tour will resume once the feed returns.";
+  }
+  return `A north-to-south tour of ${ffdWaypoints.length} FFD-monitored barrages and dams follows, from ${ffdWaypoints[0].name} down to ${ffdWaypoints[ffdWaypoints.length - 1].name}, with live inflow and outflow at each stop.`;
+}
+
+function _ffdBarrageNarrative(waypoint, precipSamples) {
+  const props = waypoint.properties || {};
+  const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
+  const inflow = props.inflow_discharge ?? "n/a";
+  const bits = [`${waypoint.name}${waypoint.province ? `, ${waypoint.province}` : ""}: outflow ${outflow} cusecs, inflow ${inflow} cusecs.`];
+  if (props.status) bits.push(`Current status: ${props.status}.`);
+  const near = _nearestPrecipSample(waypoint, precipSamples);
+  if (near && near.mm > 0) {
+    bits.push(`Forecast precipitation nearby at ${near.name} (${near.mm} ${near.unit}) ${near.mm >= 25 ? "may push inflows higher over the coming hours." : "is not expected to significantly affect inflows."}`);
+  } else {
+    bits.push("No significant forecast precipitation is expected in this barrage's nearby catchment.");
+  }
+  return bits.join(" ");
+}
+
+function _ffdAssessmentNarrative(ffdWaypoints) {
+  if (!ffdWaypoints.length) return "FFD tour assessment unavailable — no station telemetry was returned.";
+  const bits = ["FFD barrage tour assessment:"];
+  const highest = ffdWaypoints.slice().sort((a, b) => {
+    const av = Number(a.properties?.outflow_discharge ?? a.properties?.discharge ?? 0);
+    const bv = Number(b.properties?.outflow_discharge ?? b.properties?.discharge ?? 0);
+    return bv - av;
+  })[0];
+  if (highest) {
+    const v = highest.properties?.outflow_discharge ?? highest.properties?.discharge ?? "n/a";
+    bits.push(`${highest.name} currently reports the highest outflow among monitored barrages, at ${v} cusecs.`);
+  }
+  const alert = ffdWaypoints.find((w) => w.properties?.status && !/normal/i.test(String(w.properties.status)));
+  bits.push(alert
+    ? `${alert.name} is reporting a "${alert.properties.status}" status — continued monitoring is warranted.`
+    : "All monitored barrages currently report normal flow status.");
+  bits.push("Readings are live FFD telemetry; the preceding precipitation outlook determines whether inflows are likely to rise.");
+  return bits.join(" ");
+}
+
 // ==========================================================================
 // Scene construction — a flat, ordered list built once the data loads.
 // ==========================================================================
-function _buildScenes(report, observationsFC, newsArticles) {
+async function _buildScenes(report, observationsFC, newsArticles) {
   const liveFeatures = observationsFC?.features || [];
   const scenes = [
     { kind: "intro", chapter: 1, caption: _introNarrative(newsArticles) },
@@ -1291,6 +1546,49 @@ function _buildScenes(report, observationsFC, newsArticles) {
   }
   scenes.push({ kind: "temp-assessment", chapter: 2, caption: _tempAssessmentNarrative(hottest) });
 
+  // ---- CHAPTER 3 — Forecasted Precipitation Outlook ------------------
+  // Two independent halves, built from data neither Chapter 1 nor 2
+  // touches: (a) sampled 12h-precipitation forecast values per district
+  // (_fetchPrecipSamples — the only scene-build step in this whole file
+  // that awaits a network call, since the value-endpoint has to be
+  // sampled per candidate district rather than coming pre-resolved like
+  // Chapters 1/2's report-based data), and (b) the live FFD barrage/dam
+  // feed already fetched in _loadAndPlay (_state.ffdStations).
+  const precipSamples = await _fetchPrecipSamples(report, liveFeatures);
+  _state.topPrecipDistricts = precipSamples;
+
+  scenes.push({ kind: "ch3-intro", chapter: 3, caption: _chapter3IntroNarrative() });
+  scenes.push({ kind: "precip-layer", chapter: 3, precipSamples, caption: _precipLayerNarrative(precipSamples) });
+  let addedPrecip = 0;
+  for (const entry of precipSamples) {
+    if (addedPrecip >= 6) break;
+    if (!entry.coords) continue; // nowhere real to fly the camera
+    scenes.push({ kind: "precip-district", chapter: 3, entry, precipSamples, caption: _precipDistrictNarrative(entry, precipSamples) });
+    addedPrecip += 1;
+  }
+  scenes.push({ kind: "precip-assessment", chapter: 3, precipSamples, caption: _precipAssessmentNarrative(precipSamples) });
+
+  // FFD barrage tour — only built when the live feed actually returned
+  // stations; an empty/unavailable feed just skips straight past this
+  // (Chapter 3 still has its full precipitation half either way) rather
+  // than pushing a tour with nothing to show.
+  const ffdWaypoints = _buildFfdWaypoints(_state.ffdStations);
+  _state.ffdWaypoints = ffdWaypoints;
+  if (ffdWaypoints.length) {
+    scenes.push({ kind: "ffd-intro", chapter: 3, caption: _ffdIntroNarrative(ffdWaypoints) });
+    ffdWaypoints.forEach((wp, i) => {
+      scenes.push({
+        kind: "ffd-barrage",
+        chapter: 3,
+        waypoint: wp,
+        prevWaypoint: i > 0 ? ffdWaypoints[i - 1] : null,
+        precipSamples,
+        caption: _ffdBarrageNarrative(wp, precipSamples),
+      });
+    });
+    scenes.push({ kind: "ffd-assessment", chapter: 3, caption: _ffdAssessmentNarrative(ffdWaypoints) });
+  }
+
   return scenes;
 }
 
@@ -1322,6 +1620,13 @@ function _sceneTitle(scene) {
     case "temp-layer":      return "2m Temperature — Past 24 Hours";
     case "temp-station":    return `Station Focus — ${scene.entry.feature.properties?.name}${scene.entry.province ? ` (${scene.entry.province})` : ""}`;
     case "temp-assessment": return "National Temperature Assessment";
+    case "ch3-intro":       return "Chapter 3 — Forecasted Precipitation Outlook";
+    case "precip-layer":    return "12h Precipitation Forecast";
+    case "precip-district": return `Forecast Focus — ${scene.entry.name} (${scene.entry.province})`;
+    case "precip-assessment": return "Precipitation Outlook Assessment";
+    case "ffd-intro":       return "FFD Barrage & Dam Tour";
+    case "ffd-barrage":     return `${scene.waypoint.name}${scene.waypoint.province ? ` (${scene.waypoint.province})` : ""}`;
+    case "ffd-assessment":  return "FFD Tour Assessment";
     default:                return "Dynamic Weather Report";
   }
 }
@@ -1350,7 +1655,7 @@ function _renderSceneBody(card, scene) {
   } else if (scene.kind === "province-overview") {
     const pills = (scene.topDistricts || []).map((d) => `${d.name}: ${d.mm_total} mm`);
     factsHtml = pills.length ? `<div class="dwr-facts">${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>` : "";
-  } else if (scene.kind === "radar" || scene.kind === "temp-layer") {
+  } else if (scene.kind === "radar" || scene.kind === "temp-layer" || scene.kind === "precip-layer") {
     factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill dwr-frame-pill">Frame <span class="dwr-frame-value">—</span></span></div>`;
   } else if (scene.kind === "assessment") {
     const report = _state.report;
@@ -1368,6 +1673,21 @@ function _renderSceneBody(card, scene) {
   } else if (scene.kind === "temp-assessment") {
     const lead = _state.hottestStations?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill is-alert">${_hlNum(`${lead.temp}°C`)} peak reading</span></div>` : "";
+  } else if (scene.kind === "precip-district") {
+    const e = scene.entry;
+    const pillClass = e.mm >= 25 ? "dwr-fact-pill is-alert" : "dwr-fact-pill";
+    factsHtml = `<div class="dwr-facts"><span class="${pillClass}">${_hlNum(`${e.mm} ${e.unit}`)} forecast (12h)</span></div>`;
+  } else if (scene.kind === "precip-assessment") {
+    const lead = (scene.precipSamples || _state.topPrecipDistricts)?.[0];
+    factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill${lead.mm >= 25 ? " is-alert" : ""}">${_hlNum(`${lead.mm} ${lead.unit}`)} leading forecast</span></div>` : "";
+  } else if (scene.kind === "ffd-barrage") {
+    const props = scene.waypoint.properties || {};
+    const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
+    const inflow = props.inflow_discharge ?? "n/a";
+    factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill">${_hlNum(`${outflow} cusecs`)} outflow</span><span class="dwr-fact-pill">${_hlNum(`${inflow} cusecs`)} inflow</span></div>`;
+  } else if (scene.kind === "ffd-assessment") {
+    const wp = (_state.ffdWaypoints || [])[0];
+    factsHtml = wp ? `<div class="dwr-facts"><span class="dwr-fact-pill">${_state.ffdWaypoints.length} barrages monitored</span></div>` : "";
   }
   bodyEl.innerHTML = `<div class="dwr-caption">${_highlightNumbers(_escapeHtml(scene.caption || ""))}</div>${factsHtml}`;
 }
@@ -1540,16 +1860,19 @@ function _showIntroPopup() {
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
       <span class="dwrp-title">About This Briefing</span>
-      <span class="dwrp-badge">2 Chapters</span>
+      <span class="dwrp-badge">3 Chapters</span>
     </div>
     <div class="dwrp-body">
-      A cinematic, data-driven walkthrough of Pakistan's most recent weather picture — every figure traces back to a live PMD/NWFC source; nothing here is scripted or invented. Use the rewind/fast-forward buttons on the transport bar to change playback speed (1x-5x) in either direction.
+      A cinematic, data-driven walkthrough of Pakistan's most recent weather picture — every figure traces back to a live PMD/NWFC/FFD source; nothing here is scripted or invented. Use the rewind/fast-forward buttons on the transport bar to change playback speed (1x-5x) in either direction.
     </div>
     <div class="dwrp-table-label">Layers used in this briefing</div>
     <div class="dwrp-chips">
       <span class="dwrp-chip">DWD Satellite Infrared</span>
       <span class="dwrp-chip">2m Temperature</span>
+      <span class="dwrp-chip">12h Precipitation</span>
       <span class="dwrp-chip">NWFC Station Observations</span>
+      <span class="dwrp-chip">Heatwave Monitoring</span>
+      <span class="dwrp-chip">FFD Data</span>
       <span class="dwrp-chip">District Boundaries</span>
     </div>
     <div class="dwrp-table-label">What happens next</div>
@@ -1557,7 +1880,8 @@ function _showIntroPopup() {
       1. Cinematic fly-in to Pakistan<br>
       2. Chapter 1 — satellite sweep + 24-hour rainfall stats, then a tour of the heaviest rainfall districts<br>
       3. Chapter 2 — 2m temperature outlook, then a tour of the hottest reporting stations<br>
-      4. Closing operational assessment for each chapter
+      4. Chapter 3 — 12h precipitation outlook, then a north-to-south flythrough of FFD-monitored barrages and dams<br>
+      5. Closing operational assessment for each chapter
     </div>
     ${_newsSectionHtml()}
     <div class="dwrp-body" style="font-size:10.5px;color:rgba(234,234,234,0.55);font-style:italic;">
@@ -1795,6 +2119,19 @@ async function _ensureObservationsOff() {
 async function _ensureHeatwaveLayerOn() {
   if (!window.sourceLayerControl || typeof window.sourceLayerControl.addLayerByKey !== "function") return;
   try { await window.sourceLayerControl.addLayerByKey(HEATWAVE_ITEM_KEY); } catch (_) { /* best-effort */ }
+}
+
+// Chapter 3's equivalent of _ensureHeatwaveLayerOn — turns on the FFD
+// Data TOGGLE layer for the barrage tour. Chapter 2's Heatwave Monitoring
+// layer has no reason to stay on into Chapter 3, mirroring the same
+// hand-off _ensureObservationsOff already does between Chapters 1 and 2.
+async function _ensureFfdLayerOn() {
+  if (!window.sourceLayerControl || typeof window.sourceLayerControl.addLayerByKey !== "function") return;
+  try { await window.sourceLayerControl.addLayerByKey(FFD_ITEM_KEY); } catch (_) { /* best-effort */ }
+}
+async function _ensureHeatwaveLayerOff() {
+  if (!window.sourceLayerControl || typeof window.sourceLayerControl.removeLayerByKey !== "function") return;
+  try { window.sourceLayerControl.removeLayerByKey(HEATWAVE_ITEM_KEY); } catch (_) { /* best-effort */ }
 }
 
 function _centroid(coords) {
@@ -2094,6 +2431,153 @@ async function _runTempAssessment(map) {
   disableCinematicAtmosphere(map);
 }
 
+// ==========================================================================
+// CHAPTER 3 — Forecasted Precipitation Outlook. First half mirrors
+// Chapters 1/2's "layer scene → district tour" structure exactly (same
+// _activateTemporalLayer/_playTemporalLoop/_frameDistrictCluster/
+// orbitAroundPoint choreography); second half is the FFD barrage tour,
+// which additionally uses flyAlongPath for the north-to-south travel
+// between consecutive stops.
+// ==========================================================================
+async function _runChapter3Intro(map, token, seq) {
+  // Chapter 2's own layer (Heatwave Monitoring) has no reason to stay on
+  // into Chapter 3 — same hand-off _ensureObservationsOff already does
+  // between Chapters 1 and 2.
+  _ensureHeatwaveLayerOff();
+  await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: 6, duration: _dur(2000) });
+}
+
+async function _runPrecipLayer(map, token, seq) {
+  try { hideHeatwaveModal(); } catch (_) {}
+  await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.7, pitch: 15, bearing: 0, duration: _dur(1800) });
+  if (_isStale(token, seq)) return;
+
+  const card = document.getElementById(CARD_ID);
+  const ready = await _activateTemporalLayer(map, PRECIP_ITEM_KEY, "12h Precipitation", token, seq, {
+    onSlow: () => _setLayerLoadingNote(card, "Generating 12h Precipitation forecast imagery — this can take up to a minute on first load…"),
+  });
+  _setLayerLoadingNote(card, null);
+  if (_isStale(token, seq)) return;
+  if (!ready) { _showPrecipLayerPopup(); return; }
+
+  const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
+  const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
+  for (const id of layerIds) {
+    try { map.setPaintProperty(id, "raster-opacity", 0); } catch (_) {}
+  }
+  await wait(150);
+  if (_isStale(token, seq)) return;
+  await Promise.all(layerIds.map((id) => fadeLayerOpacity(map, id, "raster-opacity", 0, 0.75, _dur(2000))));
+  if (_isStale(token, seq)) return;
+
+  _playTemporalLoop(token, seq);
+
+  // Blink every sampled district with a non-zero forecast — the districts
+  // this chapter's sampling step actually found precipitation at, not
+  // Chapter 1's observed-rainfall set (a fresh _prepareDistrictHighlight
+  // call cleanly takes over the same boundary-blink overlay).
+  const wetNames = (_state.topPrecipDistricts || [])
+    .filter((d) => d.mm > 0)
+    .map((d) => ({ name: d.name }));
+  _prepareDistrictHighlight(wetNames).then(() => { if (!_isStale(token, seq)) _startDistrictBlink(); });
+
+  _showPrecipLayerPopup();
+}
+
+async function _runPrecipDistrict(map, scene, token, seq) {
+  const coords = scene.entry?.coords;
+  if (!coords) return;
+
+  _prepareDistrictHighlight([{ name: scene.entry.name }]);
+
+  await Promise.all([
+    _frameDistrictCluster(map, [coords], {
+      pitch: 40,
+      bearing: (Math.random() * 30) - 15,
+      duration: 2600,
+    }),
+    _setActiveLayerOpacity(map, 0.4),
+  ]);
+  if (_isStale(token, seq)) return;
+
+  await orbitAroundPoint(map, coords, {
+    durationMs: _dur(3400),
+    radiusMeters: 16000,
+    altitudeMeters: 9500,
+    revolutions: 0.2,
+  });
+  if (_isStale(token, seq)) return;
+
+  const mapEl = document.getElementById("map");
+  if (mapEl) {
+    mapEl.classList.add("ncop-dwr-pulse-target");
+    setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
+  }
+  _showPrecipDistrictPopup(scene);
+}
+
+async function _runPrecipAssessment(map) {
+  _closePopup();
+  _clearDistrictOverlay();
+  disableRainEffect(map);
+  await _deactivateTemporalLayer(map, PRECIP_ITEM_KEY);
+  await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
+}
+
+// ---- FFD barrage/dam tour ----------------------------------------------
+async function _runFfdIntro(map, token, seq) {
+  await _ensureFfdLayerOn();
+  const first = _state.ffdWaypoints?.[0];
+  if (!first) return;
+  await cinematicFlyTo(map, { center: first.center, zoom: 6.2, pitch: 45, bearing: 0, duration: _dur(3200) });
+}
+
+async function _runFfdBarrage(map, scene, token, seq) {
+  _closePopup();
+  const wp = scene.waypoint;
+  if (!wp?.center) return;
+
+  if (scene.prevWaypoint?.center) {
+    // The literal "animate camera along a path" technique the operational
+    // brief pointed at — https://docs.mapbox.com/mapbox-gl-js/example/free-camera-path/
+    // — flown for the TRAVEL leg between consecutive barrages; each stop
+    // still gets its own settle + orbit + popup below, same beat as every
+    // other scene in this file.
+    await flyAlongPath(map, [
+      { center: scene.prevWaypoint.center, altitude: 12000 },
+      { center: wp.center, altitude: 8000 },
+    ], { durationMs: _dur(4200), lookAheadFrac: 0.35 });
+  } else {
+    await cinematicFlyTo(map, { center: wp.center, zoom: 7.5, pitch: 45, bearing: 0, duration: _dur(2600) });
+  }
+  if (_isStale(token, seq)) return;
+
+  // Re-establishes a clean angled view after the flythrough (whose last
+  // frames look nearly straight down as the look-ahead point converges on
+  // the arrival point itself) — same orbit beat every other station scene
+  // in this file ends on.
+  await orbitAroundPoint(map, wp.center, {
+    durationMs: _dur(3000),
+    radiusMeters: 12000,
+    altitudeMeters: 7000,
+    revolutions: 0.2,
+  });
+  if (_isStale(token, seq)) return;
+
+  const mapEl = document.getElementById("map");
+  if (mapEl) {
+    mapEl.classList.add("ncop-dwr-pulse-target");
+    setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
+  }
+  _showFfdBarragePopup(scene, token, seq);
+}
+
+async function _runFfdAssessment(map) {
+  _closePopup();
+  await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
+  disableCinematicAtmosphere(map);
+}
+
 // ---- Floating popup — shared shell, two content builders -----------------
 function _ensurePopup() {
   if (_state.popupEl && document.body.contains(_state.popupEl)) return _state.popupEl;
@@ -2352,6 +2836,117 @@ function _showTempStationPopup(scene) {
   }
 }
 
+// ---- CHAPTER 3 popups ----------------------------------------------------
+function _showPrecipLayerPopup() {
+  const samples = _state.topPrecipDistricts || [];
+  const rows = samples.slice(0, 8).map((d) => `
+    <tr>
+      <td>${_escapeHtml(d.name)}<div class="dwrp-district-prov">${_escapeHtml(d.province)}</div></td>
+      <td>${_hlNum(`${d.mm} ${d.unit}`)}</td>
+    </tr>
+  `).join("");
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">12h Precipitation Forecast</span>
+      <span class="dwrp-badge">Sampled</span>
+    </div>
+    <div class="dwrp-body">
+      ${rows ? `
+      <div class="dwrp-table-label">Highest forecast districts (sampled)</div>
+      <table class="dwrp-table">
+        <thead><tr><th>District</th><th>Forecast (12h)</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : `<div class="dwrp-summary-line">No forecast precipitation values could be sampled for currently reachable districts.</div>`}
+      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled directly from the PMD 12h Precipitation WRF forecast raster at each district's coordinate — same method as the Weather Report panel's PMD Forecast section.</div>
+    </div>
+  `);
+}
+
+function _showPrecipDistrictPopup(scene) {
+  const e = scene.entry;
+  const badgeVariant = e.mm >= 25 ? "severe" : e.mm > 0 ? "elevated" : "normal";
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">${_escapeHtml(e.name)}</span>
+      <span class="dwrp-badge dwrp-badge--${badgeVariant}">${_escapeHtml(e.province)}</span>
+    </div>
+    <div class="dwrp-body">
+      <div class="dwrp-heatwave-now">
+        <span class="dwrp-heatwave-now-value">${_hlNum(`${e.mm} ${e.unit}`)}</span>
+        <span class="dwrp-heatwave-now-sub">forecast, next 12h</span>
+      </div>
+      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+    </div>
+  `);
+}
+
+// Current inflow/outflow shown immediately (already in hand from the live
+// FFD feed); discharge history is fetched async and fills in below it once
+// available — same two-phase "show now, fill in when ready" pattern as
+// weather-report-control.js's PMD Forecast section. `token`/`seq` guard
+// against the scene having moved on before history resolves — checked
+// via #dwr-ffd-hist-* still existing in the DOM, which _presentPopup's
+// full-innerHTML replacement already guarantees is false once a different
+// scene's popup has replaced this one.
+function _showFfdBarragePopup(scene, token, seq) {
+  const wp = scene.waypoint;
+  const props = wp.properties || {};
+  const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
+  const inflow = props.inflow_discharge ?? "n/a";
+  const status = props.status || "";
+  const near = _nearestPrecipSample(wp, scene.precipSamples || _state.topPrecipDistricts);
+  const precipNote = near
+    ? `<div class="dwrp-live-note">Nearby forecast: ${_hlNum(`${near.name} — ${near.mm} ${near.unit}`)}</div>`
+    : "";
+  const historyId = `dwr-ffd-hist-${Math.random().toString(36).slice(2, 9)}`;
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">${_escapeHtml(wp.name)}</span>
+      <span class="dwrp-badge">${_escapeHtml(wp.province || status || "FFD")}</span>
+    </div>
+    <div class="dwrp-body">
+      <div class="dwrp-heatwave-now">
+        <span class="dwrp-heatwave-now-value">${_hlNum(`${outflow} cusecs`)}</span>
+        <span class="dwrp-heatwave-now-sub">outflow · inflow ${_escapeHtml(String(inflow))} cusecs</span>
+      </div>
+      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${precipNote}
+    </div>
+    <div class="dwrp-table-label">Discharge history</div>
+    <div id="${historyId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
+  `);
+
+  _fetchFfdHistory(wp.name).then((points) => {
+    if (_isStale(token, seq)) return;
+    const el = document.getElementById(historyId);
+    if (!el) return; // popup already replaced by a different scene
+    if (!points.length) {
+      el.textContent = "No discharge history available from any connected source.";
+      return;
+    }
+    const recent = points.slice(-6);
+    const rows = recent.map((p) => `
+      <tr>
+        <td>${_escapeHtml(String(p.date || ""))}</td>
+        <td>${_escapeHtml(String(p.outflow ?? "—"))}</td>
+        <td>${_escapeHtml(String(p.inflow ?? "—"))}</td>
+      </tr>
+    `).join("");
+    el.outerHTML = `
+      <table class="dwrp-table" id="${historyId}">
+        <thead><tr><th>When</th><th>Outflow</th><th>Inflow</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }).catch(() => {
+    const el = document.getElementById(historyId);
+    if (el) el.textContent = "Discharge history unavailable.";
+  });
+}
+
 function _closePopup() {
   const el = _state.popupEl;
   if (!el) return;
@@ -2440,6 +3035,33 @@ async function _enterScene(card, scene, token, seq) {
     } else if (scene.kind === "temp-assessment") {
       if (_isStale(token, seq)) return;
       await _runTempAssessment(map);
+    } else if (scene.kind === "ch3-intro") {
+      await _runChapter3Intro(map, token, seq);
+    } else if (scene.kind === "precip-layer") {
+      await _runPrecipLayer(map, token, seq);
+    } else if (scene.kind === "precip-district") {
+      if (_isStale(token, seq)) return;
+      const prevKind = _state.scenes[_state.index - 1]?.kind;
+      if (prevKind === "precip-layer") {
+        // Same pattern as every other layer->station handoff in this file
+        // — the layer stays ON (paused at its current frame), only the
+        // popup content swaps.
+        _closePopup();
+        await wait(320);
+      }
+      await _runPrecipDistrict(map, scene, token, seq);
+    } else if (scene.kind === "precip-assessment") {
+      if (_isStale(token, seq)) return;
+      await _runPrecipAssessment(map);
+    } else if (scene.kind === "ffd-intro") {
+      if (_isStale(token, seq)) return;
+      await _runFfdIntro(map, token, seq);
+    } else if (scene.kind === "ffd-barrage") {
+      if (_isStale(token, seq)) return;
+      await _runFfdBarrage(map, scene, token, seq);
+    } else if (scene.kind === "ffd-assessment") {
+      if (_isStale(token, seq)) return;
+      await _runFfdAssessment(map);
     }
   } catch (_) { /* best-effort — a camera/layer hiccup shouldn't stall the whole briefing */ }
 }
@@ -2609,14 +3231,15 @@ async function _loadAndPlay(card) {
   card.querySelector(".dwr-chapter-title").textContent = "Dynamic Weather Report";
   card.querySelector(".dwr-chapter-counter").textContent = "";
 
-  let report, observations, newsArticles, heatwaveStations, maxTempRecords;
+  let report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations;
   try {
-    [report, observations, newsArticles, heatwaveStations, maxTempRecords] = await Promise.all([
+    [report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations] = await Promise.all([
       _fetchRainfallReport(),
       getNwfcObservations().catch(() => null),
       _fetchGdeltNews(), // best-effort — never rejects, resolves [] on any failure
       _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
       _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
+      _fetchFfdStations(), // best-effort — resolves null on any failure
     ]);
   } catch (e) {
     if (token !== _state.runToken) return;
@@ -2634,7 +3257,12 @@ async function _loadAndPlay(card) {
   _state.newsArticles = newsArticles || [];
   _state.heatwaveStations = heatwaveStations;
   _state.maxTempRecords = maxTempRecords || [];
-  _state.scenes = _buildScenes(report, observations, newsArticles); // also sets _state.discussedDistricts / hottestStations
+  _state.ffdStations = ffdStations;
+  // Chapter 3's precip-sample step awaits real network calls, so this is
+  // the one scene-build pass in the whole file that isn't instant —
+  // still fast (bounded to ~21 candidate districts at 4x concurrency).
+  _state.scenes = await _buildScenes(report, observations, newsArticles); // also sets _state.discussedDistricts / hottestStations / topPrecipDistricts / ffdWaypoints
+  if (token !== _state.runToken) return;
   _state.index = 0;
   _setSpeed(1, 1); // fresh load always starts at normal forward speed, regardless of a prior session
   _prepareDistrictHighlight(_state.discussedDistricts);

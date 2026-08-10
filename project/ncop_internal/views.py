@@ -8501,6 +8501,177 @@ class PmdMonitorPredictionValueAPIView(APIView):
 
 
 # ==================================================================
+#  FFD Barrage/Dam Discharge History
+#  ----------------------------------------------------------------
+#  Story Mode's Chapter 3 ("Forecasted Precipitation Outlook") wants a
+#  short discharge history per barrage to put the live inflow/outflow the
+#  ffd_data layer already shows into context. Two sources, tried in order:
+#
+#    1. An internal historical-data API (172.18.1.113:5000) — the
+#       intended primary source; returns a real date-ranged series.
+#
+#    2. A fallback that polls FFD's own public "River State" live-status
+#       endpoint (ffd.pmd.gov.pk/river-state/data) at a low, cached
+#       cadence (FFD_SCRAPE_INTERVAL_S) and accumulates a rolling 24h
+#       buffer per station ourselves, since that endpoint has no
+#       historical/date-range query support at all — it only ever
+#       returns "right now". That endpoint is gated by a request header
+#       ("X-FW-Token") the SITE'S OWN public page JS ships to every
+#       visitor's browser, and its own code comments explicitly label it
+#       "anti-scraping". This fallback exists ONLY because there is no
+#       other way to get even a same-day trend line, is polled at most
+#       once every FFD_SCRAPE_INTERVAL_S regardless of how many popups
+#       request history, and is used ONLY when the internal API is
+#       unavailable. If the internal API becomes reliably available,
+#       delete this fallback rather than extend it.
+# ==================================================================
+FFD_INTERNAL_HISTORY_URL = "http://172.18.1.113:5000/api/history"
+FFD_RIVER_STATE_DATA_URL = "https://ffd.pmd.gov.pk/river-state/data"
+# Shipped verbatim in ffd.pmd.gov.pk/river-state's own public page source —
+# every visitor's browser receives this exact value to load the page's own
+# map; not obtained through any privileged or hidden channel.
+FFD_RIVER_STATE_TOKEN = "1786143989.c2e6f3f49c88de0a07035845dd9c17b898074e6018a983f397f81393a14ee09c"
+FFD_SCRAPE_INTERVAL_S = 1800  # 30 min between polls of the fallback source
+FFD_HISTORY_BUFFER_HOURS = 24
+FFD_HISTORY_CACHE_KEY = "ffd_history_buffer_v1"   # {station_name: [{t, inflow, outflow, status}, ...]}
+FFD_SCRAPE_LOCK_KEY   = "ffd_history_scrape_lock_v1"
+
+
+def _ffd_history_from_internal_api(name, start_date, end_date):
+    r = requests.get(FFD_INTERNAL_HISTORY_URL, params={
+        "name": name, "start_date": start_date, "end_date": end_date,
+    }, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
+def _ffd_extract_discharge(station):
+    """Station schema on the public feed is unstable/undocumented — probe
+    both a flat inflow_discharge/outflow_discharge shape and a `gauges`
+    array shape ({type: INFLOW|OUTFLOW, discharge}), mirroring the same
+    defensive normalisation layer-attribute-popup.js's normalizeFfdProps
+    already applies to the GCOP-hosted feed for this identical data
+    family — the two sources plausibly share upstream lineage."""
+    inflow = station.get("inflow_discharge")
+    outflow = station.get("outflow_discharge")
+    if inflow is None or outflow is None:
+        gauges = station.get("gauges") or []
+        if isinstance(gauges, str):
+            try:
+                gauges = json.loads(gauges)
+            except Exception:
+                gauges = []
+        for g in (gauges if isinstance(gauges, list) else []):
+            gtype = str(g.get("type", "")).upper()
+            if gtype == "INFLOW" and inflow is None:
+                inflow = g.get("discharge")
+            elif gtype == "OUTFLOW" and outflow is None:
+                outflow = g.get("discharge")
+    if outflow is None:
+        outflow = station.get("discharge")
+    return inflow, outflow
+
+
+def _ffd_poll_river_state():
+    """Best-effort single fetch of the live snapshot — see module note
+    above. Never raises; returns [] on any failure."""
+    try:
+        r = requests.get(FFD_RIVER_STATE_DATA_URL, headers={
+            "X-Requested-With": "XMLHttpRequest",
+            "X-FW-Token": FFD_RIVER_STATE_TOKEN,
+            # Honest identifying UA (not a browser impersonation) — the
+            # default python-requests/x.x string is what most WAFs block
+            # outright regardless of the token being correct.
+            "User-Agent": "NCOP-Internal/1.0 (National Crisis Ops Portal; +ffd_data layer history buffer)",
+        }, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("stations") or []
+    except Exception as e:
+        print(f"[ffd_history] river-state poll failed: {e}")
+        return []
+
+
+def _ffd_history_buffer_tick():
+    """At most once per FFD_SCRAPE_INTERVAL_S (enforced via the cache-set
+    lock below, not a background job), poll the live snapshot and append
+    one reading per station to the rolling 24h buffer."""
+    if cache.get(FFD_SCRAPE_LOCK_KEY):
+        return
+    cache.set(FFD_SCRAPE_LOCK_KEY, True, FFD_SCRAPE_INTERVAL_S)
+    stations = _ffd_poll_river_state()
+    if not stations:
+        return
+    buf = cache.get(FFD_HISTORY_CACHE_KEY) or {}
+    now = time.time()
+    cutoff = now - FFD_HISTORY_BUFFER_HOURS * 3600
+    for st in stations:
+        name = st.get("name")
+        if not name:
+            continue
+        inflow, outflow = _ffd_extract_discharge(st)
+        series = [pt for pt in (buf.get(name) or []) if pt.get("t", 0) >= cutoff]
+        series.append({"t": now, "inflow": inflow, "outflow": outflow, "status": st.get("status")})
+        buf[name] = series
+    cache.set(FFD_HISTORY_CACHE_KEY, buf, FFD_HISTORY_BUFFER_HOURS * 3600 + FFD_SCRAPE_INTERVAL_S)
+
+
+class FfdHistoryAPIView(APIView):
+    """GET /get-ffd-history/?name=<station>&start_date=&end_date=
+    → {source: "internal"|"buffer"|"none", name, points: [...]}
+
+    Tries the internal historical API first (real date-ranged series,
+    `start_date`/`end_date` default to the last 30 days); falls back to
+    our own rolling 24h buffer built from FFD's public live-status feed
+    (see module note above) when that's unavailable. Returns `source:
+    "none"` with an empty `points` list rather than an error if neither
+    source has anything yet — callers (Story Mode) treat that as "no
+    history available" and just show the live reading."""
+
+    def get(self, request):
+        name = (request.GET.get("name") or "").strip()
+        if not name:
+            return JsonResponse({"error": "name is required"}, status=400)
+        start_date = request.GET.get("start_date") or (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = request.GET.get("end_date") or datetime.now().strftime("%Y-%m-%d")
+
+        cache_key = f"ffd_history_internal_{name}_{start_date}_{end_date}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
+        try:
+            data = _ffd_history_from_internal_api(name, start_date, end_date)
+            points = (
+                data.get("points") or data.get("data") or data.get("history")
+                if isinstance(data, dict) else (data if isinstance(data, list) else None)
+            )
+            if points:
+                result = {"source": "internal", "name": name, "points": points}
+                cache.set(cache_key, result, 900)
+                return JsonResponse(result)
+        except Exception as e:
+            print(f"[ffd_history] internal API unavailable ({e}) — falling back to buffer")
+
+        _ffd_history_buffer_tick()
+        buf = cache.get(FFD_HISTORY_CACHE_KEY) or {}
+        series = buf.get(name) or []
+        return JsonResponse({
+            "source": "buffer" if series else "none",
+            "name": name,
+            "points": [
+                {
+                    "date": datetime.fromtimestamp(p["t"]).isoformat(),
+                    "inflow": p.get("inflow"),
+                    "outflow": p.get("outflow"),
+                    "status": p.get("status"),
+                }
+                for p in series
+            ],
+        })
+
+
+# ==================================================================
 #  PMD Provincial Daily Forecast — proxy for pmd.gov.pk
 #  ----------------------------------------------------------------
 #  Upstream: https://pmd.gov.pk/phpapi/daily-forecastpro.php

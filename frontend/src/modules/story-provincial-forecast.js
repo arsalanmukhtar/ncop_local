@@ -1525,6 +1525,9 @@ function _bindCardEvents(card) {
   btn(".pf-refresh").addEventListener("click", () => {
     _story.started = true; // refreshing is an implicit start if it hadn't happened yet
     if (_inFlightFetch) return;
+    // An explicit operator-driven refresh should always hit the network,
+    // not silently serve the hour-old cache back to them.
+    _storyDataCache = null;
     _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
   });
   // Delegated click on dots for quick-jump.  A dot targets a DAY — we
@@ -2529,18 +2532,6 @@ function _probeProps(srcId, srcLayer, label) {
     const feats = map.querySourceFeatures(srcId, { sourceLayer: srcLayer }) || [];
     if (!feats.length) return; // no tiles yet — probe again later
     _propsProbed[label] = true;
-    const uniqueKeys = new Set();
-    const sample = {};
-    feats.slice(0, 25).forEach((f) => {
-      Object.keys(f.properties || {}).forEach((k) => {
-        uniqueKeys.add(k);
-        if (!(k in sample)) sample[k] = f.properties[k];
-      });
-    });
-    console.log(
-      `[story-forecast] ${label} tile props →`,
-      { keys: [...uniqueKeys], sample }
-    );
   } catch (_) { /* best-effort */ }
 }
 
@@ -2945,14 +2936,35 @@ function _startTick(card) {
   // has ~20 % buffer, but can happen), re-schedule in 2s chunks and
   // check again.  utter.onend is still the authoritative primary
   // advance signal — this is only a fallback / safety.
+  //
+  // Chrome's speechSynthesis has a well-documented failure mode where
+  // rapid cancel()+speak() calls (exactly what happens on every chapter
+  // change — see _speakChapterMessage) can leave speaking/pending wedged
+  // true forever, so onend never fires again for any future utterance.
+  // Before this cap, that meant this retry loop span forever — the
+  // "gets stuck on a specific step and the page becomes unresponsive"
+  // symptom, since nothing else was wrong except this one signal never
+  // arriving. MAX_SPEECH_RETRIES × 2s ≈ 24s of extra grace beyond the
+  // already-generous initial estimate before giving up on TTS for this
+  // step and force-advancing anyway.
+  const MAX_SPEECH_RETRIES = 12;
+  let speechRetries = 0;
   const advanceOrRecheck = () => {
     _story.tickTimer = null;
     const stillSpeaking = _story.ttsEnabled
       && window.speechSynthesis
       && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
-    if (stillSpeaking) {
+    if (stillSpeaking && speechRetries < MAX_SPEECH_RETRIES) {
+      speechRetries += 1;
       _story.tickTimer = setTimeout(advanceOrRecheck, 2000);
       return;
+    }
+    if (stillSpeaking) {
+      // Retry budget exhausted — the synthesis engine is presumed wedged
+      // rather than genuinely still narrating. Force it quiet so it can't
+      // keep blocking every subsequent chapter's advance the same way.
+      console.warn("[story] speechSynthesis appears stuck — forcing advance");
+      _stopSpeaking();
     }
     _goto(_story.index + 1, /*byUser*/ false);
   };
@@ -3315,7 +3327,6 @@ function _applyChapterWarningsOverlay() {
   if (src) {
     const feats = _story.currentWarnFeatures || [];
     src.setData({ type: "FeatureCollection", features: feats });
-    console.log("[story] overlay setData: " + feats.length + " features (fill layer=" + !!map.getLayer(WARN_FILL_ID) + ", line layer=" + !!map.getLayer(WARN_LINE_ID) + ")");
   } else {
     console.warn("[story] overlay: source", WARN_SRC_ID, "missing");
   }
@@ -3720,29 +3731,69 @@ function _teardownStoryWarningsOverlay() {
 // spinner.  Client cache (fetchGcopCached) makes re-opens instant.
 const WARNINGS_FETCH_TIMEOUT_MS = 60000;   // 60 s — the endpoint has been measured at 6–17 s cold; 30 s wasn't a comfortable safety margin
 
+// ---- Chapter data cache --------------------------------------------------
+// getNwfcWeeklyOutlook/getPmdWarnings are shared, generic helpers used
+// elsewhere in the app too (e.g. the live warnings map layer in
+// gcop-monitor-integration.js) with their own TTLs tuned for THAT use —
+// changing those globally would make the live map layer show stale
+// warnings, which is out of scope here. This is a story-local cache
+// sitting in FRONT of them instead: PMD Warnings alone can be ~30 MB and
+// 6-17s cold, and severe-weather warnings genuinely don't change
+// meaningfully minute-to-minute, so re-fetching on every story (re)open
+// within an hour is pure waste. A reopen within the window replays from
+// memory instantly; past it, one fresh fetch repopulates the cache for
+// the next hour. Only a genuinely successful outlook fetch refreshes the
+// cache — a failed attempt never overwrites a still-valid cached result
+// with nothing, and the next call simply retries instead of waiting out
+// the full hour.
+const STORY_DATA_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+let _storyDataCache = null; // { outlookRes, warningsRes, fetchedAt }
+
+async function _fetchOutlookAndWarnings() {
+  const now = Date.now();
+  if (_storyDataCache && (now - _storyDataCache.fetchedAt) < STORY_DATA_CACHE_TTL_MS) {
+    return _storyDataCache;
+  }
+
+  const outlookP = getNwfcWeeklyOutlook();
+  // The timeout branch's own setTimeout is always cleared once the race
+  // settles below — an uncleared one used to keep ticking in the
+  // background and log a misleading "timed out" message ~60s after
+  // every open regardless of outcome, even once the real fetch had
+  // already won.
+  let warningsTimeoutId = null;
+  const warningsTimeout = new Promise((resolve) => {
+    warningsTimeoutId = setTimeout(() => {
+      console.warn("[story] warnings fetch timed out");
+      resolve(null);
+    }, WARNINGS_FETCH_TIMEOUT_MS);
+  });
+  const warningsP = Promise.race([
+    getPmdWarnings().catch((e) => { console.warn("[story] getPmdWarnings threw", e); return null; }),
+    warningsTimeout,
+  ]).finally(() => { if (warningsTimeoutId) clearTimeout(warningsTimeoutId); });
+
+  const [outlookRes, warningsRes] = await Promise.allSettled([outlookP, warningsP]);
+  const result = { outlookRes, warningsRes, fetchedAt: now };
+  if (outlookRes.status === "fulfilled" && outlookRes.value && !outlookRes.value.error) {
+    _storyDataCache = result;
+  }
+  return result;
+}
+
 async function _fetchAndBuild(card) {
   const btn = card.querySelector(".pf-refresh");
   if (btn) btn.classList.add("is-loading");
   _pause();
 
   const warmCached = _story.warningsFC && _story.warningsFC.features.length > 0;
-  if (warmCached) {
-    _renderStatus(card, "Loading 7-day outlook…", false);
-  } else {
-    _renderStatus(card, "Loading 7-day outlook & PMD Weather Warnings… (may take up to 60 s on first open)", false);
-  }
-
-  console.log("[story] _fetchAndBuild start, warmCached =", warmCached);
-
-  const outlookP = getNwfcWeeklyOutlook();
-  const warningsP = Promise.race([
-    getPmdWarnings().catch((e) => { console.warn("[story] getPmdWarnings threw", e); return null; }),
-    new Promise((resolve) => setTimeout(() => { console.warn("[story] warnings fetch timed out"); resolve(null); }, WARNINGS_FETCH_TIMEOUT_MS)),
-  ]);
+  _renderStatus(card, warmCached
+    ? "Loading 7-day outlook…"
+    : "Loading 7-day outlook & PMD Weather Warnings… (may take up to 60 s on first open)", false);
+  console.log("[story] loading weekly outlook + PMD warnings…");
 
   try {
-    const [outlookRes, warningsRes] = await Promise.allSettled([outlookP, warningsP]);
-    console.log("[story] fetches settled — outlook:", outlookRes.status, "warnings:", warningsRes.status, "warningsRes.value:", warningsRes.value && (Array.isArray(warningsRes.value.features) ? `FC(${warningsRes.value.features.length})` : typeof warningsRes.value));
+    const { outlookRes, warningsRes } = await _fetchOutlookAndWarnings();
 
     if (outlookRes.status !== "fulfilled" || !outlookRes.value) {
       throw outlookRes.reason || new Error("Weekly outlook unavailable");
@@ -3755,7 +3806,6 @@ async function _fetchAndBuild(card) {
 
     if (warningsRes.status === "fulfilled" && warningsRes.value) {
       _story.warningsFC = _toFC(warningsRes.value);
-      console.log("[story] warningsFC set, features =", _story.warningsFC.features.length);
     } else if (!_story.warningsFC) {
       _story.warningsFC = { type: "FeatureCollection", features: [] };
       console.warn("[story] warningsFC empty — story will play overview-only");
@@ -3775,12 +3825,7 @@ async function _fetchAndBuild(card) {
     card.classList.remove("is-stale");
 
     const focusCount = _story.playable.filter((x) => x.type === "focus").length;
-    console.log("[story] built", _story.playable.length, "playback items (" + focusCount + " focus sub-chapters) across", chapters.length, "day chapters");
-    // Per-day sanity dump
-    chapters.forEach((c, i) => {
-      const n = (c._selectedFeatures || []).length;
-      console.log("[story]   day", i, c.date, "→", n, "features (provinces:", c.provinces.join(","), ")");
-    });
+    console.log(`[story] loaded and cached — ${chapters.length} days, ${_story.playable.length} scenes (${focusCount} warnings), ${_story.warningsFC.features.length} PMD warning features`);
 
     // Determine TTS preference — on first ever open, ask the operator;
     // on subsequent opens, honour the saved choice from localStorage.

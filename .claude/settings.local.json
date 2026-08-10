@@ -197,11 +197,31 @@
       "Bash(curl -s -m 30 \"http://localhost:8000/api/pmd/monitor/predictions/temp2m/value/?lat=31.5497&lon=74.3436&step_index=0\")",
       "Bash(curl -s -m 30 \"http://localhost:8000/api/pmd/monitor/predictions/temp2m/value/?lat=31.5497&lon=74.3436&step_index=9999\")",
       "Bash(curl -s -m 30 \"http://localhost:8000/api/pmd/monitor/predictions/temp2m/value/?lat=31.5497&lon=74.3436&step_index=5\")",
-      "Bash(git diff *)"
+      "Bash(git diff *)",
+      "Bash(curl -s -m 8 \"http://172.18.7.21:8000/get-ffd-waterlevels/\")",
+      "Bash(curl -s -m 8 -o /dev/null -w \"%{http_code}\\\\n\" \"http://172.18.7.21:8000/get-ffd-waterlevels/\")",
+      "WebFetch(domain:ffd.pmd.gov.pk)",
+      "Bash(curl -s -m 15 -o /dev/null -w \"HTTP %{http_code}\\\\n\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://ffd.pmd.gov.pk/river-state\")",
+      "Bash(curl -s -m 15 -o /dev/null -w \"HTTP %{http_code}\\\\n\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://ffd.pmd.gov.pk/\")",
+      "Bash(curl -s -m 20 -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://ffd.pmd.gov.pk/river-state\" -o /tmp/ffd_river_state.html)",
+      "Bash(curl -s -m 20 -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0 Safari/537.36\" \"https://ffd.pmd.gov.pk/river-state\" -o \"C:/Users/5693KASHIF/AppData/Local/Temp/ffd_river_state.html\")",
+      "Read(//c/Users/5693KASHIF/AppData/Local/Temp/**)",
+      "Bash(grep -n \"FeatureServer\\\\|MapServer\\\\|rest/services\\\\|portalUrl\\\\|WebMap\\\\|webmap\\\\|itemId\\\\|portalItem\\\\|fetch\\(\\\\|XMLHttpRequest\\\\|/api/\\\\|json?\" \"C:/Users/5693KASHIF/AppData/Local/Temp/ffd_river_state.html\" | head -40)",
+      "Bash(rm -f \"C:/Users/5693KASHIF/AppData/Local/Temp/ffd_river_state.html\")",
+      "Bash(curl -s -m 6 -o /dev/null -w \"internal FFD history API: HTTP %{http_code}\\\\n\" \"http://172.18.1.113:5000/api/history?name=Tarbela&start_date=2025-01-01&end_date=2026-08-06\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('project/ncop_internal/urls.py', encoding='utf-8'\\).read\\(\\)\\)\")",
+      "Bash(curl -s -m 20 \"http://localhost:8000/get-ffd-history/?name=Tarbela\")",
+      "Bash(curl -s -m 5 -o /dev/null -w \"no-name \\(expect 400\\): %{http_code}\\\\n\" \"http://localhost:8000/get-ffd-history/\")",
+      "Bash(curl -s -o /dev/null -w \"story-dynamic-weather.js: %{http_code}\\\\n\" \"http://localhost:5173/src/modules/story-dynamic-weather.js\")",
+      "Bash(curl -s -o /dev/null -w \"story-cinematic-engine.js: %{http_code}\\\\n\" \"http://localhost:5173/src/modules/story-cinematic-engine.js\")",
+      "Bash(curl -s -m 15 -o /dev/null -w \"django /get-ffd-history/ smoke: %{http_code}\\\\n\" \"http://localhost:8000/get-ffd-history/?name=Kotri\")",
+      "Bash(node -e \"try{require.resolve\\('playwright'\\);console.log\\('playwright resolvable'\\)}catch\\(e\\){console.log\\('playwright NOT installed:', e.code\\)}\")",
+      "Bash(curl -s -o /dev/null -w \"story-provincial-forecast.js: %{http_code}\\\\n\" \"http://localhost:5173/src/modules/story-provincial-forecast.js\")"
     ],
     "additionalDirectories": [
       "d:\\muhammad_arsalan\\ncop_local\\frontend\\src\\styles\\dashboard",
-      "d:\\muhammad_arsalan\\ncop_local\\project\\media\\pmd_predictions"
+      "d:\\muhammad_arsalan\\ncop_local\\project\\media\\pmd_predictions",
+      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp"
     ]
   }
 }

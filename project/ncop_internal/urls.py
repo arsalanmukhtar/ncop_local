@@ -42,6 +42,7 @@ from .views import (
     CropGeoJSONAPIView,
     PmdMonitorPredictionsAPIView,
     PmdMonitorPredictionValueAPIView,
+    FfdHistoryAPIView,
     PmdDailyForecastProAPIView,
     NwfcRainfallReportAPIView,
 
@@ -116,6 +117,14 @@ urlpatterns = [
         "api/pmd/monitor/predictions/<str:element_key>/value/",
         PmdMonitorPredictionValueAPIView.as_view(),
         name="pmd-monitor-predictions-value",
+    ),
+
+    # FFD barrage/dam discharge history — internal API primary, cached
+    # public-feed buffer fallback. See FfdHistoryAPIView.
+    path(
+        "get-ffd-history/",
+        FfdHistoryAPIView.as_view(),
+        name="ffd-history",
     ),
 
     # PMD Provincial Daily Forecast — proxy for the public
