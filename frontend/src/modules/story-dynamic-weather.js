@@ -235,6 +235,58 @@ function _stopSpeaking() {
   try { window.speechSynthesis?.cancel(); } catch (_) {}
 }
 
+// ---- TTS preference prompt ------------------------------------------
+// Same localStorage key story-provincial-forecast.js's own TTS prompt
+// uses ("ncop-story-tts-pref") — deliberately shared so the operator is
+// only ever asked once across BOTH cinematic briefings, not once per
+// story. Neither file imports from the other (each stays fully
+// independent per this app's existing story-isolation convention); the
+// key is just a plain string both happen to agree on.
+const TTS_PREF_KEY = "ncop-story-tts-pref";
+function _loadTtsPref() {
+  try { return localStorage.getItem(TTS_PREF_KEY); } catch (_) { return null; }
+}
+function _saveTtsPref(choice) {
+  try { localStorage.setItem(TTS_PREF_KEY, choice); } catch (_) {}
+}
+
+// Shown once, before the very first scene of a fresh load, ONLY when no
+// preference has been saved yet (by either story). Resolves "on"/"off";
+// never blocks playback indefinitely — a missing/unclickable body just
+// resolves to "off" and moves on.
+function _showTtsPrompt(card) {
+  return new Promise((resolve) => {
+    const bodyEl = card.querySelector(".dwr-body");
+    if (!bodyEl) { resolve("off"); return; }
+    bodyEl.innerHTML = `
+      <div class="dwr-tts-prompt" role="dialog" aria-labelledby="dwr-tts-prompt-title">
+        <div class="dwr-tts-prompt-icon" aria-hidden="true">🔊</div>
+        <div id="dwr-tts-prompt-title" class="dwr-tts-prompt-title">Enable Voice Narration?</div>
+        <div class="dwr-tts-prompt-desc">
+          Have each scene's briefing read aloud as it plays.
+          You can toggle it anytime from the speaker button on the transport bar.
+        </div>
+        <div class="dwr-tts-prompt-buttons">
+          <button type="button" class="dwr-tts-prompt-btn is-primary" data-choice="on">
+            <span aria-hidden="true">🔊</span>&nbsp;Enable narration
+          </button>
+          <button type="button" class="dwr-tts-prompt-btn" data-choice="off">
+            <span aria-hidden="true">🔇</span>&nbsp;Silent mode
+          </button>
+        </div>
+        <div class="dwr-tts-prompt-hint">Your choice is remembered for next time.</div>
+      </div>
+    `;
+    const onClick = (e) => {
+      const btn = e.target.closest("[data-choice]");
+      if (!btn) return;
+      bodyEl.removeEventListener("click", onClick);
+      resolve(btn.dataset.choice === "on" ? "on" : "off");
+    };
+    bodyEl.addEventListener("click", onClick);
+  });
+}
+
 // Scales a camera-animation duration by the current fast-forward/rewind
 // speed so the whole briefing genuinely plays back faster, not just the
 // scene-advance timer — floors at 150ms so a 5x speed never collapses a
@@ -294,6 +346,66 @@ function _injectStyles() {
     #${CARD_ID} .dwr-mute.is-muted { color: rgba(234, 234, 234, 0.35); }
     #${CARD_ID} .dwr-close:hover { background: rgba(220, 38, 38, 0.25); color: #fff; }
     #${CARD_ID} .dwr-mute:hover { background: rgba(70, 178, 255, 0.25); color: #fff; }
+
+    #${CARD_ID} .dwr-tts-prompt {
+      display: grid; gap: 10px;
+      padding: 16px 14px 14px;
+      background: linear-gradient(180deg, rgba(70, 178, 255, 0.12), rgba(70, 178, 255, 0.04));
+      border: 1px solid rgba(70, 178, 255, 0.35);
+      border-radius: 10px;
+      text-align: center;
+      animation: dwr-tts-prompt-in 260ms ease-out;
+    }
+    @keyframes dwr-tts-prompt-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    #${CARD_ID} .dwr-tts-prompt-icon {
+      font-size: 28px; line-height: 1;
+      filter: drop-shadow(0 2px 6px rgba(70, 178, 255, 0.35));
+      margin: 4px auto 0;
+    }
+    #${CARD_ID} .dwr-tts-prompt-title {
+      font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    #${CARD_ID} .dwr-tts-prompt-desc {
+      font-size: 11.5px; line-height: 1.5;
+      color: rgba(234, 234, 234, 0.80);
+      padding: 0 4px;
+    }
+    #${CARD_ID} .dwr-tts-prompt-buttons {
+      display: grid; gap: 6px;
+      margin-top: 4px;
+    }
+    #${CARD_ID} .dwr-tts-prompt-btn {
+      appearance: none; border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: #eaeaea;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #${CARD_ID} .dwr-tts-prompt-btn:hover {
+      background: rgba(255, 255, 255, 0.10);
+      transform: translateY(-1px);
+    }
+    #${CARD_ID} .dwr-tts-prompt-btn.is-primary {
+      background: var(--ndma-blue, #46b2ff); color: #fff;
+      border-color: rgba(255, 255, 255, 0.30);
+      box-shadow: 0 4px 12px rgba(70, 178, 255, 0.35);
+    }
+    #${CARD_ID} .dwr-tts-prompt-btn.is-primary:hover {
+      background: #5cbdff;
+    }
+    #${CARD_ID} .dwr-tts-prompt-hint {
+      font-size: 10px; font-style: italic;
+      color: rgba(234, 234, 234, 0.50);
+      margin-top: 2px;
+    }
 
     #${CARD_ID} .dwr-chapter-head {
       display: flex; align-items: baseline; justify-content: space-between;
@@ -683,6 +795,21 @@ function _ensureCard(root) {
   return card;
 }
 
+// Syncs the mute button's icon/class/labels to the CURRENT _state.ttsEnabled
+// — used both by its own click handler (below) and right after the TTS
+// prompt resolves in _loadAndPlay, since the button's markup is otherwise
+// static at card-creation time and would silently mismatch a preference
+// that wasn't "off" (the default in that static markup).
+function _syncMuteButton(card) {
+  const m = card?.querySelector(".dwr-mute");
+  if (!m) return;
+  m.classList.toggle("is-muted", !_state.ttsEnabled);
+  m.innerHTML = _state.ttsEnabled ? ICON_TTS_ON : ICON_TTS_OFF;
+  const label = _state.ttsEnabled ? "Mute narration" : "Unmute narration";
+  m.setAttribute("aria-label", label);
+  m.setAttribute("title", label);
+}
+
 function _bindCardEvents(card) {
   const btn = (sel) => card.querySelector(sel);
   btn(".dwr-btn--play").addEventListener("click", _togglePlay);
@@ -698,12 +825,7 @@ function _bindCardEvents(card) {
   btn(".dwr-mute").addEventListener("click", () => {
     _state.ttsEnabled = !_state.ttsEnabled;
     _stopSpeaking();
-    const m = btn(".dwr-mute");
-    m.classList.toggle("is-muted", !_state.ttsEnabled);
-    m.innerHTML = _state.ttsEnabled ? ICON_TTS_ON : ICON_TTS_OFF;
-    const label = _state.ttsEnabled ? "Mute narration" : "Unmute narration";
-    m.setAttribute("aria-label", label);
-    m.setAttribute("title", label);
+    _syncMuteButton(card);
   });
   card.querySelector(".dwr-dots").addEventListener("click", (e) => {
     const dot = e.target.closest(".dwr-dot");
@@ -3267,6 +3389,21 @@ async function _loadAndPlay(card) {
   _setSpeed(1, 1); // fresh load always starts at normal forward speed, regardless of a prior session
   _prepareDistrictHighlight(_state.discussedDistricts);
 
+  // Ask once, on a genuinely fresh preference (shared with the 7-Day
+  // Weather Outlook's own identical prompt) — every later load this
+  // session or in future sessions reads the saved choice and skips
+  // straight to playback.
+  const savedTtsPref = _loadTtsPref();
+  if (savedTtsPref === "on" || savedTtsPref === "off") {
+    _state.ttsEnabled = savedTtsPref === "on";
+  } else {
+    const choice = await _showTtsPrompt(card);
+    if (token !== _state.runToken) return;
+    _saveTtsPref(choice);
+    _state.ttsEnabled = choice === "on";
+  }
+  _syncMuteButton(card);
+
   await _gotoScene(0, false);
   if (token !== _state.runToken) return;
   _play();
@@ -3317,6 +3454,21 @@ function _teardown() {
   _clearDistrictOverlay();
   const map = window.ncop_map;
   if (map) { disableCinematicAtmosphere(map); disableRainEffect(map); _deactivateTemporalLayer(map, _state.activeLayerKey); }
+}
+
+// Public hook for an external "close everything" control (the story
+// panel's own X button) — unlike _hide() above, this does NOT call
+// window.ncopProvincialForecast?.restore() afterward, since a full close
+// should leave BOTH stories stopped, not resurrect the other one. Reuses
+// _teardown()'s existing cleanup exactly; only adds the display/visibility
+// bookkeeping _hide() also does.
+function _closeCompletely() {
+  _teardown();
+  const root = document.getElementById(ROOT_ID);
+  const card = root?.querySelector(`#${CARD_ID}`);
+  if (card) card.style.display = "none";
+  const chaptersEl = root?.querySelector("#storyChapters");
+  if (chaptersEl) chaptersEl.style.display = "grid";
 }
 
 // ---- #storySelect integration ---------------------------------------------
@@ -3390,6 +3542,15 @@ function _wireModalVisibility() {
   mo.observe(modal, { attributes: true, attributeFilter: ["style", "class"] });
   return true;
 }
+
+// Public control surface — mirrors window.ncopProvincialForecast's own
+// pattern. `closeAll` is used by the story panel's X button (wired in
+// navigation-panel.js) to fully stop this story regardless of whether it
+// was the active one, without the cross-story restore _hide() otherwise
+// triggers on close.
+window.ncopDynamicWeather = {
+  closeAll: _closeCompletely,
+};
 
 export function initStoryDynamicWeather() {
   if (_wired) return;

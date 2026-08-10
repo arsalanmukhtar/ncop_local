@@ -33,6 +33,12 @@ const MODAL_ID   = "story-modal";
 const ROOT_ID    = "story-root";
 const CARD_ID    = "ncop-provincial-forecast";
 const STYLE_ID   = "ncop-provincial-forecast-styles";
+// #storySelect integration — same injected-option pattern
+// story-dynamic-weather.js already uses for its own "Dynamic Weather
+// Report" entry, so both cinematic briefings are reached the same way:
+// pick from the dropdown, playback starts automatically.
+const SELECT_ID  = "storySelect";
+const PF_SENTINEL = "__provincial_forecast__";
 // Per-item playback timing.  Warning polygons need time to load and the
 // operator needs time to read the merged popup — hence longer than the
 // pure-outlook cadence.  Sub-chapters (feature focus) get a longer dwell
@@ -479,6 +485,17 @@ function _injectStyles() {
     }
     #${CARD_ID} .pf-refresh:hover { background: rgba(70, 178, 255, 0.22); color: #fff; }
     #${CARD_ID} .pf-refresh.is-loading { opacity: 0.55; pointer-events: none; }
+    #${CARD_ID} .pf-mute {
+      appearance: none; border: none; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      color: rgba(234, 234, 234, 0.65);
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    #${CARD_ID} .pf-mute.is-muted { color: rgba(234, 234, 234, 0.35); }
+    #${CARD_ID} .pf-mute:hover { background: rgba(70, 178, 255, 0.25); color: #fff; }
 
     /* ---- Chapter header (province name + counter) ----------------- */
     #${CARD_ID} .pf-chapter-head {
@@ -1491,6 +1508,7 @@ function _ensureCard(root) {
         <span class="pf-live" aria-hidden="true"></span>
         <span>7-Day Weather Outlook</span>
       </div>
+      <button type="button" class="pf-mute is-muted" aria-label="Enable narration" title="Enable narration">${ICON_TTS_OFF}</button>
       <button type="button" class="pf-refresh" aria-label="Refresh outlook">Refresh</button>
     </div>
     <div class="pf-chapter-head">
@@ -1517,11 +1535,41 @@ function _ensureCard(root) {
   return card;
 }
 
+// Syncs the header mute button's icon/class/labels to the CURRENT
+// _story.ttsEnabled — same pattern story-dynamic-weather.js's own
+// .dwr-mute button uses. Called from the button's own click handler and
+// from _fetchAndBuild right after ttsEnabled is determined (saved pref,
+// or the first-run prompt's answer), since the button's DOM only exists
+// from card creation onward and needs an explicit resync at that point.
+function _syncMuteButton(card) {
+  const m = card?.querySelector(".pf-mute");
+  if (!m) return;
+  m.classList.toggle("is-muted", !_story.ttsEnabled);
+  m.innerHTML = _story.ttsEnabled ? ICON_TTS_ON : ICON_TTS_OFF;
+  const label = _story.ttsEnabled ? "Mute narration" : "Enable narration";
+  m.setAttribute("aria-label", label);
+  m.setAttribute("title", label);
+}
+
 function _bindCardEvents(card) {
   const btn = (sel) => card.querySelector(sel);
   btn(".pf-btn--play").addEventListener("click", _togglePlay);
   btn(".pf-btn--prev").addEventListener("click", () => _goto(_story.index - 1, /*byUser*/ true));
   btn(".pf-btn--next").addEventListener("click", () => _goto(_story.index + 1, /*byUser*/ true));
+  btn(".pf-mute").addEventListener("click", () => {
+    _story.ttsEnabled = !_story.ttsEnabled;
+    _saveTtsPref(_story.ttsEnabled ? "on" : "off");
+    _syncMuteButton(card);
+    if (_story.ttsEnabled) {
+      _speakChapterMessage(_story.playable[_story.index]);
+    } else {
+      _stopSpeaking();
+    }
+    // TTS state changes _currentTickMs() (TTS on moves the safety cap to
+    // the word-count estimate; off returns to the fixed 14s) — restart
+    // the tick so the new dwell takes effect immediately.
+    if (_story.isPlaying) _startTick(card);
+  });
   btn(".pf-refresh").addEventListener("click", () => {
     _story.started = true; // refreshing is an implicit start if it hadn't happened yet
     if (_inFlightFetch) return;
@@ -3832,6 +3880,7 @@ async function _fetchAndBuild(card) {
     const savedPref = _loadTtsPref();
     if (savedPref === "on")  _story.ttsEnabled = true;
     else if (savedPref === "off") _story.ttsEnabled = false;
+    _syncMuteButton(card);
 
     // This fetch can take up to ~60s on a cold first open. If the
     // operator switched to Dynamic Weather Report (which hides this card
@@ -3856,6 +3905,7 @@ async function _fetchAndBuild(card) {
       const choice = await _showTtsPrompt(card);
       _saveTtsPref(choice);
       _story.ttsEnabled = choice === "on";
+      _syncMuteButton(card);
       if (card.style.display === "none") return; // hidden during the prompt's own await
       // Re-render so the speaker button reflects the new state and
       // (if enabled) TTS speaks the current chapter now.
@@ -3875,6 +3925,15 @@ async function _fetchAndBuild(card) {
 
 // ---- Panel-visibility wiring -------------------------------------------
 function _handlePanelVisible() {
+  // Now that this story is reached by picking it from #storySelect
+  // rather than shown unconditionally whenever the story-modal opens, a
+  // modal reopen should only resurrect it if it's still the operator's
+  // last explicit pick — otherwise it would reappear underneath whatever
+  // OTHER story they'd switched to before closing (e.g. Dynamic Weather
+  // Report). _pfActiveViaPicker (not #storySelect's own .value, which
+  // StoryManager resets to blank right after every pick — see
+  // _watchSelect) is the reliable record of that.
+  if (!_pfActiveViaPicker) return;
   const root = document.getElementById(ROOT_ID);
   if (!root) return;
   const card = _ensureCard(root);
@@ -3978,6 +4037,103 @@ window.ncopProvincialForecast = {
   restore: _restoreCardExternally,
 };
 
+// ---- #storySelect integration ---------------------------------------
+// Same injected-option pattern story-dynamic-weather.js already uses for
+// its own "Dynamic Weather Report" entry (see that file's _ensureOption/
+// _watchSelect) — mirrored here so both cinematic briefings are reached
+// identically: pick from the dropdown, playback starts automatically.
+// The two coexist safely without cross-calling each other: each only
+// ever hides ITSELF when #storySelect's value stops matching its own
+// sentinel, which the shared `change` listener naturally covers however
+// the operator got there (picked the other story, or cleared the
+// selection).
+function _ensureOption(sel) {
+  if (!sel || sel.querySelector(`option[value="${PF_SENTINEL}"]`)) return;
+  const opt = document.createElement("option");
+  opt.value = PF_SENTINEL;
+  opt.textContent = "7-Day Weather Outlook";
+  sel.appendChild(opt);
+}
+
+// Tracks "was this story the one last explicitly picked", independent of
+// #storySelect's own .value — StoryManager's change listener (target
+// phase, fires after ours) doesn't find our externally-injected sentinel
+// in its own story list and resets the select back to blank via
+// _renderList() every time, same acknowledged quirk story-dynamic-
+// weather.js's identical integration already lives with. Re-reading
+// sel.value later (e.g. on modal reopen) would therefore always read
+// blank even while this story is genuinely still active — this flag is
+// what _handlePanelVisible actually checks instead.
+let _pfActiveViaPicker = false;
+
+let _pfOptionObserver = null;
+function _watchSelect(sel) {
+  _ensureOption(sel);
+  if (_pfOptionObserver) _pfOptionObserver.disconnect();
+  _pfOptionObserver = new MutationObserver(() => _ensureOption(sel));
+  _pfOptionObserver.observe(sel, { childList: true });
+
+  // Capture phase so this fires before StoryManager's own change listener
+  // (registered directly on the element, so it runs at target phase) has
+  // a chance to reset the select back to blank via its own _renderList()
+  // — same reasoning story-dynamic-weather.js's identical listener relies on.
+  document.addEventListener("change", (e) => {
+    if (e.target !== sel) return;
+    // StoryManager's own #storyChapters list (chapter-card / scroll
+    // stories) has nothing to show once a cinematic briefing is picked —
+    // same hide-while-active / restore-on-exit story-dynamic-weather.js's
+    // own _show()/_hide() already do for this exact element. Safe even
+    // when switching directly to Dynamic Weather Report: its own change
+    // listener fires for the same event and re-hides it synchronously
+    // right after, so there's no visible flicker.
+    const chaptersEl = document.getElementById(ROOT_ID)?.querySelector("#storyChapters");
+    _pfActiveViaPicker = e.target.value === PF_SENTINEL;
+    if (_pfActiveViaPicker) {
+      if (chaptersEl) chaptersEl.style.display = "none";
+      _showFromPicker();
+    } else {
+      _hideCardExternally();
+      if (chaptersEl) chaptersEl.style.display = "grid";
+    }
+  }, true);
+}
+
+function _wireStorySelectWhenReady() {
+  const sel = document.getElementById(SELECT_ID);
+  if (sel) { _watchSelect(sel); return; }
+  const mo = new MutationObserver(() => {
+    const s = document.getElementById(SELECT_ID);
+    if (s) { mo.disconnect(); _watchSelect(s); }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => mo.disconnect(), 20000);
+}
+
+// Picking this story from the dropdown always plays immediately — no
+// "Start Briefing" gate. That button (_renderStartPrompt) still exists
+// untouched for the legacy story-modal-open fallback path, but the
+// picker is now the primary way in, and selecting it is already an
+// explicit "play this" gesture, so it starts straight away exactly like
+// clicking that button would.
+function _showFromPicker() {
+  const root = document.getElementById(ROOT_ID);
+  if (!root) return;
+  const card = _ensureCard(root);
+  card.style.display = "";
+  _story.started = true;
+  // Already loaded from an earlier selection this session — resume in
+  // place instead of re-fetching, same reasoning _handlePanelVisible's
+  // resume-in-place branch uses.
+  if (_story.playable.length) {
+    if (_inFlightFetch) return;
+    _renderChapter(card, { fade: false });
+    _play();
+    return;
+  }
+  if (_inFlightFetch) return;
+  _inFlightFetch = _fetchAndBuild(card).finally(() => { _inFlightFetch = null; });
+}
+
 function _wireVisibilityObserver() {
   const modal = document.getElementById(MODAL_ID);
   if (!modal) return false;
@@ -4005,6 +4161,7 @@ function _wireVisibilityObserver() {
 export function initStoryProvincialForecast() {
   if (_wired) return;
   _injectStyles();
+  _wireStorySelectWhenReady();
   if (_wireVisibilityObserver()) { _wired = true; return; }
   const mo = new MutationObserver(() => {
     if (_wireVisibilityObserver()) { _wired = true; mo.disconnect(); }
