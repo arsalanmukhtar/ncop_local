@@ -36,6 +36,7 @@ import LayerAttributePopup from "./layer-attribute-popup.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
+import { GisExportControl } from "./gis-export-control.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
@@ -173,6 +174,13 @@ class DashboardManager {
     // (proxied via /api/crops/*).  Self-contained: adds its own button
     // + its own Chart.js modal; does not touch the map's render pipeline.
     new CropExplorerControl(this.#map);
+    // GIS Export — standalone rail button that lists every currently
+    // active layer (sidebar toggles + the one active temporal layer) and
+    // exports each as GeoJSON / GeoTIFF / a source-package manifest,
+    // whichever fits its actual source type. Self-contained: adds its
+    // own button + panel, only wraps addLayerByKey/removeLayerByKey for
+    // live refresh (same pattern LayerInfoPanel already uses).
+    new GisExportControl(this.#map, this.#sourceLayerControl);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -502,6 +510,7 @@ const RAIL_PANEL_BUTTON_MAP = {
   layerInfoPanel:  { btnId: "layerInfoToggle",  visibleClass: "visible" },
   weatherReportPanel: { btnId: "weatherReportToggle", visibleClass: "visible" },
   ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
+  gisExportPanel:  { btnId: "gisExportToggle",  visibleClass: "visible" },
 };
 
 function buildUnifiedRightRail() {
@@ -565,6 +574,9 @@ function buildUnifiedRightRail() {
     // "analysis" buttons live next to each other in the rail.  Wrapper
     // div is injected by SplitCompareControl in its constructor.
     push(document.querySelector(".custom-split-compare-btn"));
+    // GIS Export — pushed alongside the other data/analysis controls.
+    // Wrapper div is injected by GisExportControl in its constructor.
+    push(document.querySelector(".custom-gis-export-btn"));
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }
@@ -869,6 +881,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "weatherReportPanel",   kind: "class",   cls: "visible",
     btn: { id: "weatherReportToggle", activeCls: "active-weather-report" } },
   { id: "ncopTourPanel",        kind: "class",   cls: "visible" },
+  { id: "gisExportPanel",       kind: "class",   cls: "visible",
+    btn: { id: "gisExportToggle",  activeCls: "active-gis-export" } },
   // Display-driven float panels
   { id: "gee-chat-modal",          kind: "display",
     btn: { id: "geeChat",          activeCls: "active-gee"       } },

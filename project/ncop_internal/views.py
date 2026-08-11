@@ -63,6 +63,8 @@ from ncop_project.settings.base import (
 
 import os
 import math
+import struct
+import base64
 import time
 import asyncio
 import httpx
@@ -70,6 +72,7 @@ import requests
 import json
 import logging
 import geopandas as gpd
+import pandas as pd
 import shutil
 import re
 import wbgapi as wb
@@ -2261,6 +2264,901 @@ class UsgsShakemapContentProxyApi(View):
             return JsonResponse(payload, safe=isinstance(payload, dict))
         except Exception as exc:
             return JsonResponse({"detail": f"Failed to load ShakeMap content: {exc}"}, status=502)
+
+
+# =============================================================================
+# GIS Export — "Export Active GIS Layers" raster tier (see
+# frontend/src/modules/gis-export-control.js and the sibling GCOP feature
+# this was ported from, GCOP_GIS_Export_Control_Integration_Guide.md §5).
+#
+# NCOP's own raster layers are plain {z}/{x}/{y} XYZ tile templates with no
+# WMS GetCapabilities to look up a "full extent" from, so this only
+# implements the XYZ tile-stitch path (guide §5.5) — scoped down from the
+# guide's WMS+XYZ dual path since no WMS layers were found anywhere in
+# NCOP's own layer catalogue (map-layers.js). Unlike the guide's own
+# GDAL-based stitcher, this uses Pillow (already a project dependency) to
+# decode/stitch tiles, and a dependency-free hand-rolled TIFF/GeoTIFF
+# writer (guide §5.6) — struct.pack only, no GDAL/rasterio needed on this
+# path at all, which matters in this environment specifically (this venv's
+# GDAL Python bindings have a numpy ABI mismatch for array reads elsewhere
+# in the project — see PmdMonitorPredictionValueAPIView's own
+# struct.unpack workaround above — so a GDAL-free path here is a
+# deliberate, not incidental, choice).
+# =============================================================================
+
+_WEB_MERCATOR_EXTENT_M = 20037508.342789244  # half the EPSG:3857 world extent, in metres
+
+
+def _tile_bounds_3857(z, x, y):
+    """EPSG:3857 (minx, miny, maxx, maxy) for XYZ tile (z, x, y) — exact
+    grid math (no lon/lat round-trip), since XYZ tiles are themselves
+    defined on an EPSG:3857 grid."""
+    n = 2 ** z
+    tile_size_m = (2 * _WEB_MERCATOR_EXTENT_M) / n
+    minx = -_WEB_MERCATOR_EXTENT_M + x * tile_size_m
+    maxx = minx + tile_size_m
+    maxy = _WEB_MERCATOR_EXTENT_M - y * tile_size_m
+    miny = maxy - tile_size_m
+    return minx, miny, maxx, maxy
+
+
+def _bbox_3857_to_tile_range(bbox, z):
+    minx, miny, maxx, maxy = bbox
+    n = 2 ** z
+    tile_size_m = (2 * _WEB_MERCATOR_EXTENT_M) / n
+    max_index = n - 1
+    x0 = int(math.floor((minx + _WEB_MERCATOR_EXTENT_M) / tile_size_m))
+    x1 = int(math.floor((maxx + _WEB_MERCATOR_EXTENT_M) / tile_size_m))
+    y0 = int(math.floor((_WEB_MERCATOR_EXTENT_M - maxy) / tile_size_m))
+    y1 = int(math.floor((_WEB_MERCATOR_EXTENT_M - miny) / tile_size_m))
+    x0, x1 = sorted((max(0, min(x0, max_index)), max(0, min(x1, max_index))))
+    y0, y1 = sorted((max(0, min(y0, max_index)), max(0, min(y1, max_index))))
+    return x0, y0, x1, y1
+
+
+def _pick_zoom_for_bbox_3857(bbox, max_tiles=64, max_zoom=13, min_zoom=1):
+    """Highest zoom whose tile count for `bbox` stays within max_tiles —
+    bounds worst-case fetch volume regardless of viewport size."""
+    for z in range(max_zoom, min_zoom - 1, -1):
+        x0, y0, x1, y1 = _bbox_3857_to_tile_range(bbox, z)
+        count = (x1 - x0 + 1) * (y1 - y0 + 1)
+        if count <= max_tiles:
+            return z
+    return min_zoom
+
+
+def _fetch_one_xyz_tile(url_template, z, x, y, timeout=15):
+    url = url_template.replace("{z}", str(z)).replace("{x}", str(x)).replace("{y}", str(y))
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code != 200 or not resp.content:
+            return None
+        return resp.content
+    except Exception:
+        return None
+
+
+def _stitch_xyz_tiles_to_image(url_template, bbox_3857, max_tiles=64, max_zoom=13):
+    """Fetches every XYZ tile covering `bbox_3857` (in parallel — pure I/O,
+    safe to parallelize) at the highest zoom max_tiles allows, and stitches
+    them into one Pillow Image. Returns (image, exact_bounds_3857) — the
+    exact bounds are derived from the TILE GRID's corner tiles, not the
+    original requested bbox (the grid almost never lines up exactly with
+    it), since that's what actually gets georeferenced. Returns (None,
+    None) if not a single tile could be fetched."""
+    z = _pick_zoom_for_bbox_3857(bbox_3857, max_tiles=max_tiles, max_zoom=max_zoom)
+    x0, y0, x1, y1 = _bbox_3857_to_tile_range(bbox_3857, z)
+    cols = x1 - x0 + 1
+    rows = y1 - y0 + 1
+
+    jobs = [(x, y) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)]
+    tile_bytes = {}
+    with ThreadPoolExecutor(max_workers=min(16, len(jobs) or 1)) as executor:
+        futures = {executor.submit(_fetch_one_xyz_tile, url_template, z, x, y): (x, y) for x, y in jobs}
+        for fut in as_completed(futures):
+            tile_bytes[futures[fut]] = fut.result()
+
+    tile_size = 256
+    has_alpha = False
+    for raw in tile_bytes.values():
+        if not raw:
+            continue
+        try:
+            probe = Image.open(io.BytesIO(raw))
+            probe.load()
+        except Exception:
+            continue
+        tile_size = probe.width
+        has_alpha = probe.mode in ("RGBA", "LA", "PA") or "transparency" in probe.info
+        break
+
+    mode = "RGBA" if has_alpha else "RGB"
+    bg = (0, 0, 0, 0) if has_alpha else (255, 255, 255)
+    canvas = Image.new(mode, (cols * tile_size, rows * tile_size), bg)
+
+    placed_any = False
+    for (x, y), raw in tile_bytes.items():
+        if not raw:
+            continue
+        try:
+            tile_img = Image.open(io.BytesIO(raw)).convert(mode)
+        except Exception:
+            continue
+        canvas.paste(tile_img, ((x - x0) * tile_size, (y - y0) * tile_size))
+        placed_any = True
+
+    if not placed_any:
+        return None, None
+
+    bottom_left = _tile_bounds_3857(z, x0, y1)
+    top_right = _tile_bounds_3857(z, x1, y0)
+    exact_bounds = (bottom_left[0], bottom_left[1], top_right[2], top_right[3])
+    return canvas, exact_bounds
+
+
+def _pick_wms_export_size(bbox_3857, target_long_side=1536, min_side=256):
+    """Aspect-ratio-preserving output size for a WMS export — the live map
+    only ever requests small 256px (or similar) tiles per Mapbox GL's own
+    {bbox-epsg-3857} substitution, which would make a whole-viewport
+    export look blocky; this instead picks a much higher-resolution single
+    image sized to the actual requested bbox's aspect ratio."""
+    minx, miny, maxx, maxy = bbox_3857
+    w, h = maxx - minx, maxy - miny
+    if w <= 0 or h <= 0:
+        return target_long_side, target_long_side
+    if w >= h:
+        width = target_long_side
+        height = max(min_side, round(target_long_side * h / w))
+    else:
+        height = target_long_side
+        width = max(min_side, round(target_long_side * w / h))
+    return width, height
+
+
+def _rewrite_wms_size(url, width, height):
+    url = re.sub(r"([?&])width=\d+", rf"\g<1>width={width}", url, flags=re.IGNORECASE)
+    url = re.sub(r"([?&])height=\d+", rf"\g<1>height={height}", url, flags=re.IGNORECASE)
+    return url
+
+
+def _fetch_wms_bbox_image(url_template, bbox_3857, timeout=25):
+    """Most of NCOP's own temporal RASTER layers (DWD, ECMWF, GDPS/GeoMet,
+    Copernicus, …) are WMS GetMap URLs carrying Mapbox GL's own
+    `{bbox-epsg-3857}` template token — Mapbox substitutes each requested
+    tile's real bbox into that token internally; this does the exact same
+    substitution server-side for the ONE bbox being exported (the current
+    map viewport), then fetches a single higher-resolution image instead
+    of many small tiles. Returns a Pillow Image, or None on any failure.
+    """
+    width, height = _pick_wms_export_size(bbox_3857)
+    url = _rewrite_wms_size(url_template, width, height)
+    bbox_str = ",".join(f"{v:.6f}" for v in bbox_3857)
+    url = url.replace("{bbox-epsg-3857}", bbox_str)
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code != 200 or not resp.content:
+            return None
+        img = Image.open(io.BytesIO(resp.content))
+        img.load()
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if img.mode in ("LA", "PA") or "transparency" in img.info else "RGB")
+        return img
+    except Exception:
+        return None
+
+
+_TIFF_TYPE_SIZE = {3: 2, 4: 4, 12: 8}  # SHORT, LONG, DOUBLE
+
+
+def _tiff_pack_value(type_code, value):
+    if type_code == 3:
+        return struct.pack("<H", int(value))
+    if type_code == 4:
+        return struct.pack("<I", int(value))
+    if type_code == 12:
+        return struct.pack("<d", float(value))
+    raise ValueError(f"unsupported TIFF field type {type_code}")
+
+
+def _write_geotiff_from_image(img, bbox_3857):
+    """Hand-assembles a valid baseline-TIFF + GeoTIFF file from a Pillow
+    Image (RGB or RGBA) by packing IFD tags directly with struct.pack — no
+    imaging or geospatial library involved on this path at all (see the
+    module comment above for why that matters in this environment). Ported
+    from GCOP_GIS_Export_Control_Integration_Guide.md §5.6's tag table.
+
+    `bbox_3857`: (minx, miny, maxx, maxy) in EPSG:3857 — the georeferenced
+    extent of img's full pixel grid (its top-left pixel ties to
+    (minx, maxy)).
+    """
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA" if img.mode in ("LA", "PA") else "RGB")
+
+    width, height = img.size
+    samples_per_pixel = 4 if img.mode == "RGBA" else 3
+    pixel_data = img.tobytes()  # chunky/interleaved rows — matches PlanarConfiguration=1
+
+    minx, miny, maxx, maxy = bbox_3857
+    pixel_size_x = (maxx - minx) / width
+    pixel_size_y = (maxy - miny) / height
+
+    entries = []  # each: [tag, type_code, count, inline_bytes_or_None, extra_data_offset_or_None]
+    extra_data = bytearray()
+
+    def add_tag(tag, type_code, values):
+        size = _TIFF_TYPE_SIZE[type_code]
+        packed = b"".join(_tiff_pack_value(type_code, v) for v in values)
+        total = size * len(values)
+        if total <= 4:
+            entries.append([tag, type_code, len(values), packed + b"\x00" * (4 - total), None])
+        else:
+            entries.append([tag, type_code, len(values), None, len(extra_data)])
+            extra_data.extend(packed)
+
+    add_tag(256, 4, [width])                       # ImageWidth
+    add_tag(257, 4, [height])                      # ImageLength
+    add_tag(258, 3, [8] * samples_per_pixel)        # BitsPerSample
+    add_tag(259, 3, [1])                            # Compression = none
+    add_tag(262, 3, [2])                            # PhotometricInterpretation = RGB
+    add_tag(273, 4, [0])                            # StripOffsets — placeholder, patched below
+    add_tag(277, 3, [samples_per_pixel])            # SamplesPerPixel
+    add_tag(278, 4, [height])                       # RowsPerStrip — single strip
+    add_tag(279, 4, [len(pixel_data)])              # StripByteCounts
+    add_tag(284, 3, [1])                            # PlanarConfiguration = chunky
+    if samples_per_pixel == 4:
+        add_tag(338, 3, [2])                        # ExtraSamples — unassociated alpha (Pillow's RGBA is straight, not premultiplied)
+
+    add_tag(33550, 12, [pixel_size_x, pixel_size_y, 0.0])              # ModelPixelScaleTag
+    add_tag(33922, 12, [0.0, 0.0, 0.0, minx, maxy, 0.0])               # ModelTiepointTag — pixel (0,0) ties to top-left
+    add_tag(34735, 3, [                                                # GeoKeyDirectoryTag — declares EPSG:3857
+        1, 1, 0, 5,          # header: KeyDirectoryVersion, KeyRevision, MinorRevision, NumberOfKeys
+        1024, 0, 1, 1,       # GTModelTypeGeoKey = 1 (Projected)
+        1025, 0, 1, 1,       # GTRasterTypeGeoKey = 1 (PixelIsArea)
+        2048, 0, 1, 4326,    # GeographicTypeGeoKey = 4326 (base geographic CRS)
+        3072, 0, 1, 3857,    # ProjectedCSTypeGeoKey = 3857 (Web Mercator)
+        3076, 0, 1, 9001,    # ProjLinearUnitsGeoKey = 9001 (metre)
+    ])
+
+    entries.sort(key=lambda e: e[0])  # IFD entries must be in ascending tag order
+
+    n = len(entries)
+    ifd_size = 2 + n * 12 + 4
+    extra_data_start = 8 + ifd_size  # 8 = TIFF header size
+    pixel_data_start = extra_data_start + len(extra_data)
+
+    for e in entries:
+        if e[0] == 273:  # StripOffsets — now that pixel_data_start is known
+            e[3] = struct.pack("<I", pixel_data_start)
+
+    out = bytearray()
+    out += b"II" + struct.pack("<H", 42) + struct.pack("<I", 8)
+    out += struct.pack("<H", n)
+    for tag, type_code, count, inline, extra_offset in entries:
+        out += struct.pack("<HHI", tag, type_code, count)
+        out += inline if inline is not None else struct.pack("<I", extra_data_start + extra_offset)
+    out += struct.pack("<I", 0)  # no next IFD
+    out += bytes(extra_data)
+    out += pixel_data
+    return bytes(out)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopRasterExportView(View):
+    """
+    GET /gis-export/raster/?url=<tile/WMS URL template>&bbox=minx,miny,maxx,maxy&filename=<name>
+
+    Two acquisition paths, auto-detected from the URL shape:
+      - `{bbox-epsg-3857}` present  -> a single WMS GetMap fetch at a
+        higher resolution than the live map ever requests (see
+        _fetch_wms_bbox_image) — this is what MOST of NCOP's own temporal
+        raster layers actually use (DWD, ECMWF, GDPS/GeoMet, Copernicus,
+        …): Mapbox GL substitutes that token per-tile internally, so the
+        map never shows a literal {z}/{x}/{y} URL for these even though
+        they're genuinely WMS-backed.
+      - literal `{z}`/`{x}`/`{y}` present -> the XYZ tile-stitch path
+        (_stitch_xyz_tiles_to_image), for the handful of layers that are
+        plain XYZ raster tiles rather than WMS.
+    Either way the result goes through the same dependency-free GeoTIFF
+    writer (_write_geotiff_from_image). `bbox` is always the current map
+    viewport (EPSG:3857) — see gis-export-control.js; NCOP's raster
+    sources have no GetCapabilities to look up a "full extent" from the
+    way the sibling GCOP feature this was ported from does.
+
+    GET rather than POST specifically so no CSRF token is needed from the
+    frontend at all (this project has no existing getCookie('csrftoken')
+    frontend helper to reuse); csrf_exempt is kept anyway for consistency
+    with this file's other proxy views. No login/permission mixin of its
+    own — whatever session/auth gate protects the page embedding the
+    Export button is the only thing standing in front of this endpoint,
+    same posture as UsgsShakemapContentProxyApi above.
+    """
+    MAX_TILES = 64
+    MAX_ZOOM = 13
+
+    def get(self, request):
+        url_template = (request.GET.get("url") or "").strip()
+        bbox_raw = (request.GET.get("bbox") or "").strip()
+        filename = re.sub(r"[^a-zA-Z0-9_\-]+", "_", (request.GET.get("filename") or "export").strip()) or "export"
+
+        if not url_template:
+            return JsonResponse({"error": "A tile/WMS URL is required."}, status=400)
+        is_xyz = "{z}" in url_template and "{x}" in url_template and "{y}" in url_template
+        is_wms = "{bbox-epsg-3857}" in url_template
+        if not is_xyz and not is_wms:
+            return JsonResponse({"error": "URL must contain either a {z}/{x}/{y} tile template or a {bbox-epsg-3857} WMS template."}, status=400)
+
+        try:
+            parts = [float(v) for v in bbox_raw.split(",")]
+            if len(parts) != 4:
+                raise ValueError("bbox must have exactly 4 components")
+            bbox = tuple(parts)
+        except (ValueError, TypeError):
+            return JsonResponse({"error": "bbox must be 'minx,miny,maxx,maxy' in EPSG:3857."}, status=400)
+
+        try:
+            if is_wms:
+                canvas = _fetch_wms_bbox_image(url_template, bbox)
+                exact_bounds = bbox
+                if canvas is None:
+                    return JsonResponse({"error": "The WMS request returned no usable image."}, status=502)
+            else:
+                canvas, exact_bounds = _stitch_xyz_tiles_to_image(url_template, bbox, max_tiles=self.MAX_TILES, max_zoom=self.MAX_ZOOM)
+                if canvas is None:
+                    return JsonResponse({"error": "No tiles could be fetched for the current map view."}, status=502)
+            tiff_bytes = _write_geotiff_from_image(canvas, exact_bounds)
+        except Exception as exc:
+            logger.warning("Raster GIS export failed: %s", exc, exc_info=True)
+            return JsonResponse({"error": str(exc)}, status=502)
+
+        response = HttpResponse(tiff_bytes, content_type="image/tiff")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.tif"'
+        return response
+
+
+# =============================================================================
+# GIS Import — the drag-and-drop counterpart to the Export tab above (see
+# frontend/src/modules/gis-export-control.js). Ported from the sibling GCOP
+# feature's "Import" tab (GCOP — GIS Import Tab Full Ground.txt §5-6) and
+# WMS Connector (GCOP — WMS Connector Full Ground-.txt), covering: drop/
+# browse GeoJSON, zipped Shapefiles, KML/KMZ, GeoTIFF rasters, and Excel/
+# CSV files with latitude/longitude columns, plus a WMS "paste a URL"
+# connector (direct add, or browse+bulk-add via GetCapabilities) with
+# time-dimension animation. The choropleth/symbology/stats toolkit that
+# GCOP's own Import tab also documents is NOT implemented here — out of
+# scope for this pass. GeoJSON needs no backend at all (parsed client-
+# side); every other format goes through one of the views below, since
+# the browser has no geometry/raster/spreadsheet libraries of its own for
+# any of them.
+# =============================================================================
+# Shared by every vector-import path below (Shapefile, KMZ/KML, and the
+# points a spreadsheet's lat/lon columns produce) — reprojects to WGS84 if
+# needed, fixes right-hand-rule polygon winding (some desktop-GIS exports
+# use clockwise exterior rings, which renders inverted in Mapbox GL fill
+# layers — a no-op for point/line data), repairs minor invalid geometries
+# via buffer(0), and simplifies large datasets so the response finishes
+# inside the request-worker timeout. Returns a plain GeoJSON dict. Kept as
+# one function so all three import paths degrade/simplify identically
+# rather than three near-copies drifting apart.
+_SIMPLIFY_FEATURE_THRESHOLD = 5000
+_SIMPLIFY_SIZE_MB_THRESHOLD = 30
+
+
+def _prepare_vector_geojson(gdf, size_mb, feature_threshold=_SIMPLIFY_FEATURE_THRESHOLD, size_threshold_mb=_SIMPLIFY_SIZE_MB_THRESHOLD):
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+
+    def _orient_geom(geom):
+        if geom is None:
+            return geom
+        if hasattr(geom, "geoms"):
+            polys = [orient(p, sign=1.0) for p in geom.geoms if isinstance(p, shapelyPolygon)]
+            return shapelyMultiPolygon(polys) if polys else geom
+        if isinstance(geom, shapelyPolygon):
+            return orient(geom, sign=1.0)
+        return geom
+    gdf.geometry = gdf.geometry.apply(_orient_geom)
+
+    invalid = ~gdf.geometry.is_valid
+    if invalid.any():
+        gdf.geometry = gdf.geometry.buffer(0)
+
+    if len(gdf) > feature_threshold or size_mb > size_threshold_mb:
+        bounds = gdf.total_bounds
+        span = max(bounds[2] - bounds[0], bounds[3] - bounds[1], 0.001)
+        tolerance = span / 4000
+        gdf.geometry = gdf.geometry.simplify(tolerance, preserve_topology=True)
+
+    return json.loads(gdf.to_json())
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopShapefileUploadView(View):
+    """
+    POST /upload-shapefile/  (multipart, field name "shapefile", a .zip)
+
+    Unzips an uploaded Shapefile bundle and runs it through
+    _prepare_vector_geojson (reproject/winding-fix/repair/simplify).
+    Returns plain GeoJSON. No CSRF token expected from the frontend (see
+    NcopRasterExportView's own comment on this project's CSRF posture);
+    csrf_exempt for consistency with every other proxy/upload view in this
+    file. No login/permission mixin of its own, same posture as those too.
+    """
+    def post(self, request):
+        shapefile = request.FILES.get("shapefile")
+        if not shapefile:
+            return JsonResponse({"error": "No file uploaded"}, status=400)
+        if not shapefile.name.lower().endswith(".zip"):
+            return JsonResponse({"error": "Please upload a ZIP file containing the shapefile"}, status=400)
+
+        upload_dir = os.path.join(settings.MEDIA_ROOT, "imported_shapefiles")
+        os.makedirs(upload_dir, exist_ok=True)
+        stamp = f"{int(time.time() * 1000)}_{re.sub(r'[^a-zA-Z0-9_.-]+', '_', shapefile.name)}"
+        zip_path = os.path.join(upload_dir, stamp)
+        extract_dir = zip_path + "_extracted"
+
+        try:
+            with open(zip_path, "wb") as f:
+                for chunk in shapefile.chunks():
+                    f.write(chunk)
+
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+            shutil.unpack_archive(zip_path, extract_dir)
+
+            shp_file = None
+            for root, _dirs, files in os.walk(extract_dir):
+                for fname in files:
+                    if fname.lower().endswith(".shp"):
+                        shp_file = os.path.join(root, fname)
+                        break
+                if shp_file:
+                    break
+            if not shp_file:
+                return JsonResponse({"error": "No .shp file found in ZIP"}, status=400)
+
+            gdf = gpd.read_file(shp_file)
+            geojson_data = _prepare_vector_geojson(gdf, size_mb=shapefile.size / (1024 * 1024))
+            return JsonResponse(geojson_data)
+        except Exception as exc:
+            logger.warning("Shapefile import failed: %s", exc, exc_info=True)
+            return JsonResponse({"error": f"Error processing shapefile: {exc}"}, status=502)
+        finally:
+            try:
+                if os.path.exists(extract_dir):
+                    shutil.rmtree(extract_dir)
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+            except Exception:
+                pass
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopKmzUploadView(View):
+    """
+    POST /upload-kmz/  (multipart, field name "kmz", a .kmz or .kml)
+
+    KMZ is just a zipped KML (+ resources) — unzipped the same way the
+    Shapefile view unzips a .zip and locates the .kml inside; a bare .kml
+    upload is read directly, no unzip step needed. GDAL's KML driver
+    (confirmed present in this venv — see the module comment above
+    NcopRasterExportView for this project's other GDAL-environment notes)
+    reads it via geopandas exactly like a shapefile, then it goes through
+    the same _prepare_vector_geojson pipeline. KML's own spec mandates
+    WGS84 lon/lat, so the reprojection step in there is normally a no-op
+    for this path — kept anyway since nothing guarantees every real-world
+    KML file actually complies.
+    """
+    def post(self, request):
+        upload = request.FILES.get("kmz")
+        if not upload:
+            return JsonResponse({"error": "No file uploaded"}, status=400)
+        name_lower = upload.name.lower()
+        if not name_lower.endswith((".kmz", ".kml")):
+            return JsonResponse({"error": "Please upload a .kmz or .kml file"}, status=400)
+
+        upload_dir = os.path.join(settings.MEDIA_ROOT, "imported_kml")
+        os.makedirs(upload_dir, exist_ok=True)
+        stamp = f"{int(time.time() * 1000)}_{re.sub(r'[^a-zA-Z0-9_.-]+', '_', upload.name)}"
+        src_path = os.path.join(upload_dir, stamp)
+        extract_dir = src_path + "_extracted"
+
+        try:
+            with open(src_path, "wb") as f:
+                for chunk in upload.chunks():
+                    f.write(chunk)
+
+            if name_lower.endswith(".kmz"):
+                if os.path.exists(extract_dir):
+                    shutil.rmtree(extract_dir)
+                shutil.unpack_archive(src_path, extract_dir, format="zip")
+                kml_file = None
+                for root, _dirs, files in os.walk(extract_dir):
+                    for fname in files:
+                        if fname.lower().endswith(".kml"):
+                            kml_file = os.path.join(root, fname)
+                            break
+                    if kml_file:
+                        break
+                if not kml_file:
+                    return JsonResponse({"error": "No .kml file found inside the KMZ"}, status=400)
+            else:
+                kml_file = src_path
+
+            gdf = gpd.read_file(kml_file)
+            if gdf.empty:
+                return JsonResponse({"error": "No features found in the KML/KMZ"}, status=400)
+
+            geojson_data = _prepare_vector_geojson(gdf, size_mb=upload.size / (1024 * 1024))
+            return JsonResponse(geojson_data)
+        except Exception as exc:
+            logger.warning("KML/KMZ import failed: %s", exc, exc_info=True)
+            return JsonResponse({"error": f"Error processing KML/KMZ: {exc}"}, status=502)
+        finally:
+            try:
+                if os.path.exists(extract_dir):
+                    shutil.rmtree(extract_dir)
+                if os.path.exists(src_path):
+                    os.remove(src_path)
+            except Exception:
+                pass
+
+
+# Header-name variants this view will recognize for latitude/longitude
+# columns, exact match first; _find_lat_lon_column falls back to a
+# substring match (e.g. "Latitude (deg)") if no exact match is found.
+_LAT_COLUMN_CANDIDATES = ["lat", "latitude", "y", "lat_dd", "lat_deg"]
+_LON_COLUMN_CANDIDATES = ["lon", "lng", "long", "longitude", "x", "lon_dd", "lon_deg"]
+
+
+def _find_lat_lon_column(columns_lower_map, candidates):
+    for cand in candidates:
+        if cand in columns_lower_map:
+            return columns_lower_map[cand]
+    for col_lower, col_orig in columns_lower_map.items():
+        for cand in candidates:
+            if cand in col_lower:
+                return col_orig
+    return None
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopSpreadsheetUploadView(View):
+    """
+    POST /upload-spreadsheet/  (multipart, field name "spreadsheet", a
+    .xlsx/.xls/.csv)
+
+    Reads a tabular file (pandas), auto-detects latitude/longitude
+    columns by common header-name variants (see _LAT_COLUMN_CANDIDATES /
+    _LON_COLUMN_CANDIDATES), and builds one Point feature per valid row —
+    every other column is carried through as feature properties. Rows
+    with missing/out-of-range coordinates are dropped, not errored on,
+    with the before/after row counts returned in the response so the
+    frontend can tell the user how many rows actually mapped. Goes
+    through the same _prepare_vector_geojson pipeline as Shapefile/KMZ
+    (a no-op for points beyond the repair/simplify steps, but keeps every
+    vector-import path consistent).
+    """
+    MAX_ROWS = 50000  # a spreadsheet with more rows than this isn't realistically meant as point data for a map
+
+    def post(self, request):
+        upload = request.FILES.get("spreadsheet")
+        if not upload:
+            return JsonResponse({"error": "No file uploaded"}, status=400)
+        name_lower = upload.name.lower()
+        if not name_lower.endswith((".xlsx", ".xls", ".csv")):
+            return JsonResponse({"error": "Please upload a .xlsx, .xls, or .csv file"}, status=400)
+
+        try:
+            if name_lower.endswith(".csv"):
+                df = pd.read_csv(upload)
+            else:
+                df = pd.read_excel(upload)
+        except Exception as exc:
+            return JsonResponse({"error": f"Could not read spreadsheet: {exc}"}, status=400)
+
+        if df.empty:
+            return JsonResponse({"error": "Spreadsheet has no rows"}, status=400)
+        if len(df) > self.MAX_ROWS:
+            return JsonResponse({"error": f"Spreadsheet has {len(df)} rows — exceeds the {self.MAX_ROWS}-row limit for point import."}, status=400)
+
+        columns_lower_map = {str(c).strip().lower(): c for c in df.columns}
+        lat_col = _find_lat_lon_column(columns_lower_map, _LAT_COLUMN_CANDIDATES)
+        lon_col = _find_lat_lon_column(columns_lower_map, _LON_COLUMN_CANDIDATES)
+        if not lat_col or not lon_col:
+            return JsonResponse({"error": "Could not find latitude/longitude columns. Expected headers like 'lat'/'lon', 'latitude'/'longitude', or 'y'/'x'."}, status=400)
+
+        df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+        df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
+        valid = df[lat_col].between(-90, 90) & df[lon_col].between(-180, 180)
+        df_valid = df[valid].copy()
+        if df_valid.empty:
+            return JsonResponse({"error": "No rows had valid latitude/longitude values."}, status=400)
+
+        try:
+            gdf = gpd.GeoDataFrame(
+                df_valid,
+                geometry=gpd.points_from_xy(df_valid[lon_col], df_valid[lat_col]),
+                crs="EPSG:4326",
+            )
+            geojson_data = _prepare_vector_geojson(gdf, size_mb=upload.size / (1024 * 1024))
+            geojson_data["metadata"] = {
+                "ncop_import_rows_total": int(len(df)),
+                "ncop_import_rows_mapped": int(len(df_valid)),
+            }
+            return JsonResponse(geojson_data)
+        except Exception as exc:
+            logger.warning("Spreadsheet import failed: %s", exc, exc_info=True)
+            return JsonResponse({"error": f"Error processing spreadsheet: {exc}"}, status=502)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopRasterUploadView(View):
+    """
+    POST /upload-raster/  (multipart, field name "raster", a .tif/.tiff)
+
+    Warps an uploaded GeoTIFF to EPSG:3857 (matching the basemap) and
+    writes an auto-contrast-stretched PNG preview, returning corner
+    coordinates for a Mapbox GL `image` source — a one-off overlay, not a
+    tiled layer, which is the right fit for a single imported file. Reuses
+    the SAME on-disk PNG-cache convention (MEDIA_ROOT/<subdir>/) already
+    established for PMD prediction rasters (_PRED_MEDIA_SUBDIR, further
+    down this file) rather than inventing a new serving mechanism, and
+    reuses _MON_PRED_GDAL_LOCK around the Warp/Translate calls — GDAL/PROJ
+    are documented-not-thread-safe for concurrent Warp calls sharing a
+    PROJ context (see that lock's own comment; this avoids reintroducing
+    the exact silent-empty-raster bug it was added to fix). GDAL Python
+    exceptions are already enabled globally at module load (see the
+    `_gdal_bootstrap.UseExceptions()` block further down) — this view
+    relies on that, wrapping everything in one try/except rather than
+    manually checking every GDAL call's return value for None.
+
+    Never calls Band.ReadAsArray()/gdal_array — this venv's GDAL bindings
+    have a numpy ABI mismatch on that path (see
+    PmdMonitorPredictionValueAPIView's own struct-based workaround
+    elsewhere in this file); gdal.Warp/gdal.Translate/ComputeRasterMinMax
+    are all GDAL-C-level operations that never touch numpy, which is why
+    this view is safe without that workaround.
+    """
+    MAX_OUTPUT_PX = 2048
+    MAX_INPUT_PX_BEFORE_DOWNSAMPLE = 4096
+
+    def post(self, request):
+        upload = request.FILES.get("raster")
+        if not upload:
+            return JsonResponse({"error": "No raster file uploaded"}, status=400)
+        if not upload.name.lower().endswith((".tif", ".tiff")):
+            return JsonResponse({"error": "Please upload a .tif or .tiff file"}, status=400)
+
+        try:
+            from osgeo import gdal, osr
+        except Exception as exc:
+            return JsonResponse({"error": f"GDAL is required for raster import: {exc}"}, status=500)
+
+        upload_dir = os.path.join(settings.MEDIA_ROOT, "imported_rasters")
+        os.makedirs(upload_dir, exist_ok=True)
+        stamp = f"{int(time.time() * 1000)}_{re.sub(r'[^a-zA-Z0-9_.-]+', '_', upload.name)}"
+        src_path = os.path.join(upload_dir, stamp)
+        warped_path = src_path + "_3857.tif"
+        png_path = src_path + "_preview.png"
+
+        try:
+            with open(src_path, "wb") as f:
+                for chunk in upload.chunks():
+                    f.write(chunk)
+
+            src_ds = gdal.Open(src_path)
+            if src_ds is None:
+                return JsonResponse({"error": "Could not open uploaded file as a raster."}, status=400)
+            if not src_ds.GetProjection():
+                return JsonResponse({"error": "Uploaded raster has no coordinate reference system (CRS)."}, status=400)
+
+            width, height = src_ds.RasterXSize, src_ds.RasterYSize
+            warp_kwargs = {"dstSRS": "EPSG:3857", "resampleAlg": "bilinear"}
+            if max(width, height) > self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE:
+                scale = self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE / max(width, height)
+                warp_kwargs["width"] = max(1, round(width * scale))
+                warp_kwargs["height"] = max(1, round(height * scale))
+
+            with _MON_PRED_GDAL_LOCK:
+                warped_ds = gdal.Warp(warped_path, src_ds, **warp_kwargs)
+                if warped_ds is None:
+                    return JsonResponse({"error": "Reprojection to EPSG:3857 failed."}, status=502)
+
+                band_count = min(warped_ds.RasterCount, 3)
+                scale_params = []
+                for i in range(1, band_count + 1):
+                    band = warped_ds.GetRasterBand(i)
+                    bmin, bmax = band.ComputeRasterMinMax(True)
+                    if bmin == bmax:
+                        bmin, bmax = bmin - 1, bmax + 1
+                    scale_params.append([bmin, bmax, 0, 255])
+
+                out_w = min(warped_ds.RasterXSize, self.MAX_OUTPUT_PX)
+                out_h = min(warped_ds.RasterYSize, self.MAX_OUTPUT_PX)
+                translate_opts = gdal.TranslateOptions(
+                    format="PNG",
+                    outputType=gdal.GDT_Byte,
+                    bandList=list(range(1, band_count + 1)),
+                    scaleParams=scale_params,
+                    width=out_w,
+                    height=out_h,
+                )
+                png_ds = gdal.Translate(png_path, warped_ds, options=translate_opts)
+                if png_ds is None:
+                    return JsonResponse({"error": "PNG preview generation failed."}, status=502)
+
+                gt = warped_ds.GetGeoTransform()
+                full_w, full_h = warped_ds.RasterXSize, warped_ds.RasterYSize
+                out_width, out_height = png_ds.RasterXSize, png_ds.RasterYSize
+
+            # Explicitly release GDAL's file handles (there's no .Close() on
+            # this GDAL version's Dataset — dereferencing triggers it) BEFORE
+            # the finally block below tries to delete src_path/warped_path.
+            # Skipping this leaves the handles open until Python's GC gets
+            # around to it, which is often AFTER the delete already ran — on
+            # Windows specifically an open handle blocks os.remove() outright
+            # (silently, since that call is wrapped in a broad try/except),
+            # leaking scratch files into MEDIA_ROOT/imported_rasters/ forever.
+            png_ds = None
+            warped_ds = None
+            src_ds = None
+
+            minx = gt[0]
+            maxy = gt[3]
+            maxx = minx + gt[1] * full_w
+            miny = maxy + gt[5] * full_h
+
+            srs_3857 = osr.SpatialReference()
+            srs_3857.ImportFromEPSG(3857)
+            srs_4326 = osr.SpatialReference()
+            srs_4326.ImportFromEPSG(4326)
+            srs_4326.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            transform = osr.CoordinateTransformation(srs_3857, srs_4326)
+
+            def _to_wgs84(x, y):
+                lon, lat, _z = transform.TransformPoint(x, y)
+                return [lon, lat]
+
+            # Mapbox `image` source corners, in order: top-left, top-right,
+            # bottom-right, bottom-left.
+            coordinates = [
+                _to_wgs84(minx, maxy),
+                _to_wgs84(maxx, maxy),
+                _to_wgs84(maxx, miny),
+                _to_wgs84(minx, miny),
+            ]
+            bounds = [coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1]]
+
+            rel_path = os.path.relpath(png_path, settings.MEDIA_ROOT).replace(os.sep, "/")
+            png_url = f"{settings.MEDIA_URL.rstrip('/')}/{rel_path}"
+
+            return JsonResponse({
+                "url": png_url,
+                "bounds": bounds,
+                "coordinates": coordinates,
+                "width": out_width,
+                "height": out_height,
+                "crs": "EPSG:4326",
+            })
+        except Exception as exc:
+            logger.warning("Raster import failed: %s", exc, exc_info=True)
+            return JsonResponse({"error": str(exc)}, status=502)
+        finally:
+            try:
+                if os.path.exists(src_path):
+                    os.remove(src_path)
+                if os.path.exists(warped_path):
+                    os.remove(warped_path)
+                # GDAL's PNG driver writes a PAM sidecar (statistics/no-data
+                # metadata) next to the preview by default — not needed
+                # since georeferencing is returned in the JSON response
+                # instead, not read back from this file.
+                aux_path = png_path + ".aux.xml"
+                if os.path.exists(aux_path):
+                    os.remove(aux_path)
+                # png_path itself is intentionally kept — it's the served
+                # preview image the frontend's `image` source url points at.
+            except Exception:
+                pass
+
+
+# =============================================================================
+# WMS connector — the "paste a URL, Connect or Add WMS" piece of the Import
+# tab. Ported from "GCOP — WMS Connector Full Ground-.txt" §5.2/§6.1: two
+# thin, same-shape proxy views (no caching, no parsing) so the browser
+# never has to call a remote WMS server directly, which routinely doesn't
+# send CORS headers. All the URL-shape detection, GetCapabilities parsing,
+# and time-dimension/animation logic lives client-side in gis-export-
+# control.js (mirrors the guide's own design — these two views are
+# deliberately dumb relays, nothing WMS-specific happens server-side).
+# =============================================================================
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopWmsCapabilitiesProxyView(View):
+    """
+    GET /wms-capabilities/?url=<base WMS URL>
+
+    Fetches a remote WMS GetCapabilities document server-side to avoid
+    CORS. Only fills in service/request/version params the caller's URL
+    doesn't already specify — lets a user paste either a bare service
+    root, or a URL that already carries some WMS query params (e.g. a
+    non-default version copied from documentation), and both work.
+    """
+    def get(self, request):
+        from urllib.parse import urlparse, urlunparse, parse_qsl
+
+        base_url = (request.GET.get("url") or "").strip()
+        if not base_url:
+            return JsonResponse({"error": "Missing url parameter"}, status=400)
+        try:
+            parsed = urlparse(base_url)
+            params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            params_lower = {k.lower(): k for k in params}
+            if "service" not in params_lower:
+                params["service"] = "WMS"
+            if "request" not in params_lower:
+                params["request"] = "GetCapabilities"
+            if "version" not in params_lower:
+                params["version"] = "1.3.0"
+            full_url = urlunparse(parsed._replace(query=urlencode(params)))
+
+            # A GetCapabilities document is fetched once (not per-tile) and
+            # a handful of real services (GeoMet in particular, which
+            # advertises hundreds of layers in one document) legitimately
+            # take well over the 20s used for tile requests below — a
+            # short timeout here was turning a slow-but-working server into
+            # a false "connection failed".
+            resp = requests.get(full_url, timeout=60, verify=False)
+            resp.raise_for_status()
+            return HttpResponse(resp.content, content_type=resp.headers.get("Content-Type", "text/xml"))
+        except Exception as exc:
+            logger.warning("WMS capabilities fetch failed for %s: %s", base_url, exc)
+            return JsonResponse({"error": str(exc)}, status=502)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class NcopWmsTileProxyView(View):
+    """
+    GET /wms-tile/?url=<full GetMap tile URL, already bbox-substituted>
+
+    Fetches a single remote WMS GetMap tile server-side to avoid CORS-
+    blocked tile loads. Deliberately thin — no caching (Mapbox GL's own
+    tile cache handles repeats at the browser level) and no validation
+    beyond "is there a URL at all"; this view's only job is making the
+    FIRST request to any given tile same-origin. `verify=False` for the
+    same reason as the capabilities proxy above — plenty of internal/
+    self-signed WMS deployments are the real target for this feature.
+    """
+    # 1x1 fully-transparent PNG, served instead of a bare error status on
+    # any tile failure. Mapbox GL treats a non-2xx/empty-body tile
+    # response as an "image could not be decoded" error and logs it to
+    # the console for EVERY tile in the viewport (dozens per pan/zoom) —
+    # a broken/unreachable WMS server was flooding the console instead of
+    # just rendering as a blank layer. A real, decodable (if empty) image
+    # keeps the raster layer silent and blank instead.
+    _BLANK_PNG = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+
+    def get(self, request):
+        tile_url = (request.GET.get("url") or "").strip()
+        if not tile_url:
+            return HttpResponse(self._BLANK_PNG, content_type="image/png")
+        try:
+            resp = requests.get(tile_url, timeout=20, verify=False)
+            resp.raise_for_status()
+            content_type = resp.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("image/"):
+                # 200 OK but not actually an image — most commonly a WMS
+                # ServiceException XML body (bad params, missing layer,
+                # server-side error) returned with a 200 status. Forwarding
+                # that as-is has the same decode-error-spam effect as a
+                # real HTTP failure.
+                logger.warning("WMS tile at %s returned non-image content-type %r: %s", tile_url, content_type, resp.content[:300])
+                return HttpResponse(self._BLANK_PNG, content_type="image/png")
+            return HttpResponse(resp.content, content_type=content_type)
+        except Exception as exc:
+            logger.warning("WMS tile fetch failed for %s: %s", tile_url, exc)
+            return HttpResponse(self._BLANK_PNG, content_type="image/png")
 
 
 class GeoGlowsRiverIdApi(View):
