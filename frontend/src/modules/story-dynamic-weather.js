@@ -177,6 +177,10 @@ const _state = {
   meteoblueHourly: null,   // Map<districtName, {name,province,coords,series}> — hourly Meteoblue samples, ALL ~11 steps queried once and cached; supporting/peak-hour context only, never the headline number
   meteoblueSampledOnce: false, // true once _sampleMeteoblueAllSteps has run for this story session — never re-samples (never re-hits Meteoblue's tiles) on repeat Chapter 3 entries, per "preserve calls for meteoblue" constraint
   chapter3ScenesBuilt: false,   // guards _buildChapter3Scenes/splice from running again if the operator navigates back to ch3-intro a second time
+  meteoblueTemperature: null,  // Map<districtName, {name,province,coords,series}> — weekly (8-day) Meteoblue 2m Temperature samples, ALL 8 steps queried once and cached; series[0] ("today") is the headline forecast value
+  meteoblueTempSampledOnce: false, // true once _sampleMeteoblueTemperatureAllSteps has run for this story session — same "never re-hit Meteoblue's tiles twice" rule as meteoblueSampledOnce
+  weeklyTempSamples: [],   // districts with the highest sampled 8-day temperature outlook (see _buildTempWeeklySamples)
+  chapter2WeeklyScenesBuilt: false, // guards the temp-weekly scene splice from running again if the operator navigates back to ch2-intro a second time
   topPrecipDistricts: [], // districts with the highest sampled 24h-precip forecast (see _fetchPrecipSamples)
   ffdWaypoints: [],        // FFD barrages/dams sorted north-to-south, chapter 3's camera-path tour
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
@@ -1096,6 +1100,114 @@ async function _sampleMeteoblueAllSteps(map, candidates) {
   return { weekly, hourly };
 }
 
+// Chapter 2's weekly-temperature-outlook counterpart to
+// _sampleMeteoblueAllSteps above — same standalone add-source/add-layer/
+// query/remove pass (never touches handleTemporalInteraction/#temp-
+// slider1, nothing is left on the map afterwards), just pointed at
+// window.temperature_2m_above_ground instead of the precipitation layers.
+// That array is built by generateMBX_MeteoblueHourlyTemperatureLayers
+// (time-functions.js) — despite the function's name it's structurally
+// identical to the weekly precipitation array: 8 entries (today..+7d),
+// each a vector-tile source + a "temperatureColortable" fill layer whose
+// features carry the reading on `minValue`. A separate function (not a
+// parameter added to _sampleMeteoblueAllSteps) so Chapter 3's existing,
+// already-working precipitation sampling is never touched.
+async function _sampleMeteoblueTemperatureAllSteps(map, candidates) {
+  const temperature = new Map();
+  if (!map || !candidates.length) return temperature;
+
+  const jobs = [];
+  for (const entry of _meteoblueEntries("temperature_2m_above_ground")) {
+    const tempDef = (entry.layers || []).find((l) => l["source-layer"] === "temperatureColortable");
+    if (!tempDef || !entry.source) continue;
+    jobs.push({ date: entry.date, source: entry.source, layerId: tempDef.id, layerDef: tempDef });
+  }
+  if (!jobs.length) return temperature;
+
+  const addedLayerIds = [];
+  const addedSourceIds = [];
+  for (const j of jobs) {
+    try {
+      if (!map.getSource(j.source.id)) {
+        map.addSource(j.source.id, j.source);
+        addedSourceIds.push(j.source.id);
+      }
+    } catch (_) { continue; }
+    try {
+      if (!map.getLayer(j.layerId)) {
+        map.addLayer({ ...j.layerDef, layout: { ...j.layerDef.layout, visibility: "visible" }, paint: { ...j.layerDef.paint, "fill-opacity": 0 } });
+        addedLayerIds.push(j.layerId);
+      } else {
+        map.setLayoutProperty(j.layerId, "visibility", "visible");
+      }
+    } catch (_) {}
+  }
+
+  const sourceIds = [...new Set(jobs.map((j) => j.source.id))];
+  for (let i = 0; i < 60; i++) {
+    const allLoaded = sourceIds.every((sid) => { try { return map.isSourceLoaded(sid); } catch (_) { return true; } });
+    if (allLoaded) break;
+    await wait(200);
+  }
+
+  const allLayerIds = jobs.map((j) => j.layerId);
+  const jobByLayerId = new Map(jobs.map((j) => [j.layerId, j]));
+  // Same "query a small bounding box, not one pixel" reasoning as
+  // precipitation sampling — these are contour bands, and a district's
+  // own peak heat can sit a few km from its exact station coordinate.
+  const DISTRICT_SAMPLE_RADIUS_DEG = 0.18;
+  for (const c of candidates) {
+    let box, feats;
+    try {
+      const [lng, lat] = c.coords;
+      const p1 = map.project([lng - DISTRICT_SAMPLE_RADIUS_DEG, lat + DISTRICT_SAMPLE_RADIUS_DEG]);
+      const p2 = map.project([lng + DISTRICT_SAMPLE_RADIUS_DEG, lat - DISTRICT_SAMPLE_RADIUS_DEG]);
+      box = [[Math.min(p1.x, p2.x), Math.min(p1.y, p2.y)], [Math.max(p1.x, p2.x), Math.max(p1.y, p2.y)]];
+    } catch (_) { continue; }
+    try { feats = map.queryRenderedFeatures(box, { layers: allLayerIds }); } catch (_) { continue; }
+    const bestByLayer = new Map();
+    for (const f of feats || []) {
+      const lid = f.layer?.id;
+      const v = Number(f?.properties?.minValue);
+      if (!lid || !Number.isFinite(v)) continue;
+      if (!bestByLayer.has(lid) || v > bestByLayer.get(lid)) bestByLayer.set(lid, v);
+    }
+    for (const [lid, tempC] of bestByLayer) {
+      const job = jobByLayerId.get(lid);
+      if (!job) continue;
+      if (!temperature.has(c.name)) temperature.set(c.name, { name: c.name, province: c.province, coords: c.coords, series: [] });
+      temperature.get(c.name).series.push({ date: job.date, tempC });
+    }
+  }
+
+  for (const id of addedLayerIds) { if (map.getLayer(id)) { try { map.removeLayer(id); } catch (_) {} } }
+  for (const sid of addedSourceIds) { if (map.getSource(sid)) { try { map.removeSource(sid); } catch (_) {} } }
+
+  return temperature;
+}
+
+// Builds Chapter 2's weekly-outlook list from the cached sampling pass
+// above — same shape/ranking convention as _fetchPrecipSamples: sorted
+// desc by the headline ("today") value, a district with no sample is
+// simply omitted rather than guessed.
+function _buildTempWeeklySamples(candidates, temperatureMap) {
+  const results = candidates.map((c) => {
+    const t = temperatureMap?.get(c.name);
+    if (!t || !t.series?.length) return null;
+    const today = t.series[0];
+    return {
+      name: c.name,
+      province: c.province,
+      coords: c.coords,
+      tempC: today.tempC,
+      date: today.date,
+      source: "Meteoblue weekly (2m Temperature)",
+      weeklySeries: t.series,
+    };
+  });
+  return results.filter(Boolean).sort((a, b) => b.tempC - a.tempC);
+}
+
 // Nationally-representative candidate district list for precipitation
 // sampling — up to 3 per province (reusing _districtsGroupedByProvince
 // purely as a geographic candidate pool; its own mm_total-based ordering
@@ -1612,8 +1724,26 @@ function _pastDayNarrative(heatwaveFC, maxTempRecords) {
     .filter((f) => Number.isFinite(f.properties?.temp_max))
     .map((f) => ({ name: f.properties.name, province: f.properties.province, tempMax: f.properties.temp_max, tempMin: f.properties.temp_min }))
     .sort((a, b) => b.tempMax - a.tempMax);
+
+  // Heatwave Monitoring's backing source (Open-Meteo) rate-limits under
+  // load (HTTP 429) — when that leaves NO usable temp_max readings, fall
+  // back to Max Temp Records (a fully separate, non-Open-Meteo GCOP feed
+  // — the same "Max Temp Records" drill view weather-report-control.js
+  // exposes — already fetched unconditionally alongside heatwaveFC
+  // either way) so the opening scene still has real past-temperature
+  // context instead of an empty placeholder.
   if (!feats.length) {
-    return "Past-24-hour temperature context is not currently available from any connected source.";
+    const records = (maxTempRecords || []).slice(0, 5);
+    if (!records.length) {
+      return "Past-24-hour temperature context is not currently available from any connected source.";
+    }
+    const lead = records[0];
+    const bits = [
+      `Live Open-Meteo readings are temporarily unavailable, so this is drawn from PMD's Max Temperature Records instead — the highest on-record reading nationwide was at ${lead.name}, at ${lead.temp}°C${lead.date ? ` (${lead.date})` : ""}.`,
+    ];
+    const others = records.slice(1, 4);
+    if (others.length) bits.push(`Also historically hot: ${others.map((r) => `${r.name} (${r.temp}°C)`).join(", ")}.`);
+    return bits.join(" ");
   }
   const lead = feats[0];
   const bits = [
@@ -1652,6 +1782,30 @@ function _tempAssessmentNarrative(hottest) {
     : "No station is currently under an elevated heat alert.");
   bits.push("Heatwave Monitoring station data, cross-checked against the PMD prediction layer, remains the authoritative record.");
   bits.push("Operational readiness: routine monitoring posture recommended based on current data.");
+  return bits.join(" ");
+}
+
+function _joinTempWeeklyList(list) {
+  const parts = list.map((d) => `${d.name} (${d.tempC}°C, ${d.province})`);
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+// Forward-looking counterpart to _pastDayNarrative/_tempAssessmentNarrative
+// — built from _state.weeklyTempSamples (see _sampleMeteoblueTemperatureAllSteps
+// / _buildTempWeeklySamples), sampled once per session during
+// _runChapter2Intro, same as Chapter 3's precipitation values.
+function _tempWeeklyNarrative(weeklyTempSamples) {
+  if (!weeklyTempSamples.length) {
+    return "The 8-day temperature outlook is not currently returning sampled values for any monitored district — the Heatwave Monitoring and Max Temp Records data above remain the authoritative current and historical record.";
+  }
+  const lead = weeklyTempSamples[0];
+  const bits = [
+    `Looking ahead, the Meteoblue 8-day outlook points to the highest sustained temperatures at ${lead.name} in ${lead.province}, forecast to reach ${lead.tempC}°C.`,
+  ];
+  const others = weeklyTempSamples.slice(1, 4);
+  if (others.length) bits.push(`Also trending hot over the coming week: ${_joinTempWeeklyList(others)}.`);
+  bits.push("Values are sampled directly from Meteoblue's weekly 2-metre temperature layer, each step carrying its own forecast date, not estimated.");
   return bits.join(" ");
 }
 
@@ -2048,6 +2202,7 @@ function _sceneTitle(scene) {
     case "ch2-intro":       return "Chapter 2 — Temperature Outlook";
     case "temp-layer":      return "2m Temperature — Past 24 Hours";
     case "temp-station":    return `Station Focus — ${scene.entry.feature.properties?.name}${scene.entry.province ? ` (${scene.entry.province})` : ""}`;
+    case "temp-weekly":     return "8-Day Temperature Outlook";
     case "temp-assessment": return "National Temperature Assessment";
     case "ch3-intro":       return "Chapter 3 — Forecasted Precipitation Outlook";
     case "precip-layer":    return "24h Precipitation Forecast";
@@ -2099,6 +2254,9 @@ function _renderSceneBody(card, scene) {
     if (Number.isFinite(props.wind_speed) && props.wind_speed > 0) pills.push(`Wind ${props.wind_speed} km/h`);
     const alertPillClass = alert !== "Normal" ? "dwr-fact-pill is-alert" : "dwr-fact-pill";
     factsHtml = `<div class="dwr-facts"><span class="${alertPillClass}">${_escapeHtml(alert)}</span>${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>`;
+  } else if (scene.kind === "temp-weekly") {
+    const lead = (scene.weeklyTempSamples || _state.weeklyTempSamples)?.[0];
+    factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill">${_hlNum(`${lead.tempC}°C`)} 8-day peak</span></div>` : "";
   } else if (scene.kind === "temp-assessment") {
     const lead = _state.hottestStations?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill is-alert">${_hlNum(`${lead.temp}°C`)} peak reading</span></div>` : "";
@@ -2835,6 +2993,42 @@ async function _runChapter2Intro(map, token, seq) {
   ]);
   if (_isStale(token, seq)) return;
   _setLayerLoadingNote(card, null);
+
+  // Weekly temperature VALUES: query every step of the Meteoblue 2m
+  // Temperature layer directly (never through handleTemporalInteraction/
+  // #temp-slider1 — see _sampleMeteoblueTemperatureAllSteps) and cache
+  // them, same "sample once per session" rule Chapter 3 uses for
+  // precipitation. Reuses _precipCandidateDistricts purely as a
+  // geographic candidate pool (up to 3 real-coordinate districts per
+  // province) — districts get re-ranked by sampled temperature here, the
+  // pool's own rainfall-based ordering doesn't matter.
+  if (!_state.meteoblueTempSampledOnce) {
+    _setLayerLoadingNote(card, "Sampling Meteoblue 8-day temperature outlook for monitored districts…");
+    const candidates = _precipCandidateDistricts(_state.report, _state.observations?.features || []);
+    const temperatureMap = await _sampleMeteoblueTemperatureAllSteps(map, candidates).catch(() => new Map());
+    _state.meteoblueTemperature = temperatureMap;
+    _state.weeklyTempSamples = _buildTempWeeklySamples(candidates, temperatureMap);
+    _state.meteoblueTempSampledOnce = true;
+    _setLayerLoadingNote(card, null);
+  }
+  if (_isStale(token, seq)) return;
+
+  // Splice the weekly-outlook scene in right before temp-assessment —
+  // guarded so re-entering ch2-intro (Prev/dot-click) never inserts a
+  // second copy. Mirrors _runChapter3Intro's own scene-splice pattern.
+  if (!_state.chapter2WeeklyScenesBuilt) {
+    const assessmentIdx = _state.scenes.findIndex((s) => s.kind === "temp-assessment");
+    const insertAt = assessmentIdx >= 0 ? assessmentIdx : _state.scenes.length;
+    _state.scenes.splice(insertAt, 0, {
+      kind: "temp-weekly",
+      chapter: 2,
+      weeklyTempSamples: _state.weeklyTempSamples,
+      caption: _tempWeeklyNarrative(_state.weeklyTempSamples),
+    });
+    _state.chapter2WeeklyScenesBuilt = true;
+    const cardEl = document.getElementById(CARD_ID);
+    if (cardEl) _renderDots(cardEl);
+  }
 }
 
 async function _runTempLayer(map, token, seq) {
@@ -2904,6 +3098,18 @@ async function _runTempStation(map, scene, token, seq) {
     setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
   }
   _showTempStationPopup(scene);
+}
+
+// Forward-looking outlook scene, spliced in right before temp-assessment
+// once its Meteoblue sampling pass has run (see _runChapter2Intro) —
+// national-scale, no per-district flyover tour (unlike Chapter 3's
+// precip-district scenes), same camera treatment as _runTempLayer/
+// _runPrecipLayer's national reveal.
+async function _runTempWeekly(map, scene, token, seq) {
+  try { hideHeatwaveModal(); } catch (_) {}
+  await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.7, pitch: 15, bearing: 4, duration: _dur(1800) });
+  if (_isStale(token, seq)) return;
+  _showTempWeeklyPopup(scene);
 }
 
 async function _runTempAssessment(map) {
@@ -3328,30 +3534,44 @@ function _showTempLayerPopup() {
     .map((f) => ({ name: f.properties.name, province: f.properties.province, tempMax: f.properties.temp_max, tempMin: f.properties.temp_min }))
     .sort((a, b) => b.tempMax - a.tempMax);
   const records = _state.maxTempRecords || [];
-  const rows = feats.slice(0, 8).map((f) => {
-    const record = records.find((r) => _normName(r.name) === _normName(f.name));
-    const recordNote = record ? `<div class="dwrp-live-note">On-record max: ${_hlNum(`${record.temp}°C`)}${record.date ? ` (${_escapeHtml(record.date)})` : ""}</div>` : "";
-    return `
-      <tr>
-        <td>${_escapeHtml(f.name || "")}<div class="dwrp-district-prov">${_escapeHtml(f.province || "")}</div></td>
-        <td>${_hlNum(`${f.tempMax}°C`)}${Number.isFinite(f.tempMin) ? ` / ${_hlNum(`${f.tempMin}°C`)}` : ""}${recordNote}</td>
-      </tr>
-    `;
-  }).join("");
+
+  // Same Open-Meteo-outage fallback as _pastDayNarrative — when Heatwave
+  // Monitoring returns no usable temp_max readings at all (429-rate-
+  // limited), build this table from Max Temp Records directly instead of
+  // showing an empty state. Max Temp Records carries no province field
+  // (see _extractMaxTempRows), so that column is simply omitted here.
+  const usingRecordsFallback = !feats.length && records.length > 0;
+  const rows = usingRecordsFallback
+    ? records.slice(0, 8).map((r) => `
+        <tr>
+          <td>${_escapeHtml(r.name || "")}</td>
+          <td>${_hlNum(`${r.temp}°C`)}${r.date ? `<div class="dwrp-live-note">On-record: ${_escapeHtml(r.date)}</div>` : ""}</td>
+        </tr>
+      `).join("")
+    : feats.slice(0, 8).map((f) => {
+        const record = records.find((r) => _normName(r.name) === _normName(f.name));
+        const recordNote = record ? `<div class="dwrp-live-note">On-record max: ${_hlNum(`${record.temp}°C`)}${record.date ? ` (${_escapeHtml(record.date)})` : ""}</div>` : "";
+        return `
+          <tr>
+            <td>${_escapeHtml(f.name || "")}<div class="dwrp-district-prov">${_escapeHtml(f.province || "")}</div></td>
+            <td>${_hlNum(`${f.tempMax}°C`)}${Number.isFinite(f.tempMin) ? ` / ${_hlNum(`${f.tempMin}°C`)}` : ""}${recordNote}</td>
+          </tr>
+        `;
+      }).join("");
   _presentPopup(`
     <div class="dwrp-head">
       <span class="dwrp-dot" aria-hidden="true"></span>
       <span class="dwrp-title">Past 24 Hours — Temperature</span>
-      <span class="dwrp-badge">High / Low</span>
+      <span class="dwrp-badge">${usingRecordsFallback ? "On-Record" : "High / Low"}</span>
     </div>
     <div class="dwrp-body">
       ${rows ? `
-      <div class="dwrp-table-label">Hottest stations, past 24h</div>
+      <div class="dwrp-table-label">${usingRecordsFallback ? "Hottest on-record stations (Max Temp Records)" : "Hottest stations, past 24h"}</div>
       <table class="dwrp-table">
-        <thead><tr><th>Station</th><th>High / Low</th></tr></thead>
+        <thead><tr><th>Station</th><th>${usingRecordsFallback ? "On-Record Max" : "High / Low"}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` : `<div class="dwrp-summary-line">No past-24-hour temperature data is currently available from any connected source.</div>`}
-      <div class="dwrp-summary-line dwrp-summary-secondary">Source: PMD Heatwave Monitoring (Open-Meteo-derived) + historical Max Temp Records. Layer: PMD 2m Temperature prediction, shown for visual context only.</div>
+      <div class="dwrp-summary-line dwrp-summary-secondary">${usingRecordsFallback ? "Live Open-Meteo readings are temporarily unavailable (rate-limited) — showing PMD's historical Max Temperature Records instead." : "Source: PMD Heatwave Monitoring (Open-Meteo-derived) + historical Max Temp Records. Layer: PMD 2m Temperature prediction, shown for visual context only."}</div>
     </div>
   `);
 }
@@ -3490,6 +3710,58 @@ function _showPrecipDistrictPopup(scene) {
       ${peakLine}
       ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
       ${_dayWiseRowsMarkup(e.weeklySeries)}
+    </div>
+  `);
+}
+
+// Chapter 2's weekly-outlook counterpart to _dayWiseRowsMarkup — same
+// "Today"/"+1d".../"+7d" step labels with each step's real forecast date
+// (not just an offset), just against °C values instead of mm.
+function _tempDayWiseRowsMarkup(weeklySeries) {
+  if (!Array.isArray(weeklySeries) || !weeklySeries.length) return "";
+  const rows = weeklySeries.map((p, i) => `
+    <tr>
+      <td>${_escapeHtml(_DAY_WISE_LABELS[i] || `+${i}d`)}</td>
+      <td>${_escapeHtml(String(p.date || "—"))}</td>
+      <td>${_hlNum(`${p.tempC}°C`)}</td>
+    </tr>
+  `).join("");
+  return `
+    <div class="dwrp-table-label">Day-by-day outlook (Meteoblue weekly 2m Temperature)</div>
+    <table class="dwrp-table">
+      <thead><tr><th>Day</th><th>Date</th><th>Forecast</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// National-scope summary, mirroring _showPrecipLayerPopup's table shape —
+// top sampled districts by today's forecast value, plus the leading
+// district's full 8-day, timestamped breakdown underneath.
+function _showTempWeeklyPopup(scene) {
+  const samples = scene.weeklyTempSamples || [];
+  const rows = samples.slice(0, 8).map((d) => `
+    <tr>
+      <td>${_escapeHtml(d.name)}<div class="dwrp-district-prov">${_escapeHtml(d.province)}</div></td>
+      <td>${_hlNum(`${d.tempC}°C`)}</td>
+    </tr>
+  `).join("");
+  const lead = samples[0];
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">8-Day Temperature Outlook</span>
+      <span class="dwrp-badge">Sampled</span>
+    </div>
+    <div class="dwrp-body">
+      ${rows ? `
+      <div class="dwrp-table-label">Highest forecast districts (today's step, sampled)</div>
+      <table class="dwrp-table">
+        <thead><tr><th>District</th><th>Forecast</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : `<div class="dwrp-summary-line">No 8-day temperature values could be sampled for currently reachable districts.</div>`}
+      ${lead ? _tempDayWiseRowsMarkup(lead.weeklySeries) : ""}
+      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled from the Meteoblue weekly 2-metre temperature layer at each district's vicinity (highest reading within ~20km, not just the exact station point) — each step carries its own forecast date/timestamp.</div>
     </div>
   `);
 }
@@ -3699,6 +3971,9 @@ async function _enterScene(card, scene, token, seq) {
       if (prevKind !== "temp-station") await _ensureHeatwaveLayerOn();
       if (_isStale(token, seq)) return;
       await _runTempStation(map, scene, token, seq);
+    } else if (scene.kind === "temp-weekly") {
+      if (_isStale(token, seq)) return;
+      await _runTempWeekly(map, scene, token, seq);
     } else if (scene.kind === "temp-assessment") {
       if (_isStale(token, seq)) return;
       await _runTempAssessment(map);
@@ -3940,6 +4215,7 @@ async function _loadAndPlay(card) {
   if (token !== _state.runToken) return;
   _state.index = 0;
   _state.chapter3ScenesBuilt = false; // fresh load — Chapter 3's scenes get (re)built the next time ch3-intro is reached
+  _state.chapter2WeeklyScenesBuilt = false; // fresh load — Chapter 2's weekly-outlook scene gets (re)built the next time ch2-intro is reached
   _setSpeed(1, 1); // fresh load always starts at normal forward speed, regardless of a prior session
   _prepareDistrictHighlight(_state.discussedDistricts);
 
