@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [74.1945, 32.1877]}, "properties": {"name": "Gujranwala", "province": "Punjab", "temperature": 33.0, "apparent_temperature": 41.5, "humidity": 67, "precipitation": 0.0, "wind_speed": 2.9, "weather_code": 0, "temp_max": 34.7, "temp_min": 26.8, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

@@ -1,0 +1,1218 @@
+# GCOP — WMS Connector: Full Ground-Up Replication Guide
+
+A complete, function-by-function guide to rebuilding GCOP's WMS connector
+control — the URL input + "Connect"/"Add WMS" button pair that lets a user
+paste any WMS service and either drop one layer straight onto the map, or
+browse that service's full `GetCapabilities` document and bulk-add layers,
+each with automatic time-dimension detection and a flicker-free play/scrub
+animation for any layer that has one.
+
+This is one piece of GCOP's larger GIS Import tab (see
+`GCOP_GIS_Import_Control_Integration_Guide.md` for the full tab, including
+file drag-drop and the symbology toolkit) — but it's a genuinely
+self-contained subsystem: everything here works off one text input, two
+buttons, and one shared `importedLayers` array, and can be lifted into any
+Mapbox GL JS + Django app on its own. This guide assumes only that you have
+*some* array to push imported-layer entries into and *some* function that
+re-renders a list from it — the exact shape used here is documented in §3
+so you can adapt it.
+
+Every function below is the real, currently-running GCOP code, not
+reconstructed from memory.
+
+---
+
+## 1. What this control does (user-facing)
+
+The whole control is one text input plus two buttons:
+
+```html
+<div class="ncop-ep-wms-row">
+  <input type="text" id="ncop-ep-wms-url" placeholder="WMS URL - paste GetMap or base WMS endpoint">
+  <div id="ncop-ep-wms-layer-row" style="display:none">
+    <input type="text" id="ncop-ep-wms-layer-name" placeholder="Layer name (e.g. topp:states)">
+  </div>
+  <button id="ncop-ep-wms-connect" title="Fetch capabilities and list available layers">Connect</button>
+  <button id="ncop-ep-wms-add">Add WMS</button>
+</div>
+```
+
+Two independent workflows, both starting from the same URL field:
+
+1. **Quick add** — paste a URL (a full `GetMap` request copied from
+   somewhere, or a bare service base URL + a layer name typed into the
+   second field), click **Add WMS**. One raster layer appears immediately.
+   No round-trip to inspect the service first — you're asserting you
+   already know the layer name.
+2. **Browse and bulk-add** — paste just the service's base URL, click
+   **Connect**. GCOP fetches and parses that service's `GetCapabilities`
+   document server-side, and shows every layer it offers: title,
+   description, a "Temporal" badge for layers with a time dimension, a
+   checkbox, and a per-layer "ⓘ" info popover. Tick what you want (or
+   "Select All"), click **Add Selected**.
+
+Either path funnels into the same `addWmsImportLayer()` function (§5), and
+any layer that turns out to have more than one time step automatically gets
+a play/scrub slider on its card, backed by a pre-loading frame cache (§9) so
+scrubbing and playback are flicker-free and don't hammer the remote server.
+
+The **layer-name field only appears when it's actually needed**:
+```js
+wmsInput?.addEventListener("input", () => {
+  const v = wmsInput.value.trim();
+  const hasGetMap = /request=GetMap/i.test(v) || /\{bbox/i.test(v);
+  if (wmsLayerRow) wmsLayerRow.style.display = v && !hasGetMap ? "flex" : "none";
+});
+```
+If what's pasted already looks like a full `GetMap` request (or an
+already-templated tile URL), the layer name is embedded in it — asking for
+it again would be redundant. It only shows up for a bare base URL, where a
+layer name genuinely can't be inferred.
+
+---
+
+## 2. Architecture at a glance
+
+```
+                    [ WMS URL text input ]
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                              ▼
+        "Add WMS" click                "Connect" click
+              │                              │
+      buildWmsTileUrl()             GET /wms-capabilities/?url=...
+      (3-way URL-shape parse)         (Django → remote WMS, CORS-free)
+              │                              │
+      proxyWmsTileUrl()              parseWmsCapabilitiesXML()
+      (route through Django)          (recursive <Layer> tree walk,
+              │                        inherited time/abstract)
+              │                              │
+              │                      renderWmsCapsHTML()
+              │                      → checkbox list + "Add Selected"
+              │                              │
+              └──────────────┬───────────────┘
+                              ▼
+                    addWmsImportLayer(url, layerName, extra)
+                              │
+                map.addSource/addLayer (type: "raster")
+                              │
+                 has >1 time step? ──yes──► WMS time-animation
+                       │no                   cache + play/scrub (§9)
+                       ▼
+                  single static
+                  raster overlay
+```
+
+Both entry points converge on one function, and everything downstream
+(the map layer itself, the card in the imported-layers list, the time
+animation if applicable) is identical regardless of which button the user
+clicked.
+
+---
+
+## 3. Prerequisites
+
+| Need | Purpose |
+|---|---|
+| Django + `requests` | Two thin server-side proxy endpoints — WMS servers routinely don't send CORS headers, so the browser can't call them directly. |
+| A Mapbox GL JS map instance | Target for `addSource`/`addLayer`. |
+| `DOMParser` (browser-native) | Parsing the `GetCapabilities` XML response — no XML library needed. |
+| Some shared "imported layers" list + a function that re-renders a card list from it | This guide's `addWmsImportLayer()` pushes a plain object into `layerExportState.importedLayers` and calls `refreshImportedList()` — swap in whatever equivalent your app already has; the entry shape is documented in §5.3. |
+| A CSRF token helper, if your Django views require one | GCOP's two WMS proxies are simple `GET`s and don't need one; only relevant if you adapt this to a `POST`-based proxy. |
+
+---
+
+## 4. Part A — Building the tile URL from whatever the user pasted
+
+The single hardest part of "just paste a WMS URL" is that people paste
+**three genuinely different shapes** of URL, and the control has to
+recognize which one it's looking at without asking:
+
+```js
+function buildWmsTileUrl(rawUrl, wmsLayerName, extra = {}) {
+  let tileUrl;
+
+  if (/\{bbox-epsg-3857\}/i.test(rawUrl)) {
+    // Shape 1: already a Mapbox-style tile template (e.g. re-used from a
+    // previous session, or hand-authored) — nothing to rewrite
+    tileUrl = rawUrl;
+  } else if (/request=GetMap/i.test(rawUrl)) {
+    // Shape 2: a full GetMap request — likely copied out of a browser's own
+    // "view WMS request" debug panel, or another map client's network tab.
+    // It has a real bbox/width/height for SOME specific view; rewrite those
+    // into Mapbox's own tile-substitution placeholder and a fixed tile size.
+    tileUrl = rawUrl
+      .replace(/([?&])bbox=[^&]*/i, `$1bbox={bbox-epsg-3857}`)
+      .replace(/([?&])width=[^&]*/i, "$1width=256")
+      .replace(/([?&])height=[^&]*/i, "$1height=256");
+    if (!/bbox=/i.test(tileUrl)) {
+      // Defensive: some captured URLs omit bbox/width/height entirely
+      tileUrl += "&bbox={bbox-epsg-3857}&width=256&height=256&transparent=true";
+    }
+  } else {
+    // Shape 3: a bare service base URL (e.g. ".../geoserver/wms") — build a
+    // complete GetMap request from scratch using the typed layer name.
+    const base = rawUrl.includes("?") ? rawUrl.split("?")[0] : rawUrl;
+    const lyr = wmsLayerName || "0";
+    tileUrl = `${base}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(lyr)}&bbox={bbox-epsg-3857}&width=256&height=256&srs=EPSG:3857&format=image/png&transparent=true`;
+  }
+
+  // TIME handling, shared by all three shapes above: strip any pre-existing
+  // TIME param (there may already be one baked into a captured GetMap URL,
+  // or this may be a re-build for a different time step during scrubbing),
+  // then append the requested one if given.
+  tileUrl = tileUrl.replace(/([?&])time=[^&]*&?/i, "$1").replace(/[?&]$/, "");
+  if (extra.time) {
+    tileUrl += `&time=${encodeURIComponent(extra.time)}`;
+  }
+  return tileUrl;
+}
+```
+
+This one function is reused for **every** tile URL construction in the
+whole subsystem — the initial "Add WMS" click, every layer added from the
+capabilities browser, and every individual time-step frame in the
+animation cache (§9) all call it, just with different `extra.time` values.
+There's no second, parallel URL-building path anywhere else in this system
+— keep it that way if you extend this; a second ad-hoc URL builder is how
+these three shapes drift out of sync with each other.
+
+`version=1.1.1` is hardcoded for the from-scratch case (Shape 3) — deliberately
+the older, more universally-tolerated WMS version for a "build a request with
+minimal information" fallback; a real `GetCapabilities` response can (and
+does, via the browsing path in §7) advertise a newer version, but that path
+gets the version from the actual server response rather than guessing.
+
+---
+
+## 5. Part B — "Add WMS": the quick path
+
+### 5.1 Routing tiles through Django to dodge CORS
+
+```js
+// Routes a tile URL through the Django backend so cross-origin WMS servers
+// that don't send CORS headers can still be loaded as map tiles.
+function proxyWmsTileUrl(tileUrl) {
+  const PLACEHOLDER = "{bbox-epsg-3857}";
+  const MARKER = "__NCOP_BBOX_MARKER__";
+  const encoded = encodeURIComponent(tileUrl.replace(PLACEHOLDER, MARKER)).replace(MARKER, PLACEHOLDER);
+  return `/wms-tile/?url=${encoded}`;
+}
+```
+
+**Read this function carefully before reusing it — it's a small trick that's
+easy to get subtly wrong.** Mapbox GL substitutes `{bbox-epsg-3857}` itself,
+at actual tile-request time, by string-replacing that exact literal
+substring inside whatever URL the source config holds. If you naively
+`encodeURIComponent()` the *entire* tile URL before handing it to the proxy
+endpoint, the braces get percent-encoded (`%7Bbbox-epsg-3857%7D`) along with
+everything else — and Mapbox's substitution logic, which looks for the
+literal unencoded string, will never find a match. Every tile request would
+then go out with the placeholder text still embedded verbatim instead of a
+real bounding box.
+
+The fix: swap the placeholder out for a plain, URL-safe token string
+*before* encoding, encode the rest of the URL normally (safely handling any
+`&`/`=`/etc. inside the WMS URL, since it's about to become a query-string
+value itself), then swap the literal placeholder text back in after
+encoding. The net result is a `/wms-tile/?url=...` string where everything
+is properly percent-encoded **except** the one substring Mapbox still needs
+to find and replace per-tile.
+
+### 5.2 The backend tile proxy
+
+```python
+class NcopWmsTileProxyView(View):
+    """Fetch a remote WMS GetMap tile server-side to avoid CORS-blocked tile loads."""
+    def get(self, request):
+        tile_url = request.GET.get("url", "").strip()
+        if not tile_url:
+            return HttpResponse(status=400)
+        try:
+            resp = requests.get(tile_url, timeout=20, verify=False)
+            resp.raise_for_status()
+            return HttpResponse(resp.content, content_type=resp.headers.get("Content-Type", "image/png"))
+        except Exception as e:
+            logger.error(f"WMS tile fetch failed for {tile_url}: {e}")
+            return HttpResponse(status=502)
+```
+```python
+# urls.py
+path("wms-tile/", NcopWmsTileProxyView.as_view(), name="wms-tile"),
+```
+
+Deliberately thin — no caching, no validation beyond "is there a URL at
+all," just a same-origin relay. Mapbox GL's own tile cache handles repeat
+requests for the same tile at the browser level; this view's only job is
+making the *first* request to any given tile same-origin so the browser
+doesn't block it. `verify=False` because plenty of internal/self-signed WMS
+deployments are the actual real-world target for this feature — if your
+target WMS servers all have valid public certs, drop that.
+
+### 5.3 Adding the layer
+
+```js
+function addWmsImportLayer(rawUrl, wmsLayerName, extra = {}, customLabel = "") {
+  const id = `ncop-imp-wms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const tileUrl = buildWmsTileUrl(rawUrl, wmsLayerName, extra);
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+    map.addSource(id, { type: "raster", tiles: [proxiedTileUrl], tileSize: 256 });
+    map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.9 } });
+  } catch (err) {
+    setImportStatus(`Failed to add WMS: ${err.message}`, true);
+    return;
+  }
+
+  const label = customLabel || wmsLayerName || new URL(rawUrl.replace(/\{[^}]+\}/g, "placeholder")).hostname;
+  let wmsTimeIndex = -1;
+  if (extra.times) {
+    wmsTimeIndex = extra.times.indexOf(extra.time);
+    if (wmsTimeIndex < 0) wmsTimeIndex = extra.times.length - 1; // fall back to the newest step
+  }
+  const entry = {
+    id, label, type: "WMS", sourceId: id, layerIds: [id], geomClass: "wms",
+    numericFields: [], _props: [], symState: null,
+    wmsRawUrl: rawUrl,
+    wmsLayerName: wmsLayerName || "",
+    wmsTime: extra.time || null,
+    wmsTimes: extra.times || null,
+    wmsTimeIndex,
+  };
+  if (entry.wmsTimes?.length > 1) {
+    // Seed the time-animation cache with the frame we just built as source id
+    entry._wmsTimeCache = new Map();
+    entry._wmsTimeCache.set(wmsTimeIndex, { layerId: id, sourceId: id, index: wmsTimeIndex, lastUsed: Date.now() });
+    entry._wmsActiveTimeLayerId = id;
+    preloadAdjacentWmsTimes(entry, wmsTimeIndex); // start warming neighboring frames right away — see §9
+  }
+  layerExportState.importedLayers.push(entry);
+  refreshImportedList();
+  setImportStatus(`WMS layer added: ${label}`);
+}
+```
+
+Notice the newly-added map source/layer (id `id`) becomes frame `wmsTimeIndex`
+of the time cache directly, rather than being thrown away and rebuilt — the
+very first frame the user sees is not wasted work.
+
+### 5.4 Wiring the button
+
+```js
+wmsAddBtn?.addEventListener("click", () => {
+  const url = wmsInput?.value?.trim() || "";
+  const layerName = wmsLayerInput?.value?.trim() || "";
+  if (!url) { setImportStatus("Paste a WMS URL first.", true); return; }
+  addWmsImportLayer(url, layerName);
+});
+```
+
+---
+
+## 6. Part C — "Connect": fetching `GetCapabilities`
+
+```js
+let wmsCapsState = null; // last-fetched capabilities, kept around so "Add Selected" can read it back
+
+async function fetchWmsCapabilities(rawUrl) {
+  const wmsCapsBox = layerExportPanelContent?.querySelector("#ncop-ep-wms-caps");
+  if (!wmsCapsBox) return;
+
+  setImportStatus("Connecting to WMS service...");
+  wmsCapsBox.style.display = "block";
+  wmsCapsBox.innerHTML = `<div class="ncop-ep-wms-caps-loading">Fetching capabilities...</div>`;
+
+  try {
+    const proxyUrl = `/wms-capabilities/?url=${encodeURIComponent(rawUrl)}`;
+    const res = await fetch(proxyUrl);
+    const text = await res.text();
+
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+
+    const parsed = parseWmsCapabilitiesXML(text);
+    if (!parsed.layers.length) throw new Error("No layers found in capabilities document");
+
+    wmsCapsState = { baseUrl: rawUrl, ...parsed };
+    wmsCapsBox.innerHTML = renderWmsCapsHTML(wmsCapsState);
+    setImportStatus(`Connected - ${parsed.layers.length} layer${parsed.layers.length === 1 ? "" : "s"} available.`);
+  } catch (err) {
+    wmsCapsState = null;
+    wmsCapsBox.innerHTML = `<div class="ncop-ep-wms-caps-error">Failed to load capabilities: ${escapeHtml(err.message)}</div>`;
+    setImportStatus(`WMS capabilities request failed: ${err.message}`, true);
+  }
+}
+```
+
+Wired to the Connect button and to hitting Enter in the URL field:
+```js
+wmsConnectBtn?.addEventListener("click", () => {
+  const url = wmsInput?.value?.trim() || "";
+  if (!url) { setImportStatus("Paste a WMS base URL first.", true); return; }
+  fetchWmsCapabilities(url);
+});
+wmsInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); wmsConnectBtn?.click(); }
+});
+```
+
+### 6.1 The backend capabilities proxy
+
+```python
+class NcopWmsCapabilitiesProxyView(View):
+    """Fetch a remote WMS GetCapabilities document server-side to avoid CORS."""
+    def get(self, request):
+        from urllib.parse import urlparse, urlunparse, parse_qsl
+        base_url = request.GET.get("url", "").strip()
+        if not base_url:
+            return JsonResponse({"error": "Missing url parameter"}, status=400)
+        try:
+            parsed = urlparse(base_url)
+            params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            params_lower = {k.lower(): k for k in params}
+
+            # Only fill in what's missing — a URL the user pasted that
+            # already specifies e.g. VERSION=1.1.1 keeps that choice
+            if "service" not in params_lower: params["service"] = "WMS"
+            if "request" not in params_lower: params["request"] = "GetCapabilities"
+            if "version" not in params_lower: params["version"] = "1.3.0"
+
+            full_url = urlunparse(parsed._replace(query=urlencode(params)))
+
+            resp = requests.get(full_url, timeout=20, verify=False)
+            resp.raise_for_status()
+            return HttpResponse(resp.content, content_type=resp.headers.get("Content-Type", "text/xml"))
+        except Exception as e:
+            logger.error(f"WMS capabilities fetch failed for {base_url}: {e}")
+            return JsonResponse({"error": str(e)}, status=502)
+```
+```python
+# urls.py
+path("wms-capabilities/", NcopWmsCapabilitiesProxyView.as_view(), name="wms-capabilities"),
+```
+
+Same "fill in only what's missing" philosophy as the tile-URL builder in
+§4 — a user can paste either a bare service root, or a URL that already
+carries some WMS query params (perhaps copied from documentation showing a
+non-default version), and both are respected.
+
+---
+
+## 7. Part D — Parsing the `GetCapabilities` XML
+
+WMS Capabilities documents are a **tree** of `<Layer>` elements, and two
+pieces of metadata — the time `<Dimension>`/`<Extent>` and the `<Abstract>`
+description — can be declared once on a *parent* layer and implicitly apply
+to every child layer that doesn't redeclare them. This is real, common WMS
+server behavior (a service groups all its temporal layers under one parent
+that carries the shared time extent), not an edge case worth skipping:
+
+```js
+function parseWmsCapabilitiesXML(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("Invalid capabilities XML");
+
+  const root = doc.documentElement;
+  const version = root?.getAttribute("version") || "1.3.0";
+  const layers = [];
+
+  function readTimeDimension(layerEl) {
+    // WMS 1.3.0 uses <Dimension name="time">...</Dimension>;
+    // WMS 1.1.x uses the older <Extent name="time">...</Extent> — support both
+    const dimEl = [...layerEl.children].find(
+      (el) => el.tagName.toLowerCase() === "dimension" && (el.getAttribute("name") || "").toLowerCase() === "time"
+    );
+    const extEl = [...layerEl.children].find(
+      (el) => el.tagName.toLowerCase() === "extent" && (el.getAttribute("name") || "").toLowerCase() === "time"
+    );
+    if (!dimEl && !extEl) return null;
+    const extent = (extEl?.textContent || dimEl?.textContent || "").trim();
+    const def = (extEl?.getAttribute("default") || dimEl?.getAttribute("default") || "").trim();
+    if (!extent && !def) return null;
+    return { extent, default: def };
+  }
+
+  function walk(layerEl, inheritedTime, inheritedAbstract) {
+    const children = [...layerEl.children];
+    const nameEl = children.find((el) => el.tagName.toLowerCase() === "name");
+    const titleEl = children.find((el) => el.tagName.toLowerCase() === "title");
+    const abstractEl = children.find((el) => el.tagName.toLowerCase() === "abstract");
+    const name = nameEl?.textContent.trim() || "";
+    const title = titleEl?.textContent.trim() || name;
+
+    const ownTime = readTimeDimension(layerEl);
+    const time = ownTime || inheritedTime || null;           // this layer's own dimension wins; else inherit from parent
+    const abstract = abstractEl?.textContent.trim() || inheritedAbstract || "";
+
+    // Only layers with a <Name> are addable (a WMS "container" layer with no
+    // Name exists purely for grouping and can't itself be requested)
+    if (name) layers.push({ name, title, time, abstract });
+
+    children
+      .filter((el) => el.tagName.toLowerCase() === "layer")
+      .forEach((child) => walk(child, time, abstract));      // thread inheritance down to children
+  }
+
+  const capabilityEl = [...root.children].find((el) => el.tagName.toLowerCase() === "capability");
+  const topLayers = capabilityEl
+    ? [...capabilityEl.children].filter((el) => el.tagName.toLowerCase() === "layer")
+    : [];
+  topLayers.forEach((l) => walk(l, null, ""));
+
+  return { version, layers };
+}
+```
+
+**Why `DOMParser` + manual `tagName` matching, not a real XML/XPath
+library**: `new DOMParser().parseFromString(xml, "text/xml")` ships in
+every browser — zero dependency to add — and this document's structure is
+shallow and predictable enough that a recursive walk over `.children`,
+comparing lowercased tag names (so it doesn't matter whether the server
+emits `<Layer>`, `<wms:Layer>`, or any other namespace prefix — only the
+local part is checked), is genuinely simpler than integrating a full XML
+library for one narrow use.
+
+---
+
+## 8. Part E — Rendering the layer picker
+
+```js
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function renderWmsCapsHTML(state) {
+  const rows = state.layers.map((l, i) => {
+    const timeBadge = l.time
+      ? `<span class="ncop-ep-wms-time-badge" title="${escapeHtml(l.time.extent || l.time.default || "")}">Temporal${l.time.default ? ` - ${escapeHtml(l.time.default)}` : ""}</span>`
+      : "";
+    return `
+      <div class="ncop-ep-wms-layer-row-item">
+        <label class="ncop-ep-wms-layer-row-label">
+          <input type="checkbox" class="ncop-ep-wms-layer-check" data-wms-layer-idx="${i}">
+          <span class="ncop-ep-wms-layer-text">
+            <span class="ncop-ep-wms-layer-title">${escapeHtml(l.title || l.name)}</span>
+            <span class="ncop-ep-wms-layer-name">${escapeHtml(l.name)}</span>
+          </span>
+          ${timeBadge}
+        </label>
+        <button type="button" class="ncop-ep-wms-info-btn" data-wms-info-idx="${i}" title="Layer info" aria-label="Layer information">i</button>
+      </div>
+      <div class="ncop-ep-wms-layer-info-panel" data-wms-info-panel="${i}" style="display:none"></div>`;
+  }).join("");
+
+  return `
+    <div class="ncop-ep-wms-caps-header">
+      <span>${state.layers.length} layer${state.layers.length === 1 ? "" : "s"} available</span>
+      <div class="ncop-ep-wms-caps-actions">
+        <button type="button" class="ncop-ep-wms-mini-btn" data-wms-select-all>Select All</button>
+        <button type="button" class="ncop-ep-wms-mini-btn ncop-ep-wms-mini-btn-primary" data-wms-add-selected>Add Selected</button>
+      </div>
+    </div>
+    <div class="ncop-ep-wms-caps-body">${rows}</div>
+  `;
+}
+```
+
+The index (`data-wms-layer-idx`) is the join key back to `wmsCapsState.layers`
+— nothing about a specific layer is duplicated into the DOM beyond what's
+needed to display it; the checkbox click handler and "Add Selected" both
+just read `wmsCapsState.layers[idx]` back out (§10).
+
+### 8.1 The per-layer "ⓘ" info popover
+
+```js
+// Builds the human-readable "what is this layer / how do I add it" info panel
+// shown when the small (i) button next to a capabilities row is clicked.
+function renderWmsLayerInfoHTML(layer) {
+  const desc = layer.abstract
+    ? escapeHtml(layer.abstract)
+    : "No description was provided by this WMS service for this layer.";
+
+  let timeInfo = "";
+  if (layer.time) {
+    const times = parseWmsTimeExtent(layer.time.extent || ""); // §9
+    if (times.length > 1) {
+      const start = formatWmsTimeLabel(times[0]);
+      const end = formatWmsTimeLabel(times[times.length - 1]);
+      timeInfo = `
+        <p><strong>Temporal layer</strong> - this layer offers ${times.length} time steps, from <strong>${escapeHtml(start)}</strong> to <strong>${escapeHtml(end)}</strong>.</p>
+        <p><strong>How time works once added:</strong> a small time slider with a timestamp label appears under this layer's card in the Import panel. Drag it to step through the available timestamps - GCOP rebuilds the layer's WMS <code>TIME</code> request and swaps the tiles in place. Nothing else on the map is affected.</p>`;
+    } else if (layer.time.default) {
+      timeInfo = `<p><strong>Temporal layer</strong> - the service only reports a single default time (<code>${escapeHtml(layer.time.default)}</code>), so it will be added showing that snapshot. No slider is shown since there is only one time step to choose from.</p>`;
+    }
+  }
+
+  return `
+    <div class="ncop-ep-wms-info-body">
+      <p class="ncop-ep-wms-info-desc">${desc}</p>
+      <p><strong>WMS layer name:</strong> <code>${escapeHtml(layer.name)}</code></p>
+      <p><strong>How to add this layer:</strong> tick the checkbox next to it (or use "Select All"), then click <strong>Add Selected</strong>. It is added as a raster overlay in the Import panel below, where you can adjust its opacity/style or remove it with the x button - it is not saved permanently and is only visible in this session.</p>
+      ${timeInfo}
+    </div>`;
+}
+```
+
+This is deliberately written as plain-language guidance ("here's what will
+happen if you add this"), not a raw metadata dump — it's answering the
+question a user actually has ("what am I about to add and what will it do"),
+computed live from real parsed data (the actual time-step count and range),
+not a static help text.
+
+Toggling it open/closed (delegated click handler, lives alongside every
+other panel button's handler):
+```js
+const wmsInfoBtn = e.target.closest("[data-wms-info-idx]");
+if (wmsInfoBtn) {
+  const idx = wmsInfoBtn.dataset.wmsInfoIdx;
+  const panel = e.target.closest(".ncop-ep-wms-caps-body")?.querySelector(`[data-wms-info-panel="${idx}"]`);
+  const layer = wmsCapsState?.layers?.[parseInt(idx, 10)];
+  if (panel && layer) {
+    const isOpen = panel.style.display !== "none";
+    if (isOpen) {
+      panel.style.display = "none";
+    } else {
+      panel.innerHTML = renderWmsLayerInfoHTML(layer); // built lazily, only when actually opened
+      panel.style.display = "block";
+    }
+  }
+}
+```
+
+The info HTML is built **on open**, not up-front for every layer in the
+list — for a service with hundreds of layers, that's hundreds of unused
+`renderWmsLayerInfoHTML()` calls avoided.
+
+---
+
+## 9. Part F — Expanding a WMS time dimension into concrete steps
+
+A WMS `<Extent name="time">` (or 1.3.0 `<Dimension name="time">`) value can
+take two shapes per the spec, and services routinely mix both in the same
+document:
+
+- A **plain comma-separated list** of exact timestamps: `"2024-01-01,2024-01-02,2024-01-03"`
+- An **interval range**: `"start/end/period"`, e.g. `"2024-01-01T00:00:00Z/2024-01-10T00:00:00Z/PT6H"`
+  (every 6 hours from Jan 1 to Jan 10) — and occasionally a range with *no*
+  period at all, which technically means "continuous," but has to be turned
+  into *some* finite list of discrete steps for a slider to make sense.
+
+```js
+// Parses a WMS ISO8601 duration ("P1D", "PT6H", "PT30M", ...) into Y/M/D/H/Min/Sec parts
+function parseISODuration(str) {
+  const m = String(str || "").match(/^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/);
+  if (!m) return null;
+  return {
+    years: +(m[1] || 0), months: +(m[2] || 0), days: +(m[3] || 0),
+    hours: +(m[4] || 0), minutes: +(m[5] || 0), seconds: +(m[6] || 0),
+  };
+}
+
+function addISODuration(date, dur) {
+  const d = new Date(date.getTime());
+  if (dur.years) d.setUTCFullYear(d.getUTCFullYear() + dur.years);
+  if (dur.months) d.setUTCMonth(d.getUTCMonth() + dur.months);
+  if (dur.days) d.setUTCDate(d.getUTCDate() + dur.days);
+  if (dur.hours) d.setUTCHours(d.getUTCHours() + dur.hours);
+  if (dur.minutes) d.setUTCMinutes(d.getUTCMinutes() + dur.minutes);
+  if (dur.seconds) d.setUTCSeconds(d.getUTCSeconds() + dur.seconds);
+  return d;
+}
+
+// Expands a WMS time Dimension/Extent string into a discrete list of ISO timestamps.
+function parseWmsTimeExtent(extentStr, maxSteps = 100) {
+  if (!extentStr) return [];
+  const out = [];
+  String(extentStr).split(",").map((s) => s.trim()).filter(Boolean).forEach((part) => {
+    if (part.includes("/")) {
+      const [startStr, endStr, periodStr] = part.split("/");
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      const dur = periodStr ? parseISODuration(periodStr) : null;
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        if (!isNaN(start.getTime())) out.push(start.toISOString());
+        return;
+      }
+      if (!dur) {
+        // No period given (e.g. "2018-01-01/2099-12-31") — spread evenly
+        // across the range so the layer still gets a usable time slider
+        // instead of failing outright.
+        const totalMs = end.getTime() - start.getTime();
+        const dayMs = 24 * 60 * 60 * 1000;
+        const stepMs = Math.max(totalMs / Math.max(maxSteps - 1, 1), dayMs);
+        let cur = start;
+        let count = 0;
+        while (cur.getTime() <= end.getTime() && count < maxSteps) {
+          out.push(cur.toISOString());
+          cur = new Date(cur.getTime() + stepMs);
+          count++;
+        }
+        return;
+      }
+      let cur = start;
+      let count = 0;
+      while (cur.getTime() <= end.getTime() && count < maxSteps) {
+        out.push(cur.toISOString());
+        cur = addISODuration(cur, dur);
+        count++;
+      }
+    } else {
+      // Plain single timestamp in the comma-list
+      const d = new Date(part);
+      out.push(isNaN(d.getTime()) ? part : d.toISOString());
+    }
+  });
+  return [...new Set(out)]; // de-dupe — a service could legally list overlapping ranges
+}
+
+// Finds the time step closest to a target ISO/date string (e.g. a WMS
+// dimension's `default` value, which may not exactly match a generated step
+// due to rounding or the server's own default not being period-aligned).
+function findClosestWmsTimeIndex(times, target) {
+  const targetMs = new Date(target).getTime();
+  if (isNaN(targetMs)) return -1;
+  let best = -1;
+  let bestDiff = Infinity;
+  times.forEach((t, i) => {
+    const diff = Math.abs(new Date(t).getTime() - targetMs);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  });
+  return best;
+}
+
+function formatWmsTimeLabel(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toISOString().slice(0, 16).replace("T", " ") + "Z";
+}
+```
+
+**`maxSteps = 100` is a hard, deliberate safety cap.** Real public WMS
+services have been observed advertising ranges like
+`"2000-01-01/2099-12-31/P1D"` — a full century of daily steps, over 36,000
+of them. Generating that many client-side time-step strings (let alone
+36,000 potential Mapbox layers if a user tried to preload adjacent frames
+across all of them) would freeze the tab. Capping at 100 means: for a
+reasonable service, every real step is captured; for a degenerate one, the
+control still produces *a* usable, evenly-distributed slider rather than
+hanging or crashing.
+
+---
+
+## 10. Part G — Adding the checked layers
+
+```js
+function addSelectedWmsCapsLayers() {
+  const wmsCapsBox = layerExportPanelContent?.querySelector("#ncop-ep-wms-caps");
+  if (!wmsCapsBox || !wmsCapsState) return;
+
+  const checks = [...wmsCapsBox.querySelectorAll(".ncop-ep-wms-layer-check:checked")];
+  if (!checks.length) { setImportStatus("Select at least one layer to add.", true); return; }
+
+  let added = 0;
+  checks.forEach((c) => {
+    const idx = parseInt(c.dataset.wmsLayerIdx, 10);
+    const layer = wmsCapsState.layers[idx];
+    if (!layer) return;
+
+    const extra = {};
+    if (layer.time?.extent) {
+      const times = parseWmsTimeExtent(layer.time.extent);
+      if (times.length > 1) {
+        extra.times = times;
+        const def = (layer.time.default || "").toLowerCase();
+        let defIdx = -1;
+        // "current"/"default" are WMS keyword defaults, not real timestamps
+        // — don't try to look them up as a literal date
+        if (def && !["current", "default"].includes(def)) {
+          defIdx = times.indexOf(layer.time.default);
+          if (defIdx < 0) defIdx = findClosestWmsTimeIndex(times, layer.time.default);
+        }
+        extra.time = defIdx >= 0 ? times[defIdx] : times[times.length - 1]; // fall back to the newest step
+      }
+    }
+    if (!extra.time && layer.time?.default) {
+      const def = layer.time.default.toLowerCase();
+      if (def !== "current" && def !== "default") extra.time = layer.time.default;
+    }
+
+    addWmsImportLayer(wmsCapsState.baseUrl, layer.name, extra, layer.title);
+    added++;
+  });
+  setImportStatus(`Added ${added} WMS layer${added === 1 ? "" : "s"}.`);
+}
+```
+
+Wired to both the per-layer checkboxes' "Select All" toggle and the "Add
+Selected" button, both delegated (same panel-wide click listener pattern as
+everywhere else in this system):
+```js
+const wmsSelectAll = e.target.closest("[data-wms-select-all]");
+if (wmsSelectAll) {
+  const box = e.target.closest(".ncop-ep-wms-caps");
+  const checks = box?.querySelectorAll(".ncop-ep-wms-layer-check");
+  const checkAll = !Array.from(checks || []).every((c) => c.checked); // toggle: if all are already checked, uncheck all
+  checks?.forEach((c) => { c.checked = checkAll; });
+  return;
+}
+const wmsAddSelected = e.target.closest("[data-wms-add-selected]");
+if (wmsAddSelected) { addSelectedWmsCapsLayers(); return; }
+```
+
+---
+
+## 11. Part H — The time-animation engine
+
+This is the part that turns "a layer happens to have multiple time steps"
+into an actual usable play/scrub experience, and it's the most involved
+piece of the whole WMS control. The naive approach — on every slider move,
+tear down the old tile source and build a new one with the new `TIME=` —
+would visibly flicker (blank frame while the new tiles load) and issue a
+fresh network request on every single drag event. Instead:
+
+**Every visited time step gets its own real Mapbox source+layer, kept
+around in a small cache. Switching between them is a paint-property
+(`raster-opacity`) change — instant, GPU-side, no network involved — while
+the *next* likely step is quietly warmed in the background.**
+
+```js
+const NCOP_WMS_TIME_CACHE_LIMIT = 8;
+const NCOP_WMS_FRAME_READY_TIMEOUT_MS = 8000;
+const NCOP_WMS_PLAY_INTERVAL_MS = 900;
+
+function getWmsLayerOpacity(entry) {
+  const op = entry?.symState?.opacity;
+  return Number.isFinite(op) ? op : 0.9;
+}
+
+function buildWmsTimeLayerIds(entry, index) {
+  return { sourceId: `${entry.id}-time-src-${index}`, layerId: `${entry.id}-time-layer-${index}` };
+}
+```
+
+### 11.1 Preparing a frame (without showing it)
+
+```js
+// Creates (or returns the already-cached) Mapbox source+layer for one time
+// index. A newly-created layer starts fully transparent — "prepared" and
+// "visible" are two separate steps on purpose.
+function ensureWmsTimeLayer(entry, index) {
+  if (!entry?._wmsTimeCache) entry._wmsTimeCache = new Map();
+  const cached = entry._wmsTimeCache.get(index);
+  if (cached && map.getLayer(cached.layerId) && map.getSource(cached.sourceId)) {
+    cached.lastUsed = Date.now();
+    return cached;
+  }
+
+  const ids = buildWmsTimeLayerIds(entry, index);
+  const time = entry.wmsTimes[index];
+  const tileUrl = buildWmsTileUrl(entry.wmsRawUrl, entry.wmsLayerName, { time });
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+
+  try {
+    if (!map.getSource(ids.sourceId)) {
+      map.addSource(ids.sourceId, { type: "raster", tiles: [proxiedTileUrl], tileSize: 256 });
+    }
+    if (!map.getLayer(ids.layerId)) {
+      map.addLayer({ id: ids.layerId, type: "raster", source: ids.sourceId, paint: { "raster-opacity": 0 } });
+    }
+  } catch (err) {
+    setImportStatus(`Failed to prepare WMS time frame: ${err.message}`, true);
+    return null;
+  }
+
+  const layerRef = { ...ids, index, lastUsed: Date.now() };
+  entry._wmsTimeCache.set(index, layerRef);
+  trimWmsTimeCache(entry);
+  return layerRef;
+}
+```
+
+### 11.2 Bounding memory — an LRU eviction pass
+
+```js
+// Evicts the least-recently-used cached frame(s) once the cache exceeds the
+// limit. Never evicts the currently-active frame, even if it happens to be
+// the oldest by lastUsed — that one is what's actually on screen right now.
+function trimWmsTimeCache(entry) {
+  if (!entry?._wmsTimeCache || entry._wmsTimeCache.size <= NCOP_WMS_TIME_CACHE_LIMIT) return;
+  const activeIndex = entry.wmsTimeIndex;
+  const removable = [...entry._wmsTimeCache.entries()]
+    .filter(([idx, ref]) => idx !== activeIndex && ref.layerId !== entry._wmsActiveTimeLayerId)
+    .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+  while (entry._wmsTimeCache.size > NCOP_WMS_TIME_CACHE_LIMIT && removable.length) {
+    const [idx, ref] = removable.shift();
+    try {
+      if (map.getLayer(ref.layerId)) map.removeLayer(ref.layerId);
+      if (ref.sourceId !== entry.sourceId && map.getSource(ref.sourceId)) map.removeSource(ref.sourceId);
+    } catch (_) { /* ignore stale cache cleanup */ }
+    entry._wmsTimeCache.delete(idx);
+  }
+}
+```
+
+Without a cap, a user who scrubs across a full 100-step animation would
+leave 100 live Mapbox sources (each polling tiles) registered on the map
+forever. 8 is a deliberately small window — plenty for "a few steps either
+side of where the user currently is," not an attempt to cache the whole
+timeline.
+
+### 11.3 Waiting for a frame to actually be ready
+
+```js
+// Waits for a source's tiles to finish loading (or times out). Used before
+// making a prepared frame visible, so switching never shows a half-loaded
+// or blank tile mid-transition.
+function waitForWmsSourceReady(sourceId, timeoutMs = NCOP_WMS_FRAME_READY_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let done = false;
+    let timeoutId = null;
+
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      map.off?.("sourcedata", onSourceData);
+      map.off?.("idle", onIdle);
+    };
+    const finish = () => { cleanup(); resolve(true); };
+    const isReady = () => {
+      try { return typeof map.isSourceLoaded === "function" && map.getSource(sourceId) && map.isSourceLoaded(sourceId); }
+      catch (_) { return false; }
+    };
+    const onSourceData = (e) => { if (e?.sourceId === sourceId && (e.isSourceLoaded || isReady())) finish(); };
+    const onIdle = () => { if (isReady()) finish(); };
+
+    if (isReady()) { resolve(true); return; }
+    map.on("sourcedata", onSourceData);
+    map.on("idle", onIdle);
+    timeoutId = setTimeout(() => { cleanup(); resolve(false); }, timeoutMs); // never hang forever on a slow/dead tile server
+  });
+}
+```
+
+Resolves `true` on genuine readiness, `false` on timeout — callers treat
+both as "proceed" (§11.5's `activateWmsTimeLayer` doesn't branch on the
+return value), because a slow server shouldn't permanently block the UI;
+after the timeout it just shows whatever's loaded so far rather than
+waiting indefinitely.
+
+### 11.4 Background pre-warming
+
+```js
+// Warms the two neighboring time steps (prev + next) in the background —
+// called right after any step becomes active, so scrubbing or playing in
+// either direction usually lands on an already-ready frame instead of a
+// cold fetch.
+function preloadAdjacentWmsTimes(entry, index) {
+  if (!entry?.wmsTimes?.length) return;
+  const len = entry.wmsTimes.length;
+  const nextIndexes = [(index + 1) % len, (index - 1 + len) % len]; // wraps at both ends
+  nextIndexes.forEach((idx) => {
+    const ref = ensureWmsTimeLayer(entry, idx);
+    if (ref) waitForWmsSourceReady(ref.sourceId, NCOP_WMS_FRAME_READY_TIMEOUT_MS).catch(() => {});
+  });
+}
+```
+
+Fire-and-forget on purpose (`.catch(() => {})`, result never awaited by the
+caller) — this is opportunistic background work, not something the current
+interaction should ever wait on.
+
+### 11.5 Making a frame visible
+
+```js
+// Makes one time index the visible one: wait for its tiles, then set every
+// cached frame's opacity in a single pass — target frame → real opacity,
+// every other cached frame → 0. One atomic-looking swap, not a sequence of
+// individual add/remove calls that could show an intermediate empty state.
+async function activateWmsTimeLayer(entry, index, requestSeq) {
+  const ref = ensureWmsTimeLayer(entry, index);
+  if (!ref) return false;
+  setWmsTimeCtrlLoading(entry, true);
+  await waitForWmsSourceReady(ref.sourceId);
+  if (requestSeq !== entry._wmsTimeRequestSeq) return false; // superseded by a newer request while we were waiting — drop it
+
+  const opacity = getWmsLayerOpacity(entry);
+  entry._wmsTimeCache?.forEach((layerRef) => {
+    if (map.getLayer(layerRef.layerId)) {
+      map.setPaintProperty(layerRef.layerId, "raster-opacity", layerRef.layerId === ref.layerId ? opacity : 0);
+    }
+  });
+  entry._wmsActiveTimeLayerId = ref.layerId;
+  entry.wmsTimeIndex = index;
+  entry.wmsTime = entry.wmsTimes[index];
+  updateWmsTimeCtrlUI(entry, index);
+  setWmsTimeCtrlLoading(entry, false);
+  preloadAdjacentWmsTimes(entry, index); // keep warming outward from wherever we just landed
+  return true;
+}
+
+async function setWmsLayerTimeIndex(entry, index) {
+  if (!entry?.wmsTimes?.length) return;
+  const clamped = Math.max(0, Math.min(index, entry.wmsTimes.length - 1));
+  const requestSeq = (entry._wmsTimeRequestSeq || 0) + 1;
+  entry._wmsTimeRequestSeq = requestSeq;
+
+  if (entry.wmsTimes.length > 1) {
+    return activateWmsTimeLayer(entry, clamped, requestSeq);
+  }
+
+  // Exactly one time step: no cache/crossfade machinery needed, just point
+  // the one existing source at the (only) time value directly
+  entry.wmsTimeIndex = clamped;
+  entry.wmsTime = entry.wmsTimes[clamped];
+  const tileUrl = buildWmsTileUrl(entry.wmsRawUrl, entry.wmsLayerName, { time: entry.wmsTime });
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+  const src = map.getSource(entry.sourceId);
+  if (src && typeof src.setTiles === "function") src.setTiles([proxiedTileUrl]);
+  updateWmsTimeCtrlUI(entry, clamped);
+}
+```
+
+**Why `requestSeq` exists — read this before touching this code.**
+`activateWmsTimeLayer` is `async` because it awaits tile readiness. Between
+the moment it starts and the moment its `await` resolves, the user can have
+already scrubbed the slider again (or hit Stop). Without a check, the
+*first* (now-stale) call would still finish and overwrite the opacities
+that the *second*, newer call already set correctly — visually, the slider
+would show one position while a stale frame from a previous position
+flashes back into view. The fix: every call to `setWmsLayerTimeIndex`
+(scrub *or* one playback tick) increments a per-entry counter and captures
+its own value; right after the `await`, the async call checks whether it's
+still the *latest* increment before touching any paint property. If not,
+it silently bails.
+
+### 11.6 Play / pause
+
+```js
+function delayWmsPlayback(ms, entry, token) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(entry._wmsPlayToken === token && entry._wmsPlayTimer), ms);
+  });
+}
+
+function toggleWmsLayerPlay(entry) {
+  if (!entry?.wmsTimes?.length || entry.wmsTimes.length < 2) return;
+
+  if (entry._wmsPlayTimer) {
+    // Stop: bump BOTH token counters so any in-flight async step (whether
+    // it's mid-activation or mid-delay) becomes a no-op at its next check
+    entry._wmsPlayToken = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsTimeRequestSeq = (entry._wmsTimeRequestSeq || 0) + 1;
+    entry._wmsPlayTimer = null;
+    setWmsTimeCtrlLoading(entry, false);
+  } else {
+    const token = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsPlayToken = token;
+    entry._wmsPlayTimer = true;
+    const runPlayback = async () => {
+      while (entry._wmsPlayTimer && entry._wmsPlayToken === token) {
+        preloadAdjacentWmsTimes(entry, entry.wmsTimeIndex);
+        const next = (entry.wmsTimeIndex + 1) % entry.wmsTimes.length;
+        await setWmsLayerTimeIndex(entry, next);
+        if (!(await delayWmsPlayback(NCOP_WMS_PLAY_INTERVAL_MS, entry, token))) break;
+      }
+    };
+    refreshImportedList(); // re-render so the play button shows its "playing" state immediately
+    runPlayback().catch((err) => setImportStatus(`WMS playback failed: ${err.message}`, true));
+    return;
+  }
+  refreshImportedList();
+}
+```
+
+There are **two independent token/counter mechanisms working together**,
+not one — worth being explicit about the difference:
+- `_wmsPlayToken` governs the *playback loop itself* — is this still the
+  active "play session," or has the user pressed stop (or play again,
+  restarting a fresh session) since this loop started?
+- `_wmsTimeRequestSeq` governs *individual frame activations* — is this
+  particular `setWmsLayerTimeIndex` call (which could have been issued by
+  either playback *or* manual scrubbing) still the most recent one?
+
+Playback stopping cleanly on the very next check (not "one more frame
+later") depends on bumping *both* — stopping only the play token would
+still let an in-flight `activateWmsTimeLayer` call finish and flip
+opacities after the user thought they'd stopped it.
+
+### 11.7 The UI it's driving
+
+```js
+function setWmsTimeCtrlLoading(entry, loading) {
+  entry._wmsTimeLoading = !!loading;
+  const card = layerExportPanelContent?.querySelector(`[data-imp-id="${entry.id}"]`);
+  const ctrl = card?.querySelector(".ncop-ep-wms-time-ctrl");
+  const slider = card?.querySelector(`[data-wms-time-slider="${entry.id}"]`);
+  if (ctrl) ctrl.classList.toggle("loading", !!loading);
+  if (slider) slider.disabled = !!loading && !!entry._wmsPlayTimer; // only lock the slider during autoplay, not manual scrubbing
+}
+
+function updateWmsTimeCtrlUI(entry, index) {
+  const card = layerExportPanelContent?.querySelector(`[data-imp-id="${entry.id}"]`);
+  const slider = card?.querySelector(`[data-wms-time-slider="${entry.id}"]`);
+  const label = card?.querySelector(`[data-wms-time-label="${entry.id}"]`);
+  if (slider) slider.value = String(index);
+  if (label) label.textContent = formatWmsTimeLabel(entry.wmsTimes[index]);
+}
+
+function renderWmsTimeCtrlHTML(l, id) {
+  const idx = Math.max(0, Math.min(l.wmsTimeIndex, l.wmsTimes.length - 1));
+  const playing = !!l._wmsPlayTimer;
+  const loading = !!l._wmsTimeLoading;
+  const playIcon = playing
+    ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>` // pause icon
+    : `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`; // play icon
+  return `
+    <div class="ncop-ep-wms-time-ctrl${loading ? " loading" : ""}">
+      <button type="button" class="ncop-ep-wms-time-play-btn${playing ? " playing" : ""}" data-wms-time-play="${id}" title="${playing ? "Pause" : "Play"} time animation" aria-label="${playing ? "Pause" : "Play"} time animation">${playIcon}</button>
+      <input type="range" min="0" max="${l.wmsTimes.length - 1}" value="${idx}" step="1" data-wms-time-slider="${id}"${loading && playing ? " disabled" : ""}>
+      <span class="ncop-ep-wms-time-label" data-wms-time-label="${id}">${escapeExportHtml(formatWmsTimeLabel(l.wmsTimes[idx]))}</span>
+    </div>`;
+}
+```
+
+Only rendered for a card when `l.wmsTimes?.length > 1` — a single-time-step
+or non-temporal WMS layer never shows this control at all.
+
+Wiring the slider drag:
+```js
+layerExportPanelContent.addEventListener("input", (e) => {
+  const wmsTimeId = e.target.dataset.wmsTimeSlider;
+  if (wmsTimeId) {
+    const entry = layerExportState.importedLayers.find(l => l.id === wmsTimeId);
+    if (entry?.wmsTimes?.length) {
+      setWmsLayerTimeIndex(entry, parseInt(e.target.value, 10)).catch((err) => {
+        setImportStatus(`WMS time step failed: ${err.message}`, true);
+      });
+    }
+  }
+});
+```
+Wiring the play/pause button (delegated click, alongside every other panel
+button target):
+```js
+const wmsPlayId = e.target.closest("[data-wms-time-play]")?.dataset.wmsTimePlay;
+if (wmsPlayId) {
+  const entry = layerExportState.importedLayers.find(l => l.id === wmsPlayId);
+  if (entry) toggleWmsLayerPlay(entry);
+  return;
+}
+```
+
+---
+
+## 12. Cleanup when a WMS layer is removed
+
+The time-cache branch needs its own teardown path distinct from a plain
+single-source layer's:
+
+```js
+function removeImportedLayer(importId) {
+  const entry = layerExportState.importedLayers.find((l) => l.id === importId);
+  if (!entry) return;
+
+  if (entry._wmsPlayTimer) {
+    // Stop playback first — otherwise the running loop can try to touch a
+    // layer we're about to remove out from under it
+    entry._wmsPlayToken = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsTimeRequestSeq = (entry._wmsTimeRequestSeq || 0) + 1;
+    entry._wmsPlayTimer = null;
+  }
+  try {
+    if (entry._wmsTimeCache) {
+      // Every cached LAYER first, then every cached SOURCE — Mapbox GL
+      // throws if you try to remove a source a layer still references
+      entry._wmsTimeCache.forEach((ref) => { if (map.getLayer(ref.layerId)) map.removeLayer(ref.layerId); });
+      entry._wmsTimeCache.forEach((ref) => { if (map.getSource(ref.sourceId)) map.removeSource(ref.sourceId); });
+      entry._wmsTimeCache.clear();
+    } else {
+      entry.layerIds.forEach((lid) => { if (map.getLayer(lid)) map.removeLayer(lid); });
+      if (map.getSource(entry.sourceId)) map.removeSource(entry.sourceId);
+    }
+  } catch (_) { /* ignore cleanup errors */ }
+  layerExportState.importedLayers = layerExportState.importedLayers.filter((l) => l.id !== importId);
+  refreshImportedList();
+}
+```
+
+A temporal WMS layer that's been scrubbed through several frames can have
+up to 8 live source/layer pairs (§11.2's cache limit) — removing "the
+layer" means removing all of them, not just the one that happened to be
+visible at the moment of removal.
+
+---
+
+## 13. Verification checklist
+
+1. **Add WMS, bare URL + layer name**: paste a service root and a known
+   layer name, click Add WMS — confirm a tile layer appears and the actual
+   HTTP requests in the Network tab go to your own origin's `/wms-tile/`,
+   not directly to the remote WMS host.
+2. **Add WMS, full GetMap URL**: paste a complete captured `GetMap` request
+   (including its own bbox/width/height) — confirm `buildWmsTileUrl`
+   correctly rewrites it rather than requesting the exact same fixed extent
+   for every tile.
+3. **Connect**: paste a known-public WMS base URL, click Connect — confirm
+   the layer list populates, layer names/titles look right, and a layer you
+   know is temporal shows the "Temporal" badge.
+4. **Capabilities inheritance**: find (or construct) a test service where a
+   parent `<Layer>` declares the time dimension and a child doesn't —
+   confirm the child still gets the inherited `time` value, not `null`.
+5. **Info popover**: click the (i) button on a temporal layer — confirm the
+   step count and date range shown match what you'd compute by hand from
+   the raw `<Extent>` string.
+6. **Add Selected**: check 2–3 layers (mix of temporal and non-temporal),
+   click Add Selected — confirm all are added, each with the right initial
+   time (its own `default`, or the newest step if no usable default).
+7. **Time slider — no flicker**: add a temporal layer, drag the slider
+   slowly — visually confirm there's no blank/flash frame between steps.
+8. **Time slider — cache eviction**: scrub through more than 8 distinct
+   steps, then check `map.getStyle().sources` — confirm the source count
+   for that layer has stayed capped near `NCOP_WMS_TIME_CACHE_LIMIT`, not
+   grown unboundedly.
+9. **Play / Stop**: hit play, let it run a few frames, hit stop — confirm
+   it halts immediately (not "one more frame then stops"), and the slider
+   position after stopping matches the last frame actually shown.
+10. **Remove mid-playback**: start playback, then remove the layer while
+    it's still playing — confirm no console errors and no orphaned
+    sources/layers remain in `map.getStyle()`.
+
+---
+
+## 14. Gotchas worth remembering
+
+- **One URL builder, reused everywhere** (`buildWmsTileUrl`) — the initial
+  add, every capabilities-browser add, and every individual animation
+  frame all go through it. Don't let a second, parallel tile-URL
+  construction path grow anywhere else in the system; that's how the three
+  URL-shape branches (§4) drift out of sync with the time-cache frames.
+- **The `{bbox-epsg-3857}` marker-swap in `proxyWmsTileUrl`** is not
+  optional boilerplate — skip it (i.e. `encodeURIComponent()` the whole
+  URL naively) and Mapbox's own tile-substitution silently stops working;
+  every tile request goes out with the literal placeholder text still in
+  it instead of a real bounding box.
+- **Time frames are opacity-swapped, never tile-swapped**, once a layer has
+  more than one time step. Calling `source.setTiles()` on a cached frame's
+  source after it's already in the cache defeats the entire point of
+  building per-frame sources in the first place.
+- **Two independent token mechanisms, not one** — `_wmsTimeRequestSeq` for
+  "is this specific frame activation still current" and `_wmsPlayToken`
+  for "is this playback session still running." Conflating them (or
+  dropping either) reintroduces the exact race conditions they exist to
+  prevent.
+- **Remove layers before sources**, always, in any Mapbox GL cleanup code
+  — not specific to WMS, but the time-cache teardown is the one place in
+  this subsystem with enough cached sources/layers that getting the order
+  wrong reliably throws instead of just working by luck.
+- **`maxSteps = 100` in `parseWmsTimeExtent` is there because real
+  services abuse open-ended time ranges** — don't remove it as "unlikely to
+  matter"; it's a guard against an observed real-world failure mode, not a
+  hypothetical one.

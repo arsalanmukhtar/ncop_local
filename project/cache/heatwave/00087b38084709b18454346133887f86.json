@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [74.5229, 32.4945]}, "properties": {"name": "Sialkot", "province": "Punjab", "temperature": 32.5, "apparent_temperature": 40.1, "humidity": 66, "precipitation": 0.0, "wind_speed": 5.1, "weather_code": 0, "temp_max": 34.0, "temp_min": 26.0, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

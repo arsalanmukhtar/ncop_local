@@ -503,6 +503,22 @@ export class NavigationPanel {
     });
 
     document.getElementById("storyCloseBtn")?.addEventListener("click", () => {
+      // Stop whichever cinematic briefing was active and strip its
+      // layers/overlays — both hooks are safe no-ops when their story
+      // wasn't the one running.
+      window.ncopProvincialForecast?.hide();
+      window.ncopDynamicWeather?.closeAll();
+      // Reset the picker back to its default "nothing selected" state so
+      // reopening the panel shows the picker, not a stale selection.
+      const sel = document.getElementById("storySelect");
+      if (sel) sel.value = "";
+      const chaptersEl = document.getElementById("story-root")?.querySelector("#storyChapters");
+      if (chaptersEl) chaptersEl.style.display = "grid";
+      // Same home-extent + bearing/tilt reset the dedicated nav rail
+      // buttons use, so closing the story leaves the map in the same
+      // resting state those buttons would.
+      this.#handleHomeExtent();
+      this.#handleResetBearing();
       const modal = document.getElementById("story-modal");
       if (modal) modal.style.display = "none";
     });

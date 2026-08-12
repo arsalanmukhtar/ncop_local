@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [69.0125, 25.5269]}, "properties": {"name": "Mirpur Khas", "province": "Sindh", "temperature": 31.4, "apparent_temperature": 35.0, "humidity": 63, "precipitation": 0.0, "wind_speed": 14.7, "weather_code": 3, "temp_max": 33.0, "temp_min": 26.5, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

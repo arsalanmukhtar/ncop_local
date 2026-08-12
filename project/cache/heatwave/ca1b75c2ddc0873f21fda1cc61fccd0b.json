@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [68.4514, 28.2823]}, "properties": {"name": "Jacobabad", "province": "Sindh", "temperature": 36.2, "apparent_temperature": 42.0, "humidity": 49, "precipitation": 0.0, "wind_speed": 8.7, "weather_code": 1, "temp_max": 39.4, "temp_min": 30.3, "alert_level": "Elevated", "updated": "2026-08-12T11:15"}}

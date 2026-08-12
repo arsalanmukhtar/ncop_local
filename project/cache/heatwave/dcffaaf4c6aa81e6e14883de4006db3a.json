@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.135, 31.4504]}, "properties": {"name": "Faisalabad", "province": "Punjab", "temperature": 34.3, "apparent_temperature": 42.9, "humidity": 66, "precipitation": 0.0, "wind_speed": 6.0, "weather_code": 0, "temp_max": 36.1, "temp_min": 28.4, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

@@ -129,6 +129,26 @@ export function getFfdBulletins() {
   return fetchGcopCached(`${GCOP_BASE_URL}/get-ffd-bulletins/`, 14400);
 }
 
+// Bulk 30-day discharge history for EVERY FFD station in one call — a
+// DIFFERENT host than GCOP_BASE_URL above (its own internal box, not the
+// GCOP server), so it gets its own base constant. `fetchGcopCached` only
+// needs a fully-qualified URL (see its own docstring), so the same TTL/
+// retry/in-flight-coalescing cache applies here unmodified — nothing about
+// that helper is actually GCOP-specific.
+export const FFD_HISTORY_ALL_BASE_URL = "http://172.18.1.113:8000/proxy_api_daily";
+
+/**
+ * Bulk discharge history — {days, stations: {NAME: {inflow:[{x,y}], outflow:[{x,y}]}}}
+ * for all ~31 FFD stations in one response. Used by Story Mode's Chapter 3
+ * barrage-tour popups for the 30-day-history / 14-day-outlook chart (see
+ * ffd-history-forecast.js). 30-minute TTL — new readings land every 4-6h,
+ * so this is generous headroom without needlessly re-fetching a ~700KB
+ * payload on every popup.
+ */
+export function getFfdHistoryAll(days = 30) {
+  return fetchGcopCached(`${FFD_HISTORY_ALL_BASE_URL}/api/history-all?days=${encodeURIComponent(days)}`, 1800);
+}
+
 // ---------------------------------------------------------------------------
 // PMD Monitor — remaining endpoints
 // ---------------------------------------------------------------------------

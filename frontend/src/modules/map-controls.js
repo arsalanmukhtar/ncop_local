@@ -205,6 +205,15 @@ export class StoryManager {
     if (window.lucide?.createIcons) window.lucide.createIcons();
   }
 
+  // Placeholder/demo content (Glacier National Park, Pakistan Hydrological
+  // Risk, Current Monsoon Condition) — kept in the backend catalog and
+  // still fully loadable by id/editor, just no longer offered as picks
+  // in the operational picker so it only lists the real cinematic
+  // briefings (Dynamic Weather Report, 7-Day Weather Outlook — the
+  // latter injected separately by story-provincial-forecast.js, same
+  // pattern as Dynamic Weather Report's own injection).
+  static HIDDEN_STORY_IDS = new Set(["demostory", "hydrological", "meteorological"]);
+
   _renderList() {
     const sel = this.root?.querySelector("#storySelect");
     const meta = this.root?.querySelector("#storyMeta");
@@ -217,17 +226,22 @@ export class StoryManager {
     optBlank.textContent = "Select story...";
     sel.appendChild(optBlank);
 
-    this.state.stories.forEach((s) => {
-      const o = document.createElement("option");
-      o.value = String(s.id);
-      o.textContent = s.title || `Story #${s.id}`;
-      sel.appendChild(o);
-    });
+    this.state.stories
+      .filter((s) => !StoryManager.HIDDEN_STORY_IDS.has(String(s.id)))
+      .forEach((s) => {
+        const o = document.createElement("option");
+        o.value = String(s.id);
+        o.textContent = s.title || `Story #${s.id}`;
+        sel.appendChild(o);
+      });
 
     if (meta) meta.textContent = "";
     chapters.innerHTML = `
-        <div style="padding:10px;border:1px dashed #444;border-radius:8px;opacity:.8">
-          Pick a story above or create a new one in the editor.
+        <div style="padding:16px 14px;border:1px dashed #444;border-radius:10px;opacity:.92;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-weight:700;font-size:14px;color:#eaeaea;">Please pick a story</div>
+          <div style="font-size:12.5px;line-height:1.55;opacity:.85;">
+            Story Mode plays cinematic, data-driven briefings directly on the map — real PMD/NWFC/FFD figures narrated scene by scene, not scripted content. Use the selector above to start one; playback begins automatically as soon as you pick it.
+          </div>
         </div>
       `;
   }

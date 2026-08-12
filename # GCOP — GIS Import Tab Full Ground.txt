@@ -1,0 +1,1762 @@
+# GCOP — GIS "Import" Tab: Full Ground-Up Replication Guide
+
+A complete, function-by-function guide to rebuilding the **Import** side of
+GCOP's combined GIS Export/Import panel in another Mapbox GL JS + Django
+application: drag-and-drop GeoJSON/Shapefile/GeoTIFF, a WMS connector with a
+full GetCapabilities browser and per-layer time animation, and a per-layer
+symbology + stats mini-toolkit — all client-session-only (nothing is
+persisted server-side beyond the duration of one upload request).
+
+This is the sibling subsystem to GCOP's **Export** panel (see
+`GCOP_GIS_Export_Control_Integration_Guide.md`) — same panel, same toggle
+button, same `layerExportState` object, different tab. This guide is
+self-contained; it does not assume you've read the Export guide, though a
+couple of shared pieces (the panel shell, the tab-switch mechanism) are only
+summarized here since they're covered in full there.
+
+Every function below is the real, currently-running GCOP code
+(`gcop-i-map-controls.js` lines ~2481–3850, plus 4 Django views), not
+reconstructed from memory.
+
+---
+
+## 1. What this system does (user-facing)
+
+1. Click the same GIS toolbar button as Export → the panel opens; click the
+   **Import** tab.
+2. **Drag a file onto the drop zone** (or click Browse): `.geojson`/`.json`,
+   a zipped Shapefile (`.zip`), or a `.tif`/`.tiff` GeoTIFF. Each is parsed
+   (GeoJSON client-side; Shapefile and GeoTIFF via a Django upload endpoint)
+   and added to the map immediately, with the view auto-fit to its extent.
+3. **Paste a WMS URL** — either a full `GetMap` request copied from
+   somewhere, or just a bare service base URL — and either:
+   - Click **Add WMS** to add it directly as a raster overlay, or
+   - Click **Connect** to fetch and browse that service's full
+     `GetCapabilities` document: every layer it offers, with a description,
+     a "temporal layer" badge where applicable, checkboxes, and an
+     **Add Selected** bulk-add action.
+4. Every imported layer (of any source type) gets a card in a running list:
+   a style/symbology editor (solid color, or a choropleth classified by any
+   numeric attribute field), a stats summary (feature count + min/max/avg
+   per numeric field), a remove button, and — for any WMS layer whose
+   service advertises multiple time steps — a **play/scrub time slider**
+   that animates through them with pre-loaded, flicker-free frame switching.
+5. Nothing here is saved to a database. Closing/reloading the page clears
+   every imported layer — this is a working-session scratch space, not a
+   layer library.
+
+---
+
+## 2. Architecture at a glance
+
+Three independent input paths, all converging on one shared state array and
+one shared list-rendering function:
+
+```
+ [File drop/browse]           [WMS URL: Add]         [WMS URL: Connect → browse → Add Selected]
+        │                            │                              │
+   ext-based dispatch          buildWmsTileUrl()            fetchWmsCapabilities() (proxied)
+        │                      + proxyWmsTileUrl()                  │
+   ┌────┼────┐                      │                        parseWmsCapabilitiesXML()
+ geojson  zip  tif                  │                        renderWmsCapsHTML() → checkboxes
+   │      │     │                   │                              │
+   │  /upload-  /upload-            │                        addSelectedWmsCapsLayers()
+   │  shapefile/ raster/            │                              │
+   │      │     │                   │                              │
+   └──────┴─────┴─────────┬─────────┴──────────────────────────────┘
+                           ▼
+              layerExportState.importedLayers.push(entry)
+                           │
+                    refreshImportedList()
+                           │
+              buildLayerCardHTML() per entry
+        (style panel · stats panel · WMS time control · remove)
+```
+
+Every entry in `importedLayers` — regardless of which path produced it —
+has the same minimal shared shape (`id`, `label`, `type`, `sourceId`,
+`layerIds`, `geomClass`, `symState`, plus source-specific extras like
+`wmsTimes`) so the list UI and the symbology/stats code can treat all of
+them uniformly.
+
+---
+
+## 3. Prerequisites
+
+| Need | Purpose |
+|---|---|
+| The Export panel's shell (`layerExportState`, the panel DOM, tab switching) | Import is a second tab inside the *same* panel — see the Export guide §4.1–4.5 for the container/state/tabs; not repeated here. |
+| Django + `requests` | Server-side WMS proxying (CORS) and file processing. |
+| `geopandas` + `shapely` (Python) | Shapefile → GeoJSON conversion, CRS reprojection, geometry repair. |
+| `osgeo.gdal` (Python) | GeoTIFF → web-mercator PNG preview (shared with the Export flow's raster handling — see §6). |
+| A Mapbox GL JS map instance | Target for `addSource`/`addLayer` calls. |
+| `DOMParser` (browser-native) | WMS `GetCapabilities` XML parsing — no XML library needed. |
+
+---
+
+## 4. State shape
+
+Reuses the same top-level state object the Export tab uses (see Export
+guide §4.1), with the two fields Import actually touches:
+
+```js
+const layerExportState = {
+  items: [],            // Export tab's own list — untouched by Import
+  busy: false,
+  activeTab: "export",  // "import" when this tab is active
+  importedLayers: [],   // <-- everything in this guide reads/writes this array
+};
+```
+
+Each entry pushed into `importedLayers` is a plain object — there is no
+class/constructor, different producers (§5–§7) just agree on a shared
+minimal shape by convention:
+
+```js
+{
+  id,           // unique DOM-safe string, used as the Mapbox source id too
+  label,        // display name in the card header
+  type,         // "GeoJSON" | "Shapefile" | "GeoTIFF" | "WMS" — badge text only
+  sourceId,     // the Mapbox source id (usually === id)
+  layerIds,     // [] of Mapbox layer ids this entry owns (fill+stroke = 2 for polygons)
+  geomClass,    // "point" | "polygon" | "line" | "wms" — drives which style controls show
+  numericFields,// [] of attribute keys usable for choropleth (vector layers only)
+  _props,       // [] of raw feature.properties, kept for stats + classification
+  symState,     // null until the style panel is opened once; see impDefaultSymState()
+  // WMS-only:
+  wmsRawUrl, wmsLayerName, wmsTime, wmsTimes, wmsTimeIndex,
+}
+```
+
+---
+
+## 5. Part A — File import (GeoJSON / Shapefile / GeoTIFF)
+
+### 5.1 The drop zone + file input markup
+
+```html
+<div class="ncop-ep-drop-zone" id="ncop-ep-drop-zone" tabindex="0" role="button" aria-label="Drop files or click to browse">
+  <div class="ncop-ep-drop-label">Drop file here or <label class="ncop-ep-browse-label" for="ncop-ep-file-input">Browse</label></div>
+  <div class="ncop-ep-drop-hint">GeoJSON&nbsp;-&nbsp;Shapefile .zip&nbsp;-&nbsp;GeoTIFF</div>
+  <input type="file" id="ncop-ep-file-input" class="ncop-ep-file-input"
+         accept=".geojson,.json,.zip,.tif,.tiff" multiple aria-label="Upload file">
+</div>
+<div id="ncop-ep-import-status" class="ncop-ep-import-status" aria-live="polite"></div>
+```
+
+### 5.2 Wiring drag/drop + the file input
+
+```js
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  if (e.dataTransfer?.files?.length) handleImportFiles(e.dataTransfer.files);
+});
+dropZone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files?.length) handleImportFiles(fileInput.files);
+  fileInput.value = ""; // reset so re-selecting the same file still fires "change"
+});
+```
+
+### 5.3 Extension-based dispatch
+
+```js
+function handleImportFiles(fileList) {
+  [...fileList].forEach((file) => {
+    const ext = file.name.split(".").pop().toLowerCase();
+    setImportStatus(`Loading ${file.name}...`);
+    if (ext === "geojson" || ext === "json") {
+      const reader = new FileReader();
+      reader.onload = (e) => processGeoJSONImport(e.target.result, file.name);
+      reader.onerror = () => setImportStatus(`Failed to read ${file.name}`, true);
+      reader.readAsText(file);
+    } else if (ext === "zip") {
+      processShapefileImport(file);
+    } else if (ext === "tif" || ext === "tiff") {
+      processRasterImport(file);
+    } else {
+      setImportStatus(`Unsupported format: .${ext}. Use GeoJSON, .zip (Shapefile), or GeoTIFF.`, true);
+    }
+  });
+}
+
+function setImportStatus(msg, isError = false) {
+  const el = layerExportPanelContent?.querySelector("#ncop-ep-import-status");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `ncop-ep-import-status${isError ? " error" : ""}`;
+}
+```
+
+Multiple files can be dropped at once — each is dispatched and processed
+independently; there's no batching or "wait for all" step, so 3 dropped
+files produce 3 independent async chains that each call
+`addImportedLayerToMap`/`addImportedRasterToMap` (§6) whenever they finish.
+
+### 5.4 GeoJSON — parsed entirely client-side, no server round-trip
+
+```js
+function processGeoJSONImport(text, filename) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    setImportStatus(`Invalid GeoJSON in ${filename}`, true);
+    return;
+  }
+  if (!data || !["FeatureCollection", "Feature", "GeometryCollection"].includes(data.type)) {
+    if (data?.features) { data.type = "FeatureCollection"; }
+    else { setImportStatus(`${filename} is not a valid GeoJSON`, true); return; }
+  }
+  const fc = data.type === "FeatureCollection" ? data : { type: "FeatureCollection", features: [data] };
+  const label = filename.replace(/\.(geo)?json$/i, "");
+  addImportedLayerToMap(fc, label, "GeoJSON");
+}
+```
+
+This is the only one of the three formats that needs **no backend at all** —
+`JSON.parse` plus a light normalization (wrap a bare `Feature` in a
+`FeatureCollection`) is sufficient, since the browser can already read and
+render GeoJSON natively via a Mapbox `geojson` source.
+
+### 5.5 Shapefile — `.zip` upload to Django
+
+```js
+function getImportCSRFToken() {
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? m[1] : "";
+}
+
+async function processShapefileImport(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  const formData = new FormData();
+  formData.append("shapefile", file);
+  const fileMb = file.size / (1024 * 1024);
+  setImportStatus(
+    fileMb > 30
+      ? `Uploading ${file.name} (${fileMb.toFixed(0)} MB) — large file, processing may take a minute...`
+      : `Uploading ${file.name}...`
+  );
+  try {
+    const res = await fetch("/upload-shapefile/", {
+      method: "POST",
+      headers: { "X-CSRFToken": getImportCSRFToken() },
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (!data?.features?.length) throw new Error("No features returned from server");
+    const label = file.name.replace(/\.(zip|tif|tiff)$/i, "");
+    addImportedLayerToMap(data, label, ext === "zip" ? "Shapefile" : "GeoTIFF");
+  } catch (err) {
+    setImportStatus(`Upload failed: ${err.message}`, true);
+  }
+}
+```
+
+Note the user-visible size warning at >30MB — this is a direct, honest
+signal to the user tied to a real server-side behavior (§6.1's adaptive
+simplification kicks in at the same threshold), not an arbitrary UX nicety.
+
+### 5.6 GeoTIFF — upload to a different endpoint, different response shape
+
+```js
+async function processRasterImport(file) {
+  const formData = new FormData();
+  formData.append("raster", file);
+  const fileMb = file.size / (1024 * 1024);
+  setImportStatus(
+    fileMb > 30
+      ? `Uploading ${file.name} (${fileMb.toFixed(0)} MB) — large raster, this may take a minute...`
+      : `Uploading raster ${file.name}...`
+  );
+  try {
+    const res = await fetch("/upload-raster/", {
+      method: "POST",
+      headers: { "X-CSRFToken": getImportCSRFToken() },
+      body: formData,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const err = await res.json(); if (err.error) msg = err.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    addImportedRasterToMap(data, file.name.replace(/\.(tif|tiff)$/i, ""));
+  } catch (err) {
+    setImportStatus(`Raster upload failed: ${err.message}`, true);
+  }
+}
+```
+
+Shapefile upload returns raw GeoJSON (routed to `addImportedLayerToMap`,
+§6.1); raster upload returns `{url, bounds, coordinates}` (routed to
+`addImportedRasterToMap`, §6.2) — **two different response shapes for two
+different Mapbox source types**, which is why they're two separate backend
+endpoints rather than one generic "upload a file" endpoint.
+
+---
+
+## 6. Backend — the two upload views
+
+### 6.1 `POST /upload-shapefile/` — GeoPandas pipeline
+
+```python
+class NcopShapefileUploadView(View):
+    def post(self, request):
+        try:
+            shapefile = request.FILES.get("shapefile")
+            if not shapefile:
+                return JsonResponse({"error": "No file uploaded"}, status=400)
+            if not shapefile.name.lower().endswith(".zip"):
+                return JsonResponse({"error": "Please upload a ZIP file containing the shapefile"}, status=400)
+
+            os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+            zip_path = os.path.join(settings.MEDIA_ROOT, shapefile.name)
+            with open(zip_path, "wb") as f:
+                for chunk in shapefile.chunks():
+                    f.write(chunk)
+
+            extract_dir = os.path.join(settings.MEDIA_ROOT, "extracted_shapefile")
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)  # clear any leftover extraction from a prior upload
+            shutil.unpack_archive(zip_path, extract_dir)
+
+            # Find the .shp inside the zip — it may be nested in a subfolder
+            shp_file = None
+            for root, _, files in os.walk(extract_dir):
+                for file in files:
+                    if file.lower().endswith(".shp"):
+                        shp_file = os.path.join(root, file)
+                        break
+                if shp_file:
+                    break
+            if not shp_file:
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                os.remove(zip_path)
+                return JsonResponse({"error": "No .shp file found in ZIP"}, status=400)
+
+            gdf = gpd.read_file(shp_file)
+
+            # Reproject to WGS84 — Mapbox GL only understands lon/lat GeoJSON
+            if gdf.crs and gdf.crs.to_epsg() != 4326:
+                gdf = gdf.to_crs(epsg=4326)
+
+            # Enforce right-hand-rule winding on every polygon (GeoJSON spec
+            # requires it; many desktop-GIS-exported shapefiles don't follow it,
+            # which can make Mapbox GL fill layers render inverted/inside-out)
+            from shapely.geometry import MultiPolygon as _MP, Polygon as _Poly
+            def _orient_geom(geom):
+                if geom is None:
+                    return geom
+                if hasattr(geom, "geoms"):
+                    polys = [orient(p, sign=1.0) for p in geom.geoms if isinstance(p, _Poly)]
+                    return _MP(polys) if polys else geom
+                if isinstance(geom, _Poly):
+                    return orient(geom, sign=1.0)
+                return geom  # points/lines pass through unchanged
+            gdf.geometry = gdf.geometry.apply(_orient_geom)
+
+            # Repair invalid geometries (self-intersections etc.) — buffer(0)
+            # is the standard "cheap fix" for most invalid-polygon cases
+            invalid_geoms = ~gdf.geometry.is_valid
+            if invalid_geoms.any():
+                gdf.geometry = gdf.geometry.buffer(0)
+
+            # Large uploads: simplify so JSON conversion + the HTTP response
+            # finish inside the request-worker timeout. Tolerance is derived
+            # from the dataset's own extent, not a fixed number — a small
+            # local shapefile and a global one need very different tolerances
+            # to both "drastically cut vertex count" without visibly distorting.
+            feat_count = len(gdf)
+            file_mb = shapefile.size / (1024 * 1024)
+            if feat_count > 5000 or file_mb > 30:
+                bounds = gdf.total_bounds  # [minx, miny, maxx, maxy]
+                span = max(bounds[2] - bounds[0], bounds[3] - bounds[1], 0.001)
+                tolerance = span / 4000
+                gdf.geometry = gdf.geometry.simplify(tolerance, preserve_topology=True)
+
+            geojson_data = json.loads(gdf.to_json())
+
+            shutil.rmtree(extract_dir, ignore_errors=True)
+            os.remove(zip_path)
+            return JsonResponse(geojson_data)
+
+        except Exception as e:
+            # best-effort cleanup even on failure, so a bad upload doesn't
+            # leave the extraction directory occupied for the next request
+            try:
+                extract_dir = os.path.join(settings.MEDIA_ROOT, "extracted_shapefile")
+                if os.path.exists(extract_dir):
+                    shutil.rmtree(extract_dir)
+                if "zip_path" in locals() and os.path.exists(zip_path):
+                    os.remove(zip_path)
+            except Exception:
+                pass
+            return JsonResponse({"error": f"Error processing shapefile: {str(e)}"}, status=500)
+```
+
+**Why each non-obvious step is there:**
+- **CRS reprojection is conditional**, not unconditional — `to_crs` has a
+  real cost; skip it when the file is already EPSG:4326.
+- **Winding-order fix** is a real, previously-hit bug class: shapefiles
+  exported from some desktop GIS tools use clockwise exterior rings, which
+  the GeoJSON spec (and by extension some renderers) expect
+  counApiter-clockwise — symptom is a polygon that renders as its own
+  inverse (the whole world filled except the shape).
+- **`buffer(0)`** is a well-known GEOS idiom for repairing minor topology
+  errors (self-intersecting rings) — cheap and usually sufficient; not a
+  general-purpose geometry validator.
+- **Adaptive simplification** exists purely for request-latency/timeout
+  reasons, not visual quality — the `>5000 features OR >30MB` gate matches
+  exactly what the frontend's size-warning message (§5.5) tells the user to
+  expect.
+
+### 6.2 `POST /upload-raster/` — GeoTIFF → web-ready PNG preview
+
+Full detail (including the exact `gdal.Warp`/`gdal.Translate` options and
+why the output uses per-band `ComputeRasterMinMax` auto-stretch) is in
+`GCOP_GIS_Export_Control_Integration_Guide.md` §5 — the Import flow calls
+the *exact same* Django view the Export/GIS-export raster path was modeled
+after. The essential shape, condensed:
+
+```python
+class NcopRasterUploadView(View):
+    """Convert an uploaded GeoTIFF into a browser-displayable georeferenced overlay."""
+    def post(self, request):
+        upload = request.FILES.get("raster")
+        if not upload:
+            return JsonResponse({"error": "No raster file uploaded"}, status=400)
+        try:
+            from osgeo import gdal
+        except Exception as e:
+            return JsonResponse({"error": f"GDAL is required for raster import: {e}"}, status=500)
+
+        # 1. Save the upload to a scratch path under MEDIA_ROOT/imported_rasters/
+        # 2. gdal.Open() it; reject if it has no CRS at all
+        # 3. gdal.Warp(dstSRS="EPSG:3857", resampleAlg="bilinear") — Mercator,
+        #    matching the basemap, so Mapbox's linear corner-interpolation
+        #    for an `image` source lines up correctly
+        # 4. If the source is very large, downsample first (bounded to 4096px)
+        #    so the warp+translate finishes inside the request-worker timeout
+        # 5. Per-band ComputeRasterMinMax() → TranslateOptions(scaleParams=...)
+        #    to auto-stretch contrast into a Byte-range PNG preview
+        # 6. Compute the WGS84 corner bounds from the warped GeoTransform
+        # 7. Return {"type":"raster","url","bounds","coordinates","width","height","crs":"EPSG:4326"}
+        ...
+```
+
+The response's `coordinates` field (`[[minx,maxy],[maxx,maxy],[maxx,miny],[minx,miny]]`
+— TL/TR/BR/BL) is exactly what a Mapbox `image` source needs (§6.4).
+
+### 6.3 `addImportedLayerToMap()` — vector data (GeoJSON or Shapefile-derived)
+
+```js
+function addImportedLayerToMap(geojsonData, label, type) {
+  const id = `ncop-imp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const geomTypes = [...new Set((geojsonData.features || []).map((f) => f?.geometry?.type).filter(Boolean))];
+  const isPoint = geomTypes.every((t) => t.includes("Point"));
+  const isPoly  = geomTypes.some((t) => t.includes("Polygon"));
+
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+    map.addSource(id, { type: "geojson", data: geojsonData });
+
+    if (isPoint) {
+      map.addLayer({ id, type: "circle", source: id,
+        paint: { "circle-radius": 5, "circle-color": "#00eaff", "circle-stroke-width": 1.5, "circle-stroke-color": "#003366" } });
+    } else if (isPoly) {
+      map.addLayer({ id: `${id}-fill`, type: "fill", source: id, paint: { "fill-color": "#00eaff", "fill-opacity": 0.18 } });
+      map.addLayer({ id: `${id}-stroke`, type: "line", source: id, paint: { "line-color": "#00eaff", "line-width": 1.5 } });
+    } else {
+      map.addLayer({ id, type: "line", source: id, paint: { "line-color": "#00eaff", "line-width": 2 } });
+    }
+  } catch (err) {
+    setImportStatus(`Failed to add layer: ${err.message}`, true);
+    return;
+  }
+
+  const featureCount = geojsonData.features?.length ?? "?";
+  const layerIds = isPoly ? [`${id}-fill`, `${id}-stroke`] : [id];
+  const geomClass = isPoint ? "point" : isPoly ? "polygon" : "line";
+  const numericFields = getNumericFields(geojsonData.features);
+  const _props = (geojsonData.features || []).map(f => f.properties || {});
+  layerExportState.importedLayers.push({ id, label, type, sourceId: id, layerIds, geomClass, numericFields, _props, symState: null });
+  refreshImportedList();
+  setImportStatus(`${label} loaded - ${featureCount} feature${featureCount === 1 ? "" : "s"}`);
+
+  // Fit the view to the new layer — hand-rolled bbox scan, not turf.js
+  try {
+    const bounds = geojsonData.features.reduce((b, f) => {
+      const coords = f?.geometry?.coordinates;
+      if (!coords) return b;
+      const flat = JSON.stringify(coords).match(/-?\d+\.?\d*/g)?.map(Number) || [];
+      for (let i = 0; i < flat.length; i += 2) {
+        const lng = flat[i], lat = flat[i + 1];
+        if (lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+          if (b === null) b = [lng, lat, lng, lat];
+          else { b[0] = Math.min(b[0], lng); b[1] = Math.min(b[1], lat); b[2] = Math.max(b[2], lng); b[3] = Math.max(b[3], lat); }
+        }
+      }
+      return b;
+    }, null);
+    if (bounds) map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 40, maxZoom: 15, duration: 800 });
+  } catch (_) { /* ignore fit errors */ }
+}
+```
+
+Notable: **`geomClass` is derived, not asked for** — point-vs-polygon-vs-line
+is detected from the actual GeoJSON geometry types present, which is what
+lets every downstream piece (style panel, choropleth) work generically
+across GeoJSON, Shapefile, or any future vector source without needing the
+producer to declare a type. The bbox-fit uses a regex-over-JSON-string trick
+to flatten arbitrarily-nested coordinate arrays (Point vs Polygon vs
+MultiPolygon all have different nesting depths) rather than writing a
+geometry-type-aware coordinate walker — pragmatic, not the "proper" GIS way,
+but correct and much shorter.
+
+### 6.4 `addImportedRasterToMap()` — the GeoTIFF preview
+
+```js
+function addImportedRasterToMap(rasterData, fallbackLabel) {
+  const id = `ncop-imp-raster-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const coordinates = rasterData.coordinates;
+  if (!rasterData.url || !Array.isArray(coordinates) || coordinates.length !== 4) {
+    setImportStatus("Raster import did not return georeferenced image coordinates.", true);
+    return;
+  }
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+    map.addSource(id, { type: "image", url: rasterData.url, coordinates });
+    map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.85 } });
+  } catch (err) {
+    setImportStatus(`Failed to add raster: ${err.message}`, true);
+    return;
+  }
+
+  const label = rasterData.label || fallbackLabel || "Imported raster";
+  layerExportState.importedLayers.push({
+    id, label, type: "GeoTIFF", sourceId: id, layerIds: [id],
+    geomClass: "wms", // reuses the WMS-style single-raster-layer style controls (opacity slider only)
+    numericFields: [], _props: [], symState: null,
+  });
+  refreshImportedList();
+  setImportStatus(`${label} loaded - ${rasterData.crs || "georeferenced raster"}`);
+
+  try {
+    const b = rasterData.bounds;
+    if (Array.isArray(b) && b.length === 4) {
+      map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, maxZoom: 15, duration: 800 });
+    }
+  } catch (_) { /* ignore fit errors */ }
+}
+```
+
+Notice `geomClass: "wms"` for a GeoTIFF entry — a deliberate reuse, not a
+mislabel: the style panel (§9) branches on `geomClass === "wms"` to show
+*only* an opacity slider (no color/radius/width controls make sense for a
+raster image), and that's exactly the right control set for an imported
+GeoTIFF too, so it borrows the same code path instead of adding a third
+branch.
+
+---
+
+## 7. Part B — WMS: direct add
+
+### 7.1 Building a tile URL from whatever the user pasted
+
+```js
+function buildWmsTileUrl(rawUrl, wmsLayerName, extra = {}) {
+  let tileUrl;
+
+  if (/\{bbox-epsg-3857\}/i.test(rawUrl)) {
+    // Already a Mapbox-style tile template — use as-is
+    tileUrl = rawUrl;
+  } else if (/request=GetMap/i.test(rawUrl)) {
+    // A full GetMap URL (e.g. copied from a browser's own WMS client) —
+    // rewrite its bbox/width/height into Mapbox's own tile-substitution form
+    tileUrl = rawUrl
+      .replace(/([?&])bbox=[^&]*/i, `$1bbox={bbox-epsg-3857}`)
+      .replace(/([?&])width=[^&]*/i, "$1width=256")
+      .replace(/([?&])height=[^&]*/i, "$1height=256");
+    if (!/bbox=/i.test(tileUrl)) {
+      tileUrl += "&bbox={bbox-epsg-3857}&width=256&height=256&transparent=true";
+    }
+  } else {
+    // A bare base URL — construct a full GetMap request from scratch
+    const base = rawUrl.includes("?") ? rawUrl.split("?")[0] : rawUrl;
+    const lyr = wmsLayerName || "0";
+    tileUrl = `${base}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(lyr)}&bbox={bbox-epsg-3857}&width=256&height=256&srs=EPSG:3857&format=image/png&transparent=true`;
+  }
+
+  // Swap in a fresh TIME param (used when scrubbing a temporal WMS layer)
+  tileUrl = tileUrl.replace(/([?&])time=[^&]*&?/i, "$1").replace(/[?&]$/, "");
+  if (extra.time) {
+    tileUrl += `&time=${encodeURIComponent(extra.time)}`;
+  }
+  return tileUrl;
+}
+```
+
+Three input shapes handled by one function, so the user doesn't need to
+know or care which one they're pasting — a full captured `GetMap` request,
+a bare service endpoint (only needs a layer name typed alongside), or an
+already-Mapbox-templated URL.
+
+### 7.2 Routing tiles through Django (CORS)
+
+```js
+// Routes a tile URL through the Django backend so cross-origin WMS servers
+// that don't send CORS headers can still be loaded as map tiles.
+function proxyWmsTileUrl(tileUrl) {
+  const PLACEHOLDER = "{bbox-epsg-3857}";
+  const MARKER = "__NCOP_BBOX_MARKER__";
+  const encoded = encodeURIComponent(tileUrl.replace(PLACEHOLDER, MARKER)).replace(MARKER, PLACEHOLDER);
+  return `/wms-tile/?url=${encoded}`;
+}
+```
+
+**Why the marker-swap dance**: Mapbox GL substitutes `{bbox-epsg-3857}`
+itself, at tile-request time, inside whatever URL string the source
+config holds. If you `encodeURIComponent()` the whole URL up front, the
+literal braces get percent-encoded too — Mapbox's own substitution logic
+won't find `{bbox-epsg-3857}` inside an already-encoded string and the
+placeholder never gets replaced. Swapping it for a plain-token marker
+before encoding, then restoring the literal placeholder text after
+encoding everything else, keeps the one substring Mapbox needs to find
+un-mangled while still safely encoding the rest of the URL (which may
+contain its own `&`, `=`, etc. inside the proxied `url=` query param).
+
+### 7.3 Adding a WMS layer
+
+```js
+function addWmsImportLayer(rawUrl, wmsLayerName, extra = {}, customLabel = "") {
+  const id = `ncop-imp-wms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const tileUrl = buildWmsTileUrl(rawUrl, wmsLayerName, extra);
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+    map.addSource(id, { type: "raster", tiles: [proxiedTileUrl], tileSize: 256 });
+    map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": 0.9 } });
+  } catch (err) {
+    setImportStatus(`Failed to add WMS: ${err.message}`, true);
+    return;
+  }
+
+  const label = customLabel || wmsLayerName || new URL(rawUrl.replace(/\{[^}]+\}/g, "placeholder")).hostname;
+  let wmsTimeIndex = -1;
+  if (extra.times) {
+    wmsTimeIndex = extra.times.indexOf(extra.time);
+    if (wmsTimeIndex < 0) wmsTimeIndex = extra.times.length - 1;
+  }
+  const entry = {
+    id, label, type: "WMS", sourceId: id, layerIds: [id], geomClass: "wms",
+    numericFields: [], _props: [], symState: null,
+    wmsRawUrl: rawUrl, wmsLayerName: wmsLayerName || "",
+    wmsTime: extra.time || null, wmsTimes: extra.times || null, wmsTimeIndex,
+  };
+  if (entry.wmsTimes?.length > 1) {
+    entry._wmsTimeCache = new Map();
+    entry._wmsTimeCache.set(wmsTimeIndex, { layerId: id, sourceId: id, index: wmsTimeIndex, lastUsed: Date.now() });
+    entry._wmsActiveTimeLayerId = id;
+    preloadAdjacentWmsTimes(entry, wmsTimeIndex); // start warming neighbors immediately, see §9
+  }
+  layerExportState.importedLayers.push(entry);
+  refreshImportedList();
+  setImportStatus(`WMS layer added: ${label}`);
+}
+```
+
+Wired to the UI with:
+```js
+wmsAddBtn?.addEventListener("click", () => {
+  const url = wmsInput?.value?.trim() || "";
+  const layerName = wmsLayerInput?.value?.trim() || "";
+  if (!url) { setImportStatus("Paste a WMS URL first.", true); return; }
+  addWmsImportLayer(url, layerName);
+});
+```
+
+---
+
+## 8. Backend — the WMS proxies
+
+Both are intentionally thin — no parsing, no caching, just a same-origin
+relay so the browser never makes a cross-origin request to a WMS server
+that (very commonly) doesn't send CORS headers.
+
+```python
+class NcopWmsCapabilitiesProxyView(View):
+    """Fetch a remote WMS GetCapabilities document server-side to avoid CORS."""
+    def get(self, request):
+        from urllib.parse import urlparse, urlunparse, parse_qsl
+        base_url = request.GET.get("url", "").strip()
+        if not base_url:
+            return JsonResponse({"error": "Missing url parameter"}, status=400)
+        try:
+            parsed = urlparse(base_url)
+            params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            params_lower = {k.lower(): k for k in params}
+            # Fill in only what's missing — respect a caller-specified VERSION, etc.
+            if "service" not in params_lower: params["service"] = "WMS"
+            if "request" not in params_lower: params["request"] = "GetCapabilities"
+            if "version" not in params_lower: params["version"] = "1.3.0"
+            full_url = urlunparse(parsed._replace(query=urlencode(params)))
+
+            resp = requests.get(full_url, timeout=20, verify=False)
+            resp.raise_for_status()
+            return HttpResponse(resp.content, content_type=resp.headers.get("Content-Type", "text/xml"))
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=502)
+
+
+class NcopWmsTileProxyView(View):
+    """Fetch a remote WMS GetMap tile server-side to avoid CORS-blocked tile loads."""
+    def get(self, request):
+        tile_url = request.GET.get("url", "").strip()
+        if not tile_url:
+            return HttpResponse(status=400)
+        try:
+            resp = requests.get(tile_url, timeout=20, verify=False)
+            resp.raise_for_status()
+            return HttpResponse(resp.content, content_type=resp.headers.get("Content-Type", "image/png"))
+        except Exception as e:
+            return HttpResponse(status=502)
+```
+
+`NcopWmsCapabilitiesProxyView` **fills in only the WMS params the caller
+didn't already specify** (`service`/`request`/`version`) rather than always
+overwriting them — this is what lets a user paste either a bare base URL
+*or* a URL that already has some query params (e.g. copied from a working
+`GetCapabilities` link with a non-default version) and have both work.
+
+---
+
+## 9. Part C — WMS `GetCapabilities` browsing
+
+### 9.1 Fetching + the recursive layer-tree parse
+
+WMS documents nest `<Layer>` elements, and both **time dimension** and
+**abstract (description)** can be declared on a parent layer and implicitly
+apply to every child that doesn't override them — a real WMS spec behavior,
+not an edge case to skip:
+
+```js
+let wmsCapsState = null;
+
+async function fetchWmsCapabilities(rawUrl) {
+  const wmsCapsBox = layerExportPanelContent?.querySelector("#ncop-ep-wms-caps");
+  if (!wmsCapsBox) return;
+  setImportStatus("Connecting to WMS service...");
+  wmsCapsBox.style.display = "block";
+  wmsCapsBox.innerHTML = `<div class="ncop-ep-wms-caps-loading">Fetching capabilities...</div>`;
+  try {
+    const proxyUrl = `/wms-capabilities/?url=${encodeURIComponent(rawUrl)}`;
+    const res = await fetch(proxyUrl);
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+    const parsed = parseWmsCapabilitiesXML(text);
+    if (!parsed.layers.length) throw new Error("No layers found in capabilities document");
+    wmsCapsState = { baseUrl: rawUrl, ...parsed };
+    wmsCapsBox.innerHTML = renderWmsCapsHTML(wmsCapsState);
+    setImportStatus(`Connected - ${parsed.layers.length} layer${parsed.layers.length === 1 ? "" : "s"} available.`);
+  } catch (err) {
+    wmsCapsState = null;
+    wmsCapsBox.innerHTML = `<div class="ncop-ep-wms-caps-error">Failed to load capabilities: ${escapeHtml(err.message)}</div>`;
+    setImportStatus(`WMS capabilities request failed: ${err.message}`, true);
+  }
+}
+
+function parseWmsCapabilitiesXML(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  if (doc.querySelector("parsererror")) throw new Error("Invalid capabilities XML");
+
+  const root = doc.documentElement;
+  const version = root?.getAttribute("version") || "1.3.0";
+  const layers = [];
+
+  function readTimeDimension(layerEl) {
+    const dimEl = [...layerEl.children].find(
+      (el) => el.tagName.toLowerCase() === "dimension" && (el.getAttribute("name") || "").toLowerCase() === "time"
+    );
+    const extEl = [...layerEl.children].find(
+      (el) => el.tagName.toLowerCase() === "extent" && (el.getAttribute("name") || "").toLowerCase() === "time"
+    );
+    if (!dimEl && !extEl) return null;
+    const extent = (extEl?.textContent || dimEl?.textContent || "").trim();
+    const def = (extEl?.getAttribute("default") || dimEl?.getAttribute("default") || "").trim();
+    if (!extent && !def) return null;
+    return { extent, default: def };
+  }
+
+  function walk(layerEl, inheritedTime, inheritedAbstract) {
+    const children = [...layerEl.children];
+    const nameEl = children.find((el) => el.tagName.toLowerCase() === "name");
+    const titleEl = children.find((el) => el.tagName.toLowerCase() === "title");
+    const abstractEl = children.find((el) => el.tagName.toLowerCase() === "abstract");
+    const name = nameEl?.textContent.trim() || "";
+    const title = titleEl?.textContent.trim() || name;
+
+    const ownTime = readTimeDimension(layerEl);
+    const time = ownTime || inheritedTime || null;         // fall back to parent's <Dimension name="time">
+    const abstract = abstractEl?.textContent.trim() || inheritedAbstract || "";
+
+    if (name) layers.push({ name, title, time, abstract });
+
+    children
+      .filter((el) => el.tagName.toLowerCase() === "layer")
+      .forEach((child) => walk(child, time, abstract));   // pass inheritance down
+  }
+
+  const capabilityEl = [...root.children].find((el) => el.tagName.toLowerCase() === "capability");
+  const topLayers = capabilityEl
+    ? [...capabilityEl.children].filter((el) => el.tagName.toLowerCase() === "layer")
+    : [];
+  topLayers.forEach((l) => walk(l, null, ""));
+
+  return { version, layers };
+}
+```
+
+**Why `DOMParser` and manual tag-name walking, not an XML-to-JS library**:
+`DOMParser().parseFromString(xml, "text/xml")` is a browser built-in — zero
+dependency — and WMS Capabilities XML's structure is shallow/predictable
+enough that a recursive `.children` walk matching on lowercased
+`tagName` (handles both `<Layer>` and any namespace-prefixed variant a
+server might emit) is simpler than pulling in a full XML/XPath library for
+this one use.
+
+### 9.2 Rendering the layer-picker list
+
+```js
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function renderWmsCapsHTML(state) {
+  const rows = state.layers.map((l, i) => {
+    const timeBadge = l.time
+      ? `<span class="ncop-ep-wms-time-badge" title="${escapeHtml(l.time.extent || l.time.default || "")}">Temporal${l.time.default ? ` - ${escapeHtml(l.time.default)}` : ""}</span>`
+      : "";
+    return `
+      <div class="ncop-ep-wms-layer-row-item">
+        <label class="ncop-ep-wms-layer-row-label">
+          <input type="checkbox" class="ncop-ep-wms-layer-check" data-wms-layer-idx="${i}">
+          <span class="ncop-ep-wms-layer-text">
+            <span class="ncop-ep-wms-layer-title">${escapeHtml(l.title || l.name)}</span>
+            <span class="ncop-ep-wms-layer-name">${escapeHtml(l.name)}</span>
+          </span>
+          ${timeBadge}
+        </label>
+        <button type="button" class="ncop-ep-wms-info-btn" data-wms-info-idx="${i}" title="Layer info" aria-label="Layer information">i</button>
+      </div>
+      <div class="ncop-ep-wms-layer-info-panel" data-wms-info-panel="${i}" style="display:none"></div>`;
+  }).join("");
+
+  return `
+    <div class="ncop-ep-wms-caps-header">
+      <span>${state.layers.length} layer${state.layers.length === 1 ? "" : "s"} available</span>
+      <div class="ncop-ep-wms-caps-actions">
+        <button type="button" class="ncop-ep-wms-mini-btn" data-wms-select-all>Select All</button>
+        <button type="button" class="ncop-ep-wms-mini-btn ncop-ep-wms-mini-btn-primary" data-wms-add-selected>Add Selected</button>
+      </div>
+    </div>
+    <div class="ncop-ep-wms-caps-body">${rows}</div>
+  `;
+}
+
+// Per-layer "(i)" info popover — plain-language guidance, not just raw metadata
+function renderWmsLayerInfoHTML(layer) {
+  const desc = layer.abstract ? escapeHtml(layer.abstract) : "No description was provided by this WMS service for this layer.";
+  let timeInfo = "";
+  if (layer.time) {
+    const times = parseWmsTimeExtent(layer.time.extent || "");
+    if (times.length > 1) {
+      const start = formatWmsTimeLabel(times[0]);
+      const end = formatWmsTimeLabel(times[times.length - 1]);
+      timeInfo = `
+        <p><strong>Temporal layer</strong> - this layer offers ${times.length} time steps, from <strong>${escapeHtml(start)}</strong> to <strong>${escapeHtml(end)}</strong>.</p>
+        <p><strong>How time works once added:</strong> a small time slider with a timestamp label appears under this layer's card in the Import panel. Drag it to step through the available timestamps.</p>`;
+    } else if (layer.time.default) {
+      timeInfo = `<p><strong>Temporal layer</strong> - the service only reports a single default time (<code>${escapeHtml(layer.time.default)}</code>), so it will be added showing that snapshot.</p>`;
+    }
+  }
+  return `<div class="ncop-ep-wms-info-body">
+    <p class="ncop-ep-wms-info-desc">${desc}</p>
+    <p><strong>WMS layer name:</strong> <code>${escapeHtml(layer.name)}</code></p>
+    <p><strong>How to add this layer:</strong> tick the checkbox next to it (or use "Select All"), then click <strong>Add Selected</strong>.</p>
+    ${timeInfo}
+  </div>`;
+}
+```
+
+### 9.3 Expanding a WMS time dimension into concrete steps
+
+WMS `<Extent name="time">` values come in one of two shapes: a plain
+comma-separated list of timestamps, or an `start/end/period` ISO8601
+interval — this has to handle both, plus the case where a period isn't
+given at all:
+
+```js
+function parseISODuration(str) {
+  const m = String(str || "").match(/^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/);
+  if (!m) return null;
+  return { years: +(m[1]||0), months: +(m[2]||0), days: +(m[3]||0), hours: +(m[4]||0), minutes: +(m[5]||0), seconds: +(m[6]||0) };
+}
+
+function addISODuration(date, dur) {
+  const d = new Date(date.getTime());
+  if (dur.years)   d.setUTCFullYear(d.getUTCFullYear() + dur.years);
+  if (dur.months)  d.setUTCMonth(d.getUTCMonth() + dur.months);
+  if (dur.days)    d.setUTCDate(d.getUTCDate() + dur.days);
+  if (dur.hours)   d.setUTCHours(d.getUTCHours() + dur.hours);
+  if (dur.minutes) d.setUTCMinutes(d.getUTCMinutes() + dur.minutes);
+  if (dur.seconds) d.setUTCSeconds(d.getUTCSeconds() + dur.seconds);
+  return d;
+}
+
+// Expands a WMS time Dimension/Extent string into a discrete list of ISO timestamps.
+function parseWmsTimeExtent(extentStr, maxSteps = 100) {
+  if (!extentStr) return [];
+  const out = [];
+  String(extentStr).split(",").map((s) => s.trim()).filter(Boolean).forEach((part) => {
+    if (part.includes("/")) {
+      const [startStr, endStr, periodStr] = part.split("/");
+      const start = new Date(startStr), end = new Date(endStr);
+      const dur = periodStr ? parseISODuration(periodStr) : null;
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        if (!isNaN(start.getTime())) out.push(start.toISOString());
+        return;
+      }
+      if (!dur) {
+        // No period given (e.g. "2018-01-01/2099-12-31") — spread evenly
+        // across the range, capped at maxSteps, so the layer still gets a
+        // usable slider instead of failing outright
+        const totalMs = end.getTime() - start.getTime();
+        const dayMs = 24 * 60 * 60 * 1000;
+        const stepMs = Math.max(totalMs / Math.max(maxSteps - 1, 1), dayMs);
+        let cur = start, count = 0;
+        while (cur.getTime() <= end.getTime() && count < maxSteps) {
+          out.push(cur.toISOString());
+          cur = new Date(cur.getTime() + stepMs);
+          count++;
+        }
+        return;
+      }
+      let cur = start, count = 0;
+      while (cur.getTime() <= end.getTime() && count < maxSteps) {
+        out.push(cur.toISOString());
+        cur = addISODuration(cur, dur);
+        count++;
+      }
+    } else {
+      const d = new Date(part);
+      out.push(isNaN(d.getTime()) ? part : d.toISOString());
+    }
+  });
+  return [...new Set(out)];
+}
+
+// Finds the time step closest to a target ISO/date string (a WMS dimension's
+// `default` value may not exactly match a generated step, e.g. rounding).
+function findClosestWmsTimeIndex(times, target) {
+  const targetMs = new Date(target).getTime();
+  if (isNaN(targetMs)) return -1;
+  let best = -1, bestDiff = Infinity;
+  times.forEach((t, i) => {
+    const diff = Math.abs(new Date(t).getTime() - targetMs);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  });
+  return best;
+}
+```
+
+`maxSteps = 100` is a hard safety cap — some WMS services advertise a
+multi-decade daily interval (`2000-01-01/2099-12-31/P1D` is >36,000 days),
+which would otherwise generate tens of thousands of client-side time steps
+and a useless slider.
+
+### 9.4 Adding the checked layers
+
+```js
+function addSelectedWmsCapsLayers() {
+  const wmsCapsBox = layerExportPanelContent?.querySelector("#ncop-ep-wms-caps");
+  if (!wmsCapsBox || !wmsCapsState) return;
+  const checks = [...wmsCapsBox.querySelectorAll(".ncop-ep-wms-layer-check:checked")];
+  if (!checks.length) { setImportStatus("Select at least one layer to add.", true); return; }
+
+  let added = 0;
+  checks.forEach((c) => {
+    const idx = parseInt(c.dataset.wmsLayerIdx, 10);
+    const layer = wmsCapsState.layers[idx];
+    if (!layer) return;
+    const extra = {};
+    if (layer.time?.extent) {
+      const times = parseWmsTimeExtent(layer.time.extent);
+      if (times.length > 1) {
+        extra.times = times;
+        const def = (layer.time.default || "").toLowerCase();
+        let defIdx = -1;
+        if (def && !["current", "default"].includes(def)) {
+          defIdx = times.indexOf(layer.time.default);
+          if (defIdx < 0) defIdx = findClosestWmsTimeIndex(times, layer.time.default);
+        }
+        extra.time = defIdx >= 0 ? times[defIdx] : times[times.length - 1]; // fall back to the newest step
+      }
+    }
+    if (!extra.time && layer.time?.default) {
+      const def = layer.time.default.toLowerCase();
+      if (def !== "current" && def !== "default") extra.time = layer.time.default;
+    }
+    addWmsImportLayer(wmsCapsState.baseUrl, layer.name, extra, layer.title);
+    added++;
+  });
+  setImportStatus(`Added ${added} WMS layer${added === 1 ? "" : "s"}.`);
+}
+```
+
+---
+
+## 10. Part D — WMS time animation (the most involved piece)
+
+A temporal WMS layer isn't just "re-request the tile with a different
+`TIME=`" on every slider move — that would flicker (old tile disappears,
+new tile loads in) and hammer the remote server on every drag event. GCOP's
+implementation instead keeps a **small LRU cache of pre-built map
+layers**, one per recently-visited time step, and switches between them by
+**toggling opacity** (instant, GPU-side) while the *next* step is fetched
+in the background.
+
+```js
+const NCOP_WMS_TIME_CACHE_LIMIT = 8;
+const NCOP_WMS_FRAME_READY_TIMEOUT_MS = 8000;
+const NCOP_WMS_PLAY_INTERVAL_MS = 900;
+
+function buildWmsTimeLayerIds(entry, index) {
+  return { sourceId: `${entry.id}-time-src-${index}`, layerId: `${entry.id}-time-layer-${index}` };
+}
+
+// Creates (or returns the cached) Mapbox source+layer for one time index.
+// New layers start fully transparent (opacity 0) — becoming visible is a
+// separate step (activateWmsTimeLayer), so "prepared" and "shown" are decoupled.
+function ensureWmsTimeLayer(entry, index) {
+  if (!entry?._wmsTimeCache) entry._wmsTimeCache = new Map();
+  const cached = entry._wmsTimeCache.get(index);
+  if (cached && map.getLayer(cached.layerId) && map.getSource(cached.sourceId)) {
+    cached.lastUsed = Date.now();
+    return cached;
+  }
+  const ids = buildWmsTimeLayerIds(entry, index);
+  const time = entry.wmsTimes[index];
+  const tileUrl = buildWmsTileUrl(entry.wmsRawUrl, entry.wmsLayerName, { time });
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+  try {
+    if (!map.getSource(ids.sourceId)) {
+      map.addSource(ids.sourceId, { type: "raster", tiles: [proxiedTileUrl], tileSize: 256 });
+    }
+    if (!map.getLayer(ids.layerId)) {
+      map.addLayer({ id: ids.layerId, type: "raster", source: ids.sourceId, paint: { "raster-opacity": 0 } });
+    }
+  } catch (err) {
+    setImportStatus(`Failed to prepare WMS time frame: ${err.message}`, true);
+    return null;
+  }
+  const layerRef = { ...ids, index, lastUsed: Date.now() };
+  entry._wmsTimeCache.set(index, layerRef);
+  trimWmsTimeCache(entry);
+  return layerRef;
+}
+
+// Evicts the least-recently-used cached frame(s) once the cache exceeds the
+// limit — never evicts the currently-active frame, even if it's old.
+function trimWmsTimeCache(entry) {
+  if (!entry?._wmsTimeCache || entry._wmsTimeCache.size <= NCOP_WMS_TIME_CACHE_LIMIT) return;
+  const activeIndex = entry.wmsTimeIndex;
+  const removable = [...entry._wmsTimeCache.entries()]
+    .filter(([idx, ref]) => idx !== activeIndex && ref.layerId !== entry._wmsActiveTimeLayerId)
+    .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+  while (entry._wmsTimeCache.size > NCOP_WMS_TIME_CACHE_LIMIT && removable.length) {
+    const [idx, ref] = removable.shift();
+    try {
+      if (map.getLayer(ref.layerId)) map.removeLayer(ref.layerId);
+      if (ref.sourceId !== entry.sourceId && map.getSource(ref.sourceId)) map.removeSource(ref.sourceId);
+    } catch (_) { /* ignore stale cache cleanup */ }
+    entry._wmsTimeCache.delete(idx);
+  }
+}
+
+// Waits for a source's tiles to actually finish loading (or times out) —
+// used before making a prepared frame visible, so switching doesn't show a
+// half-loaded/blank tile.
+function waitForWmsSourceReady(sourceId, timeoutMs = NCOP_WMS_FRAME_READY_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let done = false, timeoutId = null;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      map.off?.("sourcedata", onSourceData);
+      map.off?.("idle", onIdle);
+    };
+    const finish = () => { cleanup(); resolve(true); };
+    const isReady = () => {
+      try { return typeof map.isSourceLoaded === "function" && map.getSource(sourceId) && map.isSourceLoaded(sourceId); }
+      catch (_) { return false; }
+    };
+    const onSourceData = (e) => { if (e?.sourceId === sourceId && (e.isSourceLoaded || isReady())) finish(); };
+    const onIdle = () => { if (isReady()) finish(); };
+    if (isReady()) { resolve(true); return; }
+    map.on("sourcedata", onSourceData);
+    map.on("idle", onIdle);
+    timeoutId = setTimeout(() => { cleanup(); resolve(false); }, timeoutMs); // don't hang forever on a slow/dead tile server
+  });
+}
+
+// Warms the two neighboring time steps (prev + next) in the background —
+// called right after any step becomes active, so scrubbing/playing forward
+// or backward usually hits an already-ready frame instead of a cold fetch.
+function preloadAdjacentWmsTimes(entry, index) {
+  if (!entry?.wmsTimes?.length) return;
+  const len = entry.wmsTimes.length;
+  [(index + 1) % len, (index - 1 + len) % len].forEach((idx) => {
+    const ref = ensureWmsTimeLayer(entry, idx);
+    if (ref) waitForWmsSourceReady(ref.sourceId, NCOP_WMS_FRAME_READY_TIMEOUT_MS).catch(() => {});
+  });
+}
+
+// Makes one time index the visible one: wait for its tiles, then set every
+// cached frame's opacity in one pass (target frame → real opacity, every
+// other cached frame → 0) — a single crossfade-free swap, not a sequence of
+// individual layer add/remove calls.
+async function activateWmsTimeLayer(entry, index, requestSeq) {
+  const ref = ensureWmsTimeLayer(entry, index);
+  if (!ref) return false;
+  setWmsTimeCtrlLoading(entry, true);
+  await waitForWmsSourceReady(ref.sourceId);
+  if (requestSeq !== entry._wmsTimeRequestSeq) return false; // a newer request superseded this one — drop it
+
+  const opacity = getWmsLayerOpacity(entry);
+  entry._wmsTimeCache?.forEach((layerRef) => {
+    if (map.getLayer(layerRef.layerId)) {
+      map.setPaintProperty(layerRef.layerId, "raster-opacity", layerRef.layerId === ref.layerId ? opacity : 0);
+    }
+  });
+  entry._wmsActiveTimeLayerId = ref.layerId;
+  entry.wmsTimeIndex = index;
+  entry.wmsTime = entry.wmsTimes[index];
+  updateWmsTimeCtrlUI(entry, index);
+  setWmsTimeCtrlLoading(entry, false);
+  preloadAdjacentWmsTimes(entry, index); // keep warming outward from the new position
+  return true;
+}
+
+async function setWmsLayerTimeIndex(entry, index) {
+  if (!entry?.wmsTimes?.length) return;
+  const clamped = Math.max(0, Math.min(index, entry.wmsTimes.length - 1));
+  const requestSeq = (entry._wmsTimeRequestSeq || 0) + 1; // sequence token — see "stale request" note below
+  entry._wmsTimeRequestSeq = requestSeq;
+
+  if (entry.wmsTimes.length > 1) {
+    return activateWmsTimeLayer(entry, clamped, requestSeq);
+  }
+  // Single-time-step layer: no cache needed, just rewrite the one source's tiles directly
+  entry.wmsTimeIndex = clamped;
+  entry.wmsTime = entry.wmsTimes[clamped];
+  const tileUrl = buildWmsTileUrl(entry.wmsRawUrl, entry.wmsLayerName, { time: entry.wmsTime });
+  const proxiedTileUrl = proxyWmsTileUrl(tileUrl);
+  const src = map.getSource(entry.sourceId);
+  if (src && typeof src.setTiles === "function") src.setTiles([proxiedTileUrl]);
+  updateWmsTimeCtrlUI(entry, clamped);
+}
+
+function delayWmsPlayback(ms, entry, token) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(entry._wmsPlayToken === token && entry._wmsPlayTimer), ms);
+  });
+}
+
+function toggleWmsLayerPlay(entry) {
+  if (!entry?.wmsTimes?.length || entry.wmsTimes.length < 2) return;
+  if (entry._wmsPlayTimer) {
+    // Stop: bump both token counters so any in-flight async step becomes a no-op
+    entry._wmsPlayToken = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsTimeRequestSeq = (entry._wmsTimeRequestSeq || 0) + 1;
+    entry._wmsPlayTimer = null;
+    setWmsTimeCtrlLoading(entry, false);
+  } else {
+    const token = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsPlayToken = token;
+    entry._wmsPlayTimer = true;
+    const runPlayback = async () => {
+      while (entry._wmsPlayTimer && entry._wmsPlayToken === token) {
+        preloadAdjacentWmsTimes(entry, entry.wmsTimeIndex);
+        const next = (entry.wmsTimeIndex + 1) % entry.wmsTimes.length;
+        await setWmsLayerTimeIndex(entry, next);
+        if (!(await delayWmsPlayback(NCOP_WMS_PLAY_INTERVAL_MS, entry, token))) break;
+      }
+    };
+    refreshImportedList();
+    runPlayback().catch((err) => setImportStatus(`WMS playback failed: ${err.message}`, true));
+    return;
+  }
+  refreshImportedList();
+}
+```
+
+**The two-token pattern (`_wmsPlayToken` + `_wmsTimeRequestSeq`) is the
+piece worth understanding, not just copying.** Because activating a frame
+is `async` (it awaits tile-load), a user can scrub the slider again — or
+hit stop — before the previous activation finishes. Both counters exist so
+a stale, now-superseded async operation can detect it's stale and quietly
+no-op instead of clobbering a newer state:
+- `_wmsTimeRequestSeq` is bumped on every `setWmsLayerTimeIndex` call (scrub
+  *or* playback step); `activateWmsTimeLayer` checks it's still current
+  right after its `await` — if a newer scrub happened while this one was
+  waiting on tile load, it silently returns `false` instead of setting
+  now-wrong opacities.
+- `_wmsPlayToken` is bumped only by play/stop; the playback loop's `while`
+  condition and its `delayWmsPlayback` check both re-verify the token
+  before continuing, so clicking stop mid-frame reliably ends the loop on
+  its very next check rather than racing to finish one more step.
+
+UI wiring for the slider + play button (delegated, matching the panel's
+single-listener pattern from the Export guide):
+```js
+layerExportPanelContent.addEventListener("input", (e) => {
+  const wmsTimeId = e.target.dataset.wmsTimeSlider;
+  if (wmsTimeId) {
+    const entry = layerExportState.importedLayers.find(l => l.id === wmsTimeId);
+    if (entry?.wmsTimes?.length) {
+      setWmsLayerTimeIndex(entry, parseInt(e.target.value, 10)).catch((err) => {
+        setImportStatus(`WMS time step failed: ${err.message}`, true);
+      });
+    }
+  }
+});
+// (click delegation for [data-wms-time-play] → toggleWmsLayerPlay(entry) lives
+//  in the same big delegated click listener as the rest of the panel's buttons)
+```
+
+---
+
+## 11. The imported-layers list UI
+
+### 11.1 Rendering the list
+
+```js
+function refreshImportedList() {
+  const listEl = layerExportPanelContent?.querySelector("#ncop-ep-imp-list");
+  const layers = layerExportState.importedLayers;
+  if (!layers.length) {
+    if (listEl) listEl.remove();
+    return;
+  }
+  const html = `<div class="ncop-ep-imp-list" id="ncop-ep-imp-list">` + layers.map(buildLayerCardHTML).join("") + `</div>`;
+  if (listEl) {
+    listEl.outerHTML = html; // full re-render on every change — simple, and this list is never large
+  } else {
+    const importDiv = layerExportPanelContent?.querySelector(".ncop-ep-import");
+    if (importDiv) importDiv.insertAdjacentHTML("beforeend", html);
+  }
+}
+
+function buildLayerCardHTML(l) {
+  const sym = l.symState;
+  const id = escapeExportHtml(l.id); // shared with the Export tab — see Export guide §1.6
+  const isVector = l.geomClass !== "wms";
+  const styleActive = sym?.open === "sym";
+  const statsActive = sym?.open === "stats";
+
+  const styleBtn = `<button class="ncop-ep-imp-btn${styleActive ? " active" : ""}" data-imp-sym="${id}" title="Style layer">...</button>`;
+  const statsBtn = isVector && l._props?.length
+    ? `<button class="ncop-ep-imp-btn${statsActive ? " active" : ""}" data-imp-stats="${id}" title="Field statistics">...</button>`
+    : "";
+
+  const expandedHTML = styleActive ? renderSymPanelHTML(l) : statsActive ? renderStatsPanelHTML(l) : "";
+  const timeCtrlHTML = (l.geomClass === "wms" && l.wmsTimes?.length > 1) ? renderWmsTimeCtrlHTML(l, id) : "";
+
+  return `<div class="ncop-ep-imp-layer${sym?.open ? " expanded" : ""}" data-imp-id="${id}">
+    <div class="ncop-ep-imp-layer-header">
+      <div class="ncop-ep-imp-layer-info">
+        <span class="ncop-ep-imp-layer-name">${escapeExportHtml(l.label)}</span>
+        <span class="ncop-ep-imp-layer-type">${escapeExportHtml(l.type)}</span>
+      </div>
+      <div class="ncop-ep-imp-layer-actions">
+        ${styleBtn}${statsBtn}
+        <button class="ncop-ep-imp-remove" data-imp-remove="${id}" title="Remove layer">×</button>
+      </div>
+    </div>
+    ${timeCtrlHTML}
+    ${expandedHTML}
+  </div>`;
+}
+```
+
+The stats button only renders when there's vector attribute data to show
+(`isVector && l._props?.length`) — a WMS/GeoTIFF entry never gets one, since
+there are no per-feature attributes for a raster.
+
+### 11.2 Removal — full cleanup including the WMS time cache
+
+```js
+function removeImportedLayer(importId) {
+  const entry = layerExportState.importedLayers.find((l) => l.id === importId);
+  if (!entry) return;
+  if (entry._wmsPlayTimer) {
+    entry._wmsPlayToken = (entry._wmsPlayToken || 0) + 1;
+    entry._wmsTimeRequestSeq = (entry._wmsTimeRequestSeq || 0) + 1;
+    entry._wmsPlayTimer = null; // stop playback before tearing anything down
+  }
+  try {
+    if (entry._wmsTimeCache) {
+      // Remove every cached time-step layer, THEN every cached source —
+      // Mapbox GL throws if you remove a source that a layer still references
+      entry._wmsTimeCache.forEach((ref) => { if (map.getLayer(ref.layerId)) map.removeLayer(ref.layerId); });
+      entry._wmsTimeCache.forEach((ref) => { if (map.getSource(ref.sourceId)) map.removeSource(ref.sourceId); });
+      entry._wmsTimeCache.clear();
+    } else {
+      entry.layerIds.forEach((lid) => { if (map.getLayer(lid)) map.removeLayer(lid); });
+      if (map.getSource(entry.sourceId)) map.removeSource(entry.sourceId);
+    }
+  } catch (_) { /* ignore cleanup errors */ }
+  layerExportState.importedLayers = layerExportState.importedLayers.filter((l) => l.id !== importId);
+  refreshImportedList();
+  setImportStatus(`Layer removed.`);
+}
+```
+
+### 11.3 Event delegation — the single listener driving everything above
+
+Following the same principle as the Export tab (re-rendering the list on
+every state change means per-row listeners would leak) — one delegated
+`click` listener on the panel content handles remove/style-toggle/
+stats-toggle/style-mode-tabs/WMS-play/WMS-info/WMS-select-all/
+WMS-add-selected/choropleth-apply, one delegated `input` listener handles
+every live-updating control (WMS time slider, color picker, opacity/
+radius/width sliders), and one delegated `change` listener handles the
+ramp-preview swap:
+
+```js
+function initImportTabEvents() {
+  const dropZone = layerExportPanelContent?.querySelector("#ncop-ep-drop-zone");
+  const fileInput = layerExportPanelContent?.querySelector("#ncop-ep-file-input");
+  const wmsInput = layerExportPanelContent?.querySelector("#ncop-ep-wms-url");
+  const wmsLayerInput = layerExportPanelContent?.querySelector("#ncop-ep-wms-layer-name");
+  const wmsLayerRow = layerExportPanelContent?.querySelector("#ncop-ep-wms-layer-row");
+  const wmsAddBtn = layerExportPanelContent?.querySelector("#ncop-ep-wms-add");
+  const wmsConnectBtn = layerExportPanelContent?.querySelector("#ncop-ep-wms-connect");
+
+  // Guard so the delegated listeners are attached exactly once — the panel's
+  // *content* gets replaced on re-render (innerHTML swaps), but the content
+  // *container* itself persists, so a dataset flag on it survives re-renders.
+  if (layerExportPanelContent && !layerExportPanelContent.dataset.impEvReady) {
+    layerExportPanelContent.dataset.impEvReady = "1";
+
+    layerExportPanelContent.addEventListener("click", (e) => {
+      const removeId = e.target.closest("[data-imp-remove]")?.dataset.impRemove;
+      if (removeId) { removeImportedLayer(removeId); return; }
+
+      const symId = e.target.closest("[data-imp-sym]")?.dataset.impSym;
+      if (symId) {
+        const entry = layerExportState.importedLayers.find(l => l.id === symId);
+        if (entry) {
+          if (!entry.symState) {
+            entry.symState = impDefaultSymState();
+            // Seed a WMS layer's opacity control from its actual current paint value
+            if (entry.geomClass === "wms") {
+              const op = map.getPaintProperty(entry.layerIds[0], "raster-opacity");
+              if (typeof op === "number") entry.symState.opacity = op;
+            }
+          }
+          entry.symState.open = entry.symState.open === "sym" ? null : "sym"; // toggle
+          refreshImportedList();
+        }
+        return;
+      }
+      // ...stats toggle, sym-mode tabs, wms-play, wms-info, wms-caps-toggle,
+      // wms-select-all, wms-add-selected, choropleth-apply — same
+      // find-entry-by-id-then-act pattern, see §7–§10 above for each target
+    });
+
+    layerExportPanelContent.addEventListener("input", (e) => { /* §10's slider + §12's style sliders */ });
+    layerExportPanelContent.addEventListener("change", (e) => { /* ramp-preview swap, see §12 */ });
+  }
+
+  if (!dropZone || !fileInput) return; // rest of setup only makes sense once per real mount
+
+  wmsInput?.addEventListener("input", () => {
+    const v = wmsInput.value.trim();
+    const hasGetMap = /request=GetMap/i.test(v) || /\{bbox/i.test(v);
+    if (wmsLayerRow) wmsLayerRow.style.display = v && !hasGetMap ? "flex" : "none"; // only ask for a layer name when it can't be inferred
+  });
+
+  dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    if (e.dataTransfer?.files?.length) handleImportFiles(e.dataTransfer.files);
+  });
+  dropZone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+  fileInput.addEventListener("change", () => { if (fileInput.files?.length) handleImportFiles(fileInput.files); fileInput.value = ""; });
+
+  wmsAddBtn?.addEventListener("click", () => {
+    const url = wmsInput?.value?.trim() || "";
+    const layerName = wmsLayerInput?.value?.trim() || "";
+    if (!url) { setImportStatus("Paste a WMS URL first.", true); return; }
+    addWmsImportLayer(url, layerName);
+  });
+  wmsConnectBtn?.addEventListener("click", () => {
+    const url = wmsInput?.value?.trim() || "";
+    if (!url) { setImportStatus("Paste a WMS base URL first.", true); return; }
+    fetchWmsCapabilities(url);
+  });
+  wmsInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); wmsConnectBtn?.click(); } });
+}
+```
+
+This function is called every time the Import tab is (re)rendered (tab
+switch, or the panel re-opening) — the `dataset.impEvReady` guard is what
+stops that from stacking N duplicate delegated listeners over a session.
+
+---
+
+## 12. Part E — Symbology & analysis toolkit
+
+Applies uniformly to any vector import (GeoJSON/Shapefile) and, for
+opacity only, to WMS/GeoTIFF too — all driven by one `symState` object per
+layer entry, lazily created the first time a user opens that layer's style
+panel.
+
+### 12.1 Color ramps + default state
+
+```js
+const IMP_COLOR_RAMPS = {
+  Blues:    ["#deebf7","#9ecae1","#3182bd","#08519c","#08306b"],
+  Reds:     ["#fee5d9","#fcae91","#fb6a4a","#cb181d","#67000d"],
+  Greens:   ["#e5f5e0","#a1d99b","#41ab5d","#238b45","#005a32"],
+  Oranges:  ["#feedde","#fdbe85","#fd8d3c","#e6550d","#a63603"],
+  Purples:  ["#f2f0f7","#cbc9e2","#9e9ac8","#756bb1","#54278f"],
+  Plasma:   ["#0d0887","#7e03a8","#cc4778","#f89441","#f0f921"],
+  RdYlGn:   ["#d73027","#fc8d59","#fee08b","#d9ef8b","#1a9850"],
+  RdBu:     ["#d73027","#f46d43","#fee090","#74add1","#4575b4"],
+  YlOrRd:   ["#ffffb2","#fecc5c","#fd8d3c","#f03b20","#bd0026"],
+};
+
+function impDefaultSymState() {
+  return { open: null, mode: "simple", color: "#00eaff", opacity: 0.7, radius: 5, width: 2, field: "", ramp: "Blues", method: "quantile", classes: 5 };
+}
+```
+
+### 12.2 Detecting which fields are even usable for a choropleth
+
+```js
+function getNumericFields(features) {
+  if (!features?.length) return [];
+  const sample = features.slice(0, 50); // sampling, not scanning every feature — cheap and sufficient
+  const keys = Object.keys(sample[0]?.properties || {});
+  return keys.filter(k => {
+    const present = sample.filter(f => f.properties?.[k] !== null && f.properties?.[k] !== undefined && f.properties?.[k] !== "");
+    if (!present.length) return false;
+    // A field counts as "numeric" if ≥80% of its non-empty sampled values parse as a number —
+    // tolerant of a few dirty/text values without disqualifying an otherwise-numeric column
+    return present.filter(f => !isNaN(Number(f.properties[k]))).length / present.length > 0.8;
+  });
+}
+```
+
+### 12.3 The style panel — simple vs. choropleth
+
+```js
+function renderSymPanelHTML(l) {
+  const sym = l.symState || impDefaultSymState();
+  const id = escapeExportHtml(l.id);
+
+  if (l.geomClass === "wms") {
+    // Raster imports (WMS or GeoTIFF): opacity only, nothing else makes sense
+    return `<div class="ncop-ep-sym-panel"><div class="ncop-ep-sym-body">
+      <div class="ncop-ep-sym-row">
+        <label class="ncop-ep-sym-label">Opacity <span class="ncop-ep-sym-val">${sym.opacity}</span></label>
+        <input type="range" class="ncop-ep-sym-slider" min="0" max="1" step="0.05" value="${sym.opacity}" data-sym-opacity="${id}">
+      </div>
+    </div></div>`;
+  }
+
+  const isChoro = sym.mode === "choropleth";
+  const numFields = l.numericFields || [];
+  const noFields = !numFields.length;
+  // Auto-pick the first field with ≥2 distinct values, so "Apply" always has
+  // a working default instead of silently doing nothing on first open
+  if (l.symState && !l.symState.field && numFields.length) {
+    l.symState.field = numFields.find(f => {
+      const uv = new Set((l._props || []).map(p => Number(p[f])).filter(v => !isNaN(v)));
+      return uv.size >= 2;
+    }) || numFields[0];
+  }
+  const activeField = l.symState?.field || numFields[0] || "";
+  const fieldOpts = numFields.map(f => `<option value="${escapeExportHtml(f)}"${activeField === f ? " selected" : ""}>${escapeExportHtml(f)}</option>`).join("");
+  const rampOpts = Object.keys(IMP_COLOR_RAMPS).map(r => `<option value="${r}"${sym.ramp === r ? " selected" : ""}>${r}</option>`).join("");
+  const rampGrad = `linear-gradient(to right, ${(IMP_COLOR_RAMPS[sym.ramp] || IMP_COLOR_RAMPS.Blues).join(",")})`;
+
+  const simpleBody = `<div class="ncop-ep-sym-body">
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Color</label>
+      <input type="color" class="ncop-ep-sym-color" value="${sym.color}" data-sym-color="${id}"></div>
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Opacity <span class="ncop-ep-sym-val">${sym.opacity}</span></label>
+      <input type="range" class="ncop-ep-sym-slider" min="0" max="1" step="0.05" value="${sym.opacity}" data-sym-opacity="${id}"></div>
+    ${l.geomClass === "point" ? `<div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Radius <span class="ncop-ep-sym-val">${sym.radius}px</span></label>
+      <input type="range" class="ncop-ep-sym-slider" min="1" max="20" step="0.5" value="${sym.radius}" data-sym-radius="${id}"></div>` : ""}
+    ${l.geomClass === "line" ? `<div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Width <span class="ncop-ep-sym-val">${sym.width}px</span></label>
+      <input type="range" class="ncop-ep-sym-slider" min="0.5" max="12" step="0.5" value="${sym.width}" data-sym-width="${id}"></div>` : ""}
+  </div>`;
+
+  const choroBody = `<div class="ncop-ep-sym-body">
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Field</label><select class="ncop-ep-sym-select" data-sym-field="${id}">${fieldOpts}</select></div>
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Ramp</label><select class="ncop-ep-sym-select" data-sym-ramp="${id}">${rampOpts}</select></div>
+    <div class="ncop-ep-ramp-preview" style="background:${rampGrad}"></div>
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Method</label>
+      <select class="ncop-ep-sym-select" data-sym-method="${id}">
+        <option value="quantile"${sym.method === "quantile" ? " selected" : ""}>Quantile</option>
+        <option value="equal"${sym.method === "equal" ? " selected" : ""}>Equal interval</option>
+      </select></div>
+    <div class="ncop-ep-sym-row"><label class="ncop-ep-sym-label">Classes</label>
+      <select class="ncop-ep-sym-select" data-sym-classes="${id}">${[3,4,5,6,7].map(n => `<option value="${n}"${sym.classes === n ? " selected" : ""}>${n}</option>`).join("")}</select></div>
+    <button class="ncop-ep-sym-apply" data-sym-apply="${id}">Apply Choropleth</button>
+  </div>`;
+
+  return `<div class="ncop-ep-sym-panel">
+    <div class="ncop-ep-sym-tabs">
+      <button class="ncop-ep-sym-tab${!isChoro ? " active" : ""}" data-sym-mode="simple" data-sym-for="${id}">Simple</button>
+      <button class="ncop-ep-sym-tab${isChoro ? " active" : ""}" data-sym-mode="choropleth" data-sym-for="${id}"${noFields ? ' disabled title="No numeric fields"' : ""}>Choropleth</button>
+    </div>
+    ${isChoro ? choroBody : simpleBody}
+  </div>`;
+}
+```
+
+Geometry-specific controls (`radius` for points, `width` for lines) only
+render for the matching `geomClass` — the same style panel markup adapts
+per layer type rather than needing three separate panel implementations.
+
+### 12.4 Applying a solid style — live paint-property updates
+
+```js
+function applySimpleStyle(importId) {
+  const entry = layerExportState.importedLayers.find(l => l.id === importId);
+  if (!entry?.symState) return;
+  const { color, opacity, radius, width } = entry.symState;
+  if (entry.geomClass === "point") {
+    const lid = entry.layerIds[0];
+    if (map.getLayer(lid)) {
+      map.setPaintProperty(lid, "circle-color", color);
+      map.setPaintProperty(lid, "circle-opacity", opacity);
+      map.setPaintProperty(lid, "circle-radius", radius);
+    }
+  } else if (entry.geomClass === "polygon") {
+    const fillId = entry.layerIds.find(id => id.endsWith("-fill"));
+    const strokeId = entry.layerIds.find(id => id.endsWith("-stroke"));
+    if (fillId && map.getLayer(fillId)) { map.setPaintProperty(fillId, "fill-color", color); map.setPaintProperty(fillId, "fill-opacity", opacity); }
+    if (strokeId && map.getLayer(strokeId)) map.setPaintProperty(strokeId, "line-color", color);
+  } else if (entry.geomClass === "line") {
+    const lid = entry.layerIds[0];
+    if (map.getLayer(lid)) { map.setPaintProperty(lid, "line-color", color); map.setPaintProperty(lid, "line-opacity", opacity); map.setPaintProperty(lid, "line-width", width); }
+  } else if (entry.geomClass === "wms") {
+    if (entry._wmsTimeCache) {
+      // Only the currently-active cached frame should show the new opacity — others stay hidden
+      entry._wmsTimeCache.forEach((ref) => { if (map.getLayer(ref.layerId)) map.setPaintProperty(ref.layerId, "raster-opacity", ref.layerId === entry._wmsActiveTimeLayerId ? opacity : 0); });
+    } else {
+      const lid = entry.layerIds[0];
+      if (map.getLayer(lid)) map.setPaintProperty(lid, "raster-opacity", opacity);
+    }
+  }
+}
+```
+
+Every slider/color-picker `input` event calls this directly — there's no
+"Apply" button for simple styling (unlike choropleth, §12.6), styling
+updates live as the control moves.
+
+### 12.5 Classification — ramp interpolation + break computation
+
+```js
+function impInterpolateRamp(rampName, n) {
+  const stops = IMP_COLOR_RAMPS[rampName] || IMP_COLOR_RAMPS.Blues;
+  if (n === 1) return [stops[Math.floor(stops.length / 2)]];
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1);
+    const scaled = t * (stops.length - 1);
+    const lo = Math.floor(scaled);
+    return impLerpHex(stops[lo], stops[Math.min(lo + 1, stops.length - 1)], scaled - lo);
+  });
+}
+
+function impLerpHex(a, b, t) {
+  const p = s => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  const [ar,ag,ab] = p(a), [br,bg,bb] = p(b);
+  const h = v => Math.round(v).toString(16).padStart(2,"0");
+  return `#${h(ar+(br-ar)*t)}${h(ag+(bg-ag)*t)}${h(ab+(bb-ab)*t)}`;
+}
+
+function impComputeBreaks(values, n, method) {
+  const sorted = [...values].sort((a, b) => a - b);
+  if (method === "quantile") {
+    // n classes need n-1 internal break points; each break sits at the i/n-th percentile
+    return Array.from({ length: n - 1 }, (_, i) => sorted[Math.floor(((i + 1) / n) * sorted.length)]);
+  }
+  const min = sorted[0], step = (sorted[sorted.length - 1] - min) / n;
+  return Array.from({ length: n - 1 }, (_, i) => min + step * (i + 1));
+}
+```
+
+`IMP_COLOR_RAMPS` only stores 5 hex stops per named ramp — `impInterpolateRamp`
+is what stretches that fixed 5-stop palette out to however many classes
+(3–7) the user picked, by linearly interpolating between the two nearest
+stops in RGB space. Only 9 named ramps × 5 colors need to be hand-authored;
+every class-count in between is generated.
+
+### 12.6 Applying the choropleth
+
+```js
+function applyChoropleth(importId) {
+  const entry = layerExportState.importedLayers.find(l => l.id === importId);
+  if (!entry?._props?.length || !entry?.symState) return;
+  const { field, ramp, method, classes: n } = entry.symState;
+  if (!field) { setImportStatus("Select a field first.", true); return; }
+  const vals = entry._props.map(p => Number(p[field])).filter(v => !isNaN(v));
+  if (new Set(vals).size < 2) { setImportStatus(`"${field}" has identical values — choose a different field.`, true); return; }
+
+  const colors = impInterpolateRamp(ramp, n);
+  const breaks = impComputeBreaks(vals, n, method);
+  // Mapbox "step" expression: value < breaks[0] → colors[0], breaks[0] ≤ value < breaks[1] → colors[1], ...
+  const expr = ["step", ["to-number", ["get", field], 0], colors[0],
+    ...breaks.flatMap((b, i) => [b, colors[i + 1] || colors[colors.length - 1]])];
+
+  if (entry.geomClass === "polygon") {
+    const fillId = entry.layerIds.find(id => id.endsWith("-fill"));
+    if (fillId && map.getLayer(fillId)) { map.setPaintProperty(fillId, "fill-color", expr); map.setPaintProperty(fillId, "fill-opacity", 0.78); }
+  } else if (entry.geomClass === "point") {
+    const lid = entry.layerIds[0];
+    if (map.getLayer(lid)) map.setPaintProperty(lid, "circle-color", expr);
+  } else if (entry.geomClass === "line") {
+    const lid = entry.layerIds[0];
+    if (map.getLayer(lid)) map.setPaintProperty(lid, "line-color", expr);
+  }
+  setImportStatus(`Choropleth applied: ${field} · ${n} classes · ${method}`);
+}
+```
+
+This *is* the "Apply" button's action (§9.1's delegated click handler reads
+the panel's current field/ramp/method/classes selects into `symState` first,
+then calls this) — unlike simple styling, choropleth recomputes breaks from
+the data on every apply, so it's a deliberate action rather than a
+live-updating slider.
+
+### 12.7 Field statistics panel
+
+```js
+function renderStatsPanelHTML(l) {
+  const props = l._props || [];
+  if (!props.length) return `<div class="ncop-ep-stats-panel"><div class="ncop-ep-stats-empty">No attribute data.</div></div>`;
+  const numFields = l.numericFields || [];
+  const fmt = v => v >= 1e6 ? (v/1e6).toFixed(1)+"M" : v >= 1e3 ? (v/1e3).toFixed(1)+"K" : Number.isInteger(v) ? v : v.toFixed(2);
+  const rows = numFields.slice(0, 6).map(field => { // capped at 6 fields — a quick glance, not a full attribute table
+    const vals = props.map(p => Number(p[field])).filter(v => !isNaN(v));
+    if (!vals.length) return "";
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return `<div class="ncop-ep-stats-field">
+      <div class="ncop-ep-stats-field-name">${escapeExportHtml(field)}</div>
+      <div class="ncop-ep-stats-field-nums"><span>Min: ${fmt(min)}</span><span>Max: ${fmt(max)}</span><span>Avg: ${fmt(avg)}</span></div>
+    </div>`;
+  }).join("");
+  return `<div class="ncop-ep-stats-panel">
+    <div class="ncop-ep-stats-row"><span class="ncop-ep-stats-label">Features</span><span class="ncop-ep-stats-val">${props.length.toLocaleString()}</span></div>
+    ${rows || `<div class="ncop-ep-stats-empty">No numeric fields.</div>`}
+  </div>`;
+}
+```
+
+---
+
+## 13. Verification checklist
+
+1. **Syntax-check** the JS and Python files before touching the browser.
+2. **GeoJSON**: drop a small valid file → confirm it renders immediately
+   (no network tab activity at all — this path is 100% client-side) and the
+   map fits its bounds.
+3. **Shapefile**: zip a small `.shp`/`.shx`/`.dbf`/`.prj` set (include a
+   non-4326 `.prj` to actually exercise the reprojection path) → confirm
+   `POST /upload-shapefile/` returns real GeoJSON and the winding-order fix
+   didn't invert any polygons.
+4. **GeoTIFF**: upload a small single-band or RGB GeoTIFF → confirm
+   `POST /upload-raster/` returns `{url, bounds, coordinates}` and the PNG
+   at `url` is servable and non-trivial (same check as the Export guide's
+   raster verification).
+5. **WMS direct add**: paste a known-public WMS `GetCapabilities` base URL
+   with a layer name → confirm tiles load through `/wms-tile/` (check the
+   Network tab shows requests to your own origin, not the remote WMS host
+   directly — that's the CORS proxy working).
+6. **WMS Connect**: same URL, click Connect → confirm the layer list
+   renders, a temporal layer shows its badge, and the (i) info panel's
+   time-range text matches what the service actually advertises.
+7. **WMS time animation**: add a temporal layer, drag the slider — confirm
+   no visible flicker (opacity swap, not tile reload) — then hit Play,
+   watch it advance, then Stop mid-frame and confirm it actually stops
+   (not "stops after one more frame," which would indicate the token-check
+   pattern in §10 was implemented incorrectly).
+8. **Style panel**: solid color/opacity/radius/width sliders update live;
+   switch to Choropleth, pick a field, Apply — confirm the fill/circle/line
+   color actually reflects distinct classes, not one flat color.
+9. **Remove**: remove a WMS layer with an active time cache and confirm
+   *all* its cached sources/layers are gone from `map.getStyle().layers`,
+   not just the originally-visible one.
+10. **Session-only**: reload the page, confirm every imported layer is gone
+    (this is by design, not a bug — verifies nothing is being persisted
+    that shouldn't be).
+
+---
+
+## 14. Gotchas worth remembering
+
+- **Two different upload endpoints for two different Mapbox source
+  shapes** — Shapefile returns GeoJSON (`geojson` source), GeoTIFF returns
+  `{url, bounds, coordinates}` (`image` source). Don't try to unify them
+  into one endpoint; the response contracts are genuinely different.
+- **The `{bbox-epsg-3857}` marker-swap in `proxyWmsTileUrl`** — encode
+  everything *except* that one placeholder, or Mapbox's own tile-URL
+  substitution silently breaks. Easy to miss if you naively
+  `encodeURIComponent()` the whole URL.
+- **WMS time layers are opacity-swapped, not tile-swapped** — never call
+  `source.setTiles()` on a multi-time-step layer's frame source after
+  creation; the whole point of pre-building one source+layer per time step
+  is that switching is a paint-property change, not a network request.
+- **The two-token pattern (`_wmsTimeRequestSeq` / `_wmsPlayToken`) is not
+  optional** — without it, rapid scrubbing or a quick play-then-stop click
+  will race and can leave the wrong frame visible. If you simplify this
+  system, keep at least one cancellation mechanism for in-flight async
+  frame activations.
+- **`removeImportedLayer` must remove layers before sources** — Mapbox GL
+  throws if you remove a source that a still-existing layer references;
+  the WMS-time-cache branch does two separate `.forEach()` passes for
+  exactly this reason, not by accident.
+- **Winding order and CRS reprojection in the shapefile pipeline are not
+  optional edge-case handling** — real shapefiles from real GIS tools
+  routinely need both; skip either and some fraction of real-world uploads
+  will render incorrectly or not at all.
+- **`getNumericFields`'s 80%-threshold + 50-feature sample** is a
+  deliberate heuristic, not a precise type system — it will occasionally
+  misclassify a genuinely-numeric-but-mostly-null field, or include a
+  mostly-numeric-with-a-few-typos text field. Fine for a quick styling
+  tool; don't rely on it as a schema validator.
