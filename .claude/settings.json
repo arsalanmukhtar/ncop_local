@@ -117,7 +117,25 @@
       "Bash(curl -s -o /dev/null -w \"empty url tile: status=%{http_code} type=%{content_type} size=%{size_download}\\\\n\" --max-time 10 \"http://127.0.0.1:8000/wms-tile/?url=\")",
       "Bash(curl -s -o /dev/null -w \"broken tile: status=%{http_code} type=%{content_type} size=%{size_download}\\\\n\" --max-time 20 \"http://127.0.0.1:8000/wms-tile/?url=http%3A%2F%2Fdefinitely-not-a-real-host-ncop-test.invalid%2Ftile.png\")",
       "Bash(python manage.py check)",
-      "Bash(PYTHONIOENCODING=utf-8 python manage.py check)"
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py check)",
+      "Bash(curl -s --max-time 20 \"http://172.18.1.113:8000/proxy_api_daily/api/history-all?days=30\" -o /tmp/ffd_history.json -w \"HTTP %{http_code}, size %{size_download}\\\\n\")",
+      "Bash(mkdir -p \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad\")",
+      "Bash(curl -s --max-time 20 \"http://172.18.1.113:8000/proxy_api_daily/api/history-all?days=30\" -o \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/ffd_history.json\" -w \"HTTP %{http_code}, size %{size_download}\\\\n\")",
+      "Bash(curl -s --max-time 20 \"http://172.18.7.21:8000/get-ffd-waterlevels/\" -o \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/ffd_waterlevels.json\" -w \"HTTP %{http_code}, size %{size_download}\\\\n\")",
+      "Bash(curl -s -o /dev/null -w \"port5000: %{http_code} \\(%{time_total}s\\)\\\\n\" --max-time 8 \"http://172.18.1.113:5000/api/history?name=Tarbela%20Dam&start_date=2026-07-13&end_date=2026-08-12\")",
+      "Bash(curl -s -o /dev/null -w \"port8000 base: %{http_code} \\(%{time_total}s\\)\\\\n\" --max-time 8 \"http://172.18.1.113:8000/proxy_api_daily/api/history-all?days=7\")",
+      "Bash(curl -s --max-time 8 \"http://172.18.1.113:5000/api/history?name=Tarbela%20Dam&start_date=2026-07-13&end_date=2026-08-12\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 8 \"http://172.18.1.113:5000/\")",
+      "Bash(curl -s --max-time 20 \"http://127.0.0.1:8000/get-geoglows-riverid/?lat=34.1059&lon=72.7338\")",
+      "Bash(tee \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/geoglows_riverid.json\")",
+      "Bash(curl -s --max-time 25 \"http://127.0.0.1:8000/get-geoglows-forecast/440106085/\" -o \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/geoglows_forecast.json\" -w \"HTTP %{http_code}, size %{size_download}\\\\n\")",
+      "Bash(node scripts/validate_palette.js \"#46b2ff,#d95926,#199e70\" --mode dark)",
+      "Bash(node scripts/validate_palette.js \"#3987e5,#d95926,#199e70\" --mode dark)",
+      "Bash(node \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/test_ffd_forecast.mjs\")",
+      "Bash(curl -s -o /dev/null -w \"district_boundary tile: %{http_code} \\(%{size_download} bytes\\)\\\\n\" --max-time 15 \"http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/4/12/8.pbf\")",
+      "Bash(cp district_z0.pbf district_boundary-0-0-0.pbf)",
+      "Bash(\"C:/OSGeo4W/bin/ogrinfo.exe\" -al -so \"MVT:district_boundary-0-0-0.pbf\")",
+      "Bash(\"C:/OSGeo4W/bin/ogrinfo.exe\" \"MVT:C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/district_boundary-0-0-0.pbf\" district_boundary -where \"1=1\")"
     ],
     "deny": [
       "Bash(git push *)",
@@ -128,7 +146,8 @@
     "additionalDirectories": [
       "\\tmp",
       "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp",
-      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\shp_test"
+      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\shp_test",
+      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\claude\\d--muhammad-arsalan-ncop-v1-ncop-local\\98d36b44-7fde-436c-945d-ebd903b447e0\\scratchpad"
     ]
   }
 }
