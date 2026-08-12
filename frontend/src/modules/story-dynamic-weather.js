@@ -4236,6 +4236,20 @@ function _showFfdRiverOverviewPopup(scene) {
   `);
 }
 
+// Bounds an awaited promise so a slow/never-resolving fetch (a hung
+// GeoGLOWS lookup, an unreachable history-all payload) can't stall scene
+// playback indefinitely — always resolves, never rejects, regardless of
+// how the wrapped promise settles.
+function _awaitBounded(promise, ms) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    Promise.resolve(promise).then(finish, finish);
+    setTimeout(finish, ms);
+  });
+}
+const FFD_MODAL_LOAD_TIMEOUT_MS = 15000;
+
 // Shows the REAL FFD popup — buildFfdPopupContent/setupFfdPopupEventHandlers
 // (exported additively from layer-attribute-popup.js for exactly this) are
 // the SAME code a real map click on an ffd_data gauge uses, so this is the
@@ -4257,20 +4271,22 @@ async function _showFfdBarragePopup(scene, token, seq) {
   // THIS station — same "reuse the real modal, update it in place as the
   // tour advances" pattern _showTempStationPopup already uses for the real
   // heatwave stats modal in Chapter 2 (hopping station-to-station reads as
-  // one panel updating, not a stack of new ones). Fire-and-forget: it does
-  // its own network fetching independently of this popup, and a modal
-  // hiccup must never stall or break barrage-tour playback.
-  try {
-    showFfdModalForStation({
-      name: wp.name,
-      province: wp.province || "",
-      status: props.status || "",
-      outflow: props.outflow_discharge ?? props.discharge ?? "n/a",
-      inflow: props.inflow_discharge ?? "n/a",
-      lat: wp.center?.[1],
-      lon: wp.center?.[0],
-    });
-  } catch (_) { /* best-effort — story playback must never depend on this */ }
+  // one panel updating, not a stack of new ones). Kicked off here but only
+  // AWAITED further down (after the on-map popup below has already shown),
+  // so the popup itself never waits on the modal's own network fetches.
+  const modalReady = (async () => {
+    try {
+      await showFfdModalForStation({
+        name: wp.name,
+        province: wp.province || "",
+        status: props.status || "",
+        outflow: props.outflow_discharge ?? props.discharge ?? "n/a",
+        inflow: props.inflow_discharge ?? "n/a",
+        lat: wp.center?.[1],
+        lon: wp.center?.[0],
+      });
+    } catch (_) { /* best-effort — a modal hiccup must never crash playback */ }
+  })();
 
   const { primary, drawer } = buildFfdPopupContent(props);
   const near = _nearestPrecipSample(wp, scene.precipSamples || _state.topPrecipDistricts);
@@ -4296,6 +4312,16 @@ async function _showFfdBarragePopup(scene, token, seq) {
     const graphBtn = _state.popupEl?.querySelector(".show-ffd-graph");
     if (graphBtn) graphBtn.click();
   } catch (_) {}
+
+  // AWAITED (bounded) — the caller (_runFfdBarrage) awaits this whole
+  // function, and _gotoScene's auto-advance timer only starts once scene
+  // entry fully resolves (see _gotoScene), so the barrage scene now holds
+  // on this station until its FFD Discharge Stats modal has actually
+  // finished loading and rendering its chart — capped at
+  // FFD_MODAL_LOAD_TIMEOUT_MS so an unreachable upstream can't stall the
+  // story indefinitely.
+  await _awaitBounded(modalReady, FFD_MODAL_LOAD_TIMEOUT_MS);
+  if (_isStale(token, seq)) return;
 }
 
 function _closePopup() {
