@@ -38,6 +38,7 @@ import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
 import { GisExportControl } from "./gis-export-control.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
+import { initFfdHistoryPriming } from "./ffd-stats-modal.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
 import { initGcopMonitorIntegration } from "./gcop-monitor-integration.js";
 import { initPmdWarningsFilter } from "./pmd-warnings-filter.js";
@@ -132,6 +133,13 @@ class DashboardManager {
     // ffd_data sidebar toggle flips.  All glue is centralised in
     // gcop-ffd-integration.js; dashboard.js just installs the hook.
     initGcopFfdIntegration(this.#map, this.#sourceLayerControl);
+    // FFD discharge-history priming — the moment the ffd_data sidebar
+    // toggle switches on, kick off the bulk 30-day history-all fetch (see
+    // ffd-stats-modal.js) so the "30-Day History & Outlook" stats panel
+    // opens with data already warm instead of a multi-second load. Wraps
+    // addLayerByKey the same composable way initGcopFfdIntegration just
+    // did above — stacks on top of it, no core logic edit to either.
+    initFfdHistoryPriming(this.#sourceLayerControl);
 
     // PMD Weather Stations integration — hydrate the empty
     // pmd_weather_stations-source with the GCOP-normalised feed and map

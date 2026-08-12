@@ -187,18 +187,31 @@ function _fmtDay(ms) {
 
 /** Plain-language synthesis for one station — every figure traces back to
  * a real historical reading, a computed regression, or GeoGLOWS's own
- * simulated series; nothing here is invented. */
-export function describeFfdOutlook({ stats, regression, regressionForecast, geoglowsDaily, stationLabel }) {
+ * simulated series; nothing here is invented. `inflowStats` is optional
+ * (see buildFfdStationOutlook's `includeInflow` flag) — when absent, this
+ * reads/behaves EXACTLY as before (Story Mode's own call never passes it). */
+export function describeFfdOutlook({ stats, regression, regressionForecast, geoglowsDaily, stationLabel, inflowStats }) {
   if (!stats) {
     return `No sufficient discharge history is available to build an outlook for ${stationLabel}.`;
   }
   const bits = [
     `Over the past ${stats.days} days, ${stationLabel}'s outflow averaged ${_fmtCusecs(stats.mean)} cusecs (range ${_fmtCusecs(stats.min)}–${_fmtCusecs(stats.max)}), most recently ${_fmtCusecs(stats.latest)} cusecs and ${stats.trend} over the last week.`,
   ];
+  if (inflowStats) {
+    bits.push(`Inflow over the same window averaged ${_fmtCusecs(inflowStats.mean)} cusecs (range ${_fmtCusecs(inflowStats.min)}–${_fmtCusecs(inflowStats.max)}), most recently ${_fmtCusecs(inflowStats.latest)} cusecs and ${inflowStats.trend} over the last week.`);
+    const netLatest = stats.latest - inflowStats.latest;
+    if (Number.isFinite(netLatest) && Math.abs(netLatest) > Math.max(stats.mean, inflowStats.mean) * 0.03) {
+      bits.push(netLatest > 0
+        ? `Outflow is currently exceeding inflow by roughly ${_fmtCusecs(netLatest)} cusecs — storage is drawing down.`
+        : `Inflow is currently exceeding outflow by roughly ${_fmtCusecs(-netLatest)} cusecs — storage is accumulating.`);
+    } else {
+      bits.push("Inflow and outflow are currently close to balanced.");
+    }
+  }
   if (regressionForecast?.length) {
     const end = regressionForecast[regressionForecast.length - 1];
     const confidence = (regression?.r2 ?? 0) >= 0.5 ? "a reasonably steady" : "a weak, noisy";
-    bits.push(`Extending that trend forward (${confidence} fit, R² ${(regression?.r2 ?? 0).toFixed(2)}) projects roughly ${_fmtCusecs(end.value)} cusecs by ${_fmtDay(end.dateMs)}.`);
+    bits.push(`Extending the outflow trend forward (${confidence} fit, R² ${(regression?.r2 ?? 0).toFixed(2)}) projects roughly ${_fmtCusecs(end.value)} cusecs by ${_fmtDay(end.dateMs)}.`);
   }
   if (geoglowsDaily?.length) {
     const peak = geoglowsDaily.reduce((a, b) => (b.value > a.value ? b : a), geoglowsDaily[0]);
@@ -210,17 +223,81 @@ export function describeFfdOutlook({ stats, regression, regressionForecast, geog
   return bits.join(" ");
 }
 
+function _escapeHtmlDesc(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function _hlValue(v) {
+  return `<strong class="dwr-ffd-hl-value">${v}</strong>`;
+}
+function _hlTrend(word) {
+  const cls = word === "rising" ? "dwr-ffd-hl-rising" : word === "falling" ? "dwr-ffd-hl-falling" : "dwr-ffd-hl-steady";
+  return `<span class="${cls}">${_escapeHtmlDesc(word)}</span>`;
+}
+
+/** Same sentences as describeFfdOutlook (kept as a SEPARATE function
+ * rather than a shared builder, so that plain-text function — already
+ * relied on by Story Mode's popup — is never at risk of an HTML-escaping
+ * regression), but with the key numbers, trend words, confidence
+ * descriptors, and the storage-accumulating/drawing-down synthesis
+ * wrapped in styled spans, for callers that want a scannable rather than
+ * plain-prose reading. Returns a safe, ready-to-insert HTML string —
+ * every dynamic value is either a formatted number (never raw user text)
+ * or passes through _escapeHtmlDesc first. */
+export function describeFfdOutlookHTML({ stats, regression, regressionForecast, geoglowsDaily, stationLabel, inflowStats }) {
+  const label = _escapeHtmlDesc(stationLabel);
+  if (!stats) {
+    return `No sufficient discharge history is available to build an outlook for <strong>${label}</strong>.`;
+  }
+  const bits = [
+    `Over the past ${_hlValue(stats.days)} days, <strong>${label}</strong>'s outflow averaged ${_hlValue(`${_fmtCusecs(stats.mean)} cusecs`)} (range ${_hlValue(`${_fmtCusecs(stats.min)}–${_fmtCusecs(stats.max)}`)}), most recently ${_hlValue(`${_fmtCusecs(stats.latest)} cusecs`)} and ${_hlTrend(stats.trend)} over the last week.`,
+  ];
+  if (inflowStats) {
+    bits.push(`Inflow over the same window averaged ${_hlValue(`${_fmtCusecs(inflowStats.mean)} cusecs`)} (range ${_hlValue(`${_fmtCusecs(inflowStats.min)}–${_fmtCusecs(inflowStats.max)}`)}), most recently ${_hlValue(`${_fmtCusecs(inflowStats.latest)} cusecs`)} and ${_hlTrend(inflowStats.trend)} over the last week.`);
+    const netLatest = stats.latest - inflowStats.latest;
+    if (Number.isFinite(netLatest) && Math.abs(netLatest) > Math.max(stats.mean, inflowStats.mean) * 0.03) {
+      bits.push(netLatest > 0
+        ? `Outflow is currently exceeding inflow by roughly ${_hlValue(`${_fmtCusecs(netLatest)} cusecs`)} — <strong class="dwr-ffd-hl-drawdown">storage is drawing down</strong>.`
+        : `Inflow is currently exceeding outflow by roughly ${_hlValue(`${_fmtCusecs(-netLatest)} cusecs`)} — <strong class="dwr-ffd-hl-accum">storage is accumulating</strong>.`);
+    } else {
+      bits.push(`Inflow and outflow are currently close to <span class="dwr-ffd-hl-steady">balanced</span>.`);
+    }
+  }
+  if (regressionForecast?.length) {
+    const end = regressionForecast[regressionForecast.length - 1];
+    const r2 = regression?.r2 ?? 0;
+    const confident = r2 >= 0.5;
+    const confidenceLabel = confident ? "a reasonably steady fit" : "a weak, noisy fit";
+    const confidenceClass = confident ? "dwr-ffd-hl-confident" : "dwr-ffd-hl-unsure";
+    bits.push(`Extending the outflow trend forward (<span class="${confidenceClass}">${confidenceLabel}</span>, R² ${_hlValue(r2.toFixed(2))}) projects roughly ${_hlValue(`${_fmtCusecs(end.value)} cusecs`)} by ${_hlValue(_escapeHtmlDesc(_fmtDay(end.dateMs)))}.`);
+  }
+  if (geoglowsDaily?.length) {
+    const peak = geoglowsDaily.reduce((a, b) => (b.value > a.value ? b : a), geoglowsDaily[0]);
+    bits.push(`<span class="dwr-ffd-hl-source">GeoGLOWS</span>' independent river-routing simulation projects a peak of ${_hlValue(`${_fmtCusecs(peak.value)} cusecs`)} around ${_hlValue(_escapeHtmlDesc(_fmtDay(peak.dateMs)))} on the nearest simulated reach.`);
+  } else {
+    bits.push(`<span class="dwr-ffd-hl-source">GeoGLOWS</span> has no simulated reach resolved near this station, so the trend projection above is the only forward outlook.`);
+  }
+  bits.push("This is a statistical trend and a hydrological simulation, not a flood forecast issued by FFD — treat both as directional context alongside the live reading above.");
+  return bits.join(" ");
+}
+
 // ---- Chart (hand-rolled inline SVG — no charting library, matches this
 // project's existing convention) -------------------------------------------
 // Colors are the dark-mode categorical slots 1/2/3 from NCOP's data-viz
 // palette method (blue/orange/aqua) — that exact 3-slot subset is the one
 // validated to pass CVD-separation/contrast/lightness checks together in
 // dark mode, which is why History/Trend/GeoGLOWS map to those three and not
-// an arbitrary pick.
+// an arbitrary pick. Inflow (opt-in, see includeInflow below) deliberately
+// does NOT take a 4th competing hue — the palette method's own guidance is
+// that a 4th categorical slot (yellow) fails its CVD floor against slot 2
+// (orange, already used by GeoGLOWS here). Inflow instead reuses outflow's
+// own blue family one step lighter on the same sequential ramp (#6da7ec,
+// step 300) — a secondary encoding (lightness + a distinct dash pattern),
+// not a new identity color, so it never collides with GeoGLOWS/Trend.
 const _CHART_COLORS = {
   history: "#3987e5",
   regression: "#199e70",
   geoglows: "#d95926",
+  inflow: "#6da7ec",
   grid: "rgba(255,255,255,0.14)",
   text: "rgba(234,234,234,0.55)",
   textStrong: "#eaeaea",
@@ -233,11 +310,29 @@ function _escapeHtmlLocal(s) {
 /** Renders the 30-day history + up-to-14-day outlook as one inline SVG
  * line chart. `history`/`regressionForecast`/`geoglowsDaily` are all
  * {dateMs, value}[] already converted to the SAME unit (cusecs) so they
- * share one y-scale — never a dual-axis chart. Returns "" if there isn't
- * enough data to plot anything. */
-export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily }) {
-  const width = 300, height = 120;
-  const allPoints = [...history, ...regressionForecast, ...geoglowsDaily];
+ * share one y-scale — never a dual-axis chart. `inflowHistory` is optional
+ * (defaults to none) — when omitted, this renders BYTE-FOR-BYTE identical
+ * to before (Story Mode's own call never passes it), so that existing,
+ * already-shipped chart is untouched. `aspectRatio` (width/height) lets a
+ * caller match the chart's viewBox shape to its ACTUAL rendered container
+ * before drawing — the previous approach (a fixed 300x120 viewBox stretched
+ * non-uniformly via preserveAspectRatio="none" to fill an arbitrarily-
+ * shaped box) filled the box but visibly squashed/stretched every text
+ * label, since a non-uniform scale distorts glyph shapes. Matching the
+ * viewBox shape to the container instead means the DEFAULT uniform scaling
+ * (preserveAspectRatio, unset below = "xMidYMid meet") both fills the box
+ * AND keeps every label crisp, since scaling by the same factor on both
+ * axes never distorts text. Omitted (default 300/120 = 2.5), this renders
+ * identically to the fixed original — Story Mode's own call never passes
+ * it. Returns "" if there isn't enough data to plot anything. */
+export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily, inflowHistory = [], aspectRatio = 300 / 120 }) {
+  const width = 300;
+  // Clamped so a pathological measurement (a near-zero-height or
+  // extremely tall container) can't produce an unreadable or degenerate
+  // chart — matches this function's own established padding/font-size
+  // constants, tuned for roughly this range.
+  const height = Math.round(Math.min(220, Math.max(90, width / (aspectRatio || 300 / 120))));
+  const allPoints = [...history, ...regressionForecast, ...geoglowsDaily, ...inflowHistory];
   if (allPoints.length < 2) return "";
 
   const padL = 34, padR = 8, padT = 10, padB = 16;
@@ -289,23 +384,59 @@ export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglows
   };
   const pointTitles = (pts, label) => pts.map((p) => `<circle cx="${xAt(p.dateMs).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="7" fill="transparent"><title>${_escapeHtmlLocal(label)}: ${_fmtCusecs(p.value)} cusecs — ${_escapeHtmlLocal(_fmtDay(p.dateMs))}</title></circle>`).join("");
 
+  // X-axis date labels — start / "now" / end, sitting in the padB gutter
+  // below the plot (the tooltip crosshair already surfaces the exact date
+  // for any point on hover; these three give that same context by default,
+  // without hover). "now" is skipped if it would sit too close to either
+  // edge label to avoid overlapping text.
+  const xAxisLabel = (ms, x, anchor) => `<text x="${x.toFixed(1)}" y="${(padT + plotH + 11).toFixed(1)}" text-anchor="${anchor}" font-size="8.5" fill="${_CHART_COLORS.text}">${_escapeHtmlLocal(_fmtDay(ms))}</text>`;
+
+  // Merged per-day dataset for the JS-driven crosshair tooltip (see
+  // ffd-stats-modal.js's _attachChartTooltip) — embedded as a data
+  // attribute rather than recomputed from the DOM, so the tooltip's
+  // values can never drift from what's actually plotted. Purely additive:
+  // Story Mode's existing consumer reads none of this and is unaffected.
+  const byDay = new Map();
+  const mergeIn = (pts, field) => {
+    for (const p of pts) {
+      const row = byDay.get(p.dateMs) || { d: p.dateMs, x: Math.round(xAt(p.dateMs) * 10) / 10 };
+      row[field] = Math.round(p.value);
+      byDay.set(p.dateMs, row);
+    }
+  };
+  mergeIn(history, "o");
+  mergeIn(inflowHistory, "i");
+  mergeIn(regressionForecast, "t");
+  mergeIn(geoglowsDaily, "g");
+  const mergedDays = [...byDay.values()].sort((a, b) => a.d - b.d);
+  const pointsAttr = _escapeHtmlLocal(JSON.stringify(mergedDays));
+
   return `
-    <svg viewBox="0 0 ${width} ${height}" class="dwr-ffd-chart-svg" role="img" aria-label="30-day discharge history and 14-day outlook">
+    <svg viewBox="0 0 ${width} ${height}" class="dwr-ffd-chart-svg" role="img" aria-label="30-day discharge history and 14-day outlook"
+         data-points='${pointsAttr}' data-plot-left="${padL}" data-plot-right="${width - padR}" data-plot-top="${padT}" data-plot-bottom="${padT + plotH}">
       ${gridSteps.map((v) => `
         <line x1="${padL}" x2="${width - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="${_CHART_COLORS.grid}" stroke-width="1"/>
         <text x="${padL - 4}" y="${(yAt(v) + 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${_CHART_COLORS.text}">${v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v)}</text>
       `).join("")}
       ${nowX != null ? `<line x1="${nowX.toFixed(1)}" x2="${nowX.toFixed(1)}" y1="${padT}" y2="${padT + plotH}" stroke="${_CHART_COLORS.text}" stroke-width="1" stroke-dasharray="2 2"/>` : ""}
       ${historyAreaPath ? `<path d="${historyAreaPath}" fill="${_CHART_COLORS.history}" fill-opacity="0.10" stroke="none"/>` : ""}
+      ${inflowHistory.length ? `<path d="${pathFor(inflowHistory)}" fill="none" stroke="${_CHART_COLORS.inflow}" stroke-width="1.75" stroke-dasharray="3 2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
       ${history.length ? `<path d="${pathFor(history)}" fill="none" stroke="${_CHART_COLORS.history}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
       ${regressionPath ? `<path d="${regressionPath}" fill="none" stroke="${_CHART_COLORS.regression}" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
       ${geoglowsDaily.length ? `<path d="${pathFor(geoglowsDaily)}" fill="none" stroke="${_CHART_COLORS.geoglows}" stroke-width="2" stroke-dasharray="1 3" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
-      ${pointTitles(history, "History")}
-      ${pointTitles(regressionForecast, "Trend projection")}
+      ${pointTitles(history, "Outflow history")}
+      ${pointTitles(inflowHistory, "Inflow history")}
+      ${pointTitles(regressionForecast, "Outflow trend projection")}
       ${pointTitles(geoglowsDaily, "GeoGLOWS forecast")}
       ${endLabel(history, _CHART_COLORS.history)}
+      ${endLabel(inflowHistory, _CHART_COLORS.inflow)}
       ${endLabel(regressionForecast, _CHART_COLORS.regression)}
       ${endLabel(geoglowsDaily, _CHART_COLORS.geoglows)}
+      ${xAxisLabel(minX, padL, "start")}
+      ${nowX != null && nowX > padL + 14 && nowX < width - padR - 14 ? xAxisLabel(history[history.length - 1].dateMs, nowX, "middle") : ""}
+      ${xAxisLabel(maxX, width - padR, "end")}
+      <line class="dwr-ffd-hover-line" x1="0" x2="0" y1="${padT}" y2="${padT + plotH}" stroke="${_CHART_COLORS.textStrong}" stroke-width="1" stroke-dasharray="2 2" opacity="0" pointer-events="none"/>
+      <rect class="dwr-ffd-hover-capture" x="0" y="0" width="${width}" height="${height}" fill="transparent"/>
     </svg>
   `;
 }
@@ -314,14 +445,18 @@ function _legendSwatch(color, dashed) {
   return `<span class="dwr-ffd-legend-swatch${dashed ? " dwr-ffd-legend-swatch--dashed" : ""}" style="color:${color}"></span>`;
 }
 
-/** Legend for the 3-series chart above — always shown alongside it (per
- * the "identity is never color-alone" rule for >=2 series), styled via
- * .dwr-ffd-legend* in story-dynamic-weather.js's injected stylesheet. */
-export function renderFfdOutlookLegendHTML() {
+/** Legend for the chart above — always shown alongside it (per the
+ * "identity is never color-alone" rule for >=2 series), styled via
+ * .dwr-ffd-legend* in story-dynamic-weather.js's injected stylesheet (and
+ * equivalently in _popup.css for the FFD Stats Modal). `includeInflow`
+ * defaults to false so Story Mode's own call (which never passes it)
+ * renders EXACTLY the existing 3-item legend, unchanged. */
+export function renderFfdOutlookLegendHTML({ includeInflow = false } = {}) {
   return `
     <div class="dwr-ffd-legend">
-      <span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.history, false)}History (30d)</span>
-      <span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.regression, true)}Trend projection</span>
+      <span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.history, false)}Outflow history (30d)</span>
+      ${includeInflow ? `<span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.inflow, true)}Inflow history (30d)</span>` : ""}
+      <span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.regression, true)}Outflow trend projection</span>
       <span class="dwr-ffd-legend-item">${_legendSwatch(_CHART_COLORS.geoglows, true)}GeoGLOWS forecast</span>
     </div>
   `;
@@ -329,18 +464,30 @@ export function renderFfdOutlookLegendHTML() {
 
 /** Compact stat pills — min/max/mean/latest/trend — rendered above the
  * chart. Returns "" when there's no data (caller shows a plain message
- * instead). */
-export function renderFfdStatsRowHTML(stats) {
+ * instead). `inflowStats` is optional; when provided, a second labeled
+ * row (In: …) is added below the outflow row (Out: …) so the two read as
+ * a clear comparison rather than an ambiguous duplicate set of numbers.
+ * Story Mode's own call passes only `stats`, so its existing single,
+ * unlabeled row renders exactly as before. */
+export function renderFfdStatsRowHTML(stats, inflowStats) {
   if (!stats) return "";
-  const trendClass = stats.trend === "rising" ? " dwr-ffd-stat-pill--rising" : stats.trend === "falling" ? " dwr-ffd-stat-pill--falling" : "";
-  const trendArrow = stats.trend === "rising" ? "↑" : stats.trend === "falling" ? "↓" : "→";
+  const pillsFor = (s, prefix) => {
+    const trendClass = s.trend === "rising" ? " dwr-ffd-stat-pill--rising" : s.trend === "falling" ? " dwr-ffd-stat-pill--falling" : "";
+    const trendArrow = s.trend === "rising" ? "↑" : s.trend === "falling" ? "↓" : "→";
+    const p = prefix ? `${prefix} ` : "";
+    return `
+      <span class="dwr-ffd-stat-pill">${p}Avg ${_fmtCusecs(s.mean)}</span>
+      <span class="dwr-ffd-stat-pill">${p}Min ${_fmtCusecs(s.min)}</span>
+      <span class="dwr-ffd-stat-pill">${p}Max ${_fmtCusecs(s.max)}</span>
+      <span class="dwr-ffd-stat-pill${trendClass}">${p}${trendArrow} ${_escapeHtmlLocal(s.trend)} (7d)</span>
+    `;
+  };
+  if (!inflowStats) {
+    return `<div class="dwr-ffd-stats-row">${pillsFor(stats, "")}</div>`;
+  }
   return `
-    <div class="dwr-ffd-stats-row">
-      <span class="dwr-ffd-stat-pill">Avg ${_fmtCusecs(stats.mean)}</span>
-      <span class="dwr-ffd-stat-pill">Min ${_fmtCusecs(stats.min)}</span>
-      <span class="dwr-ffd-stat-pill">Max ${_fmtCusecs(stats.max)}</span>
-      <span class="dwr-ffd-stat-pill${trendClass}">${trendArrow} ${_escapeHtmlLocal(stats.trend)} (7d)</span>
-    </div>
+    <div class="dwr-ffd-stats-row">${pillsFor(stats, "Out")}</div>
+    <div class="dwr-ffd-stats-row dwr-ffd-stats-row--inflow">${pillsFor(inflowStats, "In")}</div>
   `;
 }
 
@@ -348,8 +495,16 @@ export function renderFfdStatsRowHTML(stats) {
  * Top-level entry point — builds everything a barrage popup needs from the
  * raw history-all payload + (optionally) a full GeoGLOWS forecast series,
  * for ONE station. Returns null if no history matched this station at all.
+ *
+ * `includeInflow` (default false) additionally samples the SAME station's
+ * inflow series and threads it through the chart/legend/stats/description
+ * as a companion to outflow. Story Mode's own call never passes this, so
+ * its outflow-only computation, chart, legend, and stats row are all
+ * completely unaffected — every inflow-related value below is `null`/[]
+ * and every renderer's optional inflow param is simply omitted, which
+ * each one documents falls back to its pre-existing exact behavior.
  */
-export function buildFfdStationOutlook({ waypointName, historyAllStations, geoglowsPoints, cmsToCusecs, daysAhead = 14 }) {
+export function buildFfdStationOutlook({ waypointName, historyAllStations, geoglowsPoints, cmsToCusecs, daysAhead = 14, includeInflow = false }) {
   const historyStationNames = Object.keys(historyAllStations || {});
   const key = matchFfdHistoryStationKey(waypointName, historyStationNames);
   const rawSeries = key ? historyAllStations[key]?.outflow : null;
@@ -361,6 +516,15 @@ export function buildFfdStationOutlook({ waypointName, historyAllStations, geogl
   const stats = computeFfdStats(history);
   const geoglowsDaily = geoglowsPoints?.length ? dailyResampleGeoglows(geoglowsPoints, cmsToCusecs) : [];
 
+  let inflowHistory = [], inflowStats = null;
+  if (includeInflow) {
+    const rawInflow = historyAllStations[key]?.inflow;
+    if (rawInflow?.length) {
+      inflowHistory = dailyResampleFfdSeries(rawInflow);
+      inflowStats = computeFfdStats(inflowHistory);
+    }
+  }
+
   return {
     matchedKey: key,
     history,
@@ -368,9 +532,12 @@ export function buildFfdStationOutlook({ waypointName, historyAllStations, geogl
     regressionForecast,
     geoglowsDaily,
     stats,
-    description: describeFfdOutlook({ stats, regression, regressionForecast, geoglowsDaily, stationLabel: waypointName }),
-    chartSVG: renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily }),
-    legendHTML: renderFfdOutlookLegendHTML(),
-    statsRowHTML: renderFfdStatsRowHTML(stats),
+    inflowHistory,
+    inflowStats,
+    description: describeFfdOutlook({ stats, regression, regressionForecast, geoglowsDaily, stationLabel: waypointName, inflowStats }),
+    descriptionHTML: describeFfdOutlookHTML({ stats, regression, regressionForecast, geoglowsDaily, stationLabel: waypointName, inflowStats }),
+    chartSVG: renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily, inflowHistory }),
+    legendHTML: renderFfdOutlookLegendHTML({ includeInflow: inflowHistory.length > 0 }),
+    statsRowHTML: renderFfdStatsRowHTML(stats, inflowStats),
   };
 }

@@ -1483,6 +1483,618 @@
 }
 
 /* =========================================================================
+   STANDALONE STATS MODAL (#ffd-stats-modal)
+   Deliberately duplicates .heatwave-modal's chrome as its own class
+   hierarchy (same precedent .ipc-modal below already set relative to
+   .heatwave-modal) — zero coupling, so none of the three can break each
+   other. Accent is blue (matches --ndma-blue / the FFD chart's own
+   dataviz-validated blue in ffd-history-forecast.js) instead of heatwave's
+   orange/red, so the two read as clearly different panels at a glance.
+   ========================================================================= */
+
+.ffd-modal {
+    position: absolute;
+    bottom: 12px;
+    left: 20%;
+    width: 75%;
+    height: 480px;
+    min-width: 480px;
+    min-height: 340px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    z-index: 999;
+    color: var(--popup-text);
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px var(--shadow-soft, rgba(0,0,0,0.45)),
+                0 24px 60px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(12px) scale(0.985);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.ffd-modal.is-open {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.ffd-modal.hidden { display: none; }
+
+.ffd-modal.is-dragging,
+.ffd-modal.is-resizing {
+    transition: none;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+.ffd-modal__head {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 44px 10px 14px;
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+    border-bottom: 1px solid var(--popup-divider);
+    cursor: grab;
+    user-select: none;
+    flex: 0 0 auto;
+}
+
+.ffd-modal.is-dragging .ffd-modal__head { cursor: grabbing; }
+
+/* The original single-row header content (drag grip / title / badge —
+   the close button is absolutely positioned, so it isn't part of this
+   row at all) — split out so .ffd-modal__head can stack a second row
+   below it (.ffd-modal__head-stats) without disturbing this layout. */
+.ffd-modal__head-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+/* 30-day Avg/Min/Max/trend pills — moved OUT of the chart canvas (see
+   ffd-stats-modal.js's _renderOutlook) so the canvas host is free to
+   give the chart its full available space instead of sharing it with
+   two pill rows. */
+.ffd-modal__head-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.ffd-modal__head-stats:empty { display: none; }
+
+.ffd-modal__drag-grip {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 4px;
+    opacity: 0.55;
+    transition: opacity 0.18s ease;
+}
+.ffd-modal__head:hover .ffd-modal__drag-grip { opacity: 0.9; }
+
+.ffd-modal__drag-grip span {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--popup-text-muted);
+}
+
+.ffd-modal__title-block { flex: 1 1 auto; min-width: 0; }
+
+.ffd-modal__kicker {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #3987e5;
+    margin-bottom: 2px;
+}
+
+.ffd-modal__title {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--popup-text);
+}
+
+.ffd-modal__subtitle {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--popup-text-muted);
+}
+
+.ffd-modal__badge {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(57, 135, 229, 0.18);
+    color: #7db8f5;
+    border: 1px solid rgba(57, 135, 229, 0.35);
+}
+
+.ffd-modal__close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 0;
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--popup-text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.ffd-modal__close:hover {
+    background: rgba(239, 68, 68, 0.32);
+    transform: rotate(90deg);
+}
+
+/* Body: same 2-column shape as .heatwave-modal__body — stats on the left,
+   chart/description filling the right. */
+.ffd-modal__body {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(160px, 200px) 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    min-height: 0;
+}
+
+.ffd-modal__left {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 10px;
+    border-right: 1px solid var(--popup-divider);
+    overflow: auto;
+}
+
+.ffd-modal__right {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    /* Safety net, not the primary fix — with the SVG now scaling to fit
+       its host (see .ffd-modal__canvas-host below) this shouldn't trigger
+       in normal use, but a very small window or an unusually long
+       description should scroll the WHOLE right column together rather
+       than leaving content clipped or fighting a tiny inner scrollbar. */
+    overflow-y: auto;
+}
+
+.ffd-modal__stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.ffd-stat {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.ffd-stat:hover {
+    transform: translateY(-1px);
+    border-color: var(--popup-border-strong);
+}
+
+.ffd-stat__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ffd-stat__value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--popup-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ffd-stat--outflow .ffd-stat__value { color: #3987e5; }
+.ffd-stat--inflow .ffd-stat__value { color: #199e70; }
+
+/* GeoGLOWS Now/+24h/+72h/+7d/Peak horizon table — lives in the left aside
+   next to the Outflow/Inflow "now" cards, not in the on-map story popup
+   (moved here so the two never show the same data twice; see
+   ffd-stats-modal.js's showFfdModalForStation). */
+.ffd-modal__geoglows {
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 10px;
+    padding: 10px 10px 8px;
+}
+.ffd-modal__geoglows-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--popup-text-muted);
+    margin-bottom: 6px;
+}
+.ffd-modal__geoglows-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+}
+.ffd-modal__geoglows-table th {
+    text-align: left;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--popup-text-muted);
+    padding: 0 0 4px;
+    font-weight: 600;
+}
+.ffd-modal__geoglows-table td {
+    padding: 3px 0;
+    border-top: 1px solid var(--popup-divider);
+    color: var(--popup-text);
+    white-space: nowrap;
+}
+.ffd-modal__geoglows-table td:last-child {
+    color: var(--popup-text-muted);
+    font-size: 9.5px;
+}
+.ffd-modal__geoglows-note {
+    margin-top: 6px;
+    font-size: 9.5px;
+    line-height: 1.4;
+    color: var(--popup-text-muted);
+}
+#ffd-stats-modal mark.dwr-hl {
+    background: rgba(70, 178, 255, 0.22);
+    color: #fff;
+    font-weight: 800;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-style: normal;
+    white-space: nowrap;
+}
+
+.ffd-modal__chart-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ffd-modal__chart-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    gap: 10px;
+}
+
+.ffd-modal__chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--popup-text);
+}
+
+.ffd-modal__chart-sub {
+    font-size: 11px;
+    color: var(--popup-text-muted);
+    text-align: right;
+    flex: 1 1 auto;
+}
+
+.ffd-modal__canvas-host {
+    position: relative;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 200px;
+    background: var(--popup-card-bg);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 12px;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The chart content this host renders — .dwr-ffd-stats-row / .dwr-ffd-
+   chart-svg / .dwr-ffd-legend* — is emitted by ffd-history-forecast.js's
+   renderFfdOutlookChartSVG et al., the SAME functions Story Mode's own
+   FFD barrage popup uses. Story Mode styles them scoped under its own
+   popup id in story-dynamic-weather.js's injected stylesheet; this is
+   the equivalent styling for THIS modal, so the exact same rendered
+   markup looks correct in both places without either file depending on
+   the other.
+   The svg has no width/height attribute (see renderFfdOutlookChartSVG),
+   only a viewBox — width/height:100% here lets the browser's default
+   preserveAspectRatio="xMidYMid meet" scale it to fill (and never
+   overflow) whatever box it's given, which is what actually fixes the
+   "have to scroll to see the graph" problem: the chart now sizes itself
+   to the host instead of rendering at its raw 300x120 viewBox pixels.  */
+#ffd-stats-modal .dwr-ffd-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+#ffd-stats-modal .dwr-ffd-stat-pill {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(57, 135, 229, 0.16);
+    color: #bcdcff;
+    border: 1px solid rgba(57, 135, 229, 0.4);
+    white-space: nowrap;
+}
+/* Second row (inflow), only present when the outlook has inflow data —
+   tinted with the chart's own lighter inflow blue so the two rows read
+   as a matched pair (Out/In) rather than two unrelated stat lists, each
+   distinguishable from the other at a glance via a filled background
+   (not just a text-color/border tweak). */
+#ffd-stats-modal .dwr-ffd-stats-row--inflow .dwr-ffd-stat-pill {
+    background: rgba(109, 167, 236, 0.22);
+    border-color: rgba(109, 167, 236, 0.55);
+    color: #dcebfd;
+}
+/* The chart is now rendered a SECOND time client-side (see
+   ffd-stats-modal.js's _renderOutlook) once this slot's actual flex-grown
+   box is known, with a matching viewBox aspect ratio — so the svg itself
+   just needs to fill the slot exactly; no more preserveAspectRatio="none"
+   trick (that stretched geometry AND text non-uniformly, which is what
+   made the axis/value labels look squashed). No `display: flex` here —
+   a flex row container was sizing its svg child ambiguously and
+   narrower than the available width; a plain block box lets the svg's
+   own `width: 100%` resolve directly against the slot's content box. */
+#ffd-stats-modal .dwr-ffd-chart-slot {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    box-sizing: border-box;
+}
+#ffd-stats-modal .dwr-ffd-chart-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+#ffd-stats-modal .dwr-ffd-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    flex: 0 0 auto;
+    padding-top: 6px;
+    border-top: 1px solid var(--popup-divider);
+}
+#ffd-stats-modal .dwr-ffd-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--popup-text-muted);
+    white-space: nowrap;
+}
+#ffd-stats-modal .dwr-ffd-legend-swatch {
+    width: 12px;
+    height: 0;
+    display: inline-block;
+    border-top: 2px solid currentColor;
+}
+#ffd-stats-modal .dwr-ffd-legend-swatch--dashed { border-top-style: dashed; }
+
+/* Hover crosshair tooltip — driven by ffd-stats-modal.js's
+   _attachChartTooltip, reading the chart svg's embedded data-points. The
+   capture rect is a big, easy-to-hit transparent hit target spanning the
+   whole plot area (not the tiny 7px data-point circles the native
+   <title> fallback tooltips use). */
+#ffd-stats-modal .dwr-ffd-hover-capture { cursor: crosshair; }
+#ffd-stats-modal .dwr-ffd-tooltip {
+    position: absolute;
+    z-index: 5;
+    pointer-events: none;
+    background: rgba(10, 14, 22, 0.96);
+    border: 1px solid var(--popup-card-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 10.5px;
+    color: var(--popup-text);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+#ffd-stats-modal .dwr-ffd-tt-date {
+    font-weight: 700;
+    font-size: 9.5px;
+    color: var(--popup-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 3px;
+}
+#ffd-stats-modal .dwr-ffd-tt-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1.6;
+}
+#ffd-stats-modal .dwr-ffd-tt-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.ffd-modal__loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+}
+
+.ffd-modal__loader span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #3987e5;
+    animation: ffdModalDot 0.9s ease-in-out infinite;
+}
+.ffd-modal__loader span:nth-child(2) { animation-delay: 0.15s; background: #199e70; }
+.ffd-modal__loader span:nth-child(3) { animation-delay: 0.30s; background: #d95926; }
+
+@keyframes ffdModalDot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+    40%           { transform: scale(1.0); opacity: 1.0; }
+}
+
+.ffd-modal__empty {
+    padding: 16px;
+    font-size: 12px;
+    color: var(--popup-text-muted);
+    text-align: center;
+}
+
+.ffd-modal__description {
+    margin-top: 6px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--popup-text-muted);
+}
+
+/* Key-term/value highlighting inside .ffd-modal__description — built by
+   describeFfdOutlookHTML in ffd-history-forecast.js. Values use the
+   modal's primary text color + weight so they visually "pop" out of the
+   muted surrounding prose; trend/state words are color-coded to match
+   the SAME hues used elsewhere for the same concepts (rising/falling
+   pill colors, chart series colors, accumulate=inflow-teal/drawdown=
+   outflow-orange) so a color always means the same thing throughout the
+   modal, never a one-off. */
+.ffd-modal .dwr-ffd-hl-value {
+    color: var(--popup-text);
+    font-weight: 700;
+}
+.ffd-modal .dwr-ffd-hl-rising { color: #fdba74; font-weight: 600; }
+.ffd-modal .dwr-ffd-hl-falling { color: #7fdfec; font-weight: 600; }
+.ffd-modal .dwr-ffd-hl-steady { color: var(--popup-text); font-weight: 600; }
+.ffd-modal .dwr-ffd-hl-accum { color: #199e70; }
+.ffd-modal .dwr-ffd-hl-drawdown { color: #d95926; }
+.ffd-modal .dwr-ffd-hl-confident { color: #199e70; font-style: italic; }
+.ffd-modal .dwr-ffd-hl-unsure { color: var(--popup-text-muted); font-style: italic; }
+.ffd-modal .dwr-ffd-hl-source { color: #d95926; font-weight: 700; }
+
+.ffd-modal__footnote {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--popup-text-muted);
+    text-align: right;
+    font-style: italic;
+    flex: 0 0 auto;
+}
+
+.ffd-modal__resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: nwse-resize;
+    color: var(--popup-text-muted);
+    opacity: 0.65;
+    transition: opacity 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    z-index: 4;
+    touch-action: none;
+}
+
+.ffd-modal__resize:hover {
+    opacity: 1;
+    color: #3987e5;
+    transform: scale(1.08);
+}
+
+.ffd-modal__resize svg { width: 14px; height: 14px; display: block; }
+
+.ffd-modal.is-resizing .ffd-modal__resize {
+    opacity: 1;
+    color: #3987e5;
+}
+
+/* The FFD popup's own new CTA button, alongside the existing "Show Graph"
+   one — plain secondary styling so it doesn't compete with that button's
+   primary treatment. */
+.ncop-popup__button.ffd-open-stats {
+    background: rgba(57, 135, 229, 0.16);
+    border: 1px solid rgba(57, 135, 229, 0.4);
+    color: #eaeaea;
+}
+.ncop-popup__button.ffd-open-stats:hover {
+    background: rgba(57, 135, 229, 0.28);
+}
+
+@media (max-width: 720px) {
+    .ffd-modal {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        bottom: 12px;
+        height: 60vh;
+        min-width: 0;
+    }
+    .ffd-modal__body { grid-template-columns: 1fr; }
+    .ffd-modal__left {
+        border-right: none;
+        border-bottom: 1px solid var(--popup-divider);
+        padding-right: 0;
+        padding-bottom: 8px;
+    }
+    .ffd-modal__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* =========================================================================
  * IPC / Food Security popup
  * -------------------------------------------------------------------------
  * Extends the shared .ncop-popup__ theme.  The badge colour is set

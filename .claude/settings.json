@@ -135,7 +135,20 @@
       "Bash(curl -s -o /dev/null -w \"district_boundary tile: %{http_code} \\(%{size_download} bytes\\)\\\\n\" --max-time 15 \"http://172.18.7.35:8080/geoserver/gwc/service/tms/1.0.0/gcop:district_boundary@EPSG:900913@pbf/4/12/8.pbf\")",
       "Bash(cp district_z0.pbf district_boundary-0-0-0.pbf)",
       "Bash(\"C:/OSGeo4W/bin/ogrinfo.exe\" -al -so \"MVT:district_boundary-0-0-0.pbf\")",
-      "Bash(\"C:/OSGeo4W/bin/ogrinfo.exe\" \"MVT:C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/district_boundary-0-0-0.pbf\" district_boundary -where \"1=1\")"
+      "Bash(\"C:/OSGeo4W/bin/ogrinfo.exe\" \"MVT:C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/district_boundary-0-0-0.pbf\" district_boundary -where \"1=1\")",
+      "Bash(awk 'NR>=1072 && /^\\\\/\\\\* =====/ {print NR\": \"$0}' styles/dashboard/_popup.css)",
+      "Bash(node --check src/modules/ffd-stats-modal.js)",
+      "Bash(node --check src/modules/layer-attribute-popup.js)",
+      "Bash(node --check src/modules/dashboard.js)",
+      "Bash(curl -s -o /dev/null -w \"vite: %{http_code}\\\\n\" --max-time 5 \"http://127.0.0.1:5173/\")",
+      "Bash(curl -s -o /dev/null -w \"django: %{http_code}\\\\n\" --max-time 5 \"http://127.0.0.1:8000/\")",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(node --check src/modules/ffd-history-forecast.js)",
+      "Bash(curl -s --max-time 15 \"http://172.18.7.21:8000/get-ffd-waterlevels/\" -o \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/ffd_wl2.json\" -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(rm -f \"C:/Users/5693KASHIF/AppData/Local/Temp/claude/d--muhammad-arsalan-ncop-v1-ncop-local/98d36b44-7fde-436c-945d-ebd903b447e0/scratchpad/ffd_wl2.json\")",
+      "Bash(node --check src/modules/sidebar-menu.js)",
+      "Bash(curl -s -o /dev/null -w \"http_code=%{http_code} time=%{time_total}s\\\\n\" --max-time 5 \"http://172.18.1.108:8000/get-exposures/\")",
+      "Bash(node \"C:\\\\Users\\\\5693KA~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--muhammad-arsalan-ncop-v1-ncop-local\\\\98d36b44-7fde-436c-945d-ebd903b447e0\\\\scratchpad\\\\test_chart.mjs\")"
     ],
     "deny": [
       "Bash(git push *)",

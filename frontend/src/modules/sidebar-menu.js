@@ -822,9 +822,16 @@ export class SidebarMenu {
                 </div>
             `;
 
-        // Fetch data from endpoint
-        fetch(endpoint)
+        // Fetch data from endpoint — bounded by a timeout so an
+        // unreachable/hanging internal host (e.g. dew_exposures' backing
+        // service isn't reachable from every deployment/environment)
+        // resolves the loading state within a few seconds instead of
+        // spinning indefinitely.
+        const dropdownFetchController = new AbortController();
+        const dropdownFetchTimeout = setTimeout(() => dropdownFetchController.abort(), 8000);
+        fetch(endpoint, { signal: dropdownFetchController.signal })
           .then((response) => {
+            clearTimeout(dropdownFetchTimeout);
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -952,11 +959,23 @@ export class SidebarMenu {
             contentArea.appendChild(table);
           })
           .catch((error) => {
-            console.error(`❌ Error fetching data for ${dropdownKey}:`, error);
+            clearTimeout(dropdownFetchTimeout);
+            // A refused/unreachable connection or an aborted (timed-out)
+            // request is an EXPECTED, non-actionable condition for a
+            // dropdown backed by an internal service that isn't reachable
+            // from every environment — not a bug in this code, so it's
+            // logged as a warning (not an error) and shown as a plain
+            // "unavailable" state rather than surfacing the raw
+            // TypeError/AbortError text to the user.
+            const isNetworkFailure = error.name === "AbortError" || /Failed to fetch|NetworkError|Load failed/i.test(error.message || "");
+            const userMessage = isNetworkFailure
+              ? "This data source is currently unavailable."
+              : `Error loading data: ${error.message}`;
+            console.warn(`⚠️ Could not load data for ${dropdownKey}:`, error.message || error);
             contentArea.innerHTML = `
                         <div class="ncop-error-state">
-                            <span class="ncop-error-icon">❌</span>
-                            Error loading data: ${error.message}
+                            <span class="ncop-error-icon">⚠️</span>
+                            ${userMessage}
                         </div>
                     `;
           });
