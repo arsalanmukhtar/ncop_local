@@ -68,9 +68,10 @@
 //      a code change).
 // ==========================================================================
 
-import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels, getFfdRivers } from "./gcop-api-cache.js";
+import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels, getFfdRivers, getFfdHistoryAll } from "./gcop-api-cache.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
 import { showHeatwaveModalForCity, hideHeatwaveModal, buildFfdPopupContent, setupFfdPopupEventHandlers } from "./layer-attribute-popup.js";
+import { buildFfdStationOutlook } from "./ffd-history-forecast.js";
 import {
   wait,
   cinematicFlyTo,
@@ -181,6 +182,11 @@ const _state = {
   meteoblueTempSampledOnce: false, // true once _sampleMeteoblueTemperatureAllSteps has run for this story session — same "never re-hit Meteoblue's tiles twice" rule as meteoblueSampledOnce
   weeklyTempSamples: [],   // districts with the highest sampled 8-day temperature outlook (see _buildTempWeeklySamples)
   chapter2WeeklyScenesBuilt: false, // guards the temp-weekly scene splice from running again if the operator navigates back to ch2-intro a second time
+  ffdHistoryAll: null,       // raw getFfdHistoryAll() payload — {days, stations:{NAME:{inflow:[],outflow:[]}}} for all ~31 FFD stations, 30-day 4-6h series
+  ffdHistoryAllFetchedOnce: false, // true once _runFfdIntro has KICKED OFF the fetch for this story session — never re-fetches the ~700KB payload on repeat FFD-tour entries
+  ffdHistoryAllPromise: null, // the in-flight (or resolved) fetch itself, so _showFfdBarragePopup can await readiness instead of polling
+  districtBoundaryCandidates: [], // {name,province,coords}[] for every district polygon in view — see _districtBoundaryCandidates; computed once (whichever of Chapter 2/3 reaches it first) and shared by both
+  districtBoundaryCandidatesComputed: false, // guards the one-time district_boundary query above from re-running on repeat ch2-intro/ch3-intro entries
   topPrecipDistricts: [], // districts with the highest sampled 24h-precip forecast (see _fetchPrecipSamples)
   ffdWaypoints: [],        // FFD barrages/dams sorted north-to-south, chapter 3's camera-path tour
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
@@ -728,6 +734,33 @@ function _injectStyles() {
     }
     #${POPUP_ID} .dwrp-pdf-open:hover { color: #fff; }
 
+    /* FFD "30-Day History & 14-Day Outlook" — chart/stats/legend for
+       ffd-history-forecast.js's rendered output. Colors match that
+       module's _CHART_COLORS (dark-mode data-viz categorical slots
+       1/2/3 — blue/orange/aqua), kept as literal hex here so the two
+       stay in lockstep without importing CSS across module boundaries. */
+    #${POPUP_ID} .dwr-ffd-stats-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    #${POPUP_ID} .dwr-ffd-stat-pill {
+      font-size: 10px; font-weight: 600;
+      padding: 3px 8px; border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(234, 234, 234, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+    }
+    #${POPUP_ID} .dwr-ffd-stat-pill--rising  { color: #fdba74; border-color: rgba(217, 89, 38, 0.45); background: rgba(217, 89, 38, 0.14); }
+    #${POPUP_ID} .dwr-ffd-stat-pill--falling { color: #7fdfec; border-color: rgba(25, 158, 112, 0.45); background: rgba(25, 158, 112, 0.14); }
+    #${POPUP_ID} .dwr-ffd-chart-svg { width: 100%; height: auto; display: block; margin: 4px 0 2px; }
+    #${POPUP_ID} .dwr-ffd-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 2px 0 8px; }
+    #${POPUP_ID} .dwr-ffd-legend-item {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 9.5px; color: rgba(234, 234, 234, 0.65);
+    }
+    #${POPUP_ID} .dwr-ffd-legend-swatch {
+      width: 12px; height: 0; display: inline-block;
+      border-top: 2px solid currentColor;
+    }
+    #${POPUP_ID} .dwr-ffd-legend-swatch--dashed { border-top-style: dashed; }
+
     /* Station-marker pulse — targets whatever mapboxgl.Marker element(s)
        are currently in the map container when the class is toggled.
        nwfc-html-markers.js owns marker creation; this only reaches in via
@@ -975,6 +1008,22 @@ async function _fetchFfdStations() {
   try {
     const fc = await getFfdWaterlevels();
     return fc && Array.isArray(fc.features) ? fc : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Bulk 30-day discharge history for every FFD station (see getFfdHistoryAll
+// — a different host than the rest of the FFD/GCOP feeds, ~700KB). Feeds
+// the barrage popup's "30-Day History & 14-Day Outlook" chart/stats/
+// description (see ffd-history-forecast.js). Best-effort: resolves null on
+// any failure, same as every other FFD/precip fetch in this file — a
+// missing history payload just means that section of the popup shows "not
+// available", never breaks playback.
+async function _fetchFfdHistoryAll() {
+  try {
+    const data = await getFfdHistoryAll(30);
+    return data && typeof data.stations === "object" ? data : null;
   } catch (_) {
     return null;
   }
@@ -1235,6 +1284,104 @@ function _precipCandidateDistricts(report, liveFeatures) {
   return candidates;
 }
 
+// Property keys carrying a DISTRICT feature's own province name — mirrors
+// weather-report-control.js's DISTRICT_PROVINCE_PROP_KEYS (same GeoServer
+// source, gcop:district_boundary, already empirically fought through by
+// that module's own history — see its "34 PROVINCES for 34 districts"
+// comment). Duplicated as a small local constant rather than imported,
+// same "each file keeps its own small piece of schema knowledge" pattern
+// DIST_NAME_KEYS above already follows.
+const DISTRICT_PROVINCE_KEYS = ["province", "province_name", "provincename", "PROVINCE", "PROVINCE_NAME", "admin1", "ADM1_EN", "prov_name"];
+
+// Representative point for a rendered district polygon feature — reuses
+// the existing _centroid(coords) averager (unchanged), just adds the
+// geometry-type unwrapping it needs. MultiPolygon districts (a handful of
+// districts have offshore/split parts) use the ring with the most
+// vertices as a cheap "biggest part" stand-in, so the sample point lands
+// on the district's main landmass rather than a small enclave.
+function _featureCentroid(feature) {
+  const geom = feature?.geometry;
+  if (!geom) return null;
+  let ring;
+  if (geom.type === "Polygon") {
+    ring = geom.coordinates?.[0];
+  } else if (geom.type === "MultiPolygon") {
+    const best = (geom.coordinates || []).reduce(
+      (acc, poly) => ((poly?.[0]?.length || 0) > (acc?.[0]?.length || 0) ? poly : acc),
+      null
+    );
+    ring = best?.[0];
+  }
+  return ring?.length ? _centroid(ring) : null;
+}
+
+// A far broader per-district candidate list than _precipCandidateDistricts
+// above (which is capped at ~3 districts per province THAT REPORTED
+// RAINFALL, and only when a live station coordinate happens to resolve —
+// on a quiet day this can end up as just one or two districts). This one
+// queries the district_boundary vector tiles DIRECTLY for every district
+// polygon currently rendered at the national view Chapter 2/3's camera
+// already sits at when this runs, giving genuinely national coverage
+// (all ~163 districts, not a handful) with each district's own real
+// centroid instead of a live-station proxy point.
+//
+// Same "temporarily add an invisible source+layer, query, remove"
+// technique _sampleMeteoblueAllSteps already uses for the Meteoblue layers
+// themselves — nothing is ever shown on the map or flips a sidebar toggle
+// on; the map looks identical before and after this runs. Best-effort:
+// returns [] (never throws) if the layer config can't be resolved or its
+// tiles don't load in time, so callers can fall back to
+// _precipCandidateDistricts exactly as before.
+async function _districtBoundaryCandidates(map) {
+  const found = typeof window.sourceLayerControl?.findLayerConfig === "function"
+    ? window.sourceLayerControl.findLayerConfig("district_boundary")
+    : null;
+  const config = found?.config;
+  const source = config?.source;
+  const fillLayerDef = (config?.layers || []).find((l) => l.type === "fill") || (config?.layers || [])[0];
+  if (!source?.id || !fillLayerDef) return [];
+
+  let addedSource = false, addedLayer = false;
+  try {
+    if (!map.getSource(source.id)) { map.addSource(source.id, source); addedSource = true; }
+    if (!map.getLayer(fillLayerDef.id)) {
+      map.addLayer({ ...fillLayerDef, layout: { ...fillLayerDef.layout, visibility: "visible" }, paint: { ...fillLayerDef.paint, "fill-opacity": 0 } });
+      addedLayer = true;
+    } else {
+      map.setLayoutProperty(fillLayerDef.id, "visibility", "visible");
+    }
+  } catch (_) {
+    return [];
+  }
+
+  for (let i = 0; i < 40; i++) {
+    let loaded = true;
+    try { loaded = map.isSourceLoaded(source.id); } catch (_) { /* treat as loaded, don't hang the pass */ }
+    if (loaded) break;
+    await wait(150);
+  }
+
+  const candidates = [];
+  try {
+    const features = map.queryRenderedFeatures({ layers: [fillLayerDef.id] });
+    const seen = new Set();
+    for (const f of features) {
+      const name = DIST_NAME_KEYS.map((k) => f.properties?.[k]).find((v) => v != null);
+      if (!name || seen.has(name)) continue;
+      const coords = _featureCentroid(f);
+      if (!coords) continue;
+      const province = DISTRICT_PROVINCE_KEYS.map((k) => f.properties?.[k]).find((v) => v != null) || "";
+      seen.add(name);
+      candidates.push({ name: String(name), province: String(province || ""), coords });
+    }
+  } catch (_) { /* best-effort */ }
+
+  if (addedLayer && map.getLayer(fillLayerDef.id)) { try { map.removeLayer(fillLayerDef.id); } catch (_) {} }
+  if (addedSource && map.getSource(source.id)) { try { map.removeSource(source.id); } catch (_) {} }
+
+  return candidates;
+}
+
 // Precipitation VALUES for Chapter 3 come exclusively from the cached
 // Meteoblue samples (_state.meteoblueWeekly/_state.meteoblueHourly,
 // populated once by _sampleMeteoblueAllSteps during _runChapter3Intro) —
@@ -1245,8 +1392,14 @@ function _precipCandidateDistricts(report, liveFeatures) {
 // the headline mm figure; the hourly layer (next ~10-11 hours, per-hour
 // readings) supplies the peak-hour context alongside it. A district with
 // no weekly sample is simply omitted.
-async function _fetchPrecipSamples(report, liveFeatures) {
-  const candidates = _precipCandidateDistricts(report, liveFeatures);
+// `candidatesOverride`, when given, replaces the report-driven candidate
+// list above with a broader one (see _districtBoundaryCandidates) — an
+// OPTIONAL 3rd param so every existing caller that doesn't pass it (there
+// are none left after _runChapter3Intro's own update below, but the
+// fallback keeps this function correct on its own terms) gets the exact
+// original report-driven behavior, unchanged.
+async function _fetchPrecipSamples(report, liveFeatures, candidatesOverride) {
+  const candidates = candidatesOverride?.length ? candidatesOverride : _precipCandidateDistricts(report, liveFeatures);
   if (!candidates.length) return [];
 
   const weekly = _state.meteoblueWeekly;
@@ -1360,6 +1513,14 @@ async function _fetchGeoglowsForecast(wp) {
         day3: nearestTo(72),
         day7: nearestTo(168),
         peak,
+        // Full series, additive alongside the five sparse horizon points
+        // above (nothing existing reads this field, so every current
+        // consumer of _fetchGeoglowsForecast is unaffected) — the 30-Day
+        // History & 14-Day Outlook chart needs every day GeoGLOWS covers,
+        // not just five snapshots. Kept on the SAME cached result rather
+        // than a second fetch, so adding this never doubles the upstream
+        // GeoGLOWS API traffic this function already makes per station.
+        points,
       };
     } catch (_) {
       return null;
@@ -1368,6 +1529,7 @@ async function _fetchGeoglowsForecast(wp) {
   _geoglowsCache.set(wp.name, result);
   return result;
 }
+
 function _cusecs(cms) {
   return Number.isFinite(cms) ? Math.round(cms * CMS_TO_CUSECS).toLocaleString() : "—";
 }
@@ -2131,9 +2293,9 @@ async function _buildScenes(report, observationsFC, newsArticles) {
 // barrage/dam tour (_state.ffdStations, fetched much earlier in
 // _loadAndPlay — that part never needed the layers, only the tour
 // SCENES built from it are deferred here for consistency).
-async function _buildChapter3Scenes(report, liveFeatures) {
+async function _buildChapter3Scenes(report, liveFeatures, candidatesOverride) {
   const scenes = [];
-  const precipSamples = await _fetchPrecipSamples(report, liveFeatures);
+  const precipSamples = await _fetchPrecipSamples(report, liveFeatures, candidatesOverride);
   _state.topPrecipDistricts = precipSamples;
 
   scenes.push({ kind: "precip-layer", chapter: 3, precipSamples, caption: _precipLayerNarrative(precipSamples) });
@@ -2998,13 +3160,20 @@ async function _runChapter2Intro(map, token, seq) {
   // Temperature layer directly (never through handleTemporalInteraction/
   // #temp-slider1 — see _sampleMeteoblueTemperatureAllSteps) and cache
   // them, same "sample once per session" rule Chapter 3 uses for
-  // precipitation. Reuses _precipCandidateDistricts purely as a
-  // geographic candidate pool (up to 3 real-coordinate districts per
-  // province) — districts get re-ranked by sampled temperature here, the
-  // pool's own rainfall-based ordering doesn't matter.
+  // precipitation. Candidate districts come from _districtBoundaryCandidates
+  // (every district polygon actually in view — genuinely national
+  // coverage), computed once and shared with Chapter 3's own sampling pass
+  // below; _precipCandidateDistricts (a handful of report-driven districts)
+  // is only the fallback if the boundary query comes back empty.
+  if (!_state.districtBoundaryCandidatesComputed) {
+    _state.districtBoundaryCandidates = await _districtBoundaryCandidates(map).catch(() => []);
+    _state.districtBoundaryCandidatesComputed = true;
+  }
   if (!_state.meteoblueTempSampledOnce) {
     _setLayerLoadingNote(card, "Sampling Meteoblue 8-day temperature outlook for monitored districts…");
-    const candidates = _precipCandidateDistricts(_state.report, _state.observations?.features || []);
+    const candidates = _state.districtBoundaryCandidates.length
+      ? _state.districtBoundaryCandidates
+      : _precipCandidateDistricts(_state.report, _state.observations?.features || []);
     const temperatureMap = await _sampleMeteoblueTemperatureAllSteps(map, candidates).catch(() => new Map());
     _state.meteoblueTemperature = temperatureMap;
     _state.weeklyTempSamples = _buildTempWeeklySamples(candidates, temperatureMap);
@@ -3179,10 +3348,21 @@ async function _runChapter3Intro(map, token, seq) {
   // slider1 — see _sampleMeteoblueAllSteps) and cache them. Runs once per
   // story session — a repeat visit to ch3-intro (Prev/dot-click) reuses
   // the cached Maps instead of re-hitting Meteoblue's tile API again.
+  // Candidate districts come from _districtBoundaryCandidates (every
+  // district polygon in view, genuinely national coverage) — computed
+  // once and shared with Chapter 2's own sampling pass, whichever of the
+  // two chapters reaches it first this session; _precipCandidateDistricts
+  // is only the fallback if that boundary query came back empty.
+  if (!_state.districtBoundaryCandidatesComputed) {
+    _state.districtBoundaryCandidates = await _districtBoundaryCandidates(map).catch(() => []);
+    _state.districtBoundaryCandidatesComputed = true;
+  }
+  const precipCandidates = _state.districtBoundaryCandidates.length
+    ? _state.districtBoundaryCandidates
+    : _precipCandidateDistricts(_state.report, _state.observations?.features || []);
   if (!_state.meteoblueSampledOnce) {
     _setLayerLoadingNote(card, "Sampling Meteoblue precipitation forecasts for monitored districts…");
-    const candidates = _precipCandidateDistricts(_state.report, _state.observations?.features || []);
-    const sampled = await _sampleMeteoblueAllSteps(map, candidates).catch(() => ({ weekly: new Map(), hourly: new Map() }));
+    const sampled = await _sampleMeteoblueAllSteps(map, precipCandidates).catch(() => ({ weekly: new Map(), hourly: new Map() }));
     _state.meteoblueWeekly = sampled.weekly;
     _state.meteoblueHourly = sampled.hourly;
     _state.meteoblueSampledOnce = true;
@@ -3211,7 +3391,7 @@ async function _runChapter3Intro(map, token, seq) {
   // the layer preload above this is fine to repeat (all idempotent), only
   // the scene-list build+splice needs the guard.
   if (!_state.chapter3ScenesBuilt) {
-    const newScenes = await _buildChapter3Scenes(_state.report, _state.observations?.features || []);
+    const newScenes = await _buildChapter3Scenes(_state.report, _state.observations?.features || [], precipCandidates);
     if (_isStale(token, seq)) return;
     _state.scenes.splice(_state.index + 1, 0, ...newScenes);
     _state.chapter3ScenesBuilt = true;
@@ -3306,6 +3486,17 @@ async function _runPrecipAssessment(map) {
 // ---- FFD barrage/dam tour ----------------------------------------------
 async function _runFfdIntro(map, token, seq) {
   await _ensureFfdLayerOn();
+
+  // Bulk 30-day discharge history for the whole barrage tour — fired once,
+  // fire-and-forget (not awaited): by the time the first barrage's own
+  // camera flythrough + popup finish (several more seconds), this has
+  // almost always already resolved, so nothing here waits on a fetch that
+  // isn't actually needed until a popup renders (see _showFfdBarragePopup).
+  if (!_state.ffdHistoryAllFetchedOnce) {
+    _state.ffdHistoryAllFetchedOnce = true;
+    _state.ffdHistoryAllPromise = _fetchFfdHistoryAll().then((data) => { _state.ffdHistoryAll = data; return data; });
+  }
+
   const first = _state.ffdWaypoints?.[0];
   if (!first) return;
   await cinematicFlyTo(map, { center: first.center, zoom: 6.2, pitch: 45, bearing: 0, duration: _dur(3200) });
@@ -3662,7 +3853,8 @@ function _showPrecipLayerPopup() {
         <thead><tr><th>District</th><th>Forecast (24h)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` : `<div class="dwrp-summary-line">No forecast precipitation values could be sampled for currently reachable districts.</div>`}
-      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled from Meteoblue's weekly + hourly precipitation forecast layers at each district's vicinity (worst reading within ~20km, not just the exact gauge point). The map layer shown alongside is the same Meteoblue weekly layer.</div>
+      ${samples[0] ? _dayWiseRowsMarkup(samples[0].weeklySeries) : ""}
+      <div class="dwrp-summary-line dwrp-summary-secondary">Values sampled from Meteoblue's weekly + hourly precipitation forecast layers at each district's vicinity (worst reading within ~20km, not just the exact gauge point). The map layer shown alongside is the same Meteoblue weekly layer.${samples[0] ? ` Day-by-day breakdown above is for the leading district, ${_escapeHtml(samples[0].name)}.` : ""}</div>
     </div>
   `);
 }
@@ -3788,6 +3980,7 @@ async function _showFfdBarragePopup(scene, token, seq) {
     : "";
   const historyId = `dwr-ffd-hist-${Math.random().toString(36).slice(2, 9)}`;
   const geoglowsId = `dwr-ffd-geoglows-${Math.random().toString(36).slice(2, 9)}`;
+  const outlookId = `dwr-ffd-outlook-${Math.random().toString(36).slice(2, 9)}`;
   _presentPopup(`
     <div class="ncop-popup__primary">
       <div class="ncop-popup__primary-content">${primary}</div>
@@ -3802,6 +3995,8 @@ async function _showFfdBarragePopup(scene, token, seq) {
       <div id="${historyId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
       <div class="dwrp-table-label">GeoGLOWS river forecast</div>
       <div id="${geoglowsId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
+      <div class="dwrp-table-label">30-Day History &amp; 14-Day Outlook</div>
+      <div id="${outlookId}" class="dwrp-summary-line dwrp-summary-secondary">Loading…</div>
     </div>
   `);
 
@@ -3819,7 +4014,7 @@ async function _showFfdBarragePopup(scene, token, seq) {
   // has actually loaded (bounded by GEOGLOWS_FETCH_TIMEOUT_MS so a slow/
   // unreachable upstream can't stall the story indefinitely).
   try {
-    const gg = await _fetchGeoglowsForecast(wp);
+    var gg = await _fetchGeoglowsForecast(wp);
     if (_isStale(token, seq)) return;
     const el = document.getElementById(geoglowsId);
     if (el) {
@@ -3856,6 +4051,46 @@ async function _showFfdBarragePopup(scene, token, seq) {
   } catch (_) {
     const el = document.getElementById(geoglowsId);
     if (el) el.textContent = "GeoGLOWS forecast unavailable.";
+  }
+
+  // 30-Day History & 14-Day Outlook — blends the bulk history-all payload
+  // (fetched once at _runFfdIntro, awaited here via ffdHistoryAllPromise so
+  // it's ready by the time ANY barrage in the tour is reached) with the
+  // GeoGLOWS series already fetched just above (`gg.points`, reusing that
+  // SAME call rather than fetching GeoGLOWS a second time). AWAITED, same
+  // reasoning as the GeoGLOWS block above — the scene holds until this
+  // resolves rather than showing a permanent "Loading…" once auto-advance
+  // has already moved on.
+  try {
+    const historyAllData = _state.ffdHistoryAllPromise ? await _state.ffdHistoryAllPromise : _state.ffdHistoryAll;
+    if (_isStale(token, seq)) return;
+    const outlookEl = document.getElementById(outlookId);
+    if (outlookEl) {
+      const outlook = historyAllData?.stations
+        ? buildFfdStationOutlook({
+            waypointName: wp.name,
+            historyAllStations: historyAllData.stations,
+            geoglowsPoints: gg?.points,
+            cmsToCusecs: CMS_TO_CUSECS,
+            daysAhead: 14,
+          })
+        : null;
+      if (!outlook) {
+        outlookEl.textContent = "No 30-day discharge history available for this station.";
+      } else {
+        outlookEl.outerHTML = `
+          <div id="${outlookId}">
+            ${outlook.statsRowHTML}
+            ${outlook.chartSVG}
+            ${outlook.legendHTML}
+            <div class="dwrp-summary-line">${_highlightNumbers(_escapeHtml(outlook.description))}</div>
+          </div>
+        `;
+      }
+    }
+  } catch (_) {
+    const outlookEl = document.getElementById(outlookId);
+    if (outlookEl) outlookEl.textContent = "30-day outlook unavailable.";
   }
 
   _fetchFfdHistory(wp.name).then((points) => {
