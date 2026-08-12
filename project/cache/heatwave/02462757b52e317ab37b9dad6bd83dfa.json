@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [74.4467, 31.1156]}, "properties": {"name": "Kasur", "province": "Punjab", "temperature": 33.6, "apparent_temperature": 42.6, "humidity": 67, "precipitation": 0.0, "wind_speed": 2.1, "weather_code": 1, "temp_max": 35.1, "temp_min": 28.0, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

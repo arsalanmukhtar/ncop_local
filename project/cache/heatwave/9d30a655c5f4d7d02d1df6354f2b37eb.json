@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [67.0011, 24.8607]}, "properties": {"name": "Karachi", "province": "Sindh", "temperature": 29.6, "apparent_temperature": 33.1, "humidity": 69, "precipitation": 0.0, "wind_speed": 15.6, "weather_code": 2, "temp_max": 30.7, "temp_min": 26.4, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.1064, 30.6707]}, "properties": {"name": "Sahiwal", "province": "Punjab", "temperature": 34.5, "apparent_temperature": 43.0, "humidity": 66, "precipitation": 0.0, "wind_speed": 6.1, "weather_code": 1, "temp_max": 35.6, "temp_min": 29.2, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

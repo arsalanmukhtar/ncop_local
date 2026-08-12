@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [72.6711, 32.0836]}, "properties": {"name": "Sargodha", "province": "Punjab", "temperature": 34.0, "apparent_temperature": 41.6, "humidity": 64, "precipitation": 0.0, "wind_speed": 7.1, "weather_code": 0, "temp_max": 36.1, "temp_min": 28.7, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

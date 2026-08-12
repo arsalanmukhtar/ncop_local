@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.0479, 33.6844]}, "properties": {"name": "Islamabad", "province": "ICT", "temperature": 30.5, "apparent_temperature": 37.3, "humidity": 69, "precipitation": 0.0, "wind_speed": 4.7, "weather_code": 1, "temp_max": 32.1, "temp_min": 23.8, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}

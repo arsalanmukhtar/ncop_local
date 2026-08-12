@@ -1,0 +1,1 @@
+{"type": "Feature", "geometry": {"type": "Point", "coordinates": [73.4711, 34.37]}, "properties": {"name": "Muzaffarabad", "province": "AJK", "temperature": 32.8, "apparent_temperature": 40.4, "humidity": 62, "precipitation": 0.0, "wind_speed": 4.7, "weather_code": 2, "temp_max": 34.6, "temp_min": 24.6, "alert_level": "Normal", "updated": "2026-08-12T11:15"}}
