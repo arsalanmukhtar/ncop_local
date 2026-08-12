@@ -3093,6 +3093,27 @@ async function _setActiveLayerOpacity(map, to, durationMs = 700) {
   }));
 }
 
+// Fading opacity to 0 (_setActiveLayerOpacity) only makes the layer paint
+// transparent — Mapbox still keeps it in the render loop, so as the camera
+// zooms/orbits closer during a district close-up it still requests newly-
+// needed tiles at the higher zoom for that (invisible) layer, and if the
+// provider doesn't serve that zoom level those requests surface as real
+// map "error" events (see dashboard.js's #handleMapError) even though
+// nothing is visibly wrong. Layout `visibility: "none"` is the actual fix
+// — it pulls the layer out of the render/tile-management loop entirely, so
+// no new tiles are requested for it at all while zoomed in. Toggled back
+// to "visible" wherever the layer is meant to be seen again (_runPrecipLayer's
+// own reveal), never left off after this scene's layer is torn down for
+// real anyway (_deactivateTemporalLayer doesn't need this — it removes the
+// layer's frame entirely, so its visibility state stops mattering).
+function _setActiveLayerVisibility(map, visible) {
+  const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
+  const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
+  for (const id of layerIds) {
+    try { map.setLayoutProperty(id, "visibility", visible ? "visible" : "none"); } catch (_) {}
+  }
+}
+
 // Frames a district's matched station coordinate(s) at a FIXED, moderate
 // aerial zoom — never nudged in further for any reason. Zooming in past
 // this triggers Mapbox to request higher-zoom tiles for whatever raster
@@ -3561,6 +3582,11 @@ async function _runPrecipLayer(map, token, seq) {
 
   const temporal = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
   const layerIds = (temporal?.currentEntry?.layers || []).map((l) => l.id).filter((id) => map.getLayer(id));
+  // Undoes _runPrecipDistrict's visibility:none in case the operator
+  // navigated straight back here (Prev/a dot click) from a district scene
+  // — without this the opacity fade-in below would run on a layer Mapbox
+  // still isn't rendering at all.
+  _setActiveLayerVisibility(map, true);
   for (const id of layerIds) {
     try { map.setPaintProperty(id, _opacityPropForLayer(map, id), 0); } catch (_) {}
   }
@@ -3589,18 +3615,22 @@ async function _runPrecipDistrict(map, scene, token, seq) {
 
   _prepareDistrictHighlight([{ name: scene.entry.name }]);
 
-  await Promise.all([
-    _frameDistrictCluster(map, [coords], {
-      pitch: 40,
-      bearing: (Math.random() * 30) - 15,
-      duration: 2600,
-    }),
-    // Fully hidden (not just dimmed) while zoomed into a district — the
-    // raster's own low resolution reads as noisy/blocky at this close a
-    // zoom, and the district boundary highlight + popup numbers already
-    // carry the reading without it.
-    _setActiveLayerOpacity(map, 0),
-  ]);
+  // Fully hidden (not just dimmed) while zoomed into a district — the
+  // raster's own low resolution reads as noisy/blocky at this close a
+  // zoom, and the district boundary highlight + popup numbers already
+  // carry the reading without it. Uses layout visibility, not opacity: an
+  // opacity-only fade leaves the layer in Mapbox's render loop, so as the
+  // camera zooms/orbits in it still requests newly-needed tiles at the
+  // higher zoom for a layer nobody can see, and the provider erroring on
+  // those (see _setActiveLayerVisibility's own comment) surfaced as real
+  // map "error" events. Visibility:none pulls it out of that loop entirely.
+  _setActiveLayerVisibility(map, false);
+
+  await _frameDistrictCluster(map, [coords], {
+    pitch: 40,
+    bearing: (Math.random() * 30) - 15,
+    duration: 2600,
+  });
   if (_isStale(token, seq)) return;
 
   await orbitAroundPoint(map, coords, {
