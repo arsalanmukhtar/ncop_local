@@ -9,6 +9,7 @@
 
 import { ncop_menu_items } from "./map-layers.js";
 import Chart from "chart.js/auto";
+import { setupFfdStatsPopupEventHandlers } from "./ffd-stats-modal.js";
 
 const ndmaLogoSrc = new URL(
   "../assets/images/bg_images/ndma-logo.png",
@@ -504,6 +505,14 @@ function buildFfdPopupContent(rawProps) {
               data-inflow="${props.inflow_discharge ?? ""}"
               data-outflow-trend="${(props.outflow_trend ?? "").toString().replace(/"/g, "&quot;")}"
               data-inflow-trend="${(props.inflow_trend ?? "").toString().replace(/"/g, "&quot;")}">Show Graph</button>
+      <button class="ncop-popup__button ffd-open-stats"
+              data-station="${(props.name ?? "").toString().replace(/"/g, "&quot;")}"
+              data-province="${(props.province ?? "").toString().replace(/"/g, "&quot;")}"
+              data-status="${(props.status ?? "").toString().replace(/"/g, "&quot;")}"
+              data-outflow="${props.outflow_discharge ?? ""} cusecs"
+              data-inflow="${props.inflow_discharge ?? ""} cusecs"
+              data-lat="${props._lat ?? ""}"
+              data-lon="${props._lon ?? ""}">30-Day History &amp; Outlook</button>
     </div>
   `;
 
@@ -3382,6 +3391,23 @@ function handleHeatwavePopupClick(e) {
 }
 // ========== END HEATWAVE MONITORING ==========
 
+// Additive named exports — the real heatwave stats modal (chart, drag/resize,
+// forecast/seasonal/climate tabs) is otherwise entirely module-private.
+// Exposing these two lets other callers (e.g. Story Mode) open the SAME
+// modal for a specific city on demand instead of re-implementing it or
+// depending on the delegated click handler having already been installed
+// by a prior real popup click. No existing behavior changes — these were
+// already fully self-contained functions, just not exported before.
+export { showHeatwaveModalForCity, hideHeatwaveModal };
+
+// Same additive-export reasoning as the heatwave pair above, for the FFD
+// popup's content builder + its delegated "Show Graph" click handler.
+// Both were already fully self-contained (buildFfdPopupContent takes raw
+// properties and returns HTML strings; setupFfdPopupEventHandlers wires
+// one idempotent document-level listener) — exporting them changes
+// nothing about how the real map-click popup path behaves.
+export { buildFfdPopupContent, setupFfdPopupEventHandlers };
+
 export default class LayerAttributePopup {
   constructor(map) {
     this.map = null;
@@ -3976,22 +4002,6 @@ export default class LayerAttributePopup {
         return this.hide();
       }
 
-      // If any feature at this click belongs to a temporal / RainViewer layer
-      // (tracked in window.__ncop_layer_registry), let the temporal module's
-      // layer-specific click handler render the popup instead. This prevents
-      // the double-popup problem when a temporal layer overlaps a vector with
-      // popup eligibility (e.g. National Boundary).
-      try {
-        const registry = window.__ncop_layer_registry;
-        if (registry instanceof Set && registry.size) {
-          for (const f of features) {
-            if (f?.layer?.id && registry.has(f.layer.id)) {
-              return this.hide();
-            }
-          }
-        }
-      } catch {}
-
       let eligible = null;
       for (const feature of features) {
         if (this.#isPopupEligible(feature)) {
@@ -4003,6 +4013,27 @@ export default class LayerAttributePopup {
       if (!eligible) {
         return this.hide();
       }
+
+      // If the feature that would actually be shown belongs to a temporal /
+      // RainViewer layer (tracked in window.__ncop_layer_registry), let the
+      // temporal module's own layer-specific click handler render the popup
+      // instead — prevents the double-popup problem when a temporal layer
+      // overlaps a vector with popup eligibility (e.g. National Boundary).
+      // Checked against the PICKED feature specifically, not every feature
+      // returned by the click's small query box — that registry is shared
+      // with layers registered for unrelated reasons (e.g. the FFD rivers
+      // basin polygon is added to it purely for z-order placement by
+      // gcop-ffd-integration.js, not because it has its own click handler),
+      // and checking every co-located feature meant an FFD gauge circle
+      // sitting on top of its own river basin polygon never opened a popup
+      // at all — the rivers polygon's registry membership swallowed the
+      // click before the circle itself was ever considered.
+      try {
+        const registry = window.__ncop_layer_registry;
+        if (registry instanceof Set && eligible.layer?.id && registry.has(eligible.layer.id)) {
+          return this.hide();
+        }
+      } catch {}
 
       const layerId = eligible.layer?.id;
       const sourceId = eligible.source;
@@ -4028,6 +4059,21 @@ export default class LayerAttributePopup {
       // SPECIAL HANDLING FOR FFD_DATA LAYER
       if (layerId?.includes("ffd_data") || sourceId === "ffd_data-source") {
         const properties = { ...(eligible.properties || {}) };
+        // Carry click coordinates so the "30-Day History & Outlook" button
+        // (see buildFfdPopupContent) can resolve a GeoGLOWS reach for this
+        // station — same fallback chain the heatwave branch above uses.
+        try {
+          const coords = eligible.geometry?.coordinates;
+          if (Array.isArray(coords) && coords.length >= 2) {
+            properties._lon = coords[0];
+            properties._lat = coords[1];
+          }
+        } catch (_) {}
+        if (properties._lat == null || properties._lon == null) {
+          properties._lat = e.lngLat.lat;
+          properties._lon = e.lngLat.lng;
+        }
+
         const { primary, drawer, drawerTitle } = buildFfdPopupContent(properties);
         this.#renderSplit(primary, drawer, drawerTitle);
 
@@ -4035,6 +4081,7 @@ export default class LayerAttributePopup {
         this.#updatePosition();
         this.#attachMoveListeners();
         setupFfdPopupEventHandlers();
+        setupFfdStatsPopupEventHandlers();
         return;
       }
 

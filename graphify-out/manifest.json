@@ -1,0 +1,2522 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1785916851.4308848,
+    "ast_hash": "7cdfd9ae883439aabc5d02566b2e1f65",
+    "semantic_hash": ""
+  },
+  ".claude/settings.local.json": {
+    "mtime": 1785918759.682563,
+    "ast_hash": "24cfb653b65b8190f9ae592e1f427f57",
+    "semantic_hash": ""
+  },
+  "debug_vite_config.py": {
+    "mtime": 1768213961.5913444,
+    "ast_hash": "22b9b0cd63498c1cd2fe0d11bf6b6faf",
+    "semantic_hash": ""
+  },
+  "frontend/package.json": {
+    "mtime": 1785916851.4342382,
+    "ast_hash": "544d9545ab14b261764d261ef4226fda",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/story_jasons/demostory.json": {
+    "mtime": 1762160782.8712666,
+    "ast_hash": "ef397830ab3201febd2c61594a748af0",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/story_jasons/hydrological.json": {
+    "mtime": 1762168133.2334547,
+    "ast_hash": "aeb2cb31989006bdc999d8d37c80613c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/story_jasons/meteorological.json": {
+    "mtime": 1762168486.9308503,
+    "ast_hash": "db4b0c457d94600dd9504067da0dc829",
+    "semantic_hash": ""
+  },
+  "frontend/src/counter.js": {
+    "mtime": 1760612236.9315488,
+    "ast_hash": "2ac86fab0c68ff8890db658663b5b7f5",
+    "semantic_hash": ""
+  },
+  "frontend/src/entries/auth_login.js": {
+    "mtime": 1785916851.4873364,
+    "ast_hash": "3338217cf77f96fc70705afe0dcf9050",
+    "semantic_hash": ""
+  },
+  "frontend/src/entries/auth_reset.js": {
+    "mtime": 1785916851.4873364,
+    "ast_hash": "4462a70f89a4328761fb8ba1fbf32dc6",
+    "semantic_hash": ""
+  },
+  "frontend/src/entries/auth_reset_confirm.js": {
+    "mtime": 1761195472.477745,
+    "ast_hash": "0fa6972b235e752623eaf055b5b9537e",
+    "semantic_hash": ""
+  },
+  "frontend/src/entries/auth_signup.js": {
+    "mtime": 1785916851.4873364,
+    "ast_hash": "827ee9839183d0bb99442e4c29aba04d",
+    "semantic_hash": ""
+  },
+  "frontend/src/entries/dashboard_main.js": {
+    "mtime": 1785916851.4873364,
+    "ast_hash": "2e30374f52fb0d54fcc301e2919941c9",
+    "semantic_hash": ""
+  },
+  "frontend/src/main.js": {
+    "mtime": 1760612236.9493077,
+    "ast_hash": "de692c7004bd5381710c3a0b68a7bb3e",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/auth-forms.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "b602785593be260984bb4c44d7e6aa84",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/crop-explorer-control.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "0f29b08994852931fed5f824cb1da302",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/crop-filter-controller.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "ee8eeb67695a5bdd45c2e4573aa175ab",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/dashboard.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "0ca2608cc57d99d429543814bcbc4552",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/gcop-api-cache.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "071b48df863cf92682a5636c40a6da21",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/gcop-ffd-integration.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "969a238d7e1f05123804ebbc40b65660",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/gcop-monitor-integration.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "ed92cc9f953c23142796b95e97b13523",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/gcop-pmd-integration.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "8ef43e3b19c6f25c9aabe58a38172142",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/geocoder-control.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "219505f629ccd31273e30f95e98822d6",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/layer-attribute-popup.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "dd6434a074a1621b593977859c0ee66a",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/layer-panels.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "2431700a166c34c0ae31969f25ac9362",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/layer-style-config.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "1e2e2215f0438b560525b1393ac0a23f",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/map-controls.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "c06b88723657f97b573d619817788c73",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/map-display-panels.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "2b283728e1d4ce94f512058c4d6ebc17",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/map-icons.js": {
+    "mtime": 1785916851.4906726,
+    "ast_hash": "34ac6a25778746dad5dd5e1fad21c1c3",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/map-layers.js": {
+    "mtime": 1785916851.4966538,
+    "ast_hash": "fd62ceaf4dde371868f059adf5222d53",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/mapbox-functions.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "bb6c500abb0f61236440b602d9c371ee",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/mapbox-telemetry-mute.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "c88735201f77dd9005e67ffab17f2acc",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/nav-controls.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "b990fe1334b59a6080a34fb9d1f17dc9",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/navigation-panel.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "a51e144d88cd3be46b64e00864202210",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/nwfc-html-markers.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "54438653a1006dab2c2a293f1243717b",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/nwfc-weather-icons.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "1a476e24b844fbf0140a106f8e6fe237",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/pmd-warnings-filter.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "c8ea0b31d2784cc9090a65e1df9a62f0",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/set-assets.js": {
+    "mtime": 1761195716.6082983,
+    "ast_hash": "62d33b1d7dc073e9285a72b8b64d5cad",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/sidebar-menu.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "545541f4d6cfd9daa30bc546924419b3",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/sourcelayer-control.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "369f40e344383e74a43585eabee7fa5c",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/split-compare-control.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "285c41645d9ad31c81d707a33132562d",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/story-provincial-forecast.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "2f2df291887b9de0dfbd2be72cea914c",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/temporal-controls.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "d2523bf47408f760a4c2f8a1c7c9732e",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/temporal-current-step.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "544b684416e258f66ae29a6486a81ec8",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/temporal-layer-legends.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "e066f1410d5145e56da57370acd1e960",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/time-functions.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "b3798f4ed539e2760389456b162c0cf3",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/weather-report-control.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "db13131041fb192498e9db039d165d92",
+    "semantic_hash": ""
+  },
+  "frontend/src/modules/wind-ocean-particles.js": {
+    "mtime": 1785916851.497668,
+    "ast_hash": "4138918d181751042df863c193746b61",
+    "semantic_hash": ""
+  },
+  "frontend/tailwind.config.js": {
+    "mtime": 1760699332.2215078,
+    "ast_hash": "63dd3199d3322db3210b90df804885ec",
+    "semantic_hash": ""
+  },
+  "frontend/vite.config.js": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "ddde4c67239de7372c63fb8783a75eae",
+    "semantic_hash": ""
+  },
+  "generate_tree.py": {
+    "mtime": 1768213961.5918114,
+    "ast_hash": "770f4766088d158a6273d44d06deb7d2",
+    "semantic_hash": ""
+  },
+  "misc/Setup Commands.sh": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "4b2d21f43ce4b8b7689a14dd9485e466",
+    "semantic_hash": ""
+  },
+  "misc/github commands.sh": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "9c836511b6c019402cb462e4cd226ef2",
+    "semantic_hash": ""
+  },
+  "project/manage.py": {
+    "mtime": 1760611736.4312224,
+    "ast_hash": "1f4189b5da76f056af945901cb17a16d",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/admin.py": {
+    "mtime": 1760611327.6554122,
+    "ast_hash": "e3dc717de887db03a015667a5fec59d8",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/apps.py": {
+    "mtime": 1760611327.6433525,
+    "ast_hash": "4fea1867603c6aabc3eceef595c64c8b",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/models.py": {
+    "mtime": 1760611327.6214633,
+    "ast_hash": "8c4eb991c6dca757bdd77f539092e29b",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/tests.py": {
+    "mtime": 1760611327.624246,
+    "ast_hash": "465b7e9f69bfd158c850cdfbc7306818",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/urls.py": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "9fffb336c035f90303efa2d6ed9d6bf6",
+    "semantic_hash": ""
+  },
+  "project/ncop_internal/views.py": {
+    "mtime": 1785916851.523401,
+    "ast_hash": "e4f1fc6d8b4d1dd12488d53be61bfd4e",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/asgi.py": {
+    "mtime": 1785916851.523401,
+    "ast_hash": "64b329f46edb99e41b91a2dfd19269aa",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/settings/dev.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "d1c5d310d4c9359250295f91c896a39d",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/settings/prod.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "d0e51ff89e41d329e63e379eadf6b3b4",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/settings/staging.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "f47c2c94c57e114c5c6205ed5c3ad25e",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/urls.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "5ad7744dbde5f806958b2b4a97f6f383",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/wsgi.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "a3e212f6ce821cd6d128bbbb711ee7ee",
+    "semantic_hash": ""
+  },
+  "project/ncop_project/wsgi_staging.py": {
+    "mtime": 1762426944.096432,
+    "ast_hash": "330618f9bf524b027bb2cf9b1e540af5",
+    "semantic_hash": ""
+  },
+  "project/pmd_diagnose.py": {
+    "mtime": 1785916851.525408,
+    "ast_hash": "bc80d8d2b5536600366f132da4d986f9",
+    "semantic_hash": ""
+  },
+  "GCOP_PMD_API_Integration.md": {
+    "mtime": 1785916851.4322212,
+    "ast_hash": "119fd5238c1350aaeaf2cc93ffd6938e",
+    "semantic_hash": ""
+  },
+  "GCOP_PMD_Weather_Report_Feature.md": {
+    "mtime": 1785916851.4322212,
+    "ast_hash": "20ae018a572ba68d391316bfb487f879",
+    "semantic_hash": ""
+  },
+  "PMD Monitor_scrapping_methodology.txt": {
+    "mtime": 1785916851.4322212,
+    "ast_hash": "8199f70a29ffb2d493ebb625c5698f24",
+    "semantic_hash": ""
+  },
+  "PMD_Forecast_Layers.txt": {
+    "mtime": 1785916851.433227,
+    "ast_hash": "70c29061ee9e4bd2f27f92497ec9d149",
+    "semantic_hash": ""
+  },
+  "dev-arsalan_commit_summary.txt": {
+    "mtime": 1767778336.3553326,
+    "ast_hash": "117c75637bb39d6651d3d0c103ca11e6",
+    "semantic_hash": ""
+  },
+  "folder_tree_updated.txt": {
+    "mtime": 1768213961.5918114,
+    "ast_hash": "489ee162209a9a7eb42afc38df2cf8ae",
+    "semantic_hash": ""
+  },
+  "frontend/index.html": {
+    "mtime": 1761288322.742019,
+    "ast_hash": "a76c218abf7cc53be3d1c719975178c6",
+    "semantic_hash": ""
+  },
+  "frontend/templates/auth/base.html": {
+    "mtime": 1760686283.8223221,
+    "ast_hash": "ecb9d04bf4f7b7683ffa38f4720d3317",
+    "semantic_hash": ""
+  },
+  "frontend/templates/auth/login.html": {
+    "mtime": 1760692359.204375,
+    "ast_hash": "fcd85dbd9ba7dced4e65efabfd390a23",
+    "semantic_hash": ""
+  },
+  "frontend/templates/auth/password_reset_confirm.html": {
+    "mtime": 1760692432.2259855,
+    "ast_hash": "67e3129696de2133660871f276bf9789",
+    "semantic_hash": ""
+  },
+  "frontend/templates/auth/signup.html": {
+    "mtime": 1760692396.2152765,
+    "ast_hash": "bf4caca1337f3fbd2060ac141b852606",
+    "semantic_hash": ""
+  },
+  "misc/NCOP_Document.md": {
+    "mtime": 1762935533.2921605,
+    "ast_hash": "6183d67687796bff93613e86ebd4d4b7",
+    "semantic_hash": ""
+  },
+  "misc/NCOP_Production_Deployment_Handbook.md": {
+    "mtime": 1762935533.2921605,
+    "ast_hash": "57459735aa3215dd29c5e317cc096da2",
+    "semantic_hash": ""
+  },
+  "misc/StageBranchProcess.md": {
+    "mtime": 1762935533.293761,
+    "ast_hash": "9bb130fb50e7a7f84ea11624a3d0636f",
+    "semantic_hash": ""
+  },
+  "misc/ncop_production_deployment_guide_prod_arsalan_v_1.md": {
+    "mtime": 1762935533.293761,
+    "ast_hash": "6517d020882d53c142fc9070746f3b47",
+    "semantic_hash": ""
+  },
+  "misc/project_structure.txt": {
+    "mtime": 1762935533.295154,
+    "ast_hash": "5cd376426b1882d6d34337fc24b7ed66",
+    "semantic_hash": ""
+  },
+  "misc/ubuntuprodenv_setup.md": {
+    "mtime": 1762935533.295659,
+    "ast_hash": "52e4b61247d89f150f23c9c806dd3d51",
+    "semantic_hash": ""
+  },
+  "ncop-commits.txt": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "c941a094f47cbf9d9ba5f5d31ba0a271",
+    "semantic_hash": ""
+  },
+  "nwfc_weather_types.txt": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "612e1f178c323d47f1d00bf79bad46cb",
+    "semantic_hash": ""
+  },
+  "project/templates/dashboard.html": {
+    "mtime": 1785916851.5892224,
+    "ast_hash": "641957030db5b649926f66fbee29f569",
+    "semantic_hash": ""
+  },
+  "project/templates/documentation.html": {
+    "mtime": 1785916851.5892224,
+    "ast_hash": "a02837e0c1236e9bff3f34b581940745",
+    "semantic_hash": ""
+  },
+  "project/templates/index.html": {
+    "mtime": 1761279363.3525996,
+    "ast_hash": "0b4167326adfd2e735c6a29e996ba702",
+    "semantic_hash": ""
+  },
+  "requirements.txt": {
+    "mtime": 1785916851.5892224,
+    "ast_hash": "27864ce157a36711ec587c5bafa55de6",
+    "semantic_hash": ""
+  },
+  "ncop_overview.pdf": {
+    "mtime": 1785916851.514369,
+    "ast_hash": "895352b1a0d3e5f578c4247ad2cbbc5a",
+    "semantic_hash": ""
+  },
+  "frontend/public/vite.svg": {
+    "mtime": 1760612236.9315488,
+    "ast_hash": "8e3a10e157f75ada21ab742c022d5430",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/air-quality.webp": {
+    "mtime": 1759907235.9593601,
+    "ast_hash": "a20111a3cbc63029af19777df3dfa378",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/early-warning.webp": {
+    "mtime": 1759897805.1694102,
+    "ast_hash": "eb30819fe5e1d171f978bad36452651c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/flood.webp": {
+    "mtime": 1759897916.0006087,
+    "ast_hash": "5ff4484fed851c77509e0c4e23e127b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/gis-layers.webp": {
+    "mtime": 1759894562.8895855,
+    "ast_hash": "56bbfd0f04be79aa72d96a2a440f4d7c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/ocean-coastal.webp": {
+    "mtime": 1759897843.8944094,
+    "ast_hash": "5dd6bb1d8061870500a5a787195e1735",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/accordion_icons/weather-systems.webp": {
+    "mtime": 1759896225.388935,
+    "ast_hash": "bfd1aff2f8fce353d1bf631b1d36acf6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/dark.webp": {
+    "mtime": 1760422473.5170543,
+    "ast_hash": "1faea64b0713241d9eb33d37b7b8bde8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/day.webp": {
+    "mtime": 1760437897.4624124,
+    "ast_hash": "d6d8cdd60b954d35d1ad3aa5c529a3b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/hybrid.webp": {
+    "mtime": 1760423194.619288,
+    "ast_hash": "3d14709ca3cba2632d30b7523dfd7e86",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/light.webp": {
+    "mtime": 1760422476.4236424,
+    "ast_hash": "282aa0aeb321a2fae66405434f2fbde4",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/night.webp": {
+    "mtime": 1760437895.4000604,
+    "ast_hash": "0c1f1386a4b90d462638fce5ff42bab6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/osm.webp": {
+    "mtime": 1760423200.0990226,
+    "ast_hash": "ed38542919adf8073602d22e1fefb9c5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/outdoors.webp": {
+    "mtime": 1760422149.5701692,
+    "ast_hash": "2143c06c26e436561600aa84105f2419",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/satellite.webp": {
+    "mtime": 1760422145.6572425,
+    "ast_hash": "a83f429efcb34047affda40876d4c196",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/basemap_images/streets.webp": {
+    "mtime": 1760422018.8627458,
+    "ast_hash": "04304b25f6ec2bafb2f16f1ae734a024",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/bg_images/background.gif": {
+    "mtime": 1762159094.7099812,
+    "ast_hash": "4c2ab693d943dd0188fc29551a8c9a82",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/bg_images/background.jpg": {
+    "mtime": 1759485972.9326375,
+    "ast_hash": "7ae5e5985e6db8dde74e02ec9a647973",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/bg_images/ndma-logo.png": {
+    "mtime": 1758016058.2228577,
+    "ast_hash": "b9c9ea2dc6356c59412d7ef142759bcf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/Clicking_a_feature.png": {
+    "mtime": 1785916851.4449768,
+    "ast_hash": "402fc677eb62905e051b77c73379abb1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/Split_Compare.png": {
+    "mtime": 1785916851.4478788,
+    "ast_hash": "d2c5e6872a537de666f5371ab22366cf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/four regions.png": {
+    "mtime": 1785916851.4478788,
+    "ast_hash": "b60a14d3ed85e957110952c0cd6ea392",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/layers_on_off.png": {
+    "mtime": 1785916851.4680846,
+    "ast_hash": "2d60fb5beaf808c997f5103f11f1e6a5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/right-hand_tools_rail.png": {
+    "mtime": 1785916851.4680846,
+    "ast_hash": "0c5129e8902aa986be885bdceacf93e2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/docs_images/temporal.png": {
+    "mtime": 1785916851.4680846,
+    "ast_hash": "f3ce099220807d631ec513cf6fd78e03",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/AccRainEGE.webp": {
+    "mtime": 1735643973.6061792,
+    "ast_hash": "5b4bfe1fa3f0228dd2ef342dfb3a675a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/EGE_probRgt150.webp": {
+    "mtime": 1735643973.6061792,
+    "ast_hash": "35828104723c3bfb74ca4e383034f58a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/EGE_probRgt300.webp": {
+    "mtime": 1735643973.6061792,
+    "ast_hash": "d938beeacc112528e1d387baa89cd2dc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/EGE_probRgt50.webp": {
+    "mtime": 1735643973.6061792,
+    "ast_hash": "9fbf81799a8f2fba46363e6fb49c2056",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/FloodHazard100y.webp": {
+    "mtime": 1735643973.6061792,
+    "ast_hash": "8ed288689099243d9c193fca234d1fc7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/FloodSummary1_30.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c4464205e469cffa3d6443957d2b7310",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/GlofasReservoirImpact.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8019535c6f2805e5a089de9c811be49c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/OMI_Aerosol_Optical_Depth_V.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "e455225d1a3e34eafb666faf471746d8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/OMI_Nitrogen_Dioxide_Tropo_Column_V.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c858373beff36ba008a224b69da46f38",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/Precipitation Probability 300mm (10 Days).webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "57d3e6f5792c4d28f7af431de08738c7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/Precipitation Probability 50mm (10 Days).webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "fbcf3449756b9dc0108169e9767c9554",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/RDrI-Agri.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8fb13fd8e116583841e2df6839ef47b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/RapidImpactAssessment.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "6f94215724e7b0e0fecf132a5161aba6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/UpstreamArea.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "ca1bd9ef4747f631a2abcdc4470cd606",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/World_AirQuality.webp": {
+    "mtime": 1761646859.467157,
+    "ast_hash": "baca9303770bd07c703fcebbb2a745b5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/abs.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "dcd991a8d5b14f614c46bcc216f5c058",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ai.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "43b77d7055d3338c216014d967d90691",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/airports.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "bd4b85152045785e8c3c6ad622e14037",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/aod.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "e455225d1a3e34eafb666faf471746d8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/aras.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "a79c992dab7605bc47be58f7b1e54046",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/arat.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "f0ad8a68e1686ad0b721f0c905269920",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/arce.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "6e01f2b5cf35c97011e2dc6e3c1a8d2e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/are.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2f637e26b46d77f35764de237799bfa7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/arvs.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "667a75677c86bd0a7b155d39c04ca08f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/at.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "695c3f434082951cdb47c5101caf9eab",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/avhrr-sst .webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "d62236266d285f181069099409c9374b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/aws.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "dcd991a8d5b14f614c46bcc216f5c058",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/bt.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "5670aa043c4fc7333d4fa84de88a08e5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cams_composition_aod550_field_aerosole.webp": {
+    "mtime": 1740131642.4143481,
+    "ast_hash": "3e0b282fb3b8ba6dbf7b4b365b451785",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cams_composition_uvindex_daily_max.webp": {
+    "mtime": 1740131642.4153476,
+    "ast_hash": "4d50d28da300c0449bf55385afd32f0c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cell_towers.webp": {
+    "mtime": 1759387761.6116292,
+    "ast_hash": "ac8f3cdbf935ed355597cab8aa1742dc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cerima.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c2d4a6007691d5e9792faab549c3211e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/clm.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2a88f9b82c8064e295c5d8ac6251c9e7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmmds.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "08b48ac904a40c076596ed5e4e1bc0bb",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmmdtc.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "ffaa02acb7549798284f359bfbc2fcb2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmmns.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "08b48ac904a40c076596ed5e4e1bc0bb",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmmntc.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "ffaa02acb7549798284f359bfbc2fcb2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmnl2.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "a5c5cc31422d24a7a549ecae0232c98e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmvmrd.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "79eaad5c8065a0265ff088b99030747e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmvmrmd.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "79eaad5c8065a0265ff088b99030747e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cmvmrmn.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "79eaad5c8065a0265ff088b99030747e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/covid_data.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "99610d35a1b4e433e50061f9147fab7b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cris.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c98a1949d2c06455f32a9fac90c54be5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/crivan.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c98a1949d2c06455f32a9fac90c54be5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/cth.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "90c48449ed482a4d3a18308277faeaab",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/disasters_geojson.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "753d9cce487ae7f0e601c218408b3aef",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.bui.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "34b03e6712b33655872526f0bf9c6e2d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.extra.lightning.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "f811aec2e7e2b7d89727c5172ed03aa9",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.ffmc.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2c937947162c183957c9ae87d96b0b9f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.mark5.df.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "db0a677076f1910cf2f256abca39bc53",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.mark5.fdi.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "a5e7d8b281ac17a94256cacb001d71bb",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.mark5.ros.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "90dd5247afe0150ea16ecc0966b93184",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.nfdrs.erc.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "30d3aca92e6e031ada67fa37ae80d801",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ecmwf.nfdrs.ic.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "1ca6f773dff6dc7fecc653cbe8262af4",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/eonetevents.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "a021876980ca45be4d723e2a9a5ba76f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/evih.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "6d30546c6c7e52eefceed0ad3d8b24a1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/evim.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "6d30546c6c7e52eefceed0ad3d8b24a1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fAPAR.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "f50c835e9f2cd91c4b853cf9cb72e6aa",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ffd.webp": {
+    "mtime": 1759387761.6116292,
+    "ast_hash": "07ab11be18c7e2ec3e59e0ddda9f482f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvl89oli24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvma24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvmat24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvmt24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvv24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvvnoaa2024.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvvnoaa2124.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fhvvsnpp24.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "8716ff7abfbc8dc34cc24f634dc16178",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fires_modis_24hrs.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "c48e496829af290341517420b5b91fbf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fl2.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2d25b57e45833e6a3e5938d4b1ae907a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fl3.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2d25b57e45833e6a3e5938d4b1ae907a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/fuel_map.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "cef5062a0eeb7842ab1dac88612cd2d7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/geostationary-ring-airmass.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "2e16f085ced5936c8f63bd7cd30d1d69",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.ch4.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "f175642f508ee0cde32df4c1cad6d273",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.co.webp": {
+    "mtime": 1735643973.607931,
+    "ast_hash": "56e82c15aaf44e38533ef2430ff934f1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.nmhc.webp": {
+    "mtime": 1735643973.615376,
+    "ast_hash": "da4186dce8976d44bcefbd6e7cacb671",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.nox.webp": {
+    "mtime": 1735643973.615533,
+    "ast_hash": "7133e9e2982c38be3d73c20c657d7697",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.oc.webp": {
+    "mtime": 1735643973.615533,
+    "ast_hash": "edd6e0557fe42ef05564e174c969d44e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.pm2p5.webp": {
+    "mtime": 1735643973.615533,
+    "ast_hash": "a61cb063206a9a419efd1150fbcb4151",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas.so2.webp": {
+    "mtime": 1735643973.6158907,
+    "ast_hash": "c48921461ff9b01c3d256f3942a308d2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gfas_c.webp": {
+    "mtime": 1735643973.6158907,
+    "ast_hash": "17794c3ec5b14cf80467348f5f8fbfe8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ggop.webp": {
+    "mtime": 1735643973.6158907,
+    "ast_hash": "d2c7385b73a4172fdf4f83239c059391",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ggtdata.webp": {
+    "mtime": 1735643973.6158907,
+    "ast_hash": "71f8f97401a40dad566f344cd3eb6e5d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ghsl.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "dded5a52bf64f21dcaf9c4961dd9e75d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gii-lifted-index.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "affa9ee124b9afef33ada59be1a1c67d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/glofas-initial-temp-2m.webp": {
+    "mtime": 1763117035.719289,
+    "ast_hash": "033a62406477e226a7a87b139b8a4845",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/glofas-lakes-reservoirs.webp": {
+    "mtime": 1763117035.719289,
+    "ast_hash": "55b89c44f55018dd6bbe0de2691393e8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/glofas-soil-moisture-2m.webp": {
+    "mtime": 1763117035.719289,
+    "ast_hash": "63133368b4b43b2e6fe0e3ed4a449a28",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/glofas-soil-moisture-anomaly-2m.webp": {
+    "mtime": 1763117035.719289,
+    "ast_hash": "f9f135d5f9e64d0030470e243730fcee",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/gwis_forecast_lightning_global.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f811aec2e7e2b7d89727c5172ed03aa9",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/hdx_foodsequrity.webp": {
+    "mtime": 1740131642.4163477,
+    "ast_hash": "963ff9818156e380f36cc84d4edb0d20",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/hs.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "6d641307be63b71e541d08f011f364e8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/hydel_power_stations.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "15dd081f4bb12f2a9f239c999a41f11a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_afghanistan.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_bangladesh.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_drc.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_lebanon.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_myanmar.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_pakistan.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_palestine.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_sudan.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ipc_yemen.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10eb23df1603c807e961db52939cadf1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/istddmt.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "e016619c81a842b997d82ed5aa2ad235",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/istnvno.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "e016619c81a842b997d82ed5aa2ad235",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/laivmaat.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "6a3a0cf4837e33acfe3186b2948cf587",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/lancover.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "fb1f0b16ab59b6fd19e05c3a728eed40",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/lstdnma.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c1cb7e5112ae8fde15ec082aa1364b2f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/lstdvma.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c1cb7e5112ae8fde15ec082aa1364b2f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/lstdvmam.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c1cb7e5112ae8fde15ec082aa1364b2f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/lstnvmam.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c1cb7e5112ae8fde15ec082aa1364b2f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/macc_gfas.bc.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "8d4761fcb145fc69f992d2e81a8e382c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/mvmrnvaa.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "9cdd5986c9f471e359e48cec9dd5389f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/mvmrvaa.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "9cdd5986c9f471e359e48cec9dd5389f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/nd.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c858373beff36ba008a224b69da46f38",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/nece.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "40984917f107f93e6dff84734a323d25",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/neoc_heatwave_projections.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "61dd11aa6517b6abc0522430769d7377",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/neoc_proj_lightning_global.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f811aec2e7e2b7d89727c5172ed03aa9",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/npl8d.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "10ae253eb76ae2dfd1de467ee0b5d429",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/nrt.ba.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "581d0abd873c9bda97507e9f3f2f9a58",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/nrt.ba30.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "581d0abd873c9bda97507e9f3f2f9a58",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/nrt.ba7.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "581d0abd873c9bda97507e9f3f2f9a58",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/oca.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "5b0b63604da3d2f299d2861f7466db9b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/oil_slicks_fill.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "42d446ef5abe5fa13c10f2caed1052ef",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/omra5m.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f9565c4ff69e8767274afe5de60defec",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/openweatherAQI.webp": {
+    "mtime": 1740131642.4173477,
+    "ast_hash": "87eae56ee1f20db909ac7a79efc17ca5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/owlef.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "bde33b3d76a7ac930cddaf64e6c9241b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ozonedoas.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "963a2a3074af51f4cb58b6a0aec256f8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/pda.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f4e2bb0e07f264189d9924c3ecc90762",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/pdb.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f4e2bb0e07f264189d9924c3ecc90762",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/pdc.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f4e2bb0e07f264189d9924c3ecc90762",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/pdd.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f4e2bb0e07f264189d9924c3ecc90762",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/pde.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f4e2bb0e07f264189d9924c3ecc90762",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/plastic-waste-hotspots_circle.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "101d8cf2a95a1d2638da97cb997e5d02",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/precip3Days.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "e8f36d0f83fa84e4106fa5db9f11465c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/precip3DaysAnomaly.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "e8f36d0f83fa84e4106fa5db9f11465c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/railway_stations.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "2dd91c60a9ae0208e61faf19bff45a86",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-airmass.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "faa19079ec894c0929a8988ac09df0ab",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-ash.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "55bf36b3c0d0c95acb7af4bd00ab55fc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-convection.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "471408a9be43053fca0000a71f709c03",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-convection_220x400.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "643e59f6f12c5fa4b0436ba7c3dcb6e8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-dust.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "144eb866d7d6f1b0b897e0b8ede3573c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-microphysics .webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "d1136afd0e241e371d147e55acdc165f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-snow.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "0ffa8ea6786162e0111775181a90f733",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-t-airmass.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "18100164a68d7730b16d1f1452d9a1b3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-tropical-airmass .webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "bed79372ad1701693859ffbb0de9dd3a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/rgb-tropical-airmass.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "7fce8a23a8029f923d0969553cf4f27f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/river_headworks.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c398729f297a59d12a73254baa38ec2a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/scndsi.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "4f614ba10f7ae9721ad555059e1bc4aa",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/seaports.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "df965b7abc66d46b4d024e20de926edc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/snowCoverInstAnomaly.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "d7205870cc40d4e66368b80e670c3636",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/snowMelt3Days.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "a741480fd3ce3a3ad8d792c8749b04d4",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/soilMoistureInst.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "98bd9fabe29f14cb5524c02b155f1939",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/soilMoistureInstAnomaly.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c68cf7522bfd1adaad43896f6259e118",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/srhdm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "24d669594df3ae60c8071c07616fff24",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/srhnm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "24d669594df3ae60c8071c07616fff24",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sscz.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "12c2df9e06226b0cbf963d6b3324f55b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ssha.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "769ad8404214118f00ff2c101a0a15d6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sssdrm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "fb03e63190fd92a54eeec3bbf166cdc8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sstam.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "dd5f7dd54b0d83c9621634ea6c2788c2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sstdm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "0fb4121f77e09ebd0a13c14246306f34",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sstnm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "0fb4121f77e09ebd0a13c14246306f34",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sumAL41EGE.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c4464205e469cffa3d6443957d2b7310",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sumAL42EGE.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c4464205e469cffa3d6443957d2b7310",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sumAL43EGE.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "c4464205e469cffa3d6443957d2b7310",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sumALEEGE.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "a82ab8c8bd0b64e14cded648d806a27e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/sumALHEGE.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "9bcb8e803a13cd94786e7129324d4a33",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/temp.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f94ae0db54ad970a2e0ba2c9fb869356",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/tempAnomaly.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "f94ae0db54ad970a2e0ba2c9fb869356",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/tprm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "798dad6b29882f80d2fafc6c21b4e99a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/ue.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "d655b85e60906cd19973a36b6765bba1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/urp.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "469a0e0c930693502f849c3f9da6f1f1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/usgs_realtime_eq_events.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "dbbda441a4cb84e1371f21313232b543",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/vil.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "19b36385cccfe871c93fa8b691243320",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "267b69e9a2ec92188859f9dfdaf2fd43",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsc.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "1df030eb5a88fa0069d303160eb57bed",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsd.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "1df030eb5a88fa0069d303160eb57bed",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsday.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "20b0a3004df8f8e31ae0058061b6e010",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsm.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "87e63f5047bdaf136b38d29ec99f4d1a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsn.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "20b0a3004df8f8e31ae0058061b6e010",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsoa.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "8b6de45e568d695f08d7a36b13ec5d23",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wsod.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "8b6de45e568d695f08d7a36b13ec5d23",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wss.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "1df030eb5a88fa0069d303160eb57bed",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wvd.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "6106eed7665bfd9b498ee317b99359a3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wvday.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "6106eed7665bfd9b498ee317b99359a3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wvn.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "6106eed7665bfd9b498ee317b99359a3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wvoa.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "7cf54fb5aca188bf57784736201dd9a6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_legends/wvod.webp": {
+    "mtime": 1735643973.6164305,
+    "ast_hash": "7cf54fb5aca188bf57784736201dd9a6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-air-temp.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "f8dc905e512d9134c0bd85f4f4642cef",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-precip.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "b78cb7e5c2a155ef2083c13d8efea6b7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-relhumidity.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "16bcd35749520369372034f1481d8c2e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-surf-snow-amount.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "5d589614e0eec512bff67a553ef09f84",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-surf-temp.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "2aabfd44c879a9f88c5fab95cb1d96f1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-total-cloud-cover.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "fa7b2c874822f287be076dd928cb4ed6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/6mp-wind-speed.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "81cc6219e9d958b38f37166f9953619d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Active_Fires_Modis.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "bf9a4e76d004e4d365bd62e0ccd8bac0",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Build_Up_Index(BUI) copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "dfa62f0b5eb74003cbf12a43bda91278",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Build_Up_Index(BUI).webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "dfa62f0b5eb74003cbf12a43bda91278",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/CO.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "1af2e17d12adfe4544dc8b296219bede",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/CoastalFloodSimulation.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "1f25a307022a92b502bed4171efc4b80",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Convective_precipitation_weekly_kgm2_forecast.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "09b8ea7b0cc539b4794cc9e949950725",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Drought_Factor_(MARK-5 DF) copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "3c2280ea67426fe94db938f49a8faa59",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Drought_Factor_(MARK-5 DF).webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "3c2280ea67426fe94db938f49a8faa59",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Duff_Moisture_Code copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "47a2e0ea8d22e90a9e84e70d6dad4a54",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Duff_Moisture_Code.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "47a2e0ea8d22e90a9e84e70d6dad4a54",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/FWI_Anomaly copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "fbb0b308183f0e46706cdbe1b47c2481",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/FWI_Anomaly.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "fbb0b308183f0e46706cdbe1b47c2481",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/FWI_Ranking copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "9462e6bdc3dea12950199f4a8d0ce617",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/FWI_Ranking.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "9462e6bdc3dea12950199f4a8d0ce617",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Fire_Danger_Index(MARK-5 FDI) copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "e83272e2bfefdd07bf1ec5453d244284",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Fire_Danger_Index(MARK-5 FDI).webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "e83272e2bfefdd07bf1ec5453d244284",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Fire_Weather_Index copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "08153740252942a199690110065660ee",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Fire_Weather_Index.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "08153740252942a199690110065660ee",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/IMERG_precip_rate_past12d.webp": {
+    "mtime": 1757666822.5126858,
+    "ast_hash": "37219034eec900b74e2fc71179730a4d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Initial_Spread_Index(ISI) copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "9dc8e4bec5f8ce5b384348eb2a676d75",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Initial_Spread_Index(ISI).webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "9dc8e4bec5f8ce5b384348eb2a676d75",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Instantaneous_precip_rate_3hourly_forecast.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "32299d89ce9510c37b3aa27825ca090f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Keetch_Byron_Drought_Index copy.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "ddd46120b7066c1879ad8d22e61015a1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Keetch_Byron_Drought_Index.webp": {
+    "mtime": 1735643973.3654213,
+    "ast_hash": "ddd46120b7066c1879ad8d22e61015a1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Liquid_Fog_Propability_3hourly_forecast.webp": {
+    "mtime": 1735643973.3810492,
+    "ast_hash": "8ee2fd9d384175a101ca73c7f7b6a417",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/O3.webp": {
+    "mtime": 1735643973.3810492,
+    "ast_hash": "e83c29915184937c77875a557db5b44e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/PMD_Earthquakes.webp": {
+    "mtime": 1735643973.3810492,
+    "ast_hash": "43f6107da4f5497d160e625524a8a690",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Precipitation_3hourly_forecast.webp": {
+    "mtime": 1735643973.3810492,
+    "ast_hash": "bf976a95232824dbba51b0362e5254b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Precipitation_character_hourly_forecast.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "cffdcace39828b7c95d56b00e2184694",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Rate_of_Spread(MARK-5 ROS) copy.webp": {
+    "mtime": 1735643973.3816223,
+    "ast_hash": "1335b3e13e618ea77711275e038ee2f6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Rate_of_Spread(MARK-5 ROS).webp": {
+    "mtime": 1735643973.3817904,
+    "ast_hash": "1335b3e13e618ea77711275e038ee2f6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Rate_of_Spread_MARK_5_ROS.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "bf2868adf250febd4f7d3aa48a44b8f9",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Relative_humidity_weekly_2m_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "e50083488a374e150532d4029b9d7bde",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/SO2.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "37ff9e224553b9792f690c1b1206eb5e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sea_Water_Potential_Height_2mgeoid_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "6ab33c3a0d729295cc25b750d251d404",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sea_Water_Potential_Temperature_10m_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "be01677034db2b15ca832deafc4b5026",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sea_Water_Potential_Wave_Height_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "941e9f38b22a5e125bc85b09d66c2877",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sea_Water_Potential_currents_10m_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "fa51870c958f22340e276dc8d80d0e43",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sea_Water_salinity_10m_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "99cad221484a344e2e307843356ebca3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Snow_density_weekly_kgm3_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "c6aa2765a1c400f856237a2c093fc6dc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Snow_depth_weekly_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "113f2fdae441e3195da6c2ccca5cacda",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Snowfall_hourly_forecast.webp": {
+    "mtime": 1740131642.4113488,
+    "ast_hash": "c6f0c891475adea7343e26a42396a3dd",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Sulphateaerosol.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "d2f04e13d3df8278a7ca1d9f58ac8e48",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Thunderstorm_Propability_3hourly_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "b28abab66ef29bee7d67bedeeb17c727",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Total_cloud_cover_3hourly_forecast.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "54b009989f0c781ffa6dc579bb470b8a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Tropical_Cyclone_strike_propability.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "bf4f8fd0487ff57f54d6bfec832cd68d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/Water_runoff_accumulation_3hourly_forecast.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "ef8df9b2ae6ce7565fed3a901023d5cf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/aerosole_optical_depth.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "aa492f3e6559d2a361b04c2c8cb36061",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/average_temperature_projection_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "69a6b753532efc9f464e8a0606f74ccd",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/biomass_burning.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "2423ba07928aad9d5d50ddbfecbacfb6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/bluprint-basemap.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "ff5167fa1d473e9f33d2a0c51d04e206",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_bbaod550_biomass.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "2423ba07928aad9d5d50ddbfecbacfb6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_co2_850hpa.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "d39b62d7976204665bdc43df2162d12e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_co2_surface.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "1af2e17d12adfe4544dc8b296219bede",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_duaod550.webp": {
+    "mtime": 1740131642.4123487,
+    "ast_hash": "91bb4863543ece361ab82219e0a750e2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_seasalt.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "85e32a81a8902aed93ce8b988544cfe6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_suaod550.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "d2f04e13d3df8278a7ca1d9f58ac8e48",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_composition_uvindex_daily_max.webp": {
+    "mtime": 1767778336.3558915,
+    "ast_hash": "c856cf34c527df39af7496993fac5054",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cams_geopotential_public.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "0d705e60ffa145e9c1181c3e134652eb",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/cerulean-oil-slicks.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "7d0e0ddec1491545b3e69031ed34ff85",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/co2.webp": {
+    "mtime": 1767260705.2218504,
+    "ast_hash": "143569f2b63057df93c7785f1e6fb064",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/dark.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "b8a4d0bdffa8e6342b143ac8db6ab3b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/dataviz.webp": {
+    "mtime": 1759812071.755464,
+    "ast_hash": "527183cb74b18daddf0e3cea0ececf43",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/default.webp": {
+    "mtime": 1740131642.4123487,
+    "ast_hash": "d6d8d12d8b94f4c487caba374cb452da",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/disasters_geojson.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "1f9ebba719552c237a21032bdc5a7d93",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/dwd_icon_t2m_with_pmsl.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "f512bbd8cfe913fe8c783bf479599c68",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/dwd_radar.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "eee5cc191d32ab08b95651aeea7febd2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonet_earthquakes.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "3d870bef4b92f9520f1163a89153eb71",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonet_seaLakeIce.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "8947923923e25c72efd43d2d8d00abd8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonet_severeStorms.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "dd9bc6f4ccb45f1b61bda19b766a5a57",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonet_volcano.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "51d0e4b41a34293a04247246a863514b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonet_wildfires.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "507e0205725ee538672d322399f46806",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eonetevents.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "186462dba550630095575535ec26b011",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/eoneteventsicon.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "979680a9550cea11415e2812aa90730e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fdew_points.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "1c9605c67d0109db77992e8080d25d51",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/ffeels_like.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "400bc4531e8c0b555e3e350e806b5a7e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fheat_index.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "041c716bebdd85047c3593261e2cc2ca",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fhumidity.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "8aad2c61752928d158cf351ac619bee6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/firms-wf.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "f5d8ac4f8c10ca9278e31095fc79e20c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fjet_stream.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "094c63d4d0725e9e8f9a47f900d3a213",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/flights_tracker_symbol.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "00b94230120d07db7a2943f54d002d6e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/formaldehyde.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "60a14232c3fae070761f9e3b5fdce858",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fpressure_msl.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "374516ff4f5e157a186e212d11a2e74c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fqpf_1h.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "3489ab88459e3da404003183fb77bace",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fqpf_accum.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "cd048863839d4041a6211be10a9fca64",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fqsf_1h.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "60a266509364cca4665cbb9d1dd7df4c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fsnow_depth.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "174029db90f16296b23f31d671a42d1a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/ftemperatures.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "317571fd5e13b058977ad8e1f668c314",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fwind_chill.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "c08f30fe7aaada89a4c261957763b00b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/fwind_speeds.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "e1f129cb3a5b0f307c334ce6b42878ba",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-DR.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "5007cf528ae375e17fb976abaa3095a8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-EQ.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "5dc5674f3801ed6c4b0a49f8a0400315",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-FL.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "74b7a479a2571dab1215a00f2c2f2656",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-TC.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "932e60ba3e64c30cffe0c731440a9ab3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-VO.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "986714f015cf36ccefa4f42a877cb3e4",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/gdacs-WF.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "88396e9fc2c318cc5fc703d742900f2e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/global_precipitation.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "cd58d862037a842e24e626ff58ab5742",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/globalprecipitation.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "cd58d862037a842e24e626ff58ab5742",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/glofas-accu-precip.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "b51c17c24761ab7ea796820cdf9be398",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/glofas-flood-sum-1-30d.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "e75bcf71adf9b1a23699bb7d5c03080d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/glofas-precip-prob-gt-150.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "77facb91fe0f3a1419ecaba32f73e040",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/glofas-precip-prob-gt-300.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "f63a3d81ed2057b7142ea14b1c921c6b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/glofas-precip-prob-gt-50.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "7a340b60e789a0ed0c462803e24f2962",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/hybrid.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "6166eb8580c24cb6436b9b0a8c71dafc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/icon_eps_10m_wind_with_pmsl.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "6fc45790da723c313e1cd7cccb8a4b55",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/icon_eps_totprec24h_layer.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "fd5e43ba57a77ec8829261645bf21028",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/icon_reg025_totprec_layer.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "9155ca9c430bc552c2b28208589a601c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/icon_t850_with_gh850.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "c9c7b5c4096170c1c2513b4860401ba1",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/lightning_forcasting.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "8aaf3d7b3ff7030ecb057a8412baf611",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_aod_hourly.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "40d75c7916a3da49c23deb51c06aa9ab",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_aqi_daily.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "49fc4551574ab65d0ccb35c83d574850",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_co_daily.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "48d6dd5f89c710949bdd8b904225cb40",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_desert_dust_daily.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "faacbbe67f70caa505a309b00ad4c42b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_no2_daily.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "21689c1a1ec4658fb87710aa3cf2b9aa",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_cams_so2_daily.webp": {
+    "mtime": 1767778336.3570845,
+    "ast_hash": "016cfe86a6ac91cd19c36dffea6c8e2a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_nems_precipitation_Anomaly_monthly_forecast.webp": {
+    "mtime": 1756098336.9957616,
+    "ast_hash": "945af8c402eba8fadf1c0f4e9ff0f1a0",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_nems_snow_depth_Anomaly_monthly_forecast.webp": {
+    "mtime": 1756098336.9957616,
+    "ast_hash": "af6c4c608f66ae8d25639f52e9efdf5d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_nems_sst_elnino_Anomaly_monthly_forecast.webp": {
+    "mtime": 1756098336.9957616,
+    "ast_hash": "5378e2522f07012e6f1cd6bd83079089",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_nems_temperature.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "a8a7447e38aaf5d6a0164127d9592c71",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/meteoblue_nems_temperature_Anomaly_monthly_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "f7cea9c8c93dbd9e54d7485afe691dbd",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/methane.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "fe557f8a3be9fc2af77fda67c40f740e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/moonlight-basemap.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "2310e3017d02cd96d94618b861445c4f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nasa-lhasa-nowcast.webp": {
+    "mtime": 1757666822.5136817,
+    "ast_hash": "faba86e42ade9d40b5ff444306254cad",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/navigation-night.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "82f9949503465d8d1ea6214c1c0979af",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/ncop_global_hazard_calender.webp": {
+    "mtime": 1740131642.4123487,
+    "ast_hash": "3bc92134df903f42239ecee3a6242516",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/ndma_logo.webp": {
+    "mtime": 1749114721.5919428,
+    "ast_hash": "72e39b8aa6bbb5e1d12bc4c3b779aa1d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_cape_hourly.webp": {
+    "mtime": 1755515014.7542977,
+    "ast_hash": "aa28d42ff6e61497de89b5b4c7b5995d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_cloudprecipitation.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "6a20e7d4a87eefcdc1ad97984dd26704",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_forecast_met_warnings.webp": {
+    "mtime": 1755515014.7542977,
+    "ast_hash": "82d08de2e6e99f5270c2ea5dac652550",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_forecast_offical_warnings.webp": {
+    "mtime": 1755515014.7542977,
+    "ast_hash": "614e0495b6d6399a3dc85c52caa44783",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_snowfall_hourly.webp": {
+    "mtime": 1755515014.7542977,
+    "ast_hash": "10f69f01a9a348d413c3365b90eb2042",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_snowfall_weekly.webp": {
+    "mtime": 1755515014.7542977,
+    "ast_hash": "10f69f01a9a348d413c3365b90eb2042",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_storms_helicity_forecast.webp": {
+    "mtime": 1756098336.9970183,
+    "ast_hash": "9bb60befa9d833a0379a0043543da849",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/nems_weather_anomaly_forecast.webp": {
+    "mtime": 1756098336.9970183,
+    "ast_hash": "1157e82830a4aad797968b2d3abf1249",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/neon-glow.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "bc45b89dbdc058fbb58f221c657ca8d0",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/no2.webp": {
+    "mtime": 1767260705.2386158,
+    "ast_hash": "c938671984d71b5f391f486d6e194896",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/osm.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "0d58ade351cc184ef48da77d75eb64a7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_10hot_wetbulp_temp_proj_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "69a6b753532efc9f464e8a0606f74ccd",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_avg_wintertemp_proj_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "69a6b753532efc9f464e8a0606f74ccd",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_change_preci_proj_icon.png.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "fda3255f9879dc782c84b2d13a86a6e3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_change_waterbalance_proj_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "ce0e0d62c0b1aeeab869e6603b443e9b",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_change_wildfire_dangerdays_proj_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "3bb9d5e2916251b139c3be584905f0fa",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pf_likelihood_drought_proj_icon.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "9485480bfef8e3374f458925fee223fb",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/plastic-waste-hotspots_circle.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "69cb50cac3f8a514625670f9f42f8649",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pm_10.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "32cc15fe0dd50ad365fce79e507b6a04",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/pm_2.5.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "e0b7daff1f40267762a2b27bf67ad48e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/precipitation_intensity_index_hourly_forecast.webp": {
+    "mtime": 1757333270.2363865,
+    "ast_hash": "f71edb5f83f4de6de5da362a33fb6d38",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/precipitation_projections.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "c918877331d486b68a58290c4b21017e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/rain-particles.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "95cd47fccd2ece4fbdaff37396ea8ba5",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/rainViewer_radar_precip.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "0246c5d02872530ca19d6e91b09a83ec",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/rainViewer_satellite.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "7dfb35e0b2b1d548ec7e0e2612d8ada9",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/road-map.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "f77e80bae52b4c598bcf4f415ae4e498",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/sea_salt.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "85e32a81a8902aed93ce8b988544cfe6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/specific_humidity_weekly_2m_forecast.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "0bdbfdd43e550f8be88b4543c21c43a3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/st-oil-basemap.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "17311dd63423965a4d3397decee569b3",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/stamen_satellite.webp": {
+    "mtime": 1759828219.8705008,
+    "ast_hash": "bb08af9c87ea376b7d47b591696d904d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/temperature_cams.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "1fa29e0c03ce61645cf160c2742dd266",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/temperature_projections.webp": {
+    "mtime": 1749536114.8598843,
+    "ast_hash": "b8dca9ecb1afd3c87f4c4017b58b8eaf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/terrain.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "fcc3336ec0e9bcb2e33f9c0ec5d1ad94",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/topographic.webp": {
+    "mtime": 1759812071.755464,
+    "ast_hash": "cfb2a58b7a3da43e521f9eb24bc06077",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/ultraviolet_index.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "c856cf34c527df39af7496993fac5054",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/usgs_realtime_earthquake_events.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "6a2062e85accb054cf2178a1eefff748",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/wind-particles.webp": {
+    "mtime": 1735643973.3819642,
+    "ast_hash": "d749ab02d276130c0c81a9606009ec0f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/layer_thumbnails/windspeed_cams.webp": {
+    "mtime": 1756098336.9970183,
+    "ast_hash": "c5f093f4b8ac9034a3833e62aef4286c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/airplane.webp": {
+    "mtime": 1760526073.9593349,
+    "ast_hash": "eaa2d55378f0e09656946e8005ea630d",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/hospital.webp": {
+    "mtime": 1760525116.4223588,
+    "ast_hash": "96e9d9169c3f6319f28d255d619000fa",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/school.webp": {
+    "mtime": 1760525384.896118,
+    "ast_hash": "e2c286ab1e944ec4410252b8dc8168df",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/settlement.webp": {
+    "mtime": 1760525830.4012263,
+    "ast_hash": "3c5c7d3549184e55a88ed0600bb05026",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/settlements.webp": {
+    "mtime": 1763117035.719289,
+    "ast_hash": "085d8058435b7c17b5c168211d6b5328",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/map_icons/weather-station.webp": {
+    "mtime": 1761210969.2115161,
+    "ast_hash": "c64d2a50b492871767b3d5f1bce43b12",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/misc_icons/newspaper.webp": {
+    "mtime": 1761631838.91045,
+    "ast_hash": "3e7e818feccbc0362dfb47bea9e103fc",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/misc_icons/newspaper1.webp": {
+    "mtime": 1761632246.0668721,
+    "ast_hash": "f3ac2c919fc1cc4304b1cc1f12437529",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/misc_icons/social-media.webp": {
+    "mtime": 1761631703.514587,
+    "ast_hash": "1c38063a73d8ae003c285dfac57c2305",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/misc_icons/social-media1.webp": {
+    "mtime": 1761632265.2735806,
+    "ast_hash": "216b51ad82501eed47bbd7c6b16b204c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/cloudy.gif": {
+    "mtime": 1785916851.4680846,
+    "ast_hash": "12135eef9203464954238496bd579a7f",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/cold.gif": {
+    "mtime": 1785916851.4680846,
+    "ast_hash": "935ac2ffd87ecbf5d79d56e7ed38b86c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/drizzle.gif": {
+    "mtime": 1785916851.4801092,
+    "ast_hash": "49e1041b29cc0f2a1cd410347fbe72a2",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/dust.gif": {
+    "mtime": 1785916851.4801092,
+    "ast_hash": "28ba3a9ba7da7eaf4f5d89c751b0f48c",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/fog.png": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "602ed5cf900d1a338c105fd7a99c1936",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/hot.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "863cb7ede20539af87f95f93dca77baf",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/overcast.png": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "aa99b131f1230f5b1edf718a81b331a7",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/partly_cloudy.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "51597485a9cbd063dc517e531e08cded",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/rain.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "b77e54779a5ccf0a69c27707f54da52e",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/snow.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "0a6e2fe9c3f3ae013f05f9a7ffa8278a",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/sunny.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "a4e33548beba0540eab59b976a4a0227",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/thunderstorm.gif": {
+    "mtime": 1785916851.4808931,
+    "ast_hash": "089131b2c5496f46834a8fc5b006e6b8",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/images/nwfc_icons/windy.gif": {
+    "mtime": 1785916851.4873364,
+    "ast_hash": "ba7e2f1a930adaaa0a0bc099b8e8c84e",
+    "semantic_hash": ""
+  },
+  "frontend/src/javascript.svg": {
+    "mtime": 1760612236.9315488,
+    "ast_hash": "87d1d2083848d70316c69d521947e98e",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/Clicking_a_feature.png": {
+    "mtime": 1785916851.554215,
+    "ast_hash": "402fc677eb62905e051b77c73379abb1",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/Split_Compare.png": {
+    "mtime": 1785916851.554215,
+    "ast_hash": "d2c5e6872a537de666f5371ab22366cf",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/four_regions.png": {
+    "mtime": 1785916851.5634437,
+    "ast_hash": "b60a14d3ed85e957110952c0cd6ea392",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/layers_on_off.png": {
+    "mtime": 1785916851.5793047,
+    "ast_hash": "2d60fb5beaf808c997f5103f11f1e6a5",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/right-hand_tools_rail.png": {
+    "mtime": 1785916851.5793047,
+    "ast_hash": "0c5129e8902aa986be885bdceacf93e2",
+    "semantic_hash": ""
+  },
+  "project/static/src/docs_images/temporal.png": {
+    "mtime": 1785916851.587213,
+    "ast_hash": "f3ce099220807d631ec513cf6fd78e03",
+    "semantic_hash": ""
+  }
+}

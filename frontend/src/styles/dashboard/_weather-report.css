@@ -1236,6 +1236,12 @@
 }
 .weather-report-panel .wrp-pmd-active-layers:empty { display: none; }
 
+/* PMD Forecast (pmd_pred_*) active-layer section — same "empty while
+   loading/absent" treatment as the Active Layers block just above, so
+   there's no visible gap before its async district-sampling pass fills
+   the placeholder in. */
+.weather-report-panel .wrp-pmd-forecast-section:empty { display: none; }
+
 .weather-report-panel .wrp-pmd-active-empty {
     display: flex;
     align-items: flex-start;
@@ -1372,6 +1378,22 @@
 }
 .weather-report-panel .wrp-pmd-layer-table tbody tr:nth-child(even) td {
     background: rgba(255,255,255,0.015);
+}
+/* PMD Forecast section rows only (see #renderPmdForecastSection) — these
+   two classes never appear on any OTHER .wrp-pmd-layer-table row today
+   (#buildLayerTable's <tr> is always class-less), so this can't touch the
+   Active-Layers tables' existing look. `tbody` is included so specificity
+   ties (and wins) against the nth-child zebra-stripe rule directly above,
+   which would otherwise override alert rows on even positions. */
+.weather-report-panel .wrp-pmd-layer-table tbody tr.wrp-pmd-forecast-row {
+    cursor: pointer;
+}
+.weather-report-panel .wrp-pmd-layer-table tbody tr.wrp-pmd-forecast-row:hover td {
+    background: rgba(79,159,255,0.10);
+}
+.weather-report-panel .wrp-pmd-layer-table tbody tr.is-alert td {
+    background: rgba(220,38,38,0.14);
+    color: #fca5a5;
 }
 .weather-report-panel .wrp-pmd-cell-empty {
     color: var(--text-muted, #9aa4b9);

@@ -16,6 +16,13 @@ from .views import (
     UsgsEarthquakeAlertsGeojsonApi,
     UsgsEarthquakeDetailApi,
     UsgsShakemapContentProxyApi,
+    NcopRasterExportView,
+    NcopShapefileUploadView,
+    NcopKmzUploadView,
+    NcopSpreadsheetUploadView,
+    NcopRasterUploadView,
+    NcopWmsCapabilitiesProxyView,
+    NcopWmsTileProxyView,
     GeoGlowsRiverIdApi,
     GeoGlowsForecastApi,
     GeoGlowsForecastStatsApi,
@@ -41,7 +48,10 @@ from .views import (
     CropMapAPIView,
     CropGeoJSONAPIView,
     PmdMonitorPredictionsAPIView,
+    PmdMonitorPredictionValueAPIView,
+    FfdHistoryAPIView,
     PmdDailyForecastProAPIView,
+    NwfcRainfallReportAPIView,
 
 
 )
@@ -68,6 +78,13 @@ urlpatterns = [
     path("get-usgs-earthquake-alerts/", UsgsEarthquakeAlertsGeojsonApi.as_view(), name="usgs-earthquake-alerts"),
     path("get-usgs-earthquake-detail/<str:event_id>/", UsgsEarthquakeDetailApi.as_view(), name="usgs-earthquake-detail"),
     path("get-usgs-shakemap-content/", UsgsShakemapContentProxyApi.as_view(), name="usgs-shakemap-content"),
+    path("gis-export/raster/", NcopRasterExportView.as_view(), name="gis-export-raster"),
+    path("upload-shapefile/", NcopShapefileUploadView.as_view(), name="upload-shapefile"),
+    path("upload-kmz/", NcopKmzUploadView.as_view(), name="upload-kmz"),
+    path("upload-spreadsheet/", NcopSpreadsheetUploadView.as_view(), name="upload-spreadsheet"),
+    path("upload-raster/", NcopRasterUploadView.as_view(), name="upload-raster"),
+    path("wms-capabilities/", NcopWmsCapabilitiesProxyView.as_view(), name="wms-capabilities"),
+    path("wms-tile/", NcopWmsTileProxyView.as_view(), name="wms-tile"),
     path("get-geoglows-riverid/", GeoGlowsRiverIdApi.as_view(), name="geoglows-riverid"),
     path("get-geoglows-forecast/<int:river_id>/", GeoGlowsForecastApi.as_view(), name="geoglows-forecast"),
     path("get-geoglows-forecaststats/<int:river_id>/", GeoGlowsForecastStatsApi.as_view(), name="geoglows-forecaststats"),
@@ -107,6 +124,23 @@ urlpatterns = [
         name="pmd-monitor-predictions",
     ),
 
+    # Point-sample companion to the above — returns the actual numeric
+    # value (not a picture) at one lat/lon, read from the same warped
+    # GeoTIFF the PNG above was rendered from. See PmdMonitorPredictionValueAPIView.
+    path(
+        "api/pmd/monitor/predictions/<str:element_key>/value/",
+        PmdMonitorPredictionValueAPIView.as_view(),
+        name="pmd-monitor-predictions-value",
+    ),
+
+    # FFD barrage/dam discharge history — internal API primary, cached
+    # public-feed buffer fallback. See FfdHistoryAPIView.
+    path(
+        "get-ffd-history/",
+        FfdHistoryAPIView.as_view(),
+        name="ffd-history",
+    ),
+
     # PMD Provincial Daily Forecast — proxy for the public
     # pmd.gov.pk/phpapi/daily-forecastpro.php feed.  Consumed by the
     # Story panel's Provincial Forecast card (see
@@ -116,5 +150,16 @@ urlpatterns = [
         "api/pmd/monitor/daily-forecast-pro/",
         PmdDailyForecastProAPIView.as_view(),
         name="pmd-daily-forecast-pro",
+    ),
+
+    # NWFC Daily Rainfall Report, discovered + downloaded + parsed
+    # server-side (PDF -> structured JSON). Feeds Chapter 1 of the
+    # cinematic Dynamic Weather Report story
+    # (frontend/src/modules/story-precipitation-briefing.js).  4 h
+    # cache + 24 h stale fallback baked into the view.
+    path(
+        "api/pmd/nwfc/rainfall-report/",
+        NwfcRainfallReportAPIView.as_view(),
+        name="nwfc-rainfall-report",
     ),
 ]

@@ -1,0 +1,823 @@
+/* =========================================================================
+ * _gis-export.css
+ * -------------------------------------------------------------------------
+ * Styles for the "Export Active GIS Layers" control (see
+ * frontend/src/modules/gis-export-control.js). Every selector is
+ * namespaced under `.gis-export-*`/`.custom-gis-export-*` so nothing here
+ * bleeds into existing rail/panel chrome.
+ * ========================================================================= */
+
+.custom-gis-export-control { display: contents; }
+
+/* ============================================================
+ * Rail button — mirrors the split-compare/weather-report
+ * button baseline (see _split-compare.css:23-60) so resting
+ * fills, hover transitions, and the active-panel highlight all
+ * read identically to the neighbouring rail controls.
+ * ============================================================ */
+.map-right-rail > .custom-gis-export-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: var(--white) !important;
+    cursor: pointer;
+}
+
+.map-right-rail > .custom-gis-export-btn:hover:not(.active-gis-export) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-gis-export-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="night"] .map-right-rail > .custom-gis-export-btn:hover:not(.active-gis-export) {
+    background: var(--glass-highlight) !important;
+}
+
+.map-right-rail > .custom-gis-export-btn.active-gis-export {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ============================================================
+ * Panel — same base look as .layer-info-panel/.basemap-panel
+ * (_map-panels.css), wider to fit the export row layout. Once
+ * dashboard.js#buildUnifiedRightRail lifts it out to be a
+ * sibling of #map, `.right-rail-panel` (_map-panels.css) takes
+ * over position/slide-in animation; the rules below stay for
+ * the panel's own look (background/border/sizing/content).
+ * ============================================================ */
+.gis-export-panel {
+    position: absolute;
+    top: 0;
+    right: 42px;
+    width: 340px;
+    max-height: 480px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.gis-export-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
+}
+
+.gis-export-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.gis-export-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.gis-export-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.gis-export-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.gis-export-close:hover {
+    color: var(--text-primary);
+    background: var(--tertiary-bg);
+}
+
+/* ============================================================
+ * Export / Import tabs — same header row idiom css-loaders'd
+ * status indicator lives in, kept as its own persistent block
+ * (outside #gisExportContent) so it never gets wiped by the
+ * content re-render each tab switch triggers.
+ * ============================================================ */
+.gis-export-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    flex-shrink: 0;
+}
+
+.gis-export-tab {
+    flex: 1;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 6px 0;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.gis-export-tab:hover {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+.gis-export-tab.active {
+    background: var(--ndma-blue-opaque);
+    border-color: var(--ndma-blue);
+    color: #fff;
+}
+
+.gis-export-content {
+    padding: 10px 12px 12px;
+    overflow-y: auto;
+}
+
+.gis-export-empty {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    padding: 8px 2px;
+}
+
+.gis-export-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.gis-export-select,
+.gis-export-run {
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.gis-export-select:hover,
+.gis-export-run:hover {
+    background: var(--tertiary-bg);
+}
+
+.gis-export-run {
+    margin-left: auto;
+    background: var(--ndma-blue-opaque);
+    border-color: var(--ndma-blue);
+    color: #fff;
+}
+.gis-export-run:hover {
+    background: var(--ndma-blue);
+}
+
+.gis-export-status {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-height: 18px;
+    font-size: 11px;
+    color: var(--text-accent-blue, var(--text-secondary));
+    margin-bottom: 8px;
+}
+
+/* ============================================================
+ * Sequential-export loader — shown only while a step is actively
+ * being prepared (#exportSelected / #exportRasterAllSteps set
+ * busy=true on #setStatus during "Preparing X of Y…" messages).
+ * Adapted from the "three pulsing bars" loader at
+ * https://css-loaders.com/dots-bars/ (#l1), recolored to NCOP's
+ * blue accent. The source loader is drawn at a fixed 40x40 box
+ * via background-position/size math, so rather than recompute
+ * every magic-number offset for a smaller size, `.gis-export-
+ * loader` clips a scaled-down copy of that same 40x40 box down to
+ * a compact 16x16 footprint that sits inline with the status text.
+ * ============================================================ */
+.gis-export-loader {
+    display: inline-block;
+    width: 0;
+    height: 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.18s ease, width 0.18s ease, margin 0.18s ease;
+}
+.gis-export-status.is-busy .gis-export-loader {
+    width: 16px;
+    margin-right: 7px;
+    opacity: 1;
+}
+
+.gis-export-loader-bars {
+    display: block;
+    width: 40px;
+    height: 40px;
+    aspect-ratio: 1;
+    transform: scale(0.4);
+    transform-origin: top left;
+    --c: linear-gradient(var(--ndma-blue) 0 0);
+    --r1: radial-gradient(farthest-side at bottom, var(--ndma-blue) 93%, #0000);
+    --r2: radial-gradient(farthest-side at top, var(--ndma-blue) 93%, #0000);
+    background:
+        var(--c), var(--r1), var(--r2),
+        var(--c), var(--r1), var(--r2),
+        var(--c), var(--r1), var(--r2);
+    background-repeat: no-repeat;
+    animation: gis-export-loader-bars 1s infinite alternate;
+}
+@keyframes gis-export-loader-bars {
+    0%, 10% {
+        background-size: 8px 0, 8px 4px, 8px 4px;
+        background-position:
+            0 50%, 0 calc(50% - 2px), 0 calc(50% + 2px),
+            50% 50%, 50% calc(50% - 2px), 50% calc(50% + 2px),
+            100% 50%, 100% calc(50% - 2px), 100% calc(50% + 2px);
+    }
+    90%, 100% {
+        background-size: 8px 100%, 8px 4px, 8px 4px;
+        background-position:
+            0 50%, 0 -2px, 0 calc(100% + 2px),
+            50% 50%, 50% -2px, 50% calc(100% + 2px),
+            100% 50%, 100% -2px, 100% calc(100% + 2px);
+    }
+}
+
+.gis-export-status-text {
+    min-width: 0;
+}
+
+.gis-export-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.gis-export-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    background: var(--secondary-bg);
+    cursor: pointer;
+}
+.gis-export-row:hover {
+    background: var(--tertiary-bg);
+}
+
+.gis-export-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--ndma-blue);
+    flex-shrink: 0;
+}
+
+.gis-export-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.gis-export-row-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gis-export-row-meta {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+
+.gis-export-note {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    border-top: 1px solid var(--border-dark);
+    padding-top: 8px;
+}
+
+/* ============================================================
+ * Import tab — drop zone, upload status (reuses .gis-export-
+ * status/.gis-export-loader from the Export tab for a visually
+ * consistent busy indicator), imported-layer rows.
+ * ============================================================ */
+.gis-import-dropzone {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    padding: 22px 14px;
+    margin-bottom: 10px;
+    border: 2px dashed var(--border-dark);
+    border-radius: 8px;
+    background: var(--secondary-bg);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.gis-import-dropzone:hover,
+.gis-import-dropzone:focus-visible {
+    border-color: var(--ndma-blue-light);
+    background: var(--tertiary-bg);
+}
+.gis-import-dropzone.is-dragover {
+    border-color: var(--ndma-blue);
+    background: var(--ndma-blue-glow);
+}
+
+.gis-import-dropzone-icon {
+    color: var(--ndma-blue);
+    opacity: 0.85;
+}
+.gis-import-dropzone-icon :is(svg) {
+    width: 26px;
+    height: 26px;
+}
+
+.gis-import-dropzone-label {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.gis-import-browse {
+    color: var(--ndma-blue);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.gis-import-dropzone-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.gis-import-file-input {
+    /* Visually hidden, not display:none — .gis-import-browse / a click
+       anywhere on the dropzone trigger it programmatically (see
+       gis-export-control.js), this just keeps it out of the flow while
+       remaining focusable/screen-reader reachable. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.gis-import-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.gis-import-empty {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    padding: 4px 2px;
+}
+
+.gis-import-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    background: var(--secondary-bg);
+}
+.gis-import-row:hover {
+    background: var(--tertiary-bg);
+}
+
+.gis-import-row-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gis-import-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.gis-import-row-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gis-import-row-meta {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+
+.gis-import-remove {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.gis-import-remove:hover {
+    color: #fff;
+    background: #b91c1c;
+}
+
+/* ============================================================
+ * WMS connector — URL row, capabilities browser, per-layer info
+ * popover, and the time play/scrub control attached to a WMS
+ * card in the imported-layers list.
+ * ============================================================ */
+.gis-wms-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.gis-wms-url-input,
+.gis-wms-layer-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 11.5px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+.gis-wms-url-input:focus,
+.gis-wms-layer-input:focus {
+    outline: none;
+    border-color: var(--ndma-blue);
+}
+.gis-wms-url-input::placeholder,
+.gis-wms-layer-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.gis-wms-layer-row {
+    display: flex;
+}
+
+.gis-wms-btn-row {
+    display: flex;
+    gap: 6px;
+}
+
+.gis-wms-btn {
+    flex: 1;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 6px 0;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.gis-wms-btn:hover {
+    background: var(--tertiary-bg);
+}
+.gis-wms-btn-primary {
+    background: var(--ndma-blue-opaque);
+    border-color: var(--ndma-blue);
+    color: #fff;
+}
+.gis-wms-btn-primary:hover {
+    background: var(--ndma-blue);
+}
+
+/* Fixed footprint (width AND height) regardless of how many layers/
+   connections are listed — the header stays its natural height, the
+   body flexes to fill whatever's left and scrolls internally, so the
+   panel never grows/shrinks or jumps around as content loads. */
+.gis-wms-caps {
+    width: 100%;
+    max-width: 100%;
+    height: 280px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    background: var(--secondary-bg);
+    overflow: hidden;
+}
+
+.gis-wms-caps-loading,
+.gis-wms-caps-error {
+    padding: 10px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+.gis-wms-caps-error {
+    color: #f87171;
+}
+
+.gis-wms-caps-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
+}
+
+.gis-wms-caps-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.gis-wms-mini-btn {
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border-dark);
+    background: var(--tertiary-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.gis-wms-mini-btn:hover {
+    background: var(--primary-bg);
+}
+.gis-wms-mini-btn-primary {
+    background: var(--ndma-blue-opaque);
+    border-color: var(--ndma-blue);
+    color: #fff;
+}
+.gis-wms-mini-btn-primary:hover {
+    background: var(--ndma-blue);
+}
+
+.gis-wms-caps-body {
+    flex: 1;
+    min-height: 0; /* let flex-basis shrink below content size so overflow-y actually scrolls instead of pushing the box taller */
+    overflow-y: auto;
+    /* The site-wide rule in _base.css (`* { scrollbar-width: none }` /
+       `*::-webkit-scrollbar-thumb { background: transparent }`) hides
+       scrollbar thumbs everywhere by default — this box specifically
+       needs a visible one since it can hold 100+ layers/connections with
+       no other scroll affordance. Scoped override, doesn't touch the
+       global rule or any other panel. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--ndma-blue) transparent;
+}
+.gis-wms-caps-body::-webkit-scrollbar {
+    width: 6px;
+}
+.gis-wms-caps-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+.gis-wms-caps-body::-webkit-scrollbar-thumb {
+    background: var(--ndma-blue);
+    border-radius: 10px;
+}
+
+.gis-wms-layer-row-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-dark);
+}
+.gis-wms-layer-row-item:hover {
+    background: var(--tertiary-bg);
+}
+
+.gis-wms-layer-row-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.gis-wms-layer-check {
+    accent-color: var(--ndma-blue);
+    flex-shrink: 0;
+}
+
+.gis-wms-layer-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.gis-wms-layer-title {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gis-wms-layer-name {
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* QGIS wms_connections.xml picker — single-select rows, reuses the
+   caps-body's fixed-height scroll container above. */
+.gis-wms-conn-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: none;
+    border-bottom: 1px solid var(--border-dark);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.gis-wms-conn-row:hover {
+    background: var(--tertiary-bg);
+}
+
+.gis-wms-conn-name {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.gis-wms-conn-url {
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.gis-wms-time-badge {
+    flex-shrink: 0;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--ndma-blue-glow);
+    color: var(--ndma-blue);
+    white-space: nowrap;
+}
+
+.gis-wms-info-btn {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border-dark);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-style: italic;
+    font-family: Georgia, serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.gis-wms-info-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--ndma-blue);
+}
+
+.gis-wms-layer-info-panel {
+    padding: 8px 10px 10px 30px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--primary-bg);
+}
+
+.gis-wms-info-body p {
+    margin: 0 0 6px;
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+.gis-wms-info-body p:last-child {
+    margin-bottom: 0;
+}
+.gis-wms-info-body strong {
+    color: var(--text-primary);
+}
+.gis-wms-info-body code {
+    background: var(--secondary-bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+/* Time play/scrub control attached under a WMS card in the imported list */
+.gis-wms-time-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-dark);
+}
+.gis-wms-time-ctrl.loading {
+    opacity: 0.7;
+}
+
+.gis-wms-time-play-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--ndma-blue-opaque);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.gis-wms-time-play-btn:hover {
+    background: var(--ndma-blue);
+}
+.gis-wms-time-play-btn.playing {
+    background: var(--ndma-blue);
+}
+
+.gis-wms-time-ctrl input[type="range"] {
+    flex: 1;
+    accent-color: var(--ndma-blue);
+    min-width: 0;
+}
+
+.gis-wms-time-label {
+    flex-shrink: 0;
+    font-size: 9.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .gis-export-panel {
+        width: 260px;
+        max-height: 360px;
+        right: 42px;
+    }
+}
