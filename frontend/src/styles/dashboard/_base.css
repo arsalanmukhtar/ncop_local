@@ -1,0 +1,170 @@
+/* ===========================
+   THEME TOGGLE WRAPPER (DAY MODE)
+=========================== */
+.theme-toggle-wrapper {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1000;
+
+    .theme-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        /* background: var(--secondary-bg); */
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        /* backdrop-filter: blur(10px); */
+        /* border: 1px solid var(--border-dark); */
+        padding: 4px;
+        color: var(--white);
+        position: relative;
+        top: 74px;
+        left: 5px;
+
+        &:hover {
+            /* background: var(--primary-bg); */
+            transform: scale(1.1);
+            /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); */
+
+            .theme-icon {
+                transform: rotate(45deg);
+            }
+        }
+
+        &:active {
+            transform: scale(0.95);
+        }
+
+        &:not([data-theme="night"]) {
+            color: #fbbf24;
+
+            /* &:hover {
+                background: rgba(251, 191, 36, 0.1);
+                border-color: rgba(251, 191, 36, 0.3);
+            } */
+        }
+
+        .theme-icon {
+            width: 16px;
+            height: 16px;
+            transition: all 0.3s ease;
+        }
+    }
+}
+
+html {
+    transition: background-color 0.3s ease;
+}
+
+/* Universal Scrollbar Styling */
+* {
+    scrollbar-width: none;
+    /* Firefox — hide thumb entirely */
+}
+
+/* Chrome, Safari, Edge */
+*::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--glass-light);
+    border-radius: 10px;
+}
+
+/* Hide scrollbar thumb completely */
+*::-webkit-scrollbar-thumb {
+    background: transparent;
+    border: none;
+}
+
+/* Hide scrollbar corner and buttons */
+*::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-button {
+    display: none;
+}
+
+/* Global Font Application */
+* {
+    font-family: 'Inter', sans-serif !important;
+}
+
+html,
+body {
+    font-family: 'Inter', sans-serif !important;
+}
+
+.ncop-container {
+    background-color: var(--primary-bg);
+    width: 320px;
+    box-sizing: border-box;
+    backdrop-filter: blur(15px);
+    border-color: var(--border-light);
+    position: fixed;
+}
+
+/* Documentation launcher in the top-right corner of the NCOP header card.
+   Absolutely positioned within the card so it never reflows the title/logo
+   row.  Anchor element so middle-click / right-click "open in new tab"
+   behave naturally for users who prefer to keep the dashboard alongside.
+   z-index lifts the button above the sibling .flex row whose `flex-1`
+   title wrapper otherwise overlaps the button's lower half and intercepts
+   pointer hover (visible as: cursor only flips to pointer near the
+   bottom edge of the button instead of across the whole tile). */
+.ncop-container .ncop-docs-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--text-secondary, #cbd2e0);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    cursor: pointer !important;
+    pointer-events: auto;
+}
+.ncop-container .ncop-docs-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.22);
+}
+.ncop-container .ncop-docs-btn:active {
+    background: rgba(255, 255, 255, 0.20);
+}
+/* Force every descendant to forward pointer events to the anchor and to
+   inherit `cursor: pointer`.  Without these !important rules the inner
+   <svg> + its <line>/<path>/<rect> children swallow hover events over
+   the icon's visual centre — visible as: cursor flips to pointer only
+   on the button's outer ring (border / padding) where the SVG isn't
+   drawn, but reverts to default over the icon glyph itself.  Using a
+   universal child selector ensures Lucide's dynamically-injected SVG
+   nodes (and any future icon swap) are covered. */
+.ncop-container .ncop-docs-btn,
+.ncop-container .ncop-docs-btn * {
+    cursor: pointer !important;
+}
+.ncop-container .ncop-docs-btn > *,
+.ncop-container .ncop-docs-btn svg,
+.ncop-container .ncop-docs-btn svg * {
+    pointer-events: none !important;
+}
+.ncop-container .ncop-docs-btn i,
+.ncop-container .ncop-docs-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+

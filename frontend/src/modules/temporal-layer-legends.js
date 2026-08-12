@@ -1,28 +1,20 @@
-// Utility to generate standardized linear gradient legend bars with labels aligned to color stops
+// Utility to generate standardized linear gradient legend bars.
+// Reference layout: gradient bar on top, value labels positioned below at matching percentages.
 function gradientLegendBar(colors, values) {
   // colors: array of color stops (hex/rgb)
   // values: array of tick labels (numbers/strings)
   const gradient = `linear-gradient(to right, ${colors.join(", ")})`;
   const n = values.length;
-  let html = `<div style="position: relative; width: 100%; height: 30px; margin-bottom: 2px;">`;
-  html += `<div style="background: ${gradient}; width: 100%; height: 100%; border-radius: 4px; position: relative;">`;
-  // Place each label absolutely at the correct percentage, centered vertically and horizontally
+  let html = `<div class="ts-legend-stack">`;
+  html += `<div class="ts-legend-bar" style="background: ${gradient};"></div>`;
+  html += `<div class="ts-legend-values">`;
   values.forEach((val, i) => {
     const leftPercent = (n === 1) ? 0 : (i / (n - 1)) * 100;
-    let style =
-      "position: absolute; " +
-      "top: 50%; transform: translateY(-50%); " +
-      "font-size: 13px; font-weight: 400; color: #fff; white-space: nowrap; " +
-      "text-shadow: 0 0 4px #000, 0 0 2px #000; " +
-      "padding: 0 6px; "; // horizontal padding
-    if (i === 0) {
-      style += "left: 0; min-width: 32px; text-align: left; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
-    } else if (i === n - 1) {
-      style += "right: 0; min-width: 32px; text-align: right; max-width: 80px; overflow: hidden; text-overflow: ellipsis;";
-    } else {
-      style += `left: calc(${leftPercent}% - 24px); min-width: 48px; text-align: center; max-width: 80px; overflow: hidden; text-overflow: ellipsis;`;
-    }
-    html += `<span style="${style}">${val}</span>`;
+    let translate;
+    if (i === 0) translate = "translateX(0%)";
+    else if (i === n - 1) translate = "translateX(-100%)";
+    else translate = "translateX(-50%)";
+    html += `<span style="left: ${leftPercent}%; transform: ${translate};">${val}</span>`;
   });
   html += `</div></div>`;
   return html;
@@ -77,11 +69,15 @@ export const legends = {
       "40",
     ]
   ),
-  rainviewerSatInfra: gradientLegendBar(
+  // RainViewer satellite IR — cloud-top brightness ramp (low contrast → high).
+  // Key matches the layer key so #temp-slider1's `legends[layerKey]` lookup
+  // resolves directly without aliases.
+  satellite_infrared: gradientLegendBar(
     ["#565B54", "#7B7C7B", "#A3A3A3", "#C8C8C8", "#EAEAEA", "#F5F5F5"],
     ["Low", "Med-Low", "Medium", "Med-High", "High", "Very High"]
   ),
-  rainviewerRadar: gradientLegendBar(
+  // RainViewer radar precipitation rate (mm/h).
+  realtime_radar: gradientLegendBar(
     [
       "#63eb63",
       "#3dc63d",
@@ -1273,5 +1269,86 @@ export const legends = {
       "#B874B2", // Pink
     ],
     ["-0.1", "1", "2", "3", "4", "5", "7", "10", "15", "20", "25", "30", "40", "60", "100", "150", "200", "250", "300", "350", "400", "500"]
+  ),
+
+  // PMD Forecast — WRF precipitation accumulation forecasts (mm).  Colors
+  // and thresholds mirror the vendor's own legendList JS chunk one-for-one
+  // (see _MON_PRED_COLOR_STOPS in ncop_internal/views.py) so the map + the
+  // legend read the same as PMD Monitor's own dashboard.  Each accumulation
+  // window has its OWN scale — a 3h scale ceiling of 100 mm wouldn't read
+  // meaningfully on a 24h layer, so the ramps diverge deliberately.
+  pmd_pred_hourtpe: gradientLegendBar(
+    [
+      "rgb(185, 244, 171)", "rgb(111, 218, 111)", "rgb(56, 188, 57)",
+      "rgb(37, 144, 38)",   "rgb(98, 184, 255)",  "rgb(0, 0, 252)",
+      "rgb(250, 0, 250)",
+    ],
+    ["0.1", "2.5", "5", "10", "25", "50", "100+"]
+  ),
+  pmd_pred_sixtpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(111, 218, 111)", "rgb(56, 188, 57)",
+      "rgb(37, 144, 38)",   "rgb(98, 184, 255)",  "rgb(0, 0, 252)",
+      "rgb(250, 0, 250)",
+    ],
+    ["0.01", "2.5", "5", "10", "25", "50", "100+"]
+  ),
+  pmd_pred_twelvetpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(61, 186, 61)",  "rgb(97, 184, 255)",
+      "rgb(0, 0, 255)",      "rgb(250, 0, 250)", "rgb(128, 0, 64)",
+    ],
+    ["0.1", "5", "15", "30", "70", "140+"]
+  ),
+  pmd_pred_daytpe: gradientLegendBar(
+    [
+      "rgb(166, 242, 143)", "rgb(61, 186, 61)",  "rgb(97, 184, 255)",
+      "rgb(0, 0, 255)",      "rgb(250, 0, 250)", "rgb(128, 0, 64)",
+    ],
+    ["0.1", "10", "25", "50", "100", "250+"]
+  ),
+
+  // State-quantity layers — colors + ticks mirror _MON_PRED_ELEMENTS stops
+  // in views.py one-for-one, so map + legend stay in sync.
+  pmd_pred_temp2m: gradientLegendBar(
+    [
+      "rgb(128, 0, 128)", "rgb(0, 0, 255)",   "rgb(0, 255, 255)",
+      "rgb(0, 255, 0)",   "rgb(255, 255, 0)", "rgb(255, 128, 0)",
+      "rgb(255, 0, 0)",   "rgb(128, 0, 0)",
+    ],
+    ["-30", "-15", "0", "10", "20", "30", "40", "45"]
+  ),
+  pmd_pred_cloud_cover: gradientLegendBar(
+    [
+      "rgb(220, 220, 220)", "rgb(180, 180, 180)", "rgb(140, 140, 140)",
+      "rgb(100, 100, 100)", "rgb(60, 60, 60)",
+    ],
+    ["0", "25", "50", "75", "100"]
+  ),
+  pmd_pred_rel_humidity: gradientLegendBar(
+    [
+      "rgb(140, 100, 60)",  "rgb(200, 170, 120)", "rgb(240, 220, 180)",
+      "rgb(200, 230, 250)", "rgb(100, 150, 220)", "rgb(0, 50, 180)",
+    ],
+    ["0", "20", "40", "60", "80", "100"]
+  ),
+
+  // 24-hour Extreme aggregates — colors mirror _MON_PRED_ELEMENTS[...][stops]
+  // in views.py one-for-one so the legend + the raster read identically.
+  pmd_pred_ext_high_temp: gradientLegendBar(
+    [
+      "rgb(0, 0, 255)",   "rgb(0, 200, 255)", "rgb(0, 200, 100)",
+      "rgb(200, 220, 0)", "rgb(255, 165, 0)", "rgb(255, 0, 0)",
+      "rgb(180, 0, 60)",  "rgb(100, 0, 0)",
+    ],
+    ["0", "15", "25", "35", "40", "45", "50", "55"]
+  ),
+  pmd_pred_ext_low_temp: gradientLegendBar(
+    [
+      "rgb(80, 0, 128)",  "rgb(0, 0, 200)",   "rgb(0, 130, 255)",
+      "rgb(0, 200, 255)", "rgb(0, 200, 100)", "rgb(200, 220, 0)",
+      "rgb(255, 165, 0)", "rgb(255, 0, 0)",
+    ],
+    ["-40", "-20", "-10", "0", "10", "20", "30", "40"]
   ),
 };

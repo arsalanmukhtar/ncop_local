@@ -1,0 +1,1685 @@
+/* ===========================
+   RESPONSIVE ADJUSTMENTS
+=========================== */
+@media (max-width: 768px) {
+    .map-controls-wrapper {
+        top: 42px;
+        right: 8px;
+        width: auto;
+    }
+
+    .layer-order-panel,
+    .layer-info-panel {
+        width: 220px;
+        max-height: 300px;
+        right: 42px;
+    }
+}
+
+/* ========================================================================
+   Time-Slider for Temporal Data — reference-aligned 2-row / 3-panel layout
+     Row 1 : Transport  |  Timeline (dates + slider)  |  Drag
+     Row 2 : Variable   |  Legend (gradient + values) |  Opacity
+   Themed via CSS variables; [data-theme="night"] overrides at bottom.
+   ======================================================================== */
+#temp-slider1 {
+    position: absolute;
+    top: 13px;
+    left: 405px;
+    right: 80px;
+    width: auto;
+    padding: 0;
+    background-color: var(--primary-bg);
+    border: 1px solid var(--glass-lighter);
+    border-radius: 14px;
+    display: none;
+    animation: nrotateMenu 3s;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-soft);
+    z-index: 1001;
+    touch-action: none;
+    box-sizing: border-box;
+}
+
+/* Inner clip wrapper — rounds corners over the row panels without trapping the popover. */
+#temp-slider1 > .tempslider-layout {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+/* ---- Shared row / panel skeleton ---- */
+.ts-row {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    height: 72px;
+    box-sizing: border-box;
+}
+
+.ts-row--timeline {
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.ts-panel {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ---- Row 1 :: Transport panel (play / pause / speed) ---- */
+#tempslider-controls.ts-panel--transport {
+    flex-shrink: 0;
+    gap: 10px;
+    padding: 0 18px;
+    background: var(--overlay-bg);
+    border-right: 1px solid var(--border-dark);
+    /* neutralize legacy grid rules */
+    position: static;
+    margin: 0;
+    width: auto;
+    grid-auto-flow: initial;
+    grid-template-rows: initial;
+    grid-auto-columns: initial;
+}
+
+#tempslider-controls button {
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    transition: all 0.2s ease;
+}
+
+#playPauseButton1,
+#playPauseButton2 {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--ndma-blue-opaque);
+    border: 1px solid var(--ndma-blue-light);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+#playPauseButton1:hover,
+#playPauseButton2:hover {
+    background: var(--ndma-blue);
+}
+
+#playPauseButton1 i {
+    margin-left: 2px;
+    /* visual centering for play glyph */
+}
+
+#tempslider-controls button i {
+    font-size: 16px !important;
+    color: var(--white) !important;
+    margin: 0;
+}
+
+#tempslider-controls .speed-btn {
+    width: auto;
+    min-width: 40px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 4px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    color: var(--white);
+}
+
+#tempslider-controls .speed-btn:hover {
+    background: var(--hover-bg);
+}
+
+/* ---- Row 1 :: Timeline panel (dates row + slider track) ---- */
+/* Horizontal padding is driven by --date-inset (set by JS to the widest date
+   label's half-width + buffer) so the dates row and slider track both inset
+   by the same amount, keeping tick ↔ thumb alignment while preventing
+   first/last pills (centered at 0% / 100% of the content box) from spilling
+   into the adjacent transport / drag cells. */
+.ts-panel--timeline {
+    --date-inset: 40px;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px var(--date-inset);
+    background: var(--frost-bg);
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+/* Date labels use absolute positioning so each tick aligns exactly with the
+   slider thumb position at step i (thumb center lands at i/(n-1)*100% of track). */
+#temp-slider1 .year-labels1 {
+    position: relative;
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    margin-bottom: 14px;
+    /* reserves space for the tick line below each pill */
+}
+
+#temp-slider1 .year-labels1 span {
+    position: absolute;
+    top: 0;
+    margin: 0 !important;
+    padding: 2px 8px;
+    /* JS sets --ts-label-font-size in updateLegendBarWidths/_recomputeDateInset
+       to fit the labels in the available width without overlap. The fallback
+       (12px) keeps existing layouts looking exactly the same when there's
+       enough room. */
+    font-size: var(--ts-label-font-size, 12px);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    transform: translateX(-50%);
+    transition: all 0.2s ease;
+}
+
+/* Tick line below each pill — thick and prominent.
+   All pills (first, middle, last) share the same centering transform so every
+   label sits directly above its tick. The timeline panel's horizontal padding
+   (--date-inset, set dynamically in JS from the widest label's half-width)
+   keeps first/last pills from overflowing into the transport / drag cells. */
+#temp-slider1 .year-labels1 span::after {
+    content: "";
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--border-light);
+    transition: all 0.2s ease;
+}
+
+#temp-slider1 .year-labels1 span:hover {
+    color: var(--text-primary);
+}
+
+/* Empty labels — used by loaders that emit "" for skipped-label indices to
+   preserve 1:1 span-to-frame indexing while thinning what actually shows
+   (see generatePmdPredictionsLoader in time-functions.js). Empty spans stay
+   in the DOM at their `left:X%` position so index math never drifts, but
+   we strip every visual affordance: no pill, no tick, no hover cursor.
+   pointer-events:none because there's no label text to click on. */
+#temp-slider1 .year-labels1 span:empty {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+}
+#temp-slider1 .year-labels1 span:empty::after {
+    display: none;
+}
+
+#temp-slider1 .year-labels1 span.is-active {
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+/* Active date: tick becomes a glowing dot centered under the label. */
+#temp-slider1 .year-labels1 span.is-active::after {
+    top: calc(100% + 4px);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2.5px solid var(--ndma-blue);
+    box-shadow: 0 0 10px rgba(70, 178, 255, 0.7);
+    transform: translateX(-50%);
+}
+
+/* Slider track */
+.ts-slider-track {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    display: flex;
+    align-items: center;
+}
+
+#slider1 {
+    position: static;
+    top: auto;
+    left: auto;
+    margin: 0;
+}
+
+.slider1 {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--border-dark);
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+}
+
+.slider1:focus {
+    outline: none;
+}
+
+/* Thumb hidden — the glowing dot on the active date's tick is the visual indicator.
+   Track remains clickable/draggable for interaction. */
+.slider1::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.slider1::-webkit-slider-thumb:hover {
+    transform: none;
+}
+
+.slider1::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+/* ---- Row 1 :: Drag panel ---- */
+#dragControlButton.ts-panel--drag {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    cursor: move;
+    padding: 0;
+}
+
+#dragControlButton.ts-panel--drag:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+#dragControlButton.ts-panel--drag i {
+    font-size: 20px !important;
+    color: currentColor !important;
+}
+
+/* ---- Row 2 :: Variable panel (icon box + name) ---- */
+.ts-panel--variable {
+    flex-shrink: 0;
+    min-width: 220px;
+    gap: 14px;
+    padding: 0 18px;
+    background: var(--frost-bg);
+    border-right: 1px solid var(--border-dark);
+}
+
+.ts-variable-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--ndma-blue);
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ts-variable-icon:hover {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.ts-variable-icon:hover i {
+    color: #dc2626 !important;
+}
+
+.ts-variable-icon i {
+    font-size: 22px !important;
+    color: var(--ndma-blue) !important;
+    transition: color 0.15s ease;
+}
+
+.ts-variable {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ts-variable p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    line-height: 1.3;
+    color: var(--text-primary);
+    text-align: left;
+    text-transform: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+/* Dynamic "current timestep" line — sits below the layer title inside
+   .ts-variable, updated live by temporal-current-step.js (main slider)
+   and split-compare-control.js's #stepLayerBTo (Layer B).  Subdued so it
+   reads as secondary information rather than competing with the title.
+   Uses the shared --text-muted var so both light and night themes render
+   correctly without a theme-specific override. */
+/* Prominent "current timestep" pill — sits below the layer title.
+   Presented as a stand-alone chip so an operator can scan the timestep
+   without hunting.  Colours drawn from the shared NDMA-blue tokens so
+   the pill recolours automatically for day/night themes; the same
+   palette drives the active slider-label pill above (see the
+   `.year-labels1 span.is-active` rule at line 217), giving the two
+   time-indicators a matched visual identity.  Inline-block + fit-content
+   so the pill hugs its text instead of stretching to the panel width. */
+.ts-variable .ts-current-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;         /* hug left in the flex column of .ts-variable */
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 5px;
+    padding: 3px 10px 3px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.2;
+    color: #fff;
+    background: var(--ndma-blue, #46b2ff);
+    border: 1px solid var(--ndma-blue-light, rgba(70, 178, 255, 0.35));
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.20),
+                0 2px 8px var(--ndma-blue-glow, rgba(70, 178, 255, 0.35));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+/* Live-dot indicator — pulses subtly to signal that this value tracks
+   the slider position in real time.  Pure CSS, no JS animation. */
+.ts-variable .ts-current-date::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+    flex: 0 0 auto;
+    animation: ncop-ts-date-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ncop-ts-date-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.75); }
+}
+/* Empty state (layer with no per-frame date info) — collapse the pill so
+   the variable panel is visually identical to its pre-integration state. */
+.ts-variable .ts-current-date.is-empty {
+    display: none;
+}
+
+/* ---- Row 2 :: Legend panel (gradient bar + values) ---- */
+.ts-panel--legend {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 24px;
+    justify-content: stretch;
+}
+
+#legend-container-slider1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.ts-legend-stack {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ts-legend-bar {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    border-radius: 4px;
+    /* Border + wide inset blur left dark edges where the gradient looked
+       unfilled — replaced with a 1px outset ring (sits outside the
+       gradient) and a tight inset shadow with negative spread so the
+       blur cannot wrap into the rounded corners. */
+    border: none;
+    box-shadow:
+        0 0 0 1px var(--glass-lighter),
+        inset 0 1px 2px -1px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.ts-legend-values {
+    position: relative;
+    width: 100%;
+    height: 14px;
+}
+
+.ts-legend-values span {
+    position: absolute;
+    top: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    line-height: 1;
+}
+
+/* ---- Row 2 :: Opacity panel ---- */
+#opacityControlButton.ts-panel--opacity {
+    flex-shrink: 0;
+    width: 56px;
+    justify-content: center;
+    background: var(--overlay-bg);
+    border: none;
+    border-left: 1px solid var(--border-dark);
+    border-radius: 0;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+}
+
+#opacityControlButton.ts-panel--opacity:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+#opacityControlButton.ts-panel--opacity[aria-expanded="true"] {
+    color: var(--ndma-blue);
+    background: var(--info-bg);
+}
+
+#opacityControlButton.ts-panel--opacity i {
+    font-size: 20px !important;
+    color: currentColor !important;
+}
+
+/* Legacy wrapper no longer used by new HTML — hide if it appears. */
+#tempslider-dragresizecontrol {
+    display: none !important;
+}
+
+/* ===== Opacity popover (unchanged mechanics; restyled lightly) ===== */
+#opacityControlPopover {
+    display: none;
+    position: absolute;
+    padding: 8px 10px;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    box-shadow: var(--shadow-soft);
+    z-index: 9999;
+    min-width: 220px;
+    pointer-events: auto;
+    box-sizing: border-box;
+    backdrop-filter: blur(10px);
+}
+
+#opacityControlPopover .opacity-popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#opacityControlPopover .opacity-popover-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+#opacityControlPopover #opacityRange {
+    flex: 1;
+    accent-color: var(--ndma-blue);
+}
+
+#opacityControlPopover .opacity-popover-value {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 36px;
+    text-align: right;
+}
+
+/* ===== Night-mode overrides ===== */
+[data-theme="night"] #temp-slider1 .year-labels1 span {
+    color: var(--text-secondary);
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span.is-active {
+    color: #fff;
+    background: var(--ndma-blue);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 8px rgba(70, 178, 255, 0.5);
+}
+
+[data-theme="night"] #temp-slider1 .year-labels1 span.is-active::after {
+    background: var(--ndma-blue);
+}
+
+/* ========================================================================
+   TABLE-STYLE DROPDOWN DESIGN FOR DROPDOWN ITEMS
+   ======================================================================== */
+
+/* ========================================================================
+   MAIN CONTAINER FOR DROPDOWN GROUP
+   ======================================================================== */
+
+.ncop-item-dropdown-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0;
+}
+
+/* ========================================================================
+   DROPDOWN WRAPPER - TABLE STRUCTURE
+   ======================================================================== */
+
+.ncop-dropdown-wrapper {
+    background: var(--secondary-bg);
+    /* border: 2px solid var(--border-dark); */
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================================================
+   DROPDOWN HEADER - COLLAPSIBLE TOGGLE
+   ======================================================================== */
+
+.ncop-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    /* background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%); */
+    border: 1px solid var(--ndma-green);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    color: var(--white);
+    border-radius: 4px;
+}
+
+.ncop-dropdown-header:hover {
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown-header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.ncop-dropdown-label {
+    font-size: 13px;
+    font-weight: 200;
+    color: var(--white);
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+.ncop-dropdown-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    background: transparent;
+    color: var(--ndma-green);
+    /* border-radius: 12px; */
+    font-size: 12px;
+    font-weight: 300;
+    padding: 0 10px;
+}
+
+.ncop-dropdown-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background: var(--white);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-inverse);
+    font-size: 12px;
+}
+
+.ncop-dropdown-header:hover .ncop-dropdown-toggle {
+    background: #e0e0e0;
+    border-color: #bbb;
+}
+
+.ncop-dropdown-toggle.expanded {
+    background: var(--ndma-green);
+    border-color: var(--ndma-green-glow);
+    color: var(--white);
+    transform: rotate(180deg);
+}
+
+.ncop-dropdown-toggle::after {
+    content: '▼';
+    display: inline-block;
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* ========================================================================
+   TABLE CONTENT - SCROLLABLE AREA
+   ======================================================================== */
+
+.ncop-dropdown-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+}
+
+.ncop-dropdown-content.expanded {
+    max-height: 400px;
+    overflow-y: auto;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* Scrollbar styling for dropdown content */
+.ncop-dropdown-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 3px;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb {
+    background: #bdbdbd;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown-content::-webkit-scrollbar-thumb:hover {
+    background: #9e9e9e;
+}
+
+/* Firefox scrollbar */
+.ncop-dropdown-content {
+    scrollbar-width: thin;
+    scrollbar-color: #bdbdbd #f5f5f5;
+}
+
+/* ========================================================================
+   TABLE STYLING
+   ======================================================================== */
+
+.ncop-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.ncop-data-table thead {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+}
+
+.ncop-data-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #37474f;
+    border-bottom: 2px solid #e0e0e0;
+    white-space: nowrap;
+    background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
+}
+
+.ncop-data-table tbody tr {
+    border-bottom: 1px solid #f0f0f0;
+    transition: all 0.15s ease;
+}
+
+.ncop-data-table tbody tr:hover {
+    background: #f9f9f9;
+}
+
+.ncop-data-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.ncop-data-table td {
+    padding: 11px 12px;
+    color: #546e7a;
+    vertical-align: middle;
+}
+
+/* ========================================================================
+   CHECKBOX STYLING IN TABLE
+   ======================================================================== */
+
+.ncop-checkbox-cell {
+    width: 40px;
+    padding: 11px 8px !important;
+    text-align: center;
+}
+
+.ncop-row-checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.ncop-row-checkbox:checked {
+    accent-color: var(--ndma-blue);
+}
+
+/* ========================================================================
+   KEY CELL STYLING
+   ======================================================================== */
+
+.ncop-key-cell {
+    font-weight: 600;
+    color: #0288d1;
+    min-width: 60px;
+    max-width: 100px;
+    word-break: break-word;
+}
+
+/* ========================================================================
+   ATTRIBUTE/VALUE CELL STYLING
+   ======================================================================== */
+
+.ncop-attribute-cell {
+    color: #546e7a;
+    flex: 1;
+    word-break: break-word;
+    max-width: 300px;
+}
+
+/* ========================================================================
+   EMPTY STATE
+   ======================================================================== */
+
+.ncop-empty-state {
+    padding: 24px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+.ncop-empty-state-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.ncop-empty-state-text {
+    color: #999;
+}
+
+/* ========================================================================
+   LOADING STATE
+   ======================================================================== */
+
+.ncop-loading-state {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+}
+
+.ncop-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #0288d1;
+    border-radius: 50%;
+    animation: ncop-spin 0.6s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+@keyframes ncop-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================================================
+   ERROR STATE
+   ======================================================================== */
+
+.ncop-error-state {
+    padding: 16px;
+    background: #ffebee;
+    border-left: 3px solid #f44336;
+    color: #c62828;
+    font-size: 13px;
+    border-radius: 0 4px 4px 0;
+}
+
+.ncop-error-icon {
+    margin-right: 6px;
+}
+
+/* ========================================================================
+   NO ITEMS STATE (Empty table)
+   ======================================================================== */
+
+.ncop-table-empty-row {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 13px;
+    background: #f9f9f9;
+}
+
+/* ========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================================================== */
+
+@media (max-width: 768px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 6px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 12px 14px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 13px;
+    }
+
+    .ncop-data-table {
+        font-size: 12px;
+    }
+
+    .ncop-data-table th {
+        padding: 8px 10px;
+    }
+
+    .ncop-data-table td {
+        padding: 9px 10px;
+    }
+
+    .ncop-key-cell {
+        max-width: 80px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ncop-dropdown-wrapper {
+        border-radius: 4px;
+    }
+
+    .ncop-dropdown-header {
+        padding: 10px 12px;
+    }
+
+    .ncop-dropdown-label {
+        font-size: 12px;
+    }
+
+    .ncop-dropdown-count {
+        min-width: 22px;
+        height: 22px;
+        font-size: 11px;
+    }
+
+    .ncop-data-table {
+        font-size: 11px;
+    }
+
+    .ncop-data-table th,
+    .ncop-data-table td {
+        padding: 8px 8px;
+    }
+
+    .ncop-key-cell {
+        max-width: 60px;
+    }
+
+    .ncop-attribute-cell {
+        max-width: 150px;
+    }
+}
+
+/* ========================================================================
+   ACCESSIBILITY
+   ======================================================================== */
+
+.ncop-dropdown-header:focus-within {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+/* .ncop-row-checkbox:focus {
+    outline: 2px solid var(--ndma-blue);
+} */
+
+/* ========================================================================
+   ANIMATION FOR SMOOTH TRANSITIONS
+   ======================================================================== */
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ncop-data-table tbody tr {
+    animation: slideDown 0.2s ease forwards;
+}
+
+.ncop-data-table tbody tr:nth-child(1) {
+    animation-delay: 0ms;
+}
+
+.ncop-data-table tbody tr:nth-child(2) {
+    animation-delay: 20ms;
+}
+
+.ncop-data-table tbody tr:nth-child(3) {
+    animation-delay: 40ms;
+}
+
+.ncop-data-table tbody tr:nth-child(n+4) {
+    animation-delay: 60ms;
+}
+
+/* ========================================================================
+   PRINT STYLES
+   ======================================================================== */
+
+@media print {
+    .ncop-dropdown-wrapper {
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+
+    .ncop-dropdown-content {
+        max-height: none !important;
+    }
+
+    .ncop-row-checkbox {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+}
+
+/* ========================================================================
+   NEWS TICKER  (#news-modal)
+   ------------------------------------------------------------------------
+   Bottom-anchored horizontal strip.  Layout:
+     [ HEADER COLUMN (logo + title + clock + 2 toggles) | SCROLLING CARDS ]
+   Each card renders one of three source variants — NEWS / REDDIT / MASTODON
+   — distinguished by a colored badge in the upper-left corner.  All colors
+   use the project's day/night theme tokens so the strip flips automatically
+   between dark-glass (day) and light-glass (night) palettes.
+   ======================================================================== */
+
+.news-modal {
+    position: absolute;
+    display: none;
+    /* visible only via inline `style.display = "flex"` toggled by JS */
+    bottom: 12px;
+    left: 20%;
+    width: 75%;
+    height: 96px;
+    z-index: 999;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--primary-bg);
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
+    border: 1px solid var(--border-dark);
+    box-shadow: 0 8px 32px var(--shadow-soft);
+}
+
+.news-modal.show,
+.news-modal[style*="display: flex"],
+.news-modal[style*="display:flex"] {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+/* ---- HEADER COLUMN -------------------------------------------------- */
+.news-header {
+    flex: 0 0 220px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px 0 16px;
+    background: rgba(0, 0, 0, 0.18);
+    border-right: 1px solid var(--border-dark);
+    position: relative;
+}
+
+[data-theme="night"] .news-header {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.logo-container {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--ndma-blue-glow);
+    border: 1px solid var(--ndma-blue-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 4px;
+}
+
+.logo-container img,
+.logo-container .rotating-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 50%;
+    animation: rotate-logo 30s linear infinite;
+}
+
+.news-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    line-height: 1;
+    text-align: center;
+}
+
+.news-info hr {
+    border: none;
+    border-top: 1px solid var(--border-dark);
+    margin: 6px 0;
+    width: 70%;
+}
+
+.news-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.news-time {
+    font-family: ui-monospace, "IBM Plex Mono", SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ndma-blue);
+    line-height: 1;
+    letter-spacing: 0.02em;
+}
+
+.news-toggle-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.toggle-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--overlay-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.toggle-btn img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    filter: none;
+}
+
+[data-theme="night"] .toggle-btn img {
+    /* The toggle icon assets are bright/white-on-transparent — invert
+       in night theme so they read on the lighter surface. */
+    filter: invert(1) brightness(0.4);
+}
+
+.toggle-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+}
+
+.toggle-btn.active {
+    background: var(--ndma-green);
+    border-color: var(--ndma-green);
+    color: #fff;
+    box-shadow: 0 0 10px var(--ndma-green-glow);
+}
+
+.toggle-btn.active img {
+    /* White-icon assets read cleanly on the bright green fill in
+       both day and night themes. */
+    filter: none;
+}
+
+[data-theme="night"] .toggle-btn.active img {
+    filter: none;
+}
+
+/* ---- Refresh button (news header) ---------------------------------- */
+/* Same 28x28 chrome as .toggle-btn but uses an inline SVG (not an <img>
+   asset), so a couple of small overrides keep the icon crisp and let
+   it spin without dragging the border with it. */
+.toggle-btn.refresh-btn {
+    color: var(--text-secondary);
+}
+
+.toggle-btn.refresh-btn .refresh-icon {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    transition: transform 0.2s ease;
+    transform-origin: 50% 50%;
+}
+
+.toggle-btn.refresh-btn:hover .refresh-icon {
+    color: var(--text-primary);
+}
+
+.toggle-btn.refresh-btn:disabled {
+    cursor: wait;
+    opacity: 0.75;
+}
+
+/* While a refresh is in flight the icon spins continuously; the
+   `.is-spinning` class is added by JS and removed the moment the
+   fetch settles (success OR failure). */
+.toggle-btn.refresh-btn.is-spinning .refresh-icon {
+    animation: news-refresh-spin 0.9s linear infinite;
+}
+
+@keyframes news-refresh-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ---- Refresh-failed ribbon ---------------------------------------- */
+/* Non-fatal ribbon appended at the bottom of the news scroll list
+   whenever a refresh fails but existing cards are still on screen.
+   Auto-dismisses after 6s (JS timer).  Amber palette to match the
+   wind-quota warning toast so the "temporary problem" cue is
+   consistent across the app. */
+.news-refresh-ribbon {
+    flex-shrink: 0;
+    margin: 6px 8px 10px 8px;
+    padding: 8px 12px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.45;
+    color: #fef3c7;
+    background: linear-gradient(135deg,
+        rgba(146, 64, 14, 0.92),
+        rgba(180, 83, 9, 0.92));
+    border: 1px solid rgba(251, 191, 36, 0.55);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(2, 6, 23, 0.35);
+    text-align: center;
+    letter-spacing: 0.1px;
+}
+
+/* Legacy `.divider-line` element from the old markup — superseded by
+   the column's `border-right`.  Hide so it doesn't paint a second rule. */
+.news-modal .divider-line {
+    display: none;
+}
+
+/* ---- SCROLL REGION -------------------------------------------------- */
+.news-scroll-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: 0 32px 0 14px;
+}
+
+/* Edge fades — gradient toward the panel's primary background so cards
+   appear to materialize from the void instead of clipping abruptly. */
+.news-scroll-wrapper::before,
+.news-scroll-wrapper::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.news-scroll-wrapper::before {
+    left: 0;
+    background: linear-gradient(to right, var(--primary-bg), transparent);
+}
+
+.news-scroll-wrapper::after {
+    right: 0;
+    width: 56px;
+    background: linear-gradient(to left, var(--primary-bg), transparent);
+}
+
+.news-scroll {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 100%;
+    /* Marquee animation; duration scales with content via inline style if
+       desired but a long fixed value gives a calm, readable cadence. */
+    animation: scroll-left 480s linear infinite;
+    will-change: transform;
+}
+
+.news-scroll:hover {
+    animation-play-state: paused;
+}
+
+@keyframes scroll-left {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .news-scroll {
+        animation: none;
+    }
+}
+
+/* ---- CARD ---------------------------------------------------------- */
+.news-box {
+    flex: 0 0 290px;
+    width: 290px;
+    height: 80px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 4px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease,
+        transform 0.18s ease, box-shadow 0.18s ease;
+    overflow: hidden;
+}
+
+.news-box:hover {
+    background: var(--hover-bg);
+    border-color: var(--border-light);
+}
+
+.news-box.active {
+    background: var(--secondary-bg);
+    border: 2px solid var(--ndma-blue);
+    padding: 6px 9px;
+    /* compensate for the +1px border so geometry stays stable */
+    transform: translateY(-2px);
+    box-shadow: 0 0 14px var(--ndma-blue-glow);
+}
+
+/* Header row: source pill + meta */
+.news-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.news-box-source {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
+}
+
+.news-box-badge {
+    flex-shrink: 0;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 8.5px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.news-box-badge--news     { background: var(--ndma-green); }
+.news-box-badge--reddit   { background: #ff4500; }
+.news-box-badge--mastodon { background: #6364ff; }
+
+.news-box-source-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.news-box-source-meta img {
+    width: 14px;
+    height: 10px;
+    object-fit: cover;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+.news-box-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.news-box-meta-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Title — 2-line clamp */
+.news-box-title {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* Footer: link (truncated) + timestamp */
+.news-box-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.news-box-link {
+    flex: 1;
+    min-width: 0;
+    font-size: 9.5px;
+    color: var(--ndma-blue);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.news-box-link:hover {
+    text-decoration: underline;
+}
+
+.news-box-time {
+    flex-shrink: 0;
+    font-family: ui-monospace, "IBM Plex Mono", SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+/* ---- loading state ----------------------------------------------
+   Adapted from three-dots' `.dot-floating` recipe — a wave of dots
+   floating left → right.  Original uses 3 dots (host + ::before +
+   ::after); we use 7 real <span> children inside `.news-loading-track`
+   for a denser, more confident "fetching…" feel.  The marquee
+   `scroll-left` animation is suppressed via `.is-loading` so the
+   dots stay centered instead of being dragged off-screen. */
+.news-scroll.is-loading {
+    animation: none !important;
+    width: 100%;
+    justify-content: center;
+}
+
+.news-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 16px;
+}
+
+.news-loading-label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.news-loading-track {
+    position: relative;
+    width: 220px;
+    height: 10px;
+}
+
+.news-loading-track span {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--ndma-blue);
+    box-shadow: 0 0 6px var(--ndma-blue-glow);
+    opacity: 0;
+    animation: news-loading-float 2.1s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.news-loading-track span:nth-child(1) { animation-delay: 0s;    }
+.news-loading-track span:nth-child(2) { animation-delay: 0.21s; }
+.news-loading-track span:nth-child(3) { animation-delay: 0.42s; }
+.news-loading-track span:nth-child(4) { animation-delay: 0.63s; }
+.news-loading-track span:nth-child(5) { animation-delay: 0.84s; }
+
+@keyframes news-loading-float {
+    0%   { left: 0;                 opacity: 0; transform: scale(0.6); }
+    18%  { opacity: 1;              transform: scale(1);   }
+    82%  { opacity: 1;              transform: scale(1);   }
+    100% { left: calc(100% - 8px);  opacity: 0; transform: scale(0.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .news-loading-track span {
+        animation: news-loading-pulse 1.6s infinite ease-in-out;
+        left: auto;
+        position: relative;
+        display: inline-block;
+        margin-right: 4px;
+    }
+    .news-loading-track {
+        display: flex;
+        gap: 4px;
+        width: auto;
+    }
+    @keyframes news-loading-pulse {
+        0%, 100% { opacity: 0.25; }
+        50%      { opacity: 1;    }
+    }
+}
+
+/* ---- empty + error states ---------------------------------------- */
+.news-empty,
+.news-error {
+    flex: 0 0 auto;
+    padding: 14px 20px;
+    border-radius: 8px;
+    background: var(--secondary-bg);
+    border: 1px dashed var(--border-dark);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+    max-width: 360px;
+}
+
+.news-empty small,
+.news-error small {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.news-error {
+    border-color: rgba(255, 0, 0, 0.35);
+    color: var(--ndma-red);
+}
+
+/* ---- responsive --------------------------------------------------- */
+@media (max-width: 768px) {
+    .news-modal {
+        left: 2%;
+        right: 2%;
+        width: auto;
+        height: auto;
+        flex-direction: column;
+    }
+
+    .news-header {
+        flex: 0 0 auto;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-dark);
+        padding: 8px 12px;
+    }
+
+    .news-toggle-buttons {
+        flex-direction: row;
+        margin-left: auto;
+    }
+
+    .news-scroll-wrapper {
+        padding: 8px 14px;
+    }
+
+    .news-box {
+        flex: 0 0 240px;
+        width: 240px;
+    }
+}
+

@@ -121,6 +121,17 @@ def dashboard_view(request):
     })
 
 
+# ============================================================================
+# NCOP Documentation
+# ----------------------------------------------------------------------------
+# Renders the self-contained product/technical documentation page consumed by
+# the in-app "Documentation" button on the dashboard header.  No login is
+# required — the page contains no user data, only platform documentation.
+# ============================================================================
+def documentation_view(request):
+    return render(request, "documentation.html")
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
@@ -589,7 +600,457 @@ class WeatherDataPMDFFDView(View):
         self._cache = {"data": geojson, "timestamp": datetime.now()}
 
         return JsonResponse(geojson)
-    
+
+
+# =============================================================================
+# Heatwave Monitoring (Open-Meteo) - Major Pakistani cities
+# Used by frontend layer "heatwave_monitoring" under PMD subcategory.
+# Two endpoints:
+#   GET /get-heatwave-monitoring/  -> GeoJSON FeatureCollection of cities w/ now-temp
+#   GET /get-heatwave-detail/?lat&lon&type=forecast|seasonal|climate&name
+# Both use ThreadPoolExecutor + a process-wide Semaphore to keep total
+# concurrent outbound calls below Open-Meteo's free-tier comfort zone.
+# =============================================================================
+
+# Major cities / districts of Pakistan (curated for heatwave coverage)
+PAKISTAN_HEATWAVE_CITIES = [
+    {"name": "Karachi",          "lat": 24.8607, "lon": 67.0011, "province": "Sindh"},
+    {"name": "Lahore",           "lat": 31.5497, "lon": 74.3436, "province": "Punjab"},
+    {"name": "Islamabad",        "lat": 33.6844, "lon": 73.0479, "province": "ICT"},
+    {"name": "Rawalpindi",       "lat": 33.5651, "lon": 73.0169, "province": "Punjab"},
+    {"name": "Faisalabad",       "lat": 31.4504, "lon": 73.1350, "province": "Punjab"},
+    {"name": "Multan",           "lat": 30.1575, "lon": 71.5249, "province": "Punjab"},
+    {"name": "Hyderabad",        "lat": 25.3960, "lon": 68.3578, "province": "Sindh"},
+    {"name": "Peshawar",         "lat": 34.0151, "lon": 71.5249, "province": "KPK"},
+    {"name": "Quetta",           "lat": 30.1798, "lon": 66.9750, "province": "Balochistan"},
+    {"name": "Gujranwala",       "lat": 32.1877, "lon": 74.1945, "province": "Punjab"},
+    {"name": "Sialkot",          "lat": 32.4945, "lon": 74.5229, "province": "Punjab"},
+    {"name": "Bahawalpur",       "lat": 29.3956, "lon": 71.6836, "province": "Punjab"},
+    {"name": "Sukkur",           "lat": 27.7059, "lon": 68.8574, "province": "Sindh"},
+    {"name": "Sargodha",         "lat": 32.0836, "lon": 72.6711, "province": "Punjab"},
+    {"name": "Larkana",          "lat": 27.5590, "lon": 68.2123, "province": "Sindh"},
+    {"name": "Sheikhupura",      "lat": 31.7167, "lon": 73.9850, "province": "Punjab"},
+    {"name": "Mardan",           "lat": 34.1989, "lon": 72.0231, "province": "KPK"},
+    {"name": "Mingora",          "lat": 34.7795, "lon": 72.3614, "province": "KPK"},
+    {"name": "Dera Ghazi Khan",  "lat": 30.0561, "lon": 70.6403, "province": "Punjab"},
+    {"name": "Rahim Yar Khan",   "lat": 28.4202, "lon": 70.2952, "province": "Punjab"},
+    {"name": "Sahiwal",          "lat": 30.6707, "lon": 73.1064, "province": "Punjab"},
+    {"name": "Okara",            "lat": 30.8138, "lon": 73.4534, "province": "Punjab"},
+    {"name": "Mirpur Khas",      "lat": 25.5269, "lon": 69.0125, "province": "Sindh"},
+    {"name": "Jacobabad",        "lat": 28.2823, "lon": 68.4514, "province": "Sindh"},
+    {"name": "Khairpur",         "lat": 27.5295, "lon": 68.7592, "province": "Sindh"},
+    {"name": "Nawabshah",        "lat": 26.2442, "lon": 68.4100, "province": "Sindh"},
+    {"name": "Turbat",           "lat": 26.0031, "lon": 63.0440, "province": "Balochistan"},
+    {"name": "Sibi",             "lat": 29.5430, "lon": 67.8773, "province": "Balochistan"},
+    {"name": "Gwadar",           "lat": 25.1216, "lon": 62.3254, "province": "Balochistan"},
+    {"name": "Khuzdar",          "lat": 27.8126, "lon": 66.6173, "province": "Balochistan"},
+    {"name": "Abbottabad",       "lat": 34.1463, "lon": 73.2117, "province": "KPK"},
+    {"name": "Dera Ismail Khan", "lat": 31.8313, "lon": 70.9019, "province": "KPK"},
+    {"name": "Chitral",          "lat": 35.8511, "lon": 71.7889, "province": "KPK"},
+    {"name": "Skardu",           "lat": 35.2987, "lon": 75.6304, "province": "GB"},
+    {"name": "Gilgit",           "lat": 35.9208, "lon": 74.3144, "province": "GB"},
+    {"name": "Muzaffarabad",     "lat": 34.3700, "lon": 73.4711, "province": "AJK"},
+    {"name": "Jhelum",           "lat": 32.9425, "lon": 73.7257, "province": "Punjab"},
+    {"name": "Gujrat",           "lat": 32.5700, "lon": 74.0789, "province": "Punjab"},
+    {"name": "Kasur",            "lat": 31.1156, "lon": 74.4467, "province": "Punjab"},
+    {"name": "Khanewal",         "lat": 30.3017, "lon": 71.9321, "province": "Punjab"},
+]
+
+# Process-wide semaphore so concurrent endpoint hits don't blow the
+# Open-Meteo free-tier rate limit (~10 req/s).
+_HEATWAVE_API_SEMAPHORE = threading.Semaphore(8)
+# Single shared session with retry/backoff.
+_heatwave_session = requests.Session()
+_heatwave_session.mount(
+    "https://",
+    HTTPAdapter(
+        max_retries=Retry(
+            total=2,
+            backoff_factor=0.4,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+        ),
+        pool_connections=16,
+        pool_maxsize=32,
+    ),
+)
+
+
+def _heatwave_get(url, params, timeout=8):
+    """Rate-limited GET wrapper for Open-Meteo. Returns (json, error)."""
+    with _HEATWAVE_API_SEMAPHORE:
+        try:
+            r = _heatwave_session.get(url, params=params, timeout=timeout)
+            if r.status_code == 200:
+                return r.json(), None
+            # Surface upstream error messages (helps debug 4xx mistakes).
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": r.text[:300]}
+            logger.warning("Open-Meteo non-200 (%s) for %s: %s", r.status_code, url, body)
+            return None, {"status": r.status_code, "body": body}
+        except Exception as exc:
+            logger.warning("Open-Meteo fetch failed for %s: %s", url, exc)
+            return None, {"status": 0, "body": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Disk-backed persistent cache for Open-Meteo data
+# ---------------------------------------------------------------------------
+# LocMemCache (the project default) evaporates on every gunicorn restart, which
+# turns into a thundering-herd of Open-Meteo calls and trips the free-tier
+# rate limit. This little helper mirrors every (kind, lat, lon) result to a
+# JSON blob on disk so a restart re-uses the prior fetches until they expire.
+#
+# Two-tier reads: the in-memory cache on each view stays the hot path; misses
+# fall through to disk; misses there hit the network.
+# ---------------------------------------------------------------------------
+
+try:
+    _HEATWAVE_CACHE_DIR = os.path.join(settings.BASE_DIR, "cache", "heatwave")
+except Exception:
+    # BASE_DIR may not be available during cold imports — fall back to /tmp.
+    import tempfile as _tempfile
+    _HEATWAVE_CACHE_DIR = os.path.join(_tempfile.gettempdir(), "ncop_heatwave_cache")
+
+os.makedirs(_HEATWAVE_CACHE_DIR, exist_ok=True)
+_HEATWAVE_DISK_LOCK = threading.Lock()
+_HEATWAVE_DISK_MAX_FILES = 1024  # soft cap; janitor trims oldest beyond this
+
+
+def _heatwave_disk_path(key):
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return os.path.join(_HEATWAVE_CACHE_DIR, f"{digest}.json")
+
+
+def _heatwave_disk_get(key, ttl_seconds):
+    """Return cached JSON for `key` if it's on disk and within TTL."""
+    path = _heatwave_disk_path(key)
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+    if (time.time() - st.st_mtime) > ttl_seconds:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        logger.debug("Heatwave disk-cache read failed for %s: %s", key, exc)
+        return None
+
+
+def _heatwave_disk_put(key, payload):
+    """Atomically write `payload` to disk for `key`."""
+    path = _heatwave_disk_path(key)
+    tmp_path = f"{path}.{os.getpid()}.tmp"
+    try:
+        with _HEATWAVE_DISK_LOCK:
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+            os.replace(tmp_path, path)
+            _heatwave_disk_janitor()
+    except Exception as exc:
+        logger.debug("Heatwave disk-cache write failed for %s: %s", key, exc)
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def _heatwave_disk_janitor():
+    """Best-effort prune so the cache dir doesn't grow unbounded."""
+    try:
+        names = [
+            n for n in os.listdir(_HEATWAVE_CACHE_DIR)
+            if n.endswith(".json")
+        ]
+        if len(names) <= _HEATWAVE_DISK_MAX_FILES:
+            return
+        entries = []
+        for n in names:
+            p = os.path.join(_HEATWAVE_CACHE_DIR, n)
+            try:
+                entries.append((os.path.getmtime(p), p))
+            except OSError:
+                continue
+        entries.sort()
+        for _, p in entries[: len(entries) - _HEATWAVE_DISK_MAX_FILES]:
+            try:
+                os.remove(p)
+            except OSError:
+                continue
+    except Exception:
+        pass
+
+
+class HeatwaveMonitoringView(View):
+    """
+    GeoJSON of major Pakistani cities with current temperature, humidity,
+    precipitation, and daily min/max — sourced from the Open-Meteo public
+    forecast API.
+
+    Cache layers:
+      * in-memory  (10 min) — hot path for repeat hits within a process
+      * disk       (30 min) — survives restarts, blunts the rate-limit storm
+      * per-city disk (15 min) — persists each city's current-weather sample
+        so a fresh aggregate after a restart only refetches stale cities.
+    """
+    CACHE_TTL = timedelta(minutes=10)
+    DISK_TTL_SECONDS = 30 * 60
+    PER_CITY_DISK_TTL = 15 * 60
+    _cache_lock = threading.Lock()
+    _cache = {"data": None, "ts": None}
+
+    FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def _fetch_city_now(self, city):
+        # Per-city disk cache — survives restarts and lets the aggregate fetch
+        # only call Open-Meteo for cities whose sample has expired.
+        ck = f"city-now:{city['name']}:{round(float(city['lat']), 3)}:{round(float(city['lon']), 3)}"
+        cached_feature = _heatwave_disk_get(ck, self.PER_CITY_DISK_TTL)
+        if cached_feature is not None:
+            return cached_feature
+
+        params = {
+            "latitude": city["lat"],
+            "longitude": city["lon"],
+            "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code,apparent_temperature,wind_speed_10m",
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "forecast_days": 1,
+            "timezone": "Asia/Karachi",
+        }
+        data, _err = _heatwave_get(self.FORECAST_URL, params, timeout=8)
+        cur = (data or {}).get("current") or {}
+        daily = (data or {}).get("daily") or {}
+        temp = cur.get("temperature_2m")
+        try:
+            t_max = (daily.get("temperature_2m_max") or [None])[0]
+            t_min = (daily.get("temperature_2m_min") or [None])[0]
+        except Exception:
+            t_max = t_min = None
+        # Heatwave alert tier (PMD-style thresholds for Pakistan)
+        alert = "Normal"
+        if isinstance(temp, (int, float)):
+            if temp >= 48:
+                alert = "Extreme"
+            elif temp >= 44:
+                alert = "Severe"
+            elif temp >= 40:
+                alert = "High"
+            elif temp >= 36:
+                alert = "Elevated"
+        feature = {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [city["lon"], city["lat"]]},
+            "properties": {
+                "name": city["name"],
+                "province": city["province"],
+                "temperature": temp,
+                "apparent_temperature": cur.get("apparent_temperature"),
+                "humidity": cur.get("relative_humidity_2m"),
+                "precipitation": cur.get("precipitation"),
+                "wind_speed": cur.get("wind_speed_10m"),
+                "weather_code": cur.get("weather_code"),
+                "temp_max": t_max,
+                "temp_min": t_min,
+                "alert_level": alert,
+                "updated": cur.get("time"),
+            },
+        }
+        # Persist this city's sample so a later restart can rebuild the
+        # aggregate without re-hammering Open-Meteo for every city.
+        if temp is not None:
+            _heatwave_disk_put(ck, feature)
+        return feature
+
+    def _read_cache(self):
+        with self._cache_lock:
+            if self._cache["data"] and self._cache["ts"]:
+                if datetime.now() - self._cache["ts"] < self.CACHE_TTL:
+                    return self._cache["data"]
+        return None
+
+    def _write_cache(self, data):
+        with self._cache_lock:
+            self._cache = {"data": data, "ts": datetime.now()}
+
+    def get(self, request, *args, **kwargs):
+        # 1. Hot in-memory cache
+        cached = self._read_cache()
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 2. Disk cache (persistent across restarts)
+        disk_key = "heatwave-monitoring:aggregate"
+        disk_cached = _heatwave_disk_get(disk_key, self.DISK_TTL_SECONDS)
+        if disk_cached is not None:
+            self._write_cache(disk_cached)
+            return JsonResponse(disk_cached)
+
+        # 3. Network — _fetch_city_now itself reads/writes per-city disk
+        # entries, so cities whose samples are still fresh skip the API.
+        features = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(self._fetch_city_now, c) for c in PAKISTAN_HEATWAVE_CITIES]
+            for fut in as_completed(futures):
+                try:
+                    feat = fut.result()
+                    if feat and feat["properties"].get("temperature") is not None:
+                        features.append(feat)
+                except Exception as exc:
+                    logger.debug("Heatwave city fetch failed: %s", exc)
+
+        geojson = {"type": "FeatureCollection", "features": features}
+        self._write_cache(geojson)
+        if features:
+            _heatwave_disk_put(disk_key, geojson)
+        return JsonResponse(geojson)
+
+
+class HeatwaveDetailView(View):
+    """
+    Detail endpoint used by the popup charts. Returns one of three datasets:
+
+        type=forecast  -> 16-day daily forecast (api.open-meteo.com /forecast)
+        type=seasonal  -> 6-month seasonal/weekly forecast (seasonal-forecast-api)
+        type=climate   -> climate-change daily projection (climate-api)
+
+    Per (lat, lon, type) results are cached in-process AND on disk so a
+    server restart doesn't burn through the Open-Meteo rate limit. TTLs are
+    chosen to match how often each upstream actually changes.
+
+    Outbound calls are funneled through the same semaphore as
+    HeatwaveMonitoringView.
+    """
+    CACHE_TTL = timedelta(minutes=15)
+    _cache_lock = threading.Lock()
+    _cache = {}  # key -> (data, ts)
+
+    URLS = {
+        "forecast": "https://api.open-meteo.com/v1/forecast",
+        "seasonal": "https://seasonal-api.open-meteo.com/v1/seasonal",
+        "climate":  "https://climate-api.open-meteo.com/v1/climate",
+    }
+
+    # Disk TTLs (seconds). Forecast updates ~hourly upstream so 1h is fine;
+    # seasonal refreshes daily (cap at 6h); climate projections are
+    # effectively static (24h is more than enough).
+    DISK_TTL_SECONDS = {
+        "forecast": 60 * 60,
+        "seasonal": 6 * 60 * 60,
+        "climate":  24 * 60 * 60,
+    }
+
+    def _cache_get(self, key):
+        with self._cache_lock:
+            entry = self._cache.get(key)
+            if entry and datetime.now() - entry[1] < self.CACHE_TTL:
+                return entry[0]
+        return None
+
+    def _cache_put(self, key, data):
+        with self._cache_lock:
+            # Soft cap to avoid unbounded growth
+            if len(self._cache) > 256:
+                self._cache.clear()
+            self._cache[key] = (data, datetime.now())
+
+    def _build_params(self, kind, lat, lon):
+        if kind == "forecast":
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_max,relative_humidity_2m_min,apparent_temperature_max",
+                "current": "temperature_2m,relative_humidity_2m,precipitation",
+                "forecast_days": 16,
+                "timezone": "Asia/Karachi",
+            }
+        if kind == "seasonal":
+            # NOTE: seasonal-api supports a *very* narrow set of weekly
+            # variables — only `temperature_2m_mean` validates. Humidity / min
+            # / max come from the `daily` series instead.
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "weekly": "temperature_2m_mean",
+                "daily": "temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,relative_humidity_2m_min",
+                "timezone": "Asia/Karachi",
+            }
+        if kind == "climate":
+            today = datetime.utcnow().date()
+            start = today.replace(year=today.year - 1).isoformat()
+            end = today.replace(year=today.year + 4).isoformat()
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "start_date": start,
+                "end_date": end,
+                "daily": "temperature_2m_mean,temperature_2m_max,precipitation_sum",
+                "models": "MRI_AGCM3_2_S",
+                "timezone": "Asia/Karachi",
+            }
+        return None
+
+    def get(self, request, *args, **kwargs):
+        try:
+            lat = float(request.GET.get("lat"))
+            lon = float(request.GET.get("lon"))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "lat/lon required"}, status=400)
+        kind = (request.GET.get("type") or "forecast").lower()
+        if kind not in self.URLS:
+            return JsonResponse({"error": "invalid type"}, status=400)
+
+        key = f"{kind}:{round(lat, 3)}:{round(lon, 3)}"
+
+        # 1. Hot in-memory cache
+        cached = self._cache_get(key)
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 2. Disk cache — survives gunicorn restarts
+        disk_ttl = self.DISK_TTL_SECONDS.get(kind, 60 * 60)
+        disk_key = f"detail:{key}"
+        disk_cached = _heatwave_disk_get(disk_key, disk_ttl)
+        if disk_cached is not None:
+            self._cache_put(key, disk_cached)
+            return JsonResponse(disk_cached)
+
+        # 3. Network
+        params = self._build_params(kind, lat, lon)
+        url = self.URLS[kind]
+
+        # Even though this is a single call we still wrap it so the same
+        # semaphore caps total concurrent outbound traffic across endpoints.
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            data, err = ex.submit(_heatwave_get, url, params, 12).result()
+
+        if data is None:
+            # Last-ditch fallback: if Open-Meteo refused/rate-limited but we
+            # have a stale-but-not-ancient disk entry, serve it rather than
+            # surfacing a 502 to the user. Marks the response so the client
+            # can flag it as stale if it cares.
+            stale = _heatwave_disk_get(disk_key, disk_ttl * 4)
+            if stale is not None:
+                stale_marked = dict(stale)
+                stale_marked["stale"] = True
+                return JsonResponse(stale_marked)
+            return JsonResponse(
+                {"error": "upstream fetch failed", "type": kind, "detail": err or {}},
+                status=502,
+            )
+
+        payload = {"type": kind, "lat": lat, "lon": lon, "data": data}
+        self._cache_put(key, payload)
+        _heatwave_disk_put(disk_key, payload)
+        return JsonResponse(payload)
+
+
 #WAQI LOCAL PAKISTAN STATION SMOG VIEW
 
 class WAQIgeojson(View):
@@ -4449,22 +4910,28 @@ class GDELTClient:
             }
         )
 
-        # Configure retry strategy with version compatibility
+        # Configure retry strategy with version compatibility.
+        # NOTE: total=0 (was 3).  The old value meant urllib3 retried 3
+        # times BEFORE our own retry loop in fetch_articles() got to
+        # decide anything — so every network hiccup ate 1+2+4 = 7 extra
+        # seconds inside a SINGLE session.get() call, plus the manual
+        # retries on top.  In production this stacked past nginx's
+        # 60s proxy_read_timeout → clients saw 504 before Django even
+        # returned.  We keep the retry policy in one place now (the
+        # manual loop below) and cap the total budget from the caller.
         try:
-            # Try new parameter name first (urllib3 >= 1.26.0)
             retry_strategy = Retry(
-                total=3,
+                total=0,
                 status_forcelist=[429, 500, 502, 503, 504],
                 allowed_methods=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1,
+                backoff_factor=0,
             )
         except TypeError:
-            # Fallback to old parameter name (urllib3 < 1.26.0)
             retry_strategy = Retry(
-                total=3,
+                total=0,
                 status_forcelist=[429, 500, 502, 503, 504],
                 method_whitelist=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1,
+                backoff_factor=0,
             )
 
         # Mount adapter with retry strategy
@@ -4484,9 +4951,26 @@ class GDELTClient:
         max_records: int = 200,
         source_country: str = "",
         max_retries: int = 3,
+        deadline_seconds: float = 50.0,
     ) -> Dict[str, Any]:
         """
-        Fetch articles from GDELT with robust error handling and SSL bypass
+        Fetch articles from GDELT with a hard time budget.
+
+        `deadline_seconds` bounds the TOTAL wall-clock this call may
+        consume across all retries and sleeps.  Nginx in production
+        proxies with a 60s upstream timeout, so we keep the budget
+        strictly under that (default 50s = ~10s safety margin for
+        GeoJSON building + serialization + network back to the client).
+
+        Prior versions used 25s which was too aggressive — GDELT's own
+        read-timeout could eat a whole attempt, leaving no room for
+        even a single retry.  50s comfortably fits 2 attempts at 20s
+        each plus the backoff sleep between them.
+
+        The manual retry loop below is the ONLY retry layer now — the
+        HTTPAdapter has been configured with total=0.  Between attempts
+        we sleep with backoff, but only if the remaining budget
+        actually allows another attempt.
         """
         # Query already has OR operators, so wrap in parentheses properly
         final_query = f"({query}) AND sourcelang:english"
@@ -4503,22 +4987,28 @@ class GDELTClient:
             "enddatetime": end_date,
         }
 
+        deadline = time.time() + max(1.0, deadline_seconds)
+        # Per-attempt HTTP timeout — sized so that at least 2 attempts
+        # fit inside the deadline.  Smaller than the old 30s (which
+        # allowed only one attempt inside a 60s nginx window) but
+        # larger than the too-aggressive 12s we tried earlier.
+        per_call_timeout = min(20.0, max(8.0, deadline_seconds / 2.5))
+
         for attempt in range(max_retries):
+            remaining = deadline - time.time()
+            if remaining <= 1.0:
+                print(f"GDELT: out of time budget after {attempt} attempts, giving up.")
+                break
             try:
-                print(f"Making GDELT API request (attempt {attempt + 1}/{max_retries})")
-                print(f"URL: {self.base_url}")
-                print(f"Params: {params}")
+                print(f"Making GDELT API request (attempt {attempt + 1}/{max_retries}, {remaining:.1f}s left)")
 
                 response = self.session.get(
                     self.base_url,
                     params=params,
-                    timeout=30,
+                    timeout=min(per_call_timeout, remaining),
                     verify=False,
                     stream=False,
                 )
-
-                print(f"GDELT API Response Status: {response.status_code}")
-                print(f"Response Headers: {dict(response.headers)}")
 
                 if response.status_code == 200:
                     try:
@@ -4530,33 +5020,36 @@ class GDELTClient:
                             return data
                         else:
                             print(f"Invalid response structure: {type(data)}")
-                            print(f"Response keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
 
                     except json.JSONDecodeError as e:
                         print(f"JSON decode error: {e}")
-                        print(f"Response content (first 500 chars): {response.text[:500]}")
 
                 elif response.status_code == 429:
-                    wait_time = min(60 * (attempt + 1), 300)
-                    print(f"Rate limited, waiting {wait_time} seconds...")
+                    # Cap the 429 backoff HARD — the previous formula
+                    # (60 × attempt, cap 300) meant a single 429 could
+                    # freeze the request for 5 minutes.  15s cap keeps
+                    # the whole retry loop under budget.
+                    wait_time = min(5 * (attempt + 1), 15)
+                    remaining_now = deadline - time.time()
+                    if wait_time >= remaining_now:
+                        print(f"GDELT 429: would need {wait_time}s but only {remaining_now:.1f}s left, aborting.")
+                        break
+                    print(f"GDELT rate limited, waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
 
                 elif response.status_code in [500, 502, 503, 504]:
-                    print(f"Server error: {response.status_code}")
-                    if attempt < max_retries - 1:
-                        wait_time = 2**attempt
-                        print(f"Waiting {wait_time} seconds before retry...")
-                        time.sleep(wait_time)
-                        continue
+                    print(f"GDELT server error {response.status_code}")
 
                 else:
-                    print(f"HTTP error: {response.status_code}")
-                    print(f"Response content: {response.text[:200]}")
+                    print(f"GDELT HTTP {response.status_code}: {response.text[:200]}")
 
+                # Backoff before the next attempt (short exponential).
                 if attempt < max_retries - 1:
-                    wait_time = 2**attempt
-                    print(f"Request failed, waiting {wait_time} seconds before retry...")
+                    wait_time = min(1 + attempt, 3)
+                    remaining_now = deadline - time.time()
+                    if wait_time >= remaining_now:
+                        break
                     time.sleep(wait_time)
                     continue
 
@@ -5417,11 +5910,27 @@ class GdeltNewsEventsApi(View):
 
             print("Starting data fetching with ENHANCED PAKISTAN FOCUS...")
 
-            # Test GDELT connection first
-            if not include_only_social_media:
-                connection_test = self.gdelt_client.test_connection()
-                if not connection_test:
-                    print("GDELT connection test failed, will try to proceed anyway...")
+            # Cache key covers everything that affects the response — a
+            # cache hit means the SAME (query, days, max_records, sources,
+            # include-flags) tuple can be served from memory instantly.
+            # bucket_10min rounds the current UTC minute down so hits
+            # within the same 10-minute window reuse the same key.
+            bucket_10min = int(time.time()) // 600
+            cache_key = (
+                f"gdelt_news|q={hash(search_query)}|d={days_back}|m={max_records}|"
+                f"sc={source_country}|ism={include_social_media}|iom={include_only_social_media}|"
+                f"ir={include_reddit}|im={include_mastodon}|b={bucket_10min}"
+            )
+            cached = cache.get(cache_key)
+            if cached:
+                print("GDELT: serving fresh cached response.")
+                return JsonResponse(cached)
+
+            # NOTE: previous code called self.gdelt_client.test_connection()
+            # here, which fired an extra network round-trip on every user
+            # click.  That test frequently 429'd (Nginx would 504 waiting
+            # for the retries) even when the real fetch below would have
+            # succeeded — and its result was thrown away.  Skipped.
 
             # Initialize data containers
             gdelt_data = {'articles': []}
@@ -5461,15 +5970,46 @@ class GdeltNewsEventsApi(View):
                         "GDELT API failed, checking if social media can provide data..."
                     )
                     if not include_social_media:
+                        # Stale-fallback: if we have a last-known-good
+                        # response for this query tuple, hand it back
+                        # as 200 with metadata.stale=true so the client
+                        # keeps rendering yesterday's cards instead of
+                        # an empty panel + fatal error.
+                        try:
+                            stable_key = cache_key.rsplit("|b=", 1)[0] + "|lkg"
+                            stale = cache.get(stable_key)
+                            if stale and stale.get("features"):
+                                print("GDELT: upstream failed; serving stale LKG.")
+                                stale_meta = dict(stale.get("metadata") or {})
+                                stale_meta["stale"] = True
+                                stale_meta["stale_reason"] = "GDELT upstream unavailable (likely rate-limited)"
+                                return JsonResponse({**stale, "metadata": stale_meta})
+                        except Exception:
+                            pass
+                        # No cache to fall back on — return an EMPTY
+                        # valid GeoJSON with an inline warning instead
+                        # of 503.  This lets the frontend render a
+                        # friendly "News temporarily unavailable" state
+                        # via the same code path it uses for normal
+                        # responses, and it stops nginx from surfacing
+                        # a bare Bad Gateway page in production.
                         return JsonResponse(
                             {
-                                "error": "GDELT API is currently unavailable due to SSL certificate issues. Please try enabling social media sources or contact support.",
-                                "status": "error",
-                                "technical_details": "SSL certificate verification failed",
-                                "suggestion": "Add ?include_social_media=true to your request to get data from alternative sources",
-                                "retry_after": "Please try again later or use social media sources",
+                                "type": "FeatureCollection",
+                                "features": [],
+                                "metadata": {
+                                    "generated_at": datetime.utcnow().isoformat(),
+                                    "sources": [],
+                                    "total_features": 0,
+                                    "stale": False,
+                                    "error": True,
+                                    "error_reason": (
+                                        "GDELT upstream is currently rate-limited "
+                                        "or unreachable. Try refreshing in a few minutes."
+                                    ),
+                                },
                             },
-                            status=503,
+                            status=200,
                         )
 
                 # Fetch social media data if requested
@@ -5514,7 +6054,19 @@ class GdeltNewsEventsApi(View):
                     if not include_only_social_media
                     else None
                 ),
+                "stale": False,
             }
+
+            # Cache the successful response for 10 min AND also keep a
+            # "last-known-good" copy under a stable key for the stale-
+            # fallback path below.  The bucketed key expires with the
+            # bucket; the last-known-good key survives multiple buckets
+            # so a failed refresh can still hand back yesterday's news
+            # instead of an empty panel.
+            if geojson_data.get("features"):
+                cache.set(cache_key, geojson_data, 600)
+                stable_key = cache_key.rsplit("|b=", 1)[0] + "|lkg"
+                cache.set(stable_key, geojson_data, 86400)  # 24 h
 
             return JsonResponse(geojson_data)
 
@@ -5524,6 +6076,28 @@ class GdeltNewsEventsApi(View):
             )
         except Exception as e:
             print(f"Unexpected server error: {e}")
+            # Stale-fallback: if we have a last-known-good response for
+            # THIS query tuple, serve it with metadata.stale = True so
+            # the browser can render the last-good cards and just tag
+            # the panel as "showing older data" instead of an empty box.
+            try:
+                bucket_10min = int(time.time()) // 600
+                cache_key_local = (
+                    f"gdelt_news|q={hash(search_query)}|d={days_back}|m={max_records}|"
+                    f"sc={source_country}|ism={include_social_media}|iom={include_only_social_media}|"
+                    f"ir={include_reddit}|im={include_mastodon}|b={bucket_10min}"
+                )
+                stable_key = cache_key_local.rsplit("|b=", 1)[0] + "|lkg"
+                stale = cache.get(stable_key)
+                if stale:
+                    print("GDELT: upstream failed; serving stale last-known-good response.")
+                    meta = stale.get("metadata") or {}
+                    meta = {**meta, "stale": True, "stale_reason": str(e)[:200]}
+                    stale = {**stale, "metadata": meta}
+                    return JsonResponse(stale)
+            except Exception:
+                pass
+
             return JsonResponse(
                 {
                     "error": "Internal server error",
@@ -6075,6 +6649,13 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
         return pts
 
     def _fetch_wind(self, lat: float, lon: float) -> Optional[Dict]:
+        # Once we know the daily quota is exhausted, don't waste more
+        # requests on Open-Meteo — every subsequent call would just get
+        # HTTP 429 back and flood the terminal.  The quota resets at UTC
+        # midnight; per-instance short-circuit is enough since the same
+        # request handler owns the flag for the lifetime of one GET.
+        if self._wind_quota_exhausted:
+            return None
         _wop_limiter.wait()
         try:
             r = requests.get(
@@ -6103,6 +6684,7 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                     dirn = dir_arr[0]
 
             if spd is None or dirn is None:
+                self._wind_errors.append(f"lat={lat},lon={lon}: no current/hourly wind fields in response")
                 return None
 
             spd = float(spd)
@@ -6116,11 +6698,46 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "v": round(-math.cos(rad) * spd, 4),
                 "spd": round(spd, 2),
             }
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            body = ""
+            try:
+                body = (e.response.text or "")[:200]
+            except Exception:
+                pass
+            # HTTP 429 with "Daily API request limit exceeded" is the
+            # ONLY 429 signature Open-Meteo emits when the free-tier
+            # quota is done for the day — flip the short-circuit flag
+            # so the remaining grid cells don't each get their own
+            # rejected request + terminal line.
+            if status == 429 and "Daily API request limit exceeded" in body:
+                self._wind_quota_exhausted = True
+                # Record ONE canonical warning instead of 80 identical
+                # rows; the view will hand this to the client as
+                # meta.warning so the browser can surface it.
+                if not self._wind_errors:
+                    self._wind_errors.append(
+                        "Open-Meteo daily wind-forecast quota exhausted. "
+                        "Wind particles will resume after UTC midnight."
+                    )
+                return None
+            msg = f"HTTP {status} at lat={lat},lon={lon}"
+            if body:
+                msg += f" body={body!r}"
+            self._wind_errors.append(msg)
+            print(f"[WOP wind] {msg}")
+            return None
         except Exception as e:
-            print(f"[WOP wind] failed at lat={lat}, lon={lon}: {e}")
+            msg = f"lat={lat},lon={lon}: {type(e).__name__}: {e}"
+            self._wind_errors.append(msg)
+            print(f"[WOP wind] failed {msg}")
             return None
 
     def _fetch_ocean(self, lat: float, lon: float) -> Optional[Dict]:
+        # Same short-circuit pattern as _fetch_wind — once the marine
+        # endpoint's daily quota is done, skip the rest of the grid.
+        if self._ocean_quota_exhausted:
+            return None
         _wop_limiter.wait()
         try:
             r = requests.get(
@@ -6171,8 +6788,31 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "v": round(math.cos(rad) * spd, 4),
                 "spd": round(spd, 4),
             }
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            body = ""
+            try:
+                body = (e.response.text or "")[:200]
+            except Exception:
+                pass
+            if status == 429 and "Daily API request limit exceeded" in body:
+                self._ocean_quota_exhausted = True
+                if not self._ocean_errors:
+                    self._ocean_errors.append(
+                        "Open-Meteo daily ocean-currents quota exhausted. "
+                        "Ocean particles will resume after UTC midnight."
+                    )
+                return None
+            msg = f"HTTP {status} at lat={lat},lon={lon}"
+            if body:
+                msg += f" body={body!r}"
+            self._ocean_errors.append(msg)
+            print(f"[WOP ocean] {msg}")
+            return None
         except Exception as e:
-            print(f"[WOP ocean] failed at lat={lat}, lon={lon}: {e}")
+            msg = f"lat={lat},lon={lon}: {type(e).__name__}: {e}"
+            self._ocean_errors.append(msg)
+            print(f"[WOP ocean] failed {msg}")
             return None
 
     def get(self, request, *args, **kwargs):
@@ -6201,6 +6841,16 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
 
         wind_pts: List[Dict] = []
         ocean_pts: List[Dict] = []
+        # Diagnostic collectors — each _fetch_* appends when it returns
+        # None so the response's `meta.wind_errors` block surfaces WHY
+        # a request failed instead of forcing us to check Django's stdout.
+        self._wind_errors: List[str] = []
+        self._ocean_errors: List[str] = []
+        # Quota short-circuit flags — once flipped, remaining grid cells
+        # skip the network call entirely so we don't hammer Open-Meteo
+        # with 80+ requests that will all return HTTP 429.
+        self._wind_quota_exhausted = False
+        self._ocean_quota_exhausted = False
 
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as ex:
             wind_futs = [ex.submit(self._fetch_wind, lat, lon) for lat, lon in grid]
@@ -6222,6 +6872,27 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 except Exception as e:
                     print(f"[WOP ocean future] {e}")
 
+        # Compose a single, user-facing `warning` string when EITHER
+        # provider is out of daily quota — the frontend uses this to
+        # surface a toast + auto-toggle the button off instead of
+        # leaving it visually "on" while nothing renders.
+        warning = None
+        if self._wind_quota_exhausted and self._ocean_quota_exhausted:
+            warning = ("Wind and ocean data unavailable — Open-Meteo's daily "
+                       "quota is exhausted. Both feeds resume after UTC midnight.")
+        elif self._wind_quota_exhausted:
+            warning = ("Wind data unavailable — Open-Meteo's daily quota is "
+                       "exhausted. Wind animation resumes after UTC midnight.")
+        elif self._ocean_quota_exhausted:
+            warning = ("Ocean currents unavailable — Open-Meteo's daily quota is "
+                       "exhausted. Ocean animation resumes after UTC midnight.")
+
+        # Emit ONE terminal summary line instead of ~80 identical 429 rows.
+        if self._wind_quota_exhausted or self._ocean_quota_exhausted:
+            print(f"[WOP] quota exhausted — wind:{self._wind_quota_exhausted} "
+                  f"ocean:{self._ocean_quota_exhausted} — served "
+                  f"{len(wind_pts)} wind / {len(ocean_pts)} ocean pts from partial fetch")
+
         payload = {
             "bbox": {"s": sw_lat, "w": sw_lng, "n": ne_lat, "e": ne_lng},
             "meta": {
@@ -6231,6 +6902,15 @@ class WindOceanParticleDataApi(LoginRequiredMixin, View):
                 "wind_count": len(wind_pts),
                 "ocean_count": len(ocean_pts),
                 "empty": (len(wind_pts) == 0 and len(ocean_pts) == 0),
+                # First few failure reasons — bounded so the payload
+                # stays small even if every grid cell errored.  Client
+                # code ignores meta; this is purely for browser DevTools.
+                "wind_errors":  self._wind_errors[:5],
+                "ocean_errors": self._ocean_errors[:5],
+                # Quota flags + user-facing message.
+                "wind_quota_exhausted":  self._wind_quota_exhausted,
+                "ocean_quota_exhausted": self._ocean_quota_exhausted,
+                "warning": warning,
             },
             "wind": wind_pts,
             "ocean": ocean_pts,
@@ -6412,3 +7092,1287 @@ if __name__ == "__main__":
 
     print("\n=== Production Notes ===")
     configure_for_production()
+
+
+# ==================================================================
+#  IPC / Food Security proxy — resolves the latest analysis for a
+#  country against IPC Info's public API and returns the GeoJSON.
+#  Additive — new class, new URL route, does not touch any existing
+#  view or dispatcher.
+#
+#  Why this needs a backend at all: the "latest analysis" resolve
+#  requires a two-step chain (GET /analyses → sort → GET /areas/<id>/P)
+#  that Mapbox's built-in GeoJSON source can't do on its own.  Doing
+#  it server-side also fixes the country-code bug documented in the
+#  GCOP integration notes: IPC's /analyses endpoint expects ISO 3166
+#  alpha-2 codes, not the alpha-3 codes GCOP was originally sending,
+#  which silently forced every ipc_* layer to fall back to a stale
+#  hardcoded snapshot instead of the true latest.
+#
+#  The response is cached per-country for 6 hours (IPC publishes
+#  analysis cycles quarterly, so hourly cache invalidation would be
+#  wasteful).  Failure returns an empty FeatureCollection so the
+#  frontend just renders nothing instead of an error state.
+# ==================================================================
+class IpcFoodSecurityAPIView(View):
+    IPC_KEY  = "ec20f488-0457-448e-b9f0-c32900af975c"
+    ANALYSES = "https://api.ipcinfo.org/analyses"
+    AREAS    = "https://api.ipcinfo.org/areas"
+    CACHE_TTL = 6 * 3600  # 6 hours
+
+    # ISO 3166 alpha-2 codes — verified live against /analyses on
+    # 2026-07-27.  Scoped to the South-Asia trio that's directly
+    # relevant to NCOP's operational area; every one of these returns
+    # at least one non-empty polygon analysis.  Countries IPC does NOT
+    # currently classify (India, Iran, Sri Lanka, Nepal, Bhutan,
+    # Myanmar) would return empty lists — see integration notes.
+    COUNTRY_CODES = {
+        "pakistan":    "PK",
+        "afghanistan": "AF",
+        "bangladesh":  "BD",
+    }
+
+    # Max analyses we'll walk before giving up.  IPC's newest published
+    # analysis is often a "projection" or table without polygon geometry
+    # (Somalia's newest ID currently returns 0 features), so we fall
+    # through to the next-newest until one returns features > 0.  Six
+    # is plenty — polygon publication happens on every real cycle.
+    MAX_ANALYSIS_WALK = 6
+
+    def get(self, request, country):
+        country = (country or "").lower()
+        if country not in self.COUNTRY_CODES:
+            return JsonResponse(
+                {"type": "FeatureCollection", "features": [],
+                 "meta": {"error": f"unsupported country '{country}'"}},
+                status=404,
+            )
+
+        cache_key = f"ipc_fc|{country}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
+
+        code = self.COUNTRY_CODES[country]
+        # Ordered list of candidate analysis IDs, newest first.  We walk
+        # this list (fetching /areas/<id>/P per attempt) until one
+        # returns non-empty features — see MAX_ANALYSIS_WALK note.
+        candidates = self._resolve_analysis_candidates(code)
+        if not candidates:
+            empty = {"type": "FeatureCollection", "features": [],
+                     "meta": {"error": "no analysis available", "country": country}}
+            return JsonResponse(empty, status=200)
+
+        last_error = None
+        for ana_id in candidates:
+            try:
+                r = requests.get(
+                    f"{self.AREAS}/{ana_id}/P",
+                    params={"format": "geojson", "key": self.IPC_KEY},
+                    timeout=15,
+                )
+                r.raise_for_status()
+                data = r.json()
+            except Exception as e:
+                last_error = str(e)
+                print(f"[IPC] /areas fetch failed for {country} (id={ana_id}): {e}")
+                continue
+
+            feats = (data or {}).get("features") or [] if isinstance(data, dict) else []
+            if not feats:
+                # Common case — the newest analysis is a projection
+                # without polygon geometry; fall through to older ones.
+                print(f"[IPC] {country} analysis {ana_id} has 0 features, trying next.")
+                continue
+
+            # Success — stamp meta so the frontend can show which
+            # analysis cycle is on screen and cache for 6 h.
+            data.setdefault("meta", {})
+            data["meta"]["analysis_id"] = ana_id
+            data["meta"]["country"] = country
+            data["meta"]["feature_count"] = len(feats)
+            cache.set(cache_key, data, self.CACHE_TTL)
+            return JsonResponse(data)
+
+        # Walked every candidate without finding one with polygons.
+        return JsonResponse(
+            {"type": "FeatureCollection", "features": [],
+             "meta": {"error": f"no analysis with polygon data available (last: {last_error})",
+                      "country": country, "tried_ids": candidates}},
+            status=200,
+        )
+
+    def _resolve_analysis_candidates(self, alpha2_code):
+        """Return analysis ids newest-first (sorted by year, then created)."""
+        try:
+            r = requests.get(
+                self.ANALYSES,
+                params={
+                    "format": "json",
+                    "type": "A",
+                    "country": alpha2_code,
+                    "key": self.IPC_KEY,
+                },
+                timeout=10,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[IPC] /analyses failed for {alpha2_code}: {e}")
+            return []
+        if not isinstance(payload, list) or not payload:
+            return []
+        # Sort by (year, created) desc — the original code sorted by
+        # `from_date` which doesn't exist on any IPC response, so the
+        # sort was effectively a no-op and depended on IPC's own
+        # response order.  These two fields are always present.
+        payload.sort(
+            key=lambda a: (a.get("year") or 0, a.get("created") or ""),
+            reverse=True,
+        )
+        return [str(a.get("id") or "") for a in payload[: self.MAX_ANALYSIS_WALK] if a.get("id")]
+
+
+# ==================================================================
+#  IPC PTT (Population Tracking Tool) proxy — yearly historical
+#  analyses for a country.
+#
+#  IPC's PTT is a public dashboard on top of a public JSON endpoint at
+#  gsu-prod.ipc.codes.  We hit /api/ptt/data-with-meta which returns
+#  every published analysis for the requested country across the year
+#  range, each with `totals.current` / `totals.projected-1` blocks
+#  containing the phase-1..5 populations + percentages the modal's
+#  history tab needs.  Not scraping — this is the same JSON endpoint
+#  IPC's own dashboard consumes.
+#
+#  Normalized so the frontend gets one flat row per analysis, sorted
+#  oldest → newest for chart X-axis chronology.  Cached 24 h — IPC
+#  publishes on a quarterly cycle, so per-hour invalidation would be
+#  overkill.  Failure returns an empty timeline (200 with
+#  meta.error) rather than an HTTP error so the modal can render a
+#  friendly empty-state.
+# ==================================================================
+class IpcHistoryAPIView(View):
+    PTT_URL = "https://gsu-prod.ipc.codes/api/ptt/data-with-meta/2017,2027"
+    CACHE_TTL = 24 * 3600
+
+    COUNTRY_CODES = IpcFoodSecurityAPIView.COUNTRY_CODES  # reuse alpha-2 map
+
+    def get(self, request, country):
+        country = (country or "").lower()
+        if country not in self.COUNTRY_CODES:
+            return JsonResponse(
+                {"analyses": [], "meta": {"error": f"unsupported country '{country}'"}},
+                status=404,
+            )
+
+        cache_key = f"ipc_ptt|{country}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
+
+        code = self.COUNTRY_CODES[country]
+        try:
+            r = requests.get(
+                self.PTT_URL,
+                params={"country": code, "limit": 100},
+                headers={"User-Agent": "NCOP/1.0", "Accept": "application/json"},
+                timeout=20,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[IPC PTT] fetch failed for {country}: {e}")
+            return JsonResponse(
+                {"analyses": [], "meta": {"error": str(e)[:200], "country": country}},
+                status=200,
+            )
+
+        raw = payload.get("data") or []
+        normalized = []
+        for it in raw:
+            if not isinstance(it, dict):
+                continue
+            totals = it.get("totals") or {}
+            # Prefer "current" period totals; fall back to first
+            # projected block if the analysis is projection-only.
+            period_key = None
+            block = None
+            for k in ("current", "projected-1", "projected-2"):
+                if isinstance(totals.get(k), dict) and totals[k]:
+                    period_key = k
+                    block = totals[k]
+                    break
+            if not block:
+                continue
+
+            date_str = it.get("analysis_date") or it.get("fanalysis_date") or ""
+            normalized.append({
+                "anl_id":            str(it.get("anl_id") or ""),
+                "title":             it.get("title") or "",
+                "date":              date_str[:10] if isinstance(date_str, str) else "",
+                "period":            period_key,
+                "analyzed_pop":      block.get("analyzedPopulation") or 0,
+                "phase1_pop":        block.get("phase1Population") or 0,
+                "phase2_pop":        block.get("phase2Population") or 0,
+                "phase3_pop":        block.get("phase3Population") or 0,
+                "phase4_pop":        block.get("phase4Population") or 0,
+                "phase5_pop":        block.get("phase5Population") or 0,
+                "phase3plus_pop":    block.get("phase3PlusPopulation") or 0,
+                "phase1_pct":        block.get("phase1Percentage") or 0,
+                "phase2_pct":        block.get("phase2Percentage") or 0,
+                "phase3_pct":        block.get("phase3Percentage") or 0,
+                "phase4_pct":        block.get("phase4Percentage") or 0,
+                "phase5_pct":        block.get("phase5Percentage") or 0,
+                "phase3plus_pct":    block.get("phase3PlusPercentage") or 0,
+                "country_population": it.get("country_population") or 0,
+            })
+
+        # Oldest first — chart X-axis reads left-to-right by convention.
+        normalized.sort(key=lambda a: a.get("date") or "")
+
+        result = {
+            "analyses": normalized,
+            "meta": {
+                "country":   country,
+                "count":     len(normalized),
+                "source":    "gsu-prod.ipc.codes / IPC PTT public API",
+                "cached_ttl_seconds": self.CACHE_TTL,
+            },
+        }
+        cache.set(cache_key, result, self.CACHE_TTL)
+        return JsonResponse(result)
+
+
+# ==================================================================
+#  Pakistan Crop Data proxy — na.data.gov.pk/Crops/*
+#  ----------------------------------------------------------------
+#  The upstream site (Pakistan Bureau of Statistics' National
+#  Account Dashboard for crops) publishes a stable public JSON API
+#  under /Crops/Get*.  We proxy it so:
+#    * the frontend can consume it with same-origin cookies (some
+#      browsers block third-party form-POST responses),
+#    * we get a 24-hour Django cache in front of an origin that
+#      typically responds in 1-3 s,
+#    * one code path can normalize error responses to
+#      { data: [] } instead of an HTML error page.
+#
+#  Endpoints (frontend base = /api/crops/):
+#    GET  list/                        → 121 crops [{id, name}]
+#    GET  years/                       → fiscal-year dropdown values
+#    GET  summary/?crop&year&level&area  → single-cell current-year card
+#    GET  yearly/?crop&level&area      → full ~44-year time series
+#    GET  map/?crop&year&level         → per-region values (province/division/district)
+#
+#  All are cached per (endpoint + query string).  Failure returns
+#  { data: [] } with HTTP 200 so the modal renders empty state.
+#  No HTML scraping — every endpoint is JSON.
+# ==================================================================
+class _CropsBaseView(View):
+    BASE_URL  = "https://na.data.gov.pk/Crops"
+    CACHE_TTL = 24 * 3600
+    TIMEOUT   = 20
+
+    def _fetch(self, path, method="GET", data=None, cache_key_extra=""):
+        cache_key = f"crops|{method}|{path}|{cache_key_extra}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        url = f"{self.BASE_URL}{path}"
+        try:
+            if method == "GET":
+                r = requests.get(url, timeout=self.TIMEOUT,
+                                 headers={"User-Agent": "NCOP/1.0",
+                                          "Accept": "application/json"})
+            else:
+                r = requests.post(url, data=(data or {}), timeout=self.TIMEOUT,
+                                  headers={"User-Agent": "NCOP/1.0",
+                                           "Accept": "application/json"})
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            print(f"[crops] {method} {path} failed: {e}")
+            return {"data": [], "meta": {"error": str(e)[:200]}}
+        cache.set(cache_key, payload, self.CACHE_TTL)
+        return payload
+
+
+class CropListAPIView(_CropsBaseView):
+    def get(self, request):
+        return JsonResponse(self._fetch("/GetCrops"))
+
+
+class CropYearsAPIView(_CropsBaseView):
+    def get(self, request):
+        return JsonResponse(self._fetch("/GetSelectList/?item=year",
+                                        cache_key_extra="year"))
+
+
+class CropSummaryAPIView(_CropsBaseView):
+    def get(self, request):
+        params = {
+            "level": request.GET.get("level", "11"),
+            "area":  request.GET.get("area",  "0"),
+            "year":  request.GET.get("year",  "2021-22"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['area']}|{params['year']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetSimpleCard", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+class CropYearlyAPIView(_CropsBaseView):
+    def get(self, request):
+        # Full historical time series — ~44 fiscal years for the classic crops.
+        params = {
+            "level": request.GET.get("level", "11"),
+            "area":  request.GET.get("area",  "0"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['area']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetYearly", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+class CropMapAPIView(_CropsBaseView):
+    def get(self, request):
+        # Per-region breakdown.  level: 11=Province, 12=Division, 13=District.
+        params = {
+            "level": request.GET.get("level", "11"),
+            "year":  request.GET.get("year",  "2021-22"),
+            "crop":  request.GET.get("crop",  "4"),
+        }
+        key = f"{params['level']}|{params['year']}|{params['crop']}"
+        return JsonResponse(
+            self._fetch("/GetMap", method="POST", data=params,
+                        cache_key_extra=key)
+        )
+
+
+# ==================================================================
+#  Crop choropleth GeoJSON endpoint — joins polygons + values
+#  ----------------------------------------------------------------
+#  na.data.gov.pk publishes two independent JSON feeds:
+#    * /Scripts/polygons/Provinces.json      → an ARRAY of
+#         { code, name, boundary: <MultiPolygon> }
+#    * /Crops/GetMap                          → per-region values
+#         { data: [{ id, name, production, area, yield }] }
+#  The `code` on the polygon file matches the `id` on the map feed
+#  1-for-1, so we join them here server-side and hand the frontend a
+#  standards-compliant FeatureCollection Mapbox's geojson source can
+#  consume directly.  This keeps the map layer registration in
+#  map-layers.js identical in shape to every other vector layer NCOP
+#  ships — no client-side stitching required.
+#
+#  Cached 24 h per (crop, year, level).  Failure returns an empty
+#  FeatureCollection with meta.error so the sidebar toggle renders
+#  gracefully instead of exposing an HTTP error.
+# ==================================================================
+class CropGeoJSONAPIView(_CropsBaseView):
+    POLY_URL = "https://na.data.gov.pk/Scripts/polygons"
+
+    # Which polygon file to fetch per level.  Divisions.json /
+    # Districts.json share the same {code, name, boundary} shape.
+    LEVEL_FILE = {
+        "11": "Provinces.json",
+        "12": "Divisions.json",
+        "13": "Districts.json",
+    }
+
+    def get(self, request):
+        crop  = request.GET.get("crop",  "4")
+        year  = request.GET.get("year",  "2021-22")
+        level = request.GET.get("level", "11")
+
+        cache_key = f"crops_geojson|{crop}|{year}|{level}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached)
+
+        # 1. Polygons — 1 cheap request; the geometry file is static
+        #    across crop/year selections so we cache it independently
+        #    with a longer TTL.  Uses a nested `_fetch_raw` because the
+        #    upstream serves a plain JSON array (not { data: [] }).
+        poly_file = self.LEVEL_FILE.get(level, "Provinces.json")
+        poly_cache_key = f"crops_poly|{level}"
+        polygons = cache.get(poly_cache_key)
+        if polygons is None:
+            try:
+                r = requests.get(
+                    f"{self.POLY_URL}/{poly_file}",
+                    timeout=self.TIMEOUT,
+                    headers={"User-Agent": "NCOP/1.0", "Accept": "application/json"},
+                )
+                r.raise_for_status()
+                polygons = r.json()
+                # 7-day cache — the polygon file changes almost never.
+                cache.set(poly_cache_key, polygons, 7 * 24 * 3600)
+            except Exception as e:
+                print(f"[crops geojson] polygon fetch failed ({poly_file}): {e}")
+                return JsonResponse({
+                    "type": "FeatureCollection", "features": [],
+                    "meta": {"error": f"polygon fetch failed: {e}"},
+                }, status=200)
+
+        # 2. Crop values — reuse the same cached path GetMap already
+        #    goes through in CropMapAPIView (identical params).
+        map_payload = self._fetch(
+            "/GetMap", method="POST",
+            data={"level": level, "year": year, "crop": crop},
+            cache_key_extra=f"{level}|{year}|{crop}",
+        )
+        rows = (map_payload or {}).get("data") or []
+        # Build TWO lookups so we can match districts (whose codes on
+        # the polygon feed are ints and on the map feed are zero-padded
+        # strings — e.g. polygon.code=5 vs map.id="005") AND provinces
+        # (which line up cleanly on int id).  Name-normalized lookup
+        # is a belt-and-braces fallback for edge cases.
+        def _to_int(v):
+            try:
+                return int(str(v).strip().lstrip("0") or "0")
+            except Exception:
+                return None
+        def _norm_name(n):
+            n = str(n or "").upper().strip()
+            # Drop the trailing " DISTRICT" / " DIVISION" suffix if
+            # present, then squeeze to alphanumerics for tolerant match.
+            for suffix in (" DISTRICT", " DIVISION"):
+                if n.endswith(suffix):
+                    n = n[: -len(suffix)]
+            return "".join(c for c in n if c.isalnum())
+
+        by_int_id  = {}
+        by_name    = {}
+        for r in rows:
+            rid = _to_int(r.get("id"))
+            entry = {
+                "production": float(r.get("production") or 0),
+                "area":       float(r.get("area")       or 0),
+                "yield":      float(r.get("yield")      or 0),
+                "name":       str(r.get("name") or "").strip(),
+            }
+            if rid is not None:
+                by_int_id[rid] = entry
+            nm = _norm_name(r.get("name"))
+            if nm:
+                by_name.setdefault(nm, entry)
+
+        # 3. Assemble the FeatureCollection.  Every polygon becomes a
+        #    feature — polygons without matching crop data get zero
+        #    values but stay in the file so the region still renders
+        #    (as a light-grey "no data" cell in the choropleth ramp).
+        features = []
+        for p in polygons or []:
+            code_raw = p.get("code")
+            geom = p.get("boundary")
+            if not geom or code_raw is None:
+                continue
+            code_int = _to_int(code_raw)
+            values = None
+            if code_int is not None and code_int in by_int_id:
+                values = by_int_id[code_int]
+            else:
+                nm = _norm_name(p.get("name"))
+                if nm and nm in by_name:
+                    values = by_name[nm]
+            has_data = values is not None
+            if not has_data:
+                values = {"production": 0, "area": 0, "yield": 0,
+                          "name": (p.get("name") or "").strip()}
+            features.append({
+                "type": "Feature",
+                "geometry": geom,
+                "properties": {
+                    "code":       str(code_raw),
+                    "name":       values["name"] or (p.get("name") or "").strip(),
+                    "production": values["production"],
+                    "area":       values["area"],
+                    "yield":      values["yield"],
+                    "crop_id":    int(crop) if str(crop).isdigit() else crop,
+                    "year":       year,
+                    "level":      int(level) if str(level).isdigit() else level,
+                    "has_data":   has_data,
+                },
+            })
+
+        # Compute min/max production for client-side ramp fallback.
+        prods = [f["properties"]["production"] for f in features if f["properties"]["has_data"]]
+        result = {
+            "type": "FeatureCollection",
+            "features": features,
+            "meta": {
+                "crop":  crop, "year":  year, "level": level,
+                "polygon_count": len(polygons or []),
+                "data_count":    len(rows),
+                "matched":       len([f for f in features if f["properties"]["has_data"]]),
+                "min_production": min(prods) if prods else 0,
+                "max_production": max(prods) if prods else 0,
+            },
+        }
+        cache.set(cache_key, result, self.CACHE_TTL)
+        return JsonResponse(result)
+
+
+# ==================================================================
+#  PMD Monitor — authenticated proxy for WRFPRS precipitation
+#  forecast GeoTIFFs → colorized PNGs for the temporal-slider system
+#  ----------------------------------------------------------------
+#  Fetches raw single-band precipitation-accumulation GeoTIFFs from
+#  the PMD Monitor portal (Chinese-vendor NWP system at a private IP),
+#  reprojects them to EPSG:3857, and colorizes them server-side via
+#  GDAL's color-relief mode using the vendor's own mm→RGB legend
+#  stops.  Frontend (map-layers.js + time-functions.js) consumes the
+#  returned per-step {url, coordinates} list as Mapbox `image`
+#  sources — one texture per forecast hour, opacity-scrubbed by the
+#  standard #temp-slider1 controller.
+#
+#  Auth: the vendor issues both a bearer JWT (in the login response's
+#  `token` field, valid ~30 days server-side) and an `ews_jwt` cookie
+#  gating page routes.  Only the bearer is needed for /api/* JSON
+#  and the /static/*.tif file range we scrape; the cookie is captured
+#  incidentally by the session jar and comes along for the ride.
+#
+#  Two caching layers, deliberately different TTLs:
+#    * model-run lookup (30 min) — cheap to refresh, want to notice new cycles
+#    * frame list per run (3 h)  — file list for a given run doesn't change
+#    * converted PNGs (unbounded, on-disk under MEDIA_ROOT/pmd_predictions/)
+#      — a given (element, run, forecast-hour) render never changes
+# ==================================================================
+_MON_BASE    = getattr(settings, "PMD_MONITOR_URL",  "https://115.186.56.181:12304").rstrip("/")
+_MON_USER    = getattr(settings, "PMD_MONITOR_USER", "")
+_MON_PASS    = getattr(settings, "PMD_MONITOR_PASS", "")
+_MON_TIMEOUT = 15
+_MON_HDRS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept":          "application/json, text/html, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         _MON_BASE + "/",
+}
+
+
+class _MonSSLAdapter(requests.adapters.HTTPAdapter):
+    """Legacy-TLS + no-cert adapter — the vendor host uses a self-signed
+    cert and a cipher/TLS-version policy that Python 3.10+ rejects by
+    default.  Confirmed live during discovery: plain `verify=False` alone
+    was not sufficient; we need SECLEVEL=0 and minimum_version=TLSv1."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try: ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except Exception: pass
+        try: ctx.minimum_version = ssl.TLSVersion.TLSv1
+        except Exception: pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def _mon_make_bare_session():
+    s = requests.Session()
+    s.mount("https://", _MonSSLAdapter())
+    s.headers.update(_MON_HDRS)
+    return s
+
+
+def _mon_extract_jwt(resp_json):
+    """Robust to slight upstream shape drift — walks the common token-
+    field names at both the top level and under `data`."""
+    if not isinstance(resp_json, dict):
+        return None
+    for key in ("token", "access_token", "jwt", "jwtToken", "accessToken", "id_token"):
+        val = resp_json.get(key)
+        if val and isinstance(val, str) and len(val) > 20:
+            return val
+    data = resp_json.get("data")
+    if isinstance(data, dict):
+        for key in ("token", "access_token", "jwt"):
+            val = data.get(key)
+            if val and isinstance(val, str) and len(val) > 20:
+                return val
+    return None
+
+
+def _mon_do_login(sess):
+    """POST creds, extract bearer JWT, attach to session default headers."""
+    if not (_MON_USER and _MON_PASS):
+        print("[pmd_monitor] credentials missing — set PMD_MONITOR_USER/PASS")
+        return False
+    creds = {"username": _MON_USER, "password": _MON_PASS}
+    for ep in ("/user/login", "/user/login/", "/api/user/login"):
+        try:
+            r = sess.post(f"{_MON_BASE}{ep}", json=creds, timeout=_MON_TIMEOUT,
+                          verify=False, allow_redirects=False)
+            if r.status_code not in (200, 201):
+                continue
+            body = r.json()
+            tok = _mon_extract_jwt(body)
+            if tok:
+                sess.headers["Authorization"] = f"Bearer {tok}"
+                return True
+            if body.get("success") in (True, "true") or body.get("code") in (0, "0", 200):
+                # Login succeeded but no bearer in body — cookies alone may
+                # be enough for some endpoints.  Kept for shape-drift safety.
+                return True
+        except Exception as e:
+            print(f"[pmd_monitor] login attempt {ep!r} failed: {e}")
+            continue
+    return False
+
+
+_mon_session         = None
+_mon_session_expiry  = 0.0
+_mon_session_lock    = threading.Lock()
+_MON_SESSION_TTL     = 3600  # 1 hour — refresh proactively, force-refresh on 401/403
+
+
+def _mon_sess():
+    """Return a logged-in requests.Session, one per Django worker process.
+    Rebuilds on TTL expiry or after a forced invalidation."""
+    global _mon_session, _mon_session_expiry
+    now = time.monotonic()
+    if _mon_session is not None and now < _mon_session_expiry:
+        return _mon_session
+    with _mon_session_lock:
+        if _mon_session is not None and now < _mon_session_expiry:
+            return _mon_session
+        sess = _mon_make_bare_session()
+        _mon_do_login(sess)
+        _mon_session = sess
+        _mon_session_expiry = now + _MON_SESSION_TTL
+    return _mon_session
+
+
+def _mon_invalidate_session():
+    global _mon_session, _mon_session_expiry
+    with _mon_session_lock:
+        _mon_session = None
+        _mon_session_expiry = 0.0
+
+
+def _mon_get(path, params=None, timeout=_MON_TIMEOUT):
+    """Authenticated GET → parsed JSON.  Retries once after re-login on 401/403."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise requests.HTTPError(f"Auth failed for GET {path}")
+
+
+def _mon_get_bytes(path, params=None, timeout=_MON_TIMEOUT):
+    """Same as _mon_get but returns raw bytes — for the .tif files, which
+    _mon_get would text/JSON-parse and thereby corrupt."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.content
+    raise requests.HTTPError(f"Auth failed for GET {path} (bytes)")
+
+
+# ---- Element registry ---------------------------------------------------
+# Each entry: element_key → { data_type, element, label, unit, stops }.
+# `data_type` and `element` are the vendor's own internal codes (discovered
+# by dumping the SPA's shipped JS chunks).  `stops` is [(value, (r,g,b))]
+# — a FIXED per-physical-quantity ramp (mm / °C / %), NOT auto-stretched,
+# so identical values render as identical colors across every frame.  The
+# ramp writer treats `stops[0][0] > 0` as "additive quantity" (precip,
+# snowfall) and emits an extra `0 → transparent` line so the no-signal
+# background stays clear of the map; for state quantities that can be 0
+# (cloud cover, humidity, temp) stops start at 0 or below and that
+# synthetic transparent line is skipped.  Precipitation stops verified
+# against the vendor legendList; temperature/humidity/cloud stops are
+# standard-meteorology defaults chosen where the vendor exposed no per-
+# element legend (nothing legend-shaped was findable in the SPA chunks).
+_MON_PRED_ELEMENTS = {
+    # ---- Precipitation (accumulation windows) --------------------------
+    "hourtpe":   {"data_type": "WRFPRS", "element": "HOURTPE",   "label": "3h Precipitation",  "unit": "mm",
+                  "stops": [(0.1, (185, 244, 171)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+                            (10, (37, 144, 38)),    (25, (98, 184, 255)),  (50, (0, 0, 252)),
+                            (100, (250, 0, 250))]},
+    "sixtpe":    {"data_type": "WRFPRS", "element": "SIXTPE",    "label": "6h Precipitation",  "unit": "mm",
+                  "stops": [(0.01, (166, 242, 143)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+                            (10, (37, 144, 38)),     (25, (98, 184, 255)),   (50, (0, 0, 252)),
+                            (100, (250, 0, 250))]},
+    "twelvetpe": {"data_type": "WRFPRS", "element": "TWELVETPE", "label": "12h Precipitation", "unit": "mm",
+                  "stops": [(0.1, (166, 242, 143)), (5, (61, 186, 61)),  (15, (97, 184, 255)),
+                            (30, (0, 0, 255)),       (70, (250, 0, 250)), (140, (128, 0, 64))]},
+    "daytpe":    {"data_type": "WRFPRS", "element": "DAYTPE",    "label": "24h Precipitation", "unit": "mm",
+                  "stops": [(0.1, (166, 242, 143)), (10, (61, 186, 61)),  (25, (97, 184, 255)),
+                            (50, (0, 0, 255)),       (100, (250, 0, 250)), (250, (128, 0, 64))]},
+
+    # ---- Temperature / humidity / cloud (state quantities) -------------
+    # 2m Temperature — WRFPRS is the Pakistan-tuned model, first choice
+    # over GDFS.  Ramp: purple → blue → cyan → green → yellow → red across
+    # -30..+45 °C, freezing at cyan (0 °C).
+    "temp2m":       {"data_type": "WRFPRS", "element": "TEM",  "label": "2m Temperature",   "unit": "°C",
+                     "stops": [(-30, (128, 0, 128)), (-15, (0, 0, 255)),   (0, (0, 255, 255)),
+                               (10,  (0, 255, 0)),    (20,  (255, 255, 0)), (30, (255, 128, 0)),
+                               (40,  (255, 0, 0)),    (45,  (128, 0, 0))]},
+
+    # Total Cloud Cover — WRFPRS/TCC currently publishes 0 frames upstream
+    # (all recent runs empty); GDFS/TCC has 80 frames and is the working
+    # cloud-cover feed.  Ramp: light grey → dark grey; user can adjust
+    # opacity via the slider's blend control for a see-through view.
+    # bbox: GDFS is a GLOBAL grid — without clipping the resulting Mapbox
+    # texture is 2847×2846 (~32 MB per frame × 48 frames = 1.5 GB of GPU
+    # texture per layer, unusable in a browser).  Clipping to a generous
+    # South-Asia box (55E-80E, 20N-40N) covers Pakistan + neighbours and
+    # brings the texture down to <1 MB per frame.
+    "cloud_cover":  {"data_type": "GDFS",   "element": "TCC",  "label": "Total Cloud Cover", "unit": "%",
+                     "bbox": (55, 20, 80, 40),
+                     "stops": [(0, (220, 220, 220)), (25, (180, 180, 180)), (50, (140, 140, 140)),
+                               (75, (100, 100, 100)), (100, (60, 60, 60))]},
+
+    # Relative Humidity — GDFS/RHU (WRFPRS publishes SHU/specific humidity
+    # instead, less operator-friendly).  Brown (dry) → tan → cream → blue
+    # → deep blue (saturated) — standard met visualisation.  Same bbox
+    # clipping rationale as cloud_cover — global GDFS grid.
+    "rel_humidity": {"data_type": "GDFS",   "element": "RHU",  "label": "Relative Humidity", "unit": "%",
+                     "bbox": (55, 20, 80, 40),
+                     "stops": [(0, (140, 100, 60)), (20, (200, 170, 120)), (40, (240, 220, 180)),
+                               (60, (200, 230, 250)), (80, (100, 150, 220)), (100, (0, 50, 180))]},
+
+    # ---- 24-hour Extreme aggregates (from PMD Monitor's /warning page) --
+    # These are daily-max / daily-min / daily-max-wind fields; scientific
+    # equivalents of the operator-facing "24 hour Extreme *" toggles in the
+    # vendor's warning panel.  All three are global grids upstream so they
+    # inherit the same 55E-80E, 20N-40N bbox clip used by cloud_cover /
+    # rel_humidity above — dropping a global 4-8 MB TIFF to a Pakistan-
+    # region tile keeps GPU-texture memory sane.
+    # Data-type picks: TMAX2M / TMIN2M live in GDFS (80 frames — WRFPRS
+    # does not publish these); VMAX10M lives in ICON (42 frames — no other
+    # published model exposes it).
+    "ext_high_temp": {"data_type": "GDFS", "element": "TMAX2M",  "label": "24h Extreme High Temperature", "unit": "°C",
+                      "bbox": (55, 20, 80, 40),
+                      # Extended range for heat extremes over Pakistan
+                      # summer (up to 55 °C observed in Sindh).
+                      "stops": [(0,   (0, 0, 255)),    (15, (0, 200, 255)),  (25, (0, 200, 100)),
+                                (35, (200, 220, 0)),  (40, (255, 165, 0)),  (45, (255, 0, 0)),
+                                (50, (180, 0, 60)),   (55, (100, 0, 0))]},
+
+    "ext_low_temp":  {"data_type": "GDFS", "element": "TMIN2M",  "label": "24h Extreme Low Temperature",  "unit": "°C",
+                      "bbox": (55, 20, 80, 40),
+                      # Winter extremes over the northern belt reach -30 °C.
+                      "stops": [(-40, (80, 0, 128)),   (-20, (0, 0, 200)),    (-10, (0, 130, 255)),
+                                (0,   (0, 200, 255)),  (10,  (0, 200, 100)),  (20,  (200, 220, 0)),
+                                (30,  (255, 165, 0)),  (40,  (255, 0, 0))]},
+
+    # NOT INTEGRATED: 24h Extreme Wind (VMAX10M).  Only ICON publishes it
+    # and the source rasters are 561×1 (a 1-D vector disguised as a
+    # raster), which segfaults gdal.Warp under the thread-pool.  Do NOT
+    # add this element back without switching to a different upstream —
+    # WRFPRS / GDFS / GRAPES / ECMWF do not publish this field.
+}
+
+
+_PRED_MEDIA_SUBDIR = "pmd_predictions"
+_PRED_RAMP_SUBDIR  = os.path.join(_PRED_MEDIA_SUBDIR, "_ramps")
+
+# GDAL / PROJ are NOT thread-safe for concurrent gdal.Warp calls that share
+# a PROJ context (documented gotcha; the default proj_context is per-process).
+# The endpoint runs a ThreadPoolExecutor(5) over convert steps so the auth
+# fetches overlap, but concurrent Warp calls silently produced empty rasters
+# on Linux prod (all-NoData output, 2894-byte "empty" PNGs after color-relief).
+# Fix: serialise only the GDAL calls (Warp + DEMProcessing) with this lock;
+# the network fetch stays parallel because that's where the real time is.
+_MON_PRED_GDAL_LOCK = threading.Lock()
+
+# Enable GDAL Python exceptions ONCE at module load (idempotent).  Doing this
+# per-call was racy under the thread pool — one thread could flip the mode
+# mid-warp on another.  Silences GDAL 4.0's FutureWarning too.
+try:
+    from osgeo import gdal as _gdal_bootstrap
+    _gdal_bootstrap.UseExceptions()
+    del _gdal_bootstrap
+except Exception:
+    pass
+
+
+def _mon_pred_ramp_file(element_key):
+    """Build (once) a GDAL color-relief text ramp for this element_key.
+    Keyed by element_key (not the vendor's ELEMENT code) so two entries
+    that share a vendor code across different data_types can never collide
+    on disk.  The synthetic `0 → transparent` line is only emitted for
+    additive quantities (precipitation, snow — stops start > 0); for state
+    quantities that can legitimately be 0 (cloud cover, humidity) or
+    negative (temperature) it's skipped so the ramp's own first stop
+    controls the low-end colour."""
+    cfg = _MON_PRED_ELEMENTS[element_key]
+    stops = cfg["stops"]
+    ramp_dir = os.path.join(settings.MEDIA_ROOT, _PRED_RAMP_SUBDIR)
+    os.makedirs(ramp_dir, exist_ok=True)
+    path = os.path.join(ramp_dir, f"{element_key}.txt")
+    if os.path.exists(path):
+        return path
+    lines = ["nv 0 0 0 0"]                              # nodata → transparent
+    if stops[0][0] > 0:                                 # additive quantity
+        r, g, b = stops[0][1]
+        lines.append(f"0 {r} {g} {b} 0")                # 0 mm → transparent
+    for value, (r, g, b) in stops:
+        lines.append(f"{value} {r} {g} {b} 255")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return path
+
+
+_PRED_DENSE_HOURS       = 48   # keep every hour through this point
+_PRED_SPARSE_STEP_HOURS = 6    # then thin to every N hours
+
+
+def _mon_pred_select_steps(ds_list):
+    """Thin the 76-hour frame list — Mapbox image sources are live GPU
+    textures, so registering every one for every layer would balloon
+    memory quickly.  Keep hourly for the first 48 h (the tactically
+    useful window), then 6-hourly for the long tail."""
+    def _p(s):
+        try: return datetime.fromisoformat(s)
+        except Exception: return None
+    if not ds_list:
+        return []
+    run_dt = _p((ds_list[0] or {}).get("data_time") or "")
+    kept = []
+    for item in ds_list:
+        fc = _p((item or {}).get("forecast_time") or "")
+        if not run_dt or not fc:
+            kept.append(item); continue
+        hours_out = (fc - run_dt).total_seconds() / 3600.0
+        if hours_out <= _PRED_DENSE_HOURS or int(round(hours_out)) % _PRED_SPARSE_STEP_HOURS == 0:
+            kept.append(item)
+    return kept
+
+
+def _mon_pred_convert_step(element_key, item):
+    """Fetch one raw .tif, warp to EPSG:3857, colorize via GDAL DEM
+    processing, cache result to disk.  Returns the frontend-ready
+    {date, url, coordinates, bounds} dict or None on failure — one bad
+    step shouldn't take down the whole layer.
+
+    Media-key convention: `{element_key}_{run}_{fh}.png` (+ `.json`
+    metadata sidecar) so repeat requests hit the disk-cache branch
+    instantly.  Keying by element_key (not vendor's ELEMENT code) means
+    e.g. WRFPRS/TEM and a hypothetical GDFS/TEM entry live on disk as
+    distinct files rather than clobbering each other."""
+    from osgeo import gdal
+    import re, math, json
+
+    # gdal.UseExceptions() is set once at module-load (see top of this
+    # section) so we don't race with parallel workers flipping the mode.
+
+    # Suppress GDAL's persistent auxiliary metadata (.png.aux.xml) sidecar.
+    # It's harmless and Mapbox never requests it, but writing it doubles
+    # the per-step disk-IO cost.
+    gdal.SetConfigOption("GDAL_PAM_ENABLED", "NO")
+
+    # ---- Rich-error scaffolding ---------------------------------------
+    # `_diag` accumulates per-step observations that get printed together
+    # if anything fails; keeps journalctl focused (one multi-line entry
+    # per failure) instead of scattered prints per convert stage.  On
+    # success `_diag` is discarded silently.
+    _diag = [f"convert {element_key}/{item.get('data_time','?')}/{item.get('forecast_time','?')}"]
+    def _log_fail(msg):
+        print("[pmd_monitor] " + " | ".join(_diag + [msg]))
+
+    run = (item.get("data_time")     or "").replace("-", "").replace(":", "").replace("T", "")
+    fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
+    safe = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element_key}_{run}_{fh}")
+    out_dir  = os.path.join(settings.MEDIA_ROOT, _PRED_MEDIA_SUBDIR)
+    png_path  = os.path.join(out_dir, f"{safe}.png")
+    meta_path = os.path.join(out_dir, f"{safe}.json")
+
+    # Disk-cache short-circuit — return the memoised JSON if the PNG is
+    # present + non-truncated.  Fresh writes are validated by variance +
+    # size below, so a paired (PNG, JSON) on disk was already known-good
+    # at write time; only guard here against 0-byte / truncated files
+    # from a system crash mid-write.  Threshold matches the write path.
+    if os.path.exists(png_path) and os.path.exists(meta_path) \
+       and os.path.getsize(png_path) >= 512:
+        try:
+            with open(meta_path) as f:
+                return json.load(f)
+        except Exception:
+            pass  # corrupt sidecar — fall through and re-render
+
+    os.makedirs(out_dir, exist_ok=True)
+    src_path    = os.path.join(out_dir, f"{safe}_src.tif")
+    warped_path = os.path.join(out_dir, f"{safe}_3857.tif")
+    try:
+        tif_bytes = _mon_get_bytes(item["file_path"])
+        _diag.append(f"fetched {len(tif_bytes)}B")
+        # Verify fetched bytes are actually a TIFF and not an HTML error
+        # page / gzipped surprise.  TIFF magic: II*\x00 (little-endian) or
+        # MM\x00* (big-endian).  BigTIFF: II\x2b\x00 or MM\x00\x2b.
+        _magic = tif_bytes[:4]
+        _looks_tif = _magic in (b"II*\x00", b"MM\x00*", b"II\x2b\x00", b"MM\x00\x2b")
+        if not _looks_tif:
+            _preview = tif_bytes[:80].decode("latin1", errors="replace")
+            raise ValueError(f"fetched bytes not a TIFF (magic={_magic!r}, preview={_preview!r})")
+        with open(src_path, "wb") as f:
+            f.write(tif_bytes)
+
+        src_ds = gdal.Open(src_path)
+        if src_ds is None:
+            raise ValueError("could not open fetched GeoTIFF")
+        _diag.append(
+            f"src {src_ds.RasterXSize}x{src_ds.RasterYSize} b={src_ds.RasterCount} "
+            f"gt={src_ds.GetGeoTransform()} proj={(src_ds.GetProjection() or '')[:60]!r}"
+        )
+        # Defensive shape check — some vendor feeds ship 1-D vector data
+        # dressed up as a 1-pixel-tall raster (observed: ICON/VMAX10M is
+        # 561×1).  gdal.Warp under the ThreadPoolExecutor can segfault
+        # trying to reproject such degenerate rasters — a C-level crash
+        # Python can't catch, which brings down the whole waitress
+        # process.  Reject anything with fewer than 4 rows or 4 columns
+        # of source data; a real 2D forecast raster is never that flat.
+        if src_ds.RasterXSize < 4 or src_ds.RasterYSize < 4:
+            raise ValueError(
+                f"source raster too flat ({src_ds.RasterXSize}x{src_ds.RasterYSize}) "
+                f"— likely 1-D vector data, skipping to avoid GDAL crash"
+            )
+        try:
+            _srcband = src_ds.GetRasterBand(1)
+            _s_mn, _s_mx, _, _ = _srcband.GetStatistics(False, True)
+            _diag.append(f"src_b1 min={_s_mn} max={_s_mx} nodata={_srcband.GetNoDataValue()}")
+        except Exception as _e:
+            _diag.append(f"src_b1 stats-fail={_e}")
+
+        # Optional per-element clip (lat/lon bbox from the registry).  For
+        # global-grid feeds like GDFS this collapses the output texture
+        # from ~2847×2846 (global mercator) to ~800×640 (Pakistan region),
+        # ~50× smaller PNG and dramatically less GPU memory in the browser.
+        # WRFPRS layers omit `bbox` because they're already Pakistan-native.
+        _bbox = _MON_PRED_ELEMENTS.get(element_key, {}).get("bbox")
+        _warp_kwargs = dict(
+            dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
+        )
+        if _bbox:
+            # outputBounds passed in the src CRS (EPSG:4326 lat/lon here)
+            # via `outputBoundsSRS`; GDAL reprojects both bounds and pixels
+            # into dstSRS in a single pass.
+            _warp_kwargs["outputBounds"]    = _bbox
+            _warp_kwargs["outputBoundsSRS"] = "EPSG:4326"
+        # GDAL / PROJ thread-safety: serialise the Warp call.  This is the
+        # actual root cause of the "prod PNGs are all 2894-byte empty" bug
+        # observed on Linux prod but not on Windows dev/staging — under a
+        # ThreadPoolExecutor concurrent Warps silently corrupt the output
+        # because they compete for the same proj_context.  The lock scope
+        # is intentionally as tight as possible so the auth fetch above
+        # (which is I/O-bound) keeps running in parallel across workers.
+        try:
+            with _MON_PRED_GDAL_LOCK:
+                warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
+        except Exception as _we:
+            raise ValueError(f"gdal.Warp raised: {_we}")
+        src_ds = None
+        if warped_ds is None:
+            raise ValueError("reprojection failed (Warp returned None)")
+        _diag.append(f"warped {warped_ds.RasterXSize}x{warped_ds.RasterYSize} b={warped_ds.RasterCount}")
+        try:
+            _wband = warped_ds.GetRasterBand(1)
+            _w_mn, _w_mx, _, _ = _wband.GetStatistics(False, True)
+            _diag.append(f"warped_b1 min={_w_mn} max={_w_mx} nodata={_wband.GetNoDataValue()}")
+        except Exception as _e:
+            _diag.append(f"warped_b1 stats-fail={_e}")
+
+        # Corner-based WGS84 bounds — 4-corner math handles any rotation
+        # the warp introduces; 2-corner min/max shortcut would miss it.
+        gt = warped_ds.GetGeoTransform()
+        w, h = warped_ds.RasterXSize, warped_ds.RasterYSize
+        _MERC_MAX = 20037508.3427892
+        cx = [gt[0], gt[0]+gt[1]*w, gt[0]+gt[2]*h, gt[0]+gt[1]*w+gt[2]*h]
+        cy = [gt[3], gt[3]+gt[4]*w, gt[3]+gt[5]*h, gt[3]+gt[4]*w+gt[5]*h]
+        minx_m, maxx_m = max(min(cx), -_MERC_MAX), min(max(cx), _MERC_MAX)
+        miny_m, maxy_m = max(min(cy), -_MERC_MAX), min(max(cy), _MERC_MAX)
+
+        def _lon(x): return (x / _MERC_MAX) * 180.0
+        def _lat(y): return math.degrees(2.0*math.atan(math.exp(y / 6378137.0)) - math.pi/2.0)
+        minx, maxx = round(_lon(minx_m), 6), round(_lon(maxx_m), 6)
+        miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
+
+        ramp = _mon_pred_ramp_file(element_key)
+        # Same thread-safety concern as gdal.Warp above — DEMProcessing
+        # touches the shared PROJ/GDAL state too.  Serialise for safety.
+        with _MON_PRED_GDAL_LOCK:
+            colored_ds = gdal.DEMProcessing(
+                png_path, warped_path, "color-relief",
+                colorFilename=ramp, format="PNG", addAlpha=True,
+            )
+        warped_ds = None
+        if colored_ds is None:
+            raise ValueError("color-relief render failed")
+        colored_ds = None
+
+        # Post-write PNG validation.  GDAL can produce an entirely-empty
+        # colorized PNG when the upstream warp silently landed on NoData
+        # pixels (has happened on Linux prod when PROJ_LIB was misconfigured
+        # — Warp returned a Dataset object rather than None, so the earlier
+        # "reprojection failed" check let it through; DEMProcessing then
+        # wrote a technically-valid, 100%-transparent PNG that Nginx serves
+        # with HTTP 200 and Mapbox loads without a console error).
+        #
+        # Two-stage guard:
+        #   1. size floor — filters truly-broken (0-byte / a-few-hundred-
+        #      bytes) writes only.  Some legitimate layers (e.g. ICON's
+        #      coarse-grid VMAX10M clipped to Pakistan) produce a real
+        #      valid ~3 KB PNG, so the primary validity signal is (2).
+        #   2. content variance — opens the PNG and confirms at least one
+        #      band has min != max (i.e. actual pixel diversity).  This
+        #      catches every all-transparent / all-uniform "empty" PNG
+        #      regardless of size (including the 2894-byte case that hit
+        #      prod when PROJ_LIB was misconfigured).
+        # Any failure deletes the broken file and raises — the surrounding
+        # try/except returns None, the endpoint drops the step from the
+        # response, and no broken URL propagates to the browser.
+        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 512:
+            try: os.remove(png_path)
+            except Exception: pass
+            raise ValueError(
+                f"colorized PNG missing or truncated ({element_key}/{run}/{fh}) "
+                f"— check PROJ_LIB / GDAL_DATA at startup log."
+            )
+        try:
+            _check_ds = gdal.Open(png_path)
+            if _check_ds is None or _check_ds.RasterCount < 1:
+                raise ValueError("cannot re-open written PNG")
+            _has_variance = False
+            for _bi in range(1, _check_ds.RasterCount + 1):
+                try:
+                    _mn, _mx, _, _ = _check_ds.GetRasterBand(_bi).GetStatistics(False, True)
+                    if _mx > _mn:
+                        _has_variance = True
+                        break
+                except Exception:
+                    pass
+            _check_ds = None
+            if not _has_variance:
+                raise ValueError("all bands uniform — warp produced empty raster")
+        except Exception as _e:
+            try: os.remove(png_path)
+            except Exception: pass
+            raise ValueError(f"colorized PNG failed validation: {_e}")
+
+        payload = {
+            "date":        item.get("forecast_time"),
+            "url":         f"{settings.MEDIA_URL}{_PRED_MEDIA_SUBDIR}/{safe}.png",
+            "bounds":      [minx, miny, maxx, maxy],
+            # Mapbox ImageSource coord order: TL, TR, BR, BL.
+            "coordinates": [[minx, maxy], [maxx, maxy], [maxx, miny], [minx, miny]],
+        }
+        with open(meta_path, "w") as f:
+            json.dump(payload, f)
+        return payload
+    except Exception as e:
+        _log_fail(f"FAIL: {e}")
+        return None
+    finally:
+        for p in (src_path, warped_path):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
+
+def _mon_cached(key, ttl, fetch_fn, fallback_key=None):
+    """Cache-with-stale-fallback wrapper — same pattern used across NCOP
+    for humanitarian upstreams so a transient PMD Monitor outage degrades
+    to slightly-stale data instead of a 502."""
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    try:
+        data = fetch_fn()
+        cache.set(key, data, ttl)
+        if fallback_key:
+            cache.set(fallback_key, data, ttl * 6)
+        return data
+    except Exception as exc:
+        if fallback_key:
+            stale = cache.get(fallback_key)
+            if stale is not None:
+                return stale
+        raise exc
+
+
+class PmdMonitorPredictionsAPIView(APIView):
+    """GET /api/pmd/monitor/predictions/<element_key>/  →  {element, label,
+    unit, run, steps: [{date, url, coordinates, bounds}, …]}
+
+    The frontend loader in time-functions.js maps each step to a Mapbox
+    `image` source under a `raster` layer (source-type is "image", layer-
+    type stays "raster" — Mapbox's raster layer renders both raster-tile
+    sources and image sources) and hands the whole array to the standard
+    #temp-slider1 controller via updateTempSliderAsync."""
+
+    def get(self, request, element_key):
+        cfg = _MON_PRED_ELEMENTS.get(element_key)
+        if not cfg:
+            return JsonResponse(
+                {"error": f"Unknown element_key {element_key!r}",
+                 "valid": sorted(_MON_PRED_ELEMENTS.keys())},
+                status=404,
+            )
+
+        try:
+            from osgeo import gdal  # noqa — availability probe before any work
+        except Exception as e:
+            return JsonResponse({"error": f"GDAL is required: {e}"}, status=500)
+
+        data_type, element = cfg["data_type"], cfg["element"]
+
+        def _latest_run():
+            resp = _mon_get("/api/modelTimeList",
+                            {"data_type": data_type, "element": element})
+            times = (resp or {}).get("data") or []
+            if not times:
+                raise ValueError("no model runs available")
+            return times[0]["data_time"]
+
+        try:
+            run = _mon_cached(f"pmd_pred_run_{element_key}", 1800,
+                              _latest_run, f"pmd_pred_run_{element_key}_last")
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        def _frames():
+            resp = _mon_get("/api/model",
+                            {"data_type": data_type, "element": element, "date_time": run})
+            return (resp or {}).get("ds") or []
+
+        try:
+            frame_list = _mon_cached(
+                f"pmd_pred_frames_{element_key}_{run}", 10800,
+                _frames, f"pmd_pred_frames_{element_key}_{run}_last",
+            )
+        except Exception:
+            return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+        # Per-step convert is I/O-heavy (one auth HTTP fetch + one GDAL
+        # warp + one color-relief pass per frame).  Serial for 20-30 steps
+        # cold = ~8-17s; a small ThreadPoolExecutor drops that ~3× because
+        # the network wait for each .tif overlaps other threads' GDAL work.
+        # Concurrency is bounded (5 workers): the auth session is shared +
+        # requests.Session is thread-safe, but the vendor host is a
+        # private-IP machine that we should not hammer with 30 concurrent
+        # downloads.  Order is preserved by dispatching in-order and
+        # collecting via the same iteration index.
+        selected = _mon_pred_select_steps(frame_list)
+        results  = [None] * len(selected)
+        if selected:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=5, thread_name_prefix="pmd_pred") as pool:
+                futures = {pool.submit(_mon_pred_convert_step, element_key, it): i
+                           for i, it in enumerate(selected)}
+                for fut in as_completed(futures):
+                    idx = futures[fut]
+                    try:
+                        results[idx] = fut.result()
+                    except Exception as e:
+                        print(f"[pmd_monitor] worker {idx} raised: {e}")
+        steps = [r for r in results if r]
+
+        return JsonResponse({
+            "element": element_key,
+            "label":   cfg["label"],
+            "unit":    cfg.get("unit", ""),
+            "run":     run,
+            "steps":   steps,
+        })
+
+
+# ==================================================================
+#  PMD Provincial Daily Forecast — proxy for pmd.gov.pk
+#  ----------------------------------------------------------------
+#  Upstream: https://pmd.gov.pk/phpapi/daily-forecastpro.php
+#  Public, no auth; but proxied here so the browser bundle never
+#  contains the upstream host (matches the security posture of every
+#  other integration in NCOP) AND so we can cache the response.
+#
+#  Response shape (upstream): a single-item list whose lone element
+#  has keys `bal_eng`, `gb_eng`, `isb_eng`, `kashmir_eng`, `kpk_eng`,
+#  `punjab_eng`, `sindh_eng` (HTML fragments) + `id`.  Roughly 3 KB
+#  total; PMD refreshes ~twice daily.  We normalize to a friendlier
+#  {provinces: [{id, code, title, text}]} shape the frontend can
+#  render straight into tabs without upstream-specific renames.
+#
+#  Cache: 30 min primary + 3 h stale fallback (same pattern as the
+#  PMD Monitor endpoints above).  If upstream is down we serve last-
+#  known-good with `_stale: true` so the UI can badge it.
+# ==================================================================
+class PmdDailyForecastProAPIView(APIView):
+    UPSTREAM   = "https://pmd.gov.pk/phpapi/daily-forecastpro.php"
+    CACHE_KEY  = "pmd_daily_forecast_pro"
+    STALE_KEY  = "pmd_daily_forecast_pro_stale"
+    PRIMARY_TTL = 30 * 60          # 30 min
+    STALE_TTL   = 6 * 60 * 60      # 6 h
+    TIMEOUT     = 15
+
+    # File-name → operator-friendly identifier + PMD province code (both
+    # extracted live from the vendor SPA at CityForecastRight-*.js).
+    _PROVINCES = [
+        ("bal_eng",     "Balochistan", "5"),
+        ("gb_eng",      "GB",          "7"),
+        ("isb_eng",     "Islamabad",   "6"),
+        ("kashmir_eng", "Kashmir",     "9"),
+        ("kpk_eng",     "KPk",         "1"),
+        ("punjab_eng",  "Punjab",      "3"),
+        ("sindh_eng",   "Sindh",       "4"),
+    ]
+
+    def _normalize(self, upstream):
+        row = (upstream[0] if isinstance(upstream, list) and upstream else {}) or {}
+        provinces = []
+        for file_name, title, code in self._PROVINCES:
+            text = (row.get(file_name) or "").strip()
+            provinces.append({
+                "id":    title,
+                "code":  code,
+                "title": title,
+                "text":  text,           # raw HTML fragment — frontend sanitises
+                "empty": not text,
+            })
+        return {
+            "id":           row.get("id"),
+            "provinces":    provinces,
+            "generated_at": int(time.time()),
+            "upstream":     "pmd.gov.pk/phpapi/daily-forecastpro.php",
+        }
+
+    def get(self, request):
+        # Honour cache-buster query param — the frontend passes _=<epoch>
+        # so a re-toggle of the Story panel triggers a fresh proxy fetch
+        # once the 30-min TTL expires.
+        hit = cache.get(self.CACHE_KEY)
+        if hit is not None:
+            return JsonResponse(hit)
+        try:
+            r = requests.get(
+                self.UPSTREAM,
+                timeout=self.TIMEOUT,
+                headers={"User-Agent": "NCOP/1.0",
+                         "Accept": "application/json"},
+            )
+            r.raise_for_status()
+            payload = self._normalize(r.json())
+            cache.set(self.CACHE_KEY, payload, self.PRIMARY_TTL)
+            cache.set(self.STALE_KEY, payload, self.STALE_TTL)
+            return JsonResponse(payload)
+        except Exception as e:
+            stale = cache.get(self.STALE_KEY)
+            if stale is not None:
+                return JsonResponse({**stale, "_stale": True,
+                                     "_error": str(e)[:200]})
+            return JsonResponse(
+                {"error": f"provincial forecast unavailable: {str(e)[:200]}"},
+                status=502,
+            )

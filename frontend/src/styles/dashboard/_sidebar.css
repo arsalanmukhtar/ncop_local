@@ -1,0 +1,863 @@
+/* Sidebar Panel — flex column so the .sidebar-header (search) stays
+   pinned at the top while only the .sidebar-content scrolls.
+   Height is shrink-to-fit; the calc() acts as the ceiling. Below the
+   ceiling, the panel hugs its content so there's no empty tail. */
+.sidebar-panel {
+    position: fixed;
+    top: 138px;
+    left: 12px;
+    width: 320px;
+    height: auto;
+    max-height: calc(100vh - 100px - 3rem);
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 16px;
+    backdrop-filter: blur(15px);
+    transform: translateX(-100%);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease, max-height 0.2s ease;
+    z-index: 999;
+    overflow: hidden;
+    padding: 12px 12px 12px 12px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.sidebar-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+/* Sidebar Header — pinned top strip, never scrolls. */
+.sidebar-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-dark);
+    gap: 12px;
+}
+
+.sidebar-title {
+    color: var(--white);
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.sidebar-search-container {
+    flex: 1;
+    max-width: none;
+}
+
+/* Search Functionality */
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    color: var(--text-primary);
+    z-index: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 6px 28px 6px 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 400;
+    transition: all 0.2s ease;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-input:focus {
+    outline: none;
+    background: transparent;
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-icon {
+    width: 8px;
+    height: 8px;
+    color: transparent;
+    visibility: hidden;
+}
+
+/* Hide elements that don't match search */
+.search-hidden {
+    display: none !important;
+}
+
+/* No results message */
+.no-results-message {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #000000;
+    background: var(--tertiary-bg);
+    border-radius: 8px;
+    margin: 1rem 0;
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+}
+
+.no-results-message p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.no-results-message small {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 2px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.sidebar-close-btn:hover {
+    color: var(--white);
+    background: var(--ndma-red-opaque);
+}
+
+.sidebar-close-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Sidebar Content — the only scrollable region. */
+.sidebar-content {
+    color: var(--white);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    /* Small right padding so the scrollbar does not sit on top of content */
+    padding-right: 2px;
+}
+
+.sidebar-accordion {
+    margin-bottom: 15px;
+}
+
+.accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px;
+    background: var(--tertiary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-dark);
+    margin-bottom: 4px;
+}
+
+.accordion-header:hover {
+    background: var(--accent-bg-blue);
+}
+
+.accordion-header.active {
+    background: var(--ndma-blue-gradient);
+    border-color: var(--ndma-blue);
+}
+
+.accordion-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+    color: var(--white);
+    flex: 1;
+}
+
+.accordion-icon {
+    width: 12px;
+    height: 12px;
+    color: var(--white);
+    font-weight: bold;
+    transition: transform 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.accordion-body {
+    padding: 15px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--glass-lighter);
+}
+
+/* NCOP Sidebar Specific Styles */
+.ncop-subcategory {
+    margin: 4px 0;
+}
+
+.ncop-subcategory-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.ncop-subcategory-header:hover {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header.expanded {
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-subcategory-header .subcategory-chevron {
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    margin-left: 5px;
+}
+
+/* Only the title span (first child) gets flex:1. */
+.ncop-subcategory-header > span:first-child {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--white);
+    overflow: hidden;
+    position: relative;
+}
+
+.ncop-subcategory-header.expanded .subcategory-chevron {
+    transform: rotate(90deg);
+}
+
+.ncop-items-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    margin-top: 4px;
+}
+
+.ncop-items-container.visible {
+    max-height: 400px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    scroll-padding-bottom: 10px;
+}
+
+.ncop-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+/* Single column grid for button items */
+.ncop-grid:has(.ncop-item-button) {
+    grid-template-columns: 1fr;
+    gap: 0px;
+}
+
+.ncop-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 4px 0;
+    padding: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+/* Loading indicator — a bright segment that travels around the row's
+   border perimeter like a train on a rectangular track. Implemented as a
+   conic-gradient painted on a ::before pseudo-element, masked to the
+   border band via mask-composite. The animation is on the conic
+   gradient's `from` angle (via @property), NOT on the element's
+   transform — so the border rectangle stays pinned to the row and only
+   the bright segment moves around the perimeter. */
+@property --ncop-loading-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+
+.ncop-item.is-loading {
+    /* Faint static backing ring so the track is visible even during the
+       "dark" portion of the cycle. */
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.ncop-item.is-loading::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+        from var(--ncop-loading-angle),
+        transparent 0deg,
+        transparent 300deg,
+        var(--ndma-blue, #3b82f6) 340deg,
+        transparent 360deg
+    );
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: ncop-loading-angle-spin 1.4s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+@keyframes ncop-loading-angle-spin {
+    to { --ncop-loading-angle: 360deg; }
+}
+
+/* Toggle items - horizontal layout with label and control */
+.ncop-item-toggle {
+    justify-content: space-between;
+}
+
+/* Temporal items - vertical layout centered */
+.ncop-item-temporal,
+.ncop-item-static {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    padding: 12px 8px;
+    min-height: 120px;
+}
+
+
+/* Button with checked toggle - full color background */
+.ncop-item-button .ncop-toggle input:checked+.ncop-toggle-slider {
+    background-color: var(--button-color, #6366f1) !important;
+}
+
+.ncop-item-image {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    border-radius: 15px;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+    border: 3px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.ncop-item-image.selected img {
+    border: 3px solid var(--ndma-green);
+    box-shadow: 0 0 8px var(--ndma-green-glow);
+}
+
+.ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Button content with image - left aligned with proper spacing */
+.ncop-item-button .ncop-item-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-right: 8px;
+}
+
+.ncop-item-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--white);
+    line-height: 1.2;
+    text-align: center;
+}
+
+/* Toggle item labels */
+.ncop-item-toggle .ncop-item-label {
+    flex: 1;
+    margin-right: 8px;
+    text-align: left;
+}
+
+/* Temporal item labels - centered below image */
+.ncop-item-temporal .ncop-item-label,
+.ncop-item-static .ncop-item-label {
+    margin-top: 8px;
+    font-size: 10px;
+}
+
+/* Remove right margin from images in temporal items */
+.ncop-item-temporal .ncop-item-image,
+.ncop-item-static .ncop-item-image {
+    margin-right: 0;
+}
+
+/* Button labels - left aligned */
+.ncop-item-button .ncop-item-label {
+    text-align: left;
+    flex: 1;
+    margin-right: 8px;
+}
+
+/* Dropdown labels - centered */
+.ncop-item-dropdown .ncop-item-label {
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ncop-item-control {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* NCOP Toggle Styles */
+.ncop-toggle {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.ncop-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ncop-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--tertiary-bg);
+    transition: 0.3s;
+    border-radius: 20px;
+    border: 1px solid var(--border-dark);
+}
+
+.ncop-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--white);
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px var(--shadow-soft);
+}
+
+.ncop-toggle input:checked+.ncop-toggle-slider {
+    background-color: var(--ndma-green);
+    border-color: var(--border-dark);
+}
+
+.ncop-toggle input:checked+.ncop-toggle-slider:before {
+    transform: translateX(16px);
+}
+
+/* NCOP Dropdown Styles */
+.ncop-dropdown {
+    background: var(--ndma-blue-light);
+    border: 1px solid var(--ndma-blue-light);
+    border-radius: 4px;
+    color: var(--white);
+    font-size: 10px;
+    padding: 7px 2px;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ncop-dropdown:focus {
+    outline: none;
+    border-color: var(--ndma-blue);
+    background: var(--secondary-bg);
+}
+
+.ncop-dropdown option {
+    background: var(--primary-bg);
+    color: var (--white);
+    padding: 4px;
+}
+
+/* Custom accordion icon for GIS layers */
+.accordion-header .accordion-custom-icon {
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Lucide-SVG variant of the accordion badge — used when a category has no
+   custom .webp icon (currently: Agriculture & Food Security).  Sized to
+   match .accordion-custom-icon so header rhythm is uniform across every
+   accordion item; padded slightly so the stroke doesn't touch the edge. */
+.accordion-header > .accordion-icon {
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
+    padding: 4px;
+    color: var(--white);
+    flex-shrink: 0;
+    stroke-width: 1.8;
+}
+
+.accordion-header .accordion-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--white);
+    overflow: hidden;
+    position: relative;
+}
+
+.accordion-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    margin-right: 4px;
+}
+
+.accordion-header.active .accordion-chevron {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: transparent;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.accordion-content.expanded {
+    /* Large cap so no subcategory is clipped when the accordion is open.
+       The .sidebar-content parent already scrolls if total content exceeds
+       the viewport. */
+    max-height: 4000px;
+    padding-bottom: 16px;
+}
+
+.custom-basemap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+}
+
+.custom-basemap-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-basemap-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* =========================================
+   Unified single-row layer items
+   (icon · marquee name · type · switch)
+   Applied to .ncop-item-toggle, .ncop-item-temporal, .ncop-item-static
+   ========================================= */
+.ncop-item.ncop-item-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    gap: 10px;
+    padding: 6px 10px;
+    margin: 2px 0;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    min-height: 36px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.ncop-item.ncop-item-row:hover {
+    background: var(--hover-bg);
+    border-color: var(--border-dark);
+}
+
+/* Stack row items vertically inside grids (overrides 2-column default) */
+.ncop-grid:has(.ncop-item-row) {
+    grid-template-columns: 1fr;
+    gap: 2px;
+}
+
+.ncop-item-row .ncop-item-icon {
+    flex: 0 0 24px;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    margin: 0;
+    padding: 0;
+}
+
+.ncop-item-row .ncop-item-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+    transition: transform 0.2s ease;
+}
+
+.ncop-item-row .ncop-item-icon.selected {
+    border-color: var(--ndma-green);
+    box-shadow: 0 0 0 2px var(--ndma-green-glow);
+}
+
+.ncop-item-row .ncop-item-label-marquee {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.ncop-item-row .ncop-item-label {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--text-primary);
+    margin: 0;
+    flex: initial;
+    text-align: left;
+    will-change: transform;
+}
+
+/* Slide only on hover over an overflowing row.
+   Flip overflow to visible so the text can spill into the marquee's
+   viewport (clipped by the marquee's overflow:hidden), and clear the
+   ellipsis during the animation. */
+.ncop-item-row:hover .ncop-item-label-marquee.is-overflowing .ncop-item-label {
+    overflow: visible;
+    text-overflow: clip;
+    animation: ncop-label-marquee var(--marquee-duration, 10s) ease-in-out infinite;
+}
+
+@keyframes ncop-label-marquee {
+    0%, 12%   { transform: translateX(0); }
+    42%, 58%  { transform: translateX(var(--marquee-x, 0px)); }
+    88%, 100% { transform: translateX(0); }
+}
+
+.ncop-item-row .ncop-item-type {
+    flex: 0 0 16px;
+    flex-shrink: 0;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.ncop-item-row:hover .ncop-item-type {
+    opacity: 1;
+}
+
+.ncop-item-row .ncop-item-type svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.ncop-item-row .ncop-item-type[data-geom="point"]   { color: #3b82f6; }
+.ncop-item-row .ncop-item-type[data-geom="line"]    { color: #10b981; }
+.ncop-item-row .ncop-item-type[data-geom="polygon"] { color: #f59e0b; }
+.ncop-item-row .ncop-item-type[data-geom="raster"]  { color: #a78bfa; }
+
+.ncop-item-row .ncop-toggle {
+    flex: 0 0 36px;
+    flex-shrink: 0;
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* Neutralise legacy temporal/static column-layout rules when row is applied */
+.ncop-item.ncop-item-row.ncop-item-temporal,
+.ncop-item.ncop-item-row.ncop-item-static {
+    flex-direction: row;
+    padding: 6px 10px;
+    min-height: 36px;
+    text-align: left;
+}
+
+.ncop-item-row.ncop-item-temporal .ncop-item-image,
+.ncop-item-row.ncop-item-static .ncop-item-image {
+    margin: 0;
+}
+
+/* Clickable rows: whole row is the click target; no trailing toggle.
+   Single-selection highlight lives on .is-selected. */
+.ncop-item-row--clickable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.ncop-item-row--clickable .ncop-toggle {
+    display: none;
+}
+
+.ncop-item-row.is-selected {
+    background: var(--ndma-green-light);
+    border-color: var(--ndma-green);
+}
+
+.ncop-item-row.is-selected:hover {
+    background: var(--ndma-green-opaque);
+    border-color: var(--ndma-green);
+}
+
+.ncop-item-row.is-selected .ncop-item-label {
+    color: var(--white);
+}
+
+.ncop-item-row.is-selected .ncop-item-type {
+    opacity: 1;
+}
+
+/* =========================================
+   Header title marquee — titles ellipse at
+   rest and slide on hover when overflowing.
+   Mirrors the item-label marquee pattern.
+   ========================================= */
+.accordion-title-text,
+.ncop-subcategory-title-text,
+.ncop-nested-title-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    will-change: transform;
+}
+
+.accordion-header:hover
+    .accordion-title.is-overflowing
+    .accordion-title-text,
+.ncop-subcategory-header:hover
+    .ncop-subcategory-title.is-overflowing
+    .ncop-subcategory-title-text,
+.ncop-nested-header:hover
+    .ncop-nested-title.is-overflowing
+    .ncop-nested-title-text {
+    overflow: visible;
+    text-overflow: clip;
+    animation: ncop-label-marquee var(--marquee-duration, 10s) ease-in-out
+        infinite;
+}
+

@@ -13,7 +13,7 @@ deactivate
 # Install required python modules
 pip install -r requirements.txt
 # Compatible GDAL wheel download link
-DOWNLOAD_URL="https://github.com/arsalanmukhtar/ncop_local/blob/dev-arsalan/GDAL-3.4.3-cp311-cp311-win_amd64.whl"
+DOWNLOAD_URL="https://github.com/arsalanmukhtar/ncop_local/blob/dev-arsalan/misc/GDAL-3.4.3-cp311-cp311-win_amd64.whl"
 
 # Install postgresql and postgis if not installed  and setup database on postgresql (SQL Shell or pgAdmin) for dev-ahadkhan
 PS C:\Users\7987sarim> psql -U postgres

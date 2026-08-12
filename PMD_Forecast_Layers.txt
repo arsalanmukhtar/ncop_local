@@ -1,0 +1,823 @@
+
+
+Carefully and without altering any existing core logic, continue scraping and monitoring real-time meteorological data from the PMD Monitor system at https://115.186.56.181:12304, authenticating with PMD_MONITOR_URL=https://115.186.56.181:12304, PMD_MONITOR_USER=PMD, PMD_MONITOR_PASS=Ab123456. Pull data from the /login, /warning, and /predictions pages, plus the "PMD Weather" tab and its django-ninja backend endpoints under /api/pmd/monitor/: stations/ (live SYNOP/METAR/AWS obs, 5-min cache), station-history/ (1–30 day time series), warnings/ (active warning polygons as GeoJSON, 2-min cache, add ?diag=1 to bypass cache), monsoon/ (monsoon warnings, 5-min cache), glof-obs/ (GLOF station obs with warning flag, 2-min cache), lightning/ (recent strikes, 1–48h window, 3-min cache), city-forecast/ (12-period city forecasts, 30-min cache), wfs-forecast/ (GeoServer WFS forecast areas, 1h cache), glacier-lakes/ (2018–2021 survey polygons, 24h cache), /api/pmd/public-forecast/ (PMD public daily forecast, 30-min cache), and /api/pmd/monitor/debug/ (dev raw probe). Also fetch the forecast layer data types served from /predictions: WMS GetMap requests (e.g., global_english:SEA layer via /geoserver/global_english/wms), static GeoJSON model outputs (e.g., /static/WRFPRS/{run}/GPH/...json), and static GeoTIFFs (e.g., /static/WRFPRS/{run}/UV/...tif). Specifically target the satellite/precipitation layer toggle set (3h Pre, 6h Pre, 12h Pre, 24h Pre, 7d Pre, Cumulative Pre, 6h Rainfall&Snow, 12h Rainfall&Snow, 24h Rainfall&Snow) and the temperature/precipitation anomaly layer set (2m Temperature Anomaly, Maximum 2m Temperature Anomaly, Minimum 2m Temperature Anomaly, Precipitation Anomaly Percentage), and correlate these with the rendered map canvas output (2048×1588, scaled via CSS transform) so the extracted raster/vector data matches what's visually displayed.
+
+
+# Building "PMD Predictions" (Live NWP GeoTIFF → Mapbox Temporal Layers) — Full Integration Guide
+
+A complete, from-scratch guide to the feature GCOP calls **PMD Predictions**:
+live WRF model precipitation forecasts, pulled from an authenticated external
+portal as raw GeoTIFFs, converted server-side into colorized, georeferenced
+PNGs, and displayed as an animated temporal layer group in Mapbox GL JS with
+the existing timeline slider.
+
+This document is written to be handed to an AI coding assistant (Claude,
+ChatGPT, etc.) as a spec: it contains the real, working code this was built
+from, verified live end-to-end, plus every gotcha that was actually hit while
+building it. The pattern generalizes to **any** situation where you need to
+pull an authenticated external raster/tile feed into a Django + Mapbox GL JS
+app as a temporal layer — PMD Monitor is the concrete worked example.
+
+---
+
+## 1. What this system does (user-facing)
+
+1. A sidebar checkbox ("PMD Predictions — 3h Precipitation") toggles on.
+2. The browser fetches a Django endpoint, which returns a list of forecast
+   steps (one per model hour), each pointing at a pre-rendered PNG.
+3. Each step becomes a Mapbox `image` source overlaid on the map, opacity-
+   toggled by an animation slider — scrubbing the slider changes which
+   forecast hour is visible, exactly like any other temporal layer.
+4. The colors are the source system's own official color scale (e.g. a
+   precipitation mm ramp), not an arbitrary re-interpretation, so the layer
+   reads the same way the source system's own dashboard would show it.
+
+---
+
+## 2. The core architecture — why this needs a backend at all
+
+**The one idea that makes this whole feature necessary**: many "live model
+output" portals do NOT serve pre-rendered map tiles — they serve raw
+single-band scientific GeoTIFFs (one float value per pixel, e.g. millimeters
+of rain), and decode/colorize them **client-side in the source portal's own
+JavaScript** (often via WebGL). Mapbox GL JS cannot render a raw GeoTIFF —
+its `raster` and `image` source types both expect an already-rendered image
+(PNG/JPG), not scientific raster data.
+
+So the pipeline is:
+
+```
+[external portal auth] → [list available forecast runs/steps] → [fetch one raw .tif]
+        → [GDAL: reproject to EPSG:3857] → [GDAL: colorize with the source's own scale]
+        → [save PNG, cache on disk] → [return {url, bounds, coordinates} JSON per step]
+        → [frontend: one Mapbox `image` source per step] → [existing temporal slider]
+```
+
+Everything left of "save PNG" happens once per (element, forecast-hour) and
+is cached — it never needs to happen twice for the same file.
+
+---
+
+## 3. Prerequisites
+
+| Need | Why |
+|---|---|
+| Django + `requests` | Server-side authenticated fetch — credentials must never reach the browser. |
+| **GDAL Python bindings** (`osgeo.gdal`) | Reprojection + color-relief rendering. No other dependency needed for this — no PIL/Pillow, no numpy, no rasterio. |
+| A `MEDIA_ROOT`/`MEDIA_URL` Django serves | Where converted PNGs live and get served from. |
+| A Django cache backend | For the cheap JSON metadata (model-run lookups) — separate from the on-disk PNG cache, which is deliberately *not* time-limited (see §6). |
+| An existing Mapbox GL JS **temporal layer / timeline slider system** in the target app | This guide's frontend part *plugs into* one — see §8 for what that system needs to expose, and a minimal version if you don't have one yet. |
+| The target external portal's actual API shape | You will very likely need to **reverse-engineer** this the same way it was done here — see §4. |
+
+---
+
+## 4. Discovering the external API (do this first, in the real target system)
+
+Before writing any code, find the real endpoints. The method that worked here:
+
+1. **Log in for real** via the portal's own login form/API, capturing cookies
+   *and* whatever token the JSON response contains — many of these systems
+   use both an `HttpOnly` session cookie (checked at the reverse-proxy/page
+   level) *and* a separate bearer token (checked at the API level). Test
+   both together with a session-aware HTTP client (e.g. `curl -c cookies.txt`).
+2. **Fetch the authenticated app shell**, not just the login page — SPA
+   frontends often serve a *different*, unauthenticated login page at the
+   same route until a valid session cookie is present. Look at the actual
+   `<script src>` tags once authenticated.
+3. **Read the shipped JS bundle(s)**, especially any lazy-loaded chunk whose
+   name suggests the feature you want (a router config mapping route → chunk
+   file is usually findable by searching the main bundle for the route
+   string). Grep it for:
+   - String literals that match option labels you see in the UI (these are
+     often internal parameter/element codes, distinct from the display text).
+   - `fetch(`/`axios(` call sites — these reveal the real endpoint paths and
+     required query parameters.
+4. **Call the endpoints directly** with a session-aware HTTP client, starting
+   from required-field validation errors (many backends will tell you
+   exactly which query params are missing/required if you omit them) and
+   working up to a real, full request.
+5. **Download one real data file** and inspect it locally (e.g. with GDAL)
+   before writing any conversion code — check band count, data type, nodata
+   value, and actual value range. Don't assume; verify.
+6. Look for a **legend/color-scale definition** shipped in the same JS
+   bundles (search for the unit strings or parameter codes you found in
+   step 3) — reuse the source system's own color scale rather than inventing
+   one, so the layer means the same thing to a user familiar with the source
+   portal.
+
+This reconnaissance is the actual hard part of building one of these
+integrations — the code in §5–§8 below is comparatively mechanical once you
+have real endpoint shapes, real parameter codes, and a real color scale.
+
+---
+
+## 5. Backend, Part 1 — the authenticated session module
+
+Reusable independently of everything else here. Handles: a self-signed/
+legacy-TLS-cert host, login + token extraction, session reuse with
+auto-re-login on 401/403, and both JSON and raw-bytes fetch helpers.
+
+```python
+import ssl as _ssl
+import threading, time
+from typing import Any, Optional
+import requests
+from requests.adapters import HTTPAdapter
+
+_MON_BASE    = "https://<external-host>:<port>"
+_MON_USER    = "<username-from-settings>"
+_MON_PASS    = "<password-from-settings>"
+_MON_TIMEOUT = 12
+_MON_HDRS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json, text/html, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": _MON_BASE + "/",
+}
+
+# ── Custom TLS adapter — only needed if the target host has a self-signed
+# cert or requires legacy cipher suites Python 3.10+ blocks by default.
+class _MonSSLAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+        try:
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except Exception:
+            pass
+        try:
+            ctx.minimum_version = _ssl.TLSVersion.TLSv1
+        except Exception:
+            pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def _mon_make_bare_session() -> requests.Session:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    s = requests.Session()
+    s.mount("https://", _MonSSLAdapter())
+    s.mount("http://", HTTPAdapter())
+    s.headers.update(_MON_HDRS)
+    return s
+
+
+def _mon_extract_jwt(resp_json: Any) -> Optional[str]:
+    """Try common login-response shapes for a token field."""
+    if not isinstance(resp_json, dict):
+        return None
+    for key in ("token", "access_token", "jwt", "jwtToken", "accessToken", "id_token"):
+        val = resp_json.get(key)
+        if val and isinstance(val, str) and len(val) > 20:
+            return val
+    data = resp_json.get("data")
+    if isinstance(data, dict):
+        for key in ("token", "access_token", "jwt"):
+            val = data.get(key)
+            if val and isinstance(val, str) and len(val) > 20:
+                return val
+    return None
+
+
+def _mon_do_login(sess: requests.Session) -> bool:
+    """POST credentials, extract a bearer token, attach it to the session."""
+    creds = {"username": _MON_USER, "password": _MON_PASS}
+    r = sess.post(f"{_MON_BASE}/user/login", json=creds, timeout=_MON_TIMEOUT,
+                  verify=False, allow_redirects=False)
+    if r.status_code not in (200, 201):
+        return False
+    body = r.json()
+    token = _mon_extract_jwt(body)
+    if token:
+        sess.headers["Authorization"] = f"Bearer {token}"
+        return True
+    return bool(body.get("success"))
+
+
+# ── Module-level session cache — one session per process, re-login after TTL
+_mon_session: Optional[requests.Session] = None
+_mon_session_expiry: float = 0.0
+_mon_session_lock = threading.Lock()
+_MON_SESSION_TTL = 3600  # 1 hour
+
+
+def _mon_sess() -> requests.Session:
+    global _mon_session, _mon_session_expiry
+    now = time.monotonic()
+    if _mon_session is not None and now < _mon_session_expiry:
+        return _mon_session
+    with _mon_session_lock:
+        if _mon_session is not None and now < _mon_session_expiry:
+            return _mon_session
+        sess = _mon_make_bare_session()
+        _mon_do_login(sess)
+        _mon_session = sess
+        _mon_session_expiry = now + _MON_SESSION_TTL
+    return _mon_session
+
+
+def _mon_invalidate_session() -> None:
+    global _mon_session, _mon_session_expiry
+    with _mon_session_lock:
+        _mon_session = None
+        _mon_session_expiry = 0.0
+
+
+def _mon_get(path: str, params: Optional[dict] = None, timeout: int = _MON_TIMEOUT) -> Any:
+    """Authenticated GET → parsed JSON. Retries once after re-login on 401/403."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                             timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise requests.HTTPError(f"Authentication failed for {path}")
+
+
+def _mon_get_bytes(path: str, params: Optional[dict] = None, timeout: int = _MON_TIMEOUT) -> bytes:
+    """Authenticated GET → raw bytes (for binary files like .tif rasters —
+    _mon_get JSON-parses, which would corrupt binary content)."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                             timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.content
+    raise requests.HTTPError(f"Authentication failed for {path}")
+
+
+def _mon_cached(key: str, ttl: int, fetch_fn, fallback_key: Optional[str] = None) -> Any:
+    """Cache-with-stale-fallback: on hit return immediately; on miss, fetch
+    and cache for ttl (and, if given, also cache under fallback_key for
+    ttl*6 so a transient upstream failure can still serve slightly-stale
+    data instead of erroring)."""
+    from django.core.cache import cache
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    try:
+        data = fetch_fn()
+        cache.set(key, data, ttl)
+        if fallback_key:
+            cache.set(fallback_key, data, ttl * 6)
+        return data
+    except Exception as exc:
+        if fallback_key:
+            stale = cache.get(fallback_key)
+            if stale is not None:
+                return stale
+        raise exc
+```
+
+**Why each piece exists:**
+- `_MonSSLAdapter` — only needed for hosts with weak/legacy TLS; a modern
+  public API can usually just use `requests` directly with `verify=True`.
+- The dual cookie+token auth (session established via `_mon_sess()`'s
+  cookie jar, bearer token attached to headers) matters because some portals
+  gate **page routes** via a cookie at the reverse-proxy layer while gating
+  **API routes** via the bearer token separately — you may need both, not
+  just one, depending on what you're fetching.
+- `_mon_get_bytes` is a *separate* function from `_mon_get`, not a flag —
+  JSON-parsing binary content silently corrupts it; keep the two paths apart.
+- The retry-once-after-401 pattern means a transient token expiry never
+  surfaces as a user-facing error — it just triggers one re-login inline.
+
+---
+
+## 6. Backend, Part 2 — the element registry and color scale
+
+```python
+# One entry per selectable layer. `data_type`/`element` are the source
+# system's own internal codes (found via §4's reverse-engineering step).
+_MON_PRED_ELEMENTS = {
+    "hourtpe":   {"data_type": "WRFPRS", "element": "HOURTPE",   "label": "3h Precipitation"},
+    "sixtpe":    {"data_type": "WRFPRS", "element": "SIXTPE",    "label": "6h Precipitation"},
+    "twelvetpe": {"data_type": "WRFPRS", "element": "TWELVETPE", "label": "12h Precipitation"},
+    "daytpe":    {"data_type": "WRFPRS", "element": "DAYTPE",    "label": "24h Precipitation"},
+}
+
+# Real color stops: (value, (r, g, b)) — extracted from the source system's
+# own shipped legend definitions, not invented. Different elements can have
+# genuinely different breakpoints (a 24h accumulation field needs larger mm
+# thresholds than a 3h one) — extract each one individually, don't assume
+# they share a scale just because they're conceptually related.
+_MON_PRED_COLOR_STOPS = {
+    "HOURTPE": [
+        (0.1, (185, 244, 171)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+        (10, (37, 144, 38)), (25, (98, 184, 255)), (50, (0, 0, 252)), (100, (250, 0, 250)),
+    ],
+    "SIXTPE": [
+        (0.01, (166, 242, 143)), (2.5, (111, 218, 111)), (5, (56, 188, 57)),
+        (10, (37, 144, 38)), (25, (98, 184, 255)), (50, (0, 0, 252)), (100, (250, 0, 250)),
+    ],
+    "TWELVETPE": [
+        (0.1, (166, 242, 143)), (5, (61, 186, 61)), (15, (97, 184, 255)),
+        (30, (0, 0, 255)), (70, (250, 0, 250)), (140, (128, 0, 64)),
+    ],
+    "DAYTPE": [
+        (0.1, (166, 242, 143)), (10, (61, 186, 61)), (25, (97, 184, 255)),
+        (50, (0, 0, 255)), (100, (250, 0, 250)), (250, (128, 0, 64)),
+    ],
+}
+```
+
+If your target system doesn't expose its color scale anywhere discoverable,
+the fallback is to pick a scientifically-reasonable ramp for the physical
+quantity yourself (e.g. a standard precipitation color scale) — just be
+explicit in your own docs/comments that it's your own choice, not the
+source's, so nobody later assumes it should match the source portal pixel-
+for-pixel.
+
+---
+
+## 7. Backend, Part 3 — GDAL conversion pipeline
+
+This is the part that turns one raw GeoTIFF into one Mapbox-ready PNG. Three
+pieces: a color-relief ramp file (built once per element, reused across every
+step/request), the actual per-step conversion, and a step-count thinning
+function so you don't register hundreds of Mapbox sources for one layer.
+
+### 7.1 The color-relief ramp file
+
+GDAL's `color-relief` processing mode reads a plain text file of
+`value R G B [A]` lines — building this once and reusing the path is far
+cheaper than reconstructing it per request.
+
+```python
+import os
+
+_PRED_RAMP_DIR = os.path.join(MEDIA_ROOT, "pmd_predictions", "_ramps")
+
+def _mon_pred_ramp_file(element: str) -> str:
+    os.makedirs(_PRED_RAMP_DIR, exist_ok=True)
+    path = os.path.join(_PRED_RAMP_DIR, f"{element}.txt")
+    if os.path.exists(path):
+        return path
+    stops = _MON_PRED_COLOR_STOPS[element]
+    lines = ["nv 0 0 0 0"]  # nodata -> fully transparent
+    first_r, first_g, first_b = stops[0][1]
+    lines.append(f"0 {first_r} {first_g} {first_b} 0")  # 0-value -> transparent ("no signal")
+    for value, (r, g, b) in stops:
+        lines.append(f"{value} {r} {g} {b} 255")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    return path
+```
+
+**Why the two extra lines at the top**: GDAL's color-relief clamps values
+below the lowest defined stop to that stop's color by default, which for a
+"no rain" (or generally "no signal") area would paint the whole background
+solid instead of leaving it transparent. Adding an explicit `0 → transparent`
+stop (using the first real stop's own RGB, alpha 0) fixes that. The `nv`
+line makes the source raster's actual `nodata` sentinel value (e.g. `-9999`
+for out-of-domain pixels) render transparent too, instead of some
+arbitrary color a scale wasn't designed to represent.
+
+### 7.2 Step-count thinning
+
+```python
+from datetime import datetime
+from typing import List, Optional
+
+_PRED_DENSE_HOURS = 48          # keep every hour through this point
+_PRED_SPARSE_STEP_HOURS = 6     # then thin to every N hours
+
+def _mon_pred_select_steps(ds_list: List[dict]) -> List[dict]:
+    def _parse(dt_str: str) -> Optional[datetime]:
+        try:
+            return datetime.fromisoformat(dt_str)
+        except Exception:
+            return None
+
+    if not ds_list:
+        return []
+    run_dt = _parse(ds_list[0].get("data_time") or "")
+    kept = []
+    for item in ds_list:
+        fc_dt = _parse(item.get("forecast_time") or "")
+        if not run_dt or not fc_dt:
+            kept.append(item)
+            continue
+        hours_out = (fc_dt - run_dt).total_seconds() / 3600
+        if hours_out <= _PRED_DENSE_HOURS or int(round(hours_out)) % _PRED_SPARSE_STEP_HOURS == 0:
+            kept.append(item)
+    return kept
+```
+
+**Why this exists at all**: a Mapbox `image` source is one live GPU texture.
+If the source publishes, say, 76 hourly frames and you register one Mapbox
+source per frame per layer, you end up with hundreds of textures loaded
+simultaneously (even though only one is visible at a time) — this caps that
+count to something reasonable. Tune the two constants to your own memory/UX
+tradeoff; there's nothing special about 48/6, they're just a sane default.
+
+### 7.3 The conversion itself
+
+```python
+import re, math, json
+from django.conf import settings
+
+_PRED_MEDIA_SUBDIR = "pmd_predictions"
+
+def _mon_pred_convert_step(element: str, item: dict) -> Optional[dict]:
+    """Fetch one raw .tif, warp to EPSG:3857, colorize, cache to disk.
+    Returns the Mapbox `image` source payload for this step, or None on failure."""
+    from osgeo import gdal
+
+    run = (item.get("data_time") or "").replace("-", "").replace(":", "").replace("T", "")
+    fh  = (item.get("forecast_time") or "").replace("-", "").replace(":", "").replace("T", "")
+    safe_name = re.sub(r"[^A-Za-z0-9_]+", "_", f"{element}_{run}_{fh}")
+    out_dir = os.path.join(settings.MEDIA_ROOT, _PRED_MEDIA_SUBDIR)
+    png_path = os.path.join(out_dir, f"{safe_name}.png")
+    meta_path = os.path.join(out_dir, f"{safe_name}.json")
+
+    # On-disk memoization: this is the expensive path (network fetch + GDAL),
+    # so a deterministic filename keyed by (element, run, forecast-hour) lets
+    # repeat requests skip straight to "file already exists."
+    if os.path.exists(png_path) and os.path.exists(meta_path):
+        with open(meta_path) as f:
+            return json.load(f)
+
+    os.makedirs(out_dir, exist_ok=True)
+    src_path = os.path.join(out_dir, f"{safe_name}_src.tif")
+    warped_path = os.path.join(out_dir, f"{safe_name}_3857.tif")
+    try:
+        tif_bytes = _mon_get_bytes(item["file_path"])   # authenticated fetch, §5
+        with open(src_path, "wb") as f:
+            f.write(tif_bytes)
+
+        src_ds = gdal.Open(src_path)
+        if src_ds is None:
+            raise ValueError("could not open fetched GeoTIFF")
+
+        warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(
+            dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
+        ))
+        src_ds = None
+        if warped_ds is None:
+            raise ValueError("reprojection failed")
+
+        # EPSG:3857 -> WGS84 corner bounds, using all 4 corners (handles any
+        # residual rotation the warp introduces — don't just use 2 corners).
+        gt = warped_ds.GetGeoTransform()
+        width, height = warped_ds.RasterXSize, warped_ds.RasterYSize
+        _MERC_MAX = 20037508.3427892
+        cx = [gt[0], gt[0] + gt[1]*width, gt[0] + gt[2]*height, gt[0] + gt[1]*width + gt[2]*height]
+        cy = [gt[3], gt[3] + gt[4]*width, gt[3] + gt[5]*height, gt[3] + gt[4]*width + gt[5]*height]
+        minx_m, maxx_m = max(min(cx), -_MERC_MAX), min(max(cx), _MERC_MAX)
+        miny_m, maxy_m = max(min(cy), -_MERC_MAX), min(max(cy), _MERC_MAX)
+
+        def _m_to_lon(x): return (x / _MERC_MAX) * 180.0
+        def _m_to_lat(y): return math.degrees(2.0 * math.atan(math.exp(y / 6378137.0)) - math.pi / 2.0)
+
+        minx, maxx = round(_m_to_lon(minx_m), 6), round(_m_to_lon(maxx_m), 6)
+        miny, maxy = round(_m_to_lat(miny_m), 6), round(_m_to_lat(maxy_m), 6)
+
+        ramp_file = _mon_pred_ramp_file(element)
+        colored_ds = gdal.DEMProcessing(
+            png_path, warped_path, "color-relief", colorFilename=ramp_file,
+            format="PNG", addAlpha=True,
+        )
+        warped_ds = None
+        if colored_ds is None:
+            raise ValueError("color-relief render failed")
+        colored_ds = None
+
+        payload = {
+            "date": item.get("forecast_time"),
+            "url": f"{settings.MEDIA_URL}{_PRED_MEDIA_SUBDIR}/{safe_name}.png",
+            "bounds": [minx, miny, maxx, maxy],
+            # Mapbox ImageSource coordinate order: top-left, top-right,
+            # bottom-right, bottom-left.
+            "coordinates": [[minx, maxy], [maxx, maxy], [maxx, miny], [minx, miny]],
+        }
+        with open(meta_path, "w") as f:
+            json.dump(payload, f)
+        return payload
+    except Exception as exc:
+        # log and return None — one bad step shouldn't fail the whole layer
+        return None
+    finally:
+        for p in (src_path, warped_path):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+```
+
+**Key decisions worth understanding, not just copying:**
+
+- **`gdal.DEMProcessing(..., "color-relief", ...)` instead of a generic
+  min/max auto-stretch.** If you've built an "upload any raster, preview it"
+  feature before, you likely used `ComputeRasterMinMax` +
+  `TranslateOptions(scaleParams=...)` to auto-stretch contrast per image —
+  **do not reuse that here.** A fixed physical quantity like millimeters of
+  rain needs a *fixed* color scale so the same value always renders the same
+  color across every forecast frame; an auto-stretch would make 5mm look
+  bright red on a dry day and dull on a wet one.
+- **`addAlpha=True`** is what makes the "no signal" areas (and any real
+  `nodata` pixels) transparent instead of opaque black/white — without it
+  you get a solid rectangle over the whole raster extent.
+- **Corner-based bounds math, not just min/max of the GeoTransform.** A warp
+  can introduce slight rotation; computing all 4 corners and taking
+  min/max across them is what `NcopRasterUploadView`-style code already in
+  this codebase does, and it's correct where a 2-corner shortcut isn't.
+- **Delete the intermediate `.tif` files in `finally`**, keep only the final
+  PNG + its JSON metadata sidecar — otherwise disk usage grows by two full
+  GeoTIFFs per step forever.
+- **GDAL will also write a `.png.aux.xml` sidecar** (PAM metadata) next to
+  each output — harmless, Mapbox never requests it, but if you want to
+  suppress it set the `GDAL_PAM_ENABLED=NO` config option before calling
+  `DEMProcessing`.
+
+---
+
+## 8. Backend, Part 4 — the endpoint
+
+```python
+from django.http import JsonResponse
+# assuming django-ninja; adapt the decorator for plain Django views if needed
+
+@api.get("/api/pmd/monitor/predictions/{element_key}/", tags=["PMD Monitor"])
+def get_pmd_monitor_predictions(request, element_key: str):
+    cfg = _MON_PRED_ELEMENTS.get(element_key)
+    if not cfg:
+        return JsonResponse({"error": f"Unknown element_key '{element_key}'"}, status=404)
+
+    try:
+        from osgeo import gdal  # noqa — availability check before any real work
+    except Exception as e:
+        return JsonResponse({"error": f"GDAL is required: {e}"}, status=500)
+
+    data_type, element = cfg["data_type"], cfg["element"]
+
+    def _fetch_latest_run():
+        resp = _mon_get("/api/modelTimeList", {"data_type": data_type, "element": element})
+        times = (resp or {}).get("data") or []
+        if not times:
+            raise ValueError("no model runs available")
+        return times[0]["data_time"]  # newest-first, per the source API
+
+    try:
+        latest_run = _mon_cached(f"pmd_pred_run_{element_key}", 1800, _fetch_latest_run)
+    except Exception:
+        return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+    def _fetch_frame_list():
+        resp = _mon_get("/api/model", {"data_type": data_type, "element": element, "date_time": latest_run})
+        return (resp or {}).get("ds") or []
+
+    try:
+        frame_list = _mon_cached(f"pmd_pred_frames_{element_key}_{latest_run}", 10800, _fetch_frame_list)
+    except Exception:
+        return JsonResponse({"error": "predictions unavailable"}, status=502)
+
+    steps = []
+    for item in _mon_pred_select_steps(frame_list):
+        converted = _mon_pred_convert_step(element, item)
+        if converted:
+            steps.append(converted)
+
+    return JsonResponse({
+        "element": element_key, "label": cfg["label"], "unit": "mm",
+        "run": latest_run, "steps": steps,
+    })
+```
+
+Two caching layers, deliberately different lifetimes:
+- **Model-run lookup**: 30 min — cheap to refetch, and you want to notice a
+  new model cycle reasonably promptly.
+- **Frame list for one run**: 3 h — a given run's file list doesn't change
+  once published.
+- **The converted PNGs themselves**: unbounded (on-disk memoization, §7.3) —
+  a given (element, run, forecast-hour) combination's rendered output never
+  changes, so there's no reason to ever expire it. (If disk usage is a
+  concern at scale, add a periodic cleanup job keyed on file age — not
+  included here since it wasn't needed at the scale this was built for.)
+
+---
+
+## 9. Frontend, Part 1 — sidebar checkbox markup
+
+```html
+<div class="your-layer-switcher-class">
+  <span>
+    <label class="switch">
+      <input id="pmd_pred_hourtpe" type="checkbox"
+             data-layergroup="<YOUR_APP'S_TEMPORAL_GROUP_NAME>"
+             data-layertype="layer"
+             data-layername="pmd_pred_hourtpe"
+             data-layerlegend="true"
+             data-istempo="true"
+             information="WRF model precipitation forecast, 3-hour accumulation (mm).">
+      <span class="slider round"></span>
+    </label>
+    PMD Predictions — 3h Precipitation
+  </span>
+</div>
+<!-- repeat for pmd_pred_sixtpe / pmd_pred_twelvetpe / pmd_pred_daytpe -->
+```
+
+### ⚠ The gotcha that will silently break this if you skip it
+
+If your app already has a temporal-layer/timeline-slider system (most
+non-trivial Mapbox GL JS dashboards that show animated weather layers do),
+**it almost certainly gates slider activation on a specific `data-layergroup`
+value** shared by every temporal layer, not just `data-istempo="true"` alone.
+In this codebase specifically, that shared value is
+`data-layergroup="neoc_projections_timeseries"` — a legacy name that now
+means "any temporal layer," used by every animated layer in the app
+regardless of what it conceptually is (weather radar, satellite, model
+forecasts, etc.).
+
+**Symptom if you get this wrong**: the checkbox visually toggles fine
+(generic layer-visibility code doesn't care what layergroup a checkbox has),
+but nothing appears on the map and the timeline slider either doesn't
+appear or keeps showing whatever *other* temporal layer was already active —
+because the actual "load this layer's frames and wire up the slider"
+function is never called at all.
+
+**How to find your app's equivalent**: search the codebase for wherever the
+timeline slider's frames actually get populated (something like
+`prepareAnimation(layerName)` reading `yourLayersets[layerName]`), and trace
+backward to find what triggers that call from the checkbox's `change`
+event. Match whatever gate it uses — don't assume `data-istempo="true"`
+alone is sufficient.
+
+**Also match the `id` attribute to the `data-layername` value.** Many slider
+implementations have a "close timeline" button that does
+`document.getElementById(currentLayerName)` to re-sync the checkbox's
+visual checked state — if `id` doesn't match, the checkbox will silently
+get out of sync with the actual layer state when the user closes the slider
+instead of unchecking the box directly.
+
+---
+
+## 10. Frontend, Part 2 — legend
+
+Reuse whatever legend-box-generation helper your app already has (a function
+that takes an ordered list of `{color, label}` and renders swatches) —
+build the entries from the *exact same* color stops the backend used to
+build the GDAL ramp file (§6), so the legend and the rendered raster are
+guaranteed to agree:
+
+```js
+const legends = {
+  pmd_pred_hourtpe: generateBoxLegend([
+    { bgcolor: "transparent", value: "mm/3h" },
+    { bgcolor: "#B9F4AB", value: "0.1" },
+    { bgcolor: "#6FDA6F", value: "2.5" },
+    { bgcolor: "#38BC39", value: "5" },
+    { bgcolor: "#259026", value: "10" },
+    { bgcolor: "#62B8FF", value: "25" },
+    { bgcolor: "#0000FC", value: "50" },
+    { bgcolor: "#FA00FA", value: "100+" },
+  ]),
+  // ...same pattern for sixtpe/twelvetpe/daytpe, using each element's own stops
+};
+```
+
+---
+
+## 11. Frontend, Part 3 — the temporal layerset loader
+
+This is the piece that turns the backend's JSON response into whatever data
+structure your app's slider system consumes. In this codebase that's an
+array of `{source, layers, date}` per step, keyed by layer name in a global
+registry:
+
+```js
+const PMD_PREDICTION_ELEMENTS = ["hourtpe", "sixtpe", "twelvetpe", "daytpe"];
+
+async function loadPmdPredictionLayerset(elementKey, layerName) {
+  try {
+    const response = await fetch(`${baseUrl}/api/pmd/monitor/predictions/${elementKey}/`);
+    if (!response.ok) {
+      console.warn(`PMD prediction fetch failed for ${elementKey}: ${response.status}`);
+      timeseriesLayersets[layerName] = [];
+      return;
+    }
+    const data = await response.json();
+    const steps = Array.isArray(data?.steps) ? data.steps : [];
+    timeseriesLayersets[layerName] = steps.map((step, index) => ({
+      source: {
+        id: `${layerName}_${index}`,
+        type: "image",              // NOT "raster" — a single fixed image per step, not a tile template
+        url: step.url,
+        coordinates: step.coordinates,
+      },
+      layers: [{
+        id: `${layerName}_${index}`,
+        type: "raster",             // the LAYER type is "raster" even though the SOURCE type is "image"
+        source: `${layerName}_${index}`,
+        layout: { visibility: "visible" },
+        // Every step's source+layer is registered up front; only one is
+        // opaque at a time. The slider changes opacity, not visibility —
+        // this avoids repeated addSource/removeSource churn while scrubbing.
+        paint: { "raster-opacity": index === 0 ? 0.85 : 0 },
+      }],
+      date: step.date,
+    }));
+  } catch (error) {
+    console.error(`PMD prediction layerset load failed for ${elementKey}:`, error);
+    timeseriesLayersets[layerName] = [];
+  }
+}
+
+PMD_PREDICTION_ELEMENTS.forEach((elementKey) =>
+  loadPmdPredictionLayerset(elementKey, `pmd_pred_${elementKey}`),
+);
+```
+
+**Why `type: "image"` per step, not one `type: "raster"` tile source**:
+Mapbox `raster` sources expect a `{z}/{x}/{y}` tile URL template — fine for
+a live tile server, wrong for a single static PNG covering a fixed extent.
+`image` sources are the correct primitive for "one picture, pinned to these
+4 corner coordinates" — which is exactly what each converted forecast frame
+is. Note the *source* type is `"image"` while the *layer* type referencing
+it is still `"raster"` — that's correct, not a typo; Mapbox's raster layer
+type renders both raster tile sources and image sources.
+
+**Async-before-the-registry-exists ordering**: if your app's temporal-layerset
+registry is declared as `export const timeseriesLayersets = {...}` further
+down in the same module, calling an `async` loader function *before* that
+declaration is still safe **as long as the function's first `await` happens
+before it touches the registry** — the synchronous part of the module
+(including the `export const` initialization) finishes evaluating before
+any `await`ed continuation runs, even if the loader call appears earlier in
+the file textually. This is the same pattern this codebase already uses for
+its other externally-sourced temporal layers (e.g. a RainViewer radar/
+satellite loader) — mirror that existing pattern's placement rather than
+guessing.
+
+---
+
+## 12. Frontend, Part 4 — popups
+
+None, deliberately. Continuous raster fields (like a precipitation surface)
+don't have discrete clickable features the way point/polygon layers do —
+match whatever your app's other raster/image temporal layers already do
+(most likely: nothing, no click handler registered for these layer ids).
+
+---
+
+## 13. Verification checklist
+
+Do these **in this order** — each one rules out a different failure class:
+
+1. **Syntax-check** every edited file (`node --check` for JS, `python -m
+   py_compile` / `ast.parse` for the Django file) before touching the network.
+2. **Call the backend endpoint directly** (`curl`) for each element, cold
+   (first call) and warm (immediate second call) — confirm the second call
+   is dramatically faster (proves on-disk memoization is actually working,
+   not just "not erroring").
+3. **Open one returned PNG URL directly** in a browser / via `curl` — confirm
+   it's a real, non-trivial-sized image, not a 0-byte or error-page response
+   masquerading as 200.
+4. **Inspect a generated PNG with GDAL directly** (band count, per-band
+   `GetStatistics()`) — confirms real, varied pixel content and a working
+   alpha channel, without needing `gdal_array`/numpy (which may not even be
+   installed, or may be version-mismatched — `ReadAsArray()` needs it,
+   `GetStatistics()` doesn't).
+5. **Confirm existing, unrelated layers/endpoints still work** — this
+   feature should be 100% additive; prove it by re-hitting a couple of
+   pre-existing endpoints that share the same auth session module.
+6. **Only then** check the browser: toggle each new checkbox, confirm the
+   slider populates with the expected step count, scrub it, confirm the
+   visible raster actually changes, check the console for errors.
+7. If step 6 fails but step 2 succeeded, the bug is almost certainly in the
+   sidebar-to-slider wiring (§9's gotcha), not in the data pipeline — check
+   that before re-debugging the backend.
+
+---
+
+## 14. Summary of hard-won lessons (read this before you start copying code)
+
+- **Reverse-engineer the real API before writing conversion code.** The
+  example URLs a user might paste in are usually just *samples* of a file
+  naming convention — the actual driving endpoints (list available runs,
+  list files for a run) are a separate discovery step, found in the
+  portal's own shipped JS, not guessable from a single example URL.
+- **Two-token auth is common on these systems**: a cookie for page routes, a
+  bearer token for API routes. Capture both from the same login call.
+- **Raw scientific rasters need server-side colorization** — you cannot hand
+  Mapbox a `.tif` directly, and you should not auto-stretch contrast per
+  image for a fixed physical quantity; use the source's own fixed scale.
+- **Extract each element's own color stops individually** — don't assume
+  related fields (3h vs 24h accumulation) share breakpoints.
+- **Cap the number of temporal steps you register** — one Mapbox `image`
+  source is one live GPU texture; don't register hundreds per layer.
+- **On-disk memoization, keyed deterministically**, is what makes repeat
+  requests cheap — the GDAL warp+colorize step is the expensive part, not
+  the JSON metadata, so that's where memoization matters most.
+- **The frontend "nothing shows up" bug is almost always sidebar-wiring, not
+  data** — verify the backend independently (curl) before assuming the
+  conversion pipeline is broken; a checkbox that "toggles but does nothing"
+  is the classic symptom of a missing/wrong `data-layergroup` gate.

@@ -1,0 +1,313 @@
+/* ======================================= */
+/* NCOP STATIC TYPE STYLES */
+/* ======================================= */
+.ncop-item-thumb {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.ncop-item-thumb:hover {
+    background: #f0f4fa;
+}
+
+.ncop-thumb-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+.ncop-thumb-label {
+    font-size: 15px;
+    color: #222;
+    font-weight: 500;
+}
+
+
+/* ============================================================================
+   NESTED SUB-ACCORDION STYLES - NDMA THEME
+   ============================================================================
+   These styles are designed to match the NDMA glassmorphic design system
+   with blue gradients, dark backgrounds, and consistent transitions.
+   
+   REPLACE the existing nested styles (lines 3051-3374) with this entire block.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------
+   Nested Subsection Container
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection {
+    margin: 6px 0;
+    border-left: 2px solid var(--ndma-blue-light);
+    padding-left: 8px;
+    transition: all 0.2s ease;
+}
+
+/* ---------------------------------------------------------------------
+   Nested Header (Clickable accordion header for nested sections)
+   --------------------------------------------------------------------- */
+.ncop-nested-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--tertiary-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    position: relative;
+    backdrop-filter: blur(10px);
+}
+
+/* Left accent border (appears on hover/expand) */
+.ncop-nested-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--ndma-blue);
+    border-radius: 4px 0 0 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.ncop-nested-header:hover {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+}
+
+.ncop-nested-header:hover::before {
+    opacity: 1;
+}
+
+.ncop-nested-header.expanded {
+    background: var(--ndma-blue-gradient);
+    border: 1px solid var(--ndma-blue);
+    box-shadow: var(--shadow-glow-blue);
+}
+
+.ncop-nested-header.expanded::before {
+    opacity: 1;
+}
+
+/* Nested Header Title — only the first span (title) takes flex:1. */
+.ncop-nested-header > span:first-child {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--white);
+    letter-spacing: 0.2px;
+    overflow: hidden;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+/* Nested Header Chevron Icon */
+.ncop-nested-header .nested-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 5px;
+}
+
+.ncop-nested-header.expanded .nested-chevron {
+    transform: rotate(90deg);
+    color: var(--white);
+}
+
+/* ---------------------------------------------------------------------
+   Nested Items Container (Collapsible content area)
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding: 0 4px;
+    margin-top: 4px;
+}
+
+.ncop-nested-items-container.visible {
+    max-height: 600px;
+    /* Matches main .ncop-items-container */
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding: 4px;
+}
+
+/* ---------------------------------------------------------------------
+   Grid Layout Inside Nested Containers
+   ---------------------------------------------------------------------
+   Nested grids now inherit the same unified single-row ("icon · label ·
+   type · toggle") layout used at the top level. When the grid contains
+   `.ncop-item-row` children (all of our current items do), force a
+   single column with a tight gap — matching the non-nested sidebar
+   grids. The legacy 2-column + 80×80 image layout has been dropped; it
+   produced the stretched thumbnails visible in the GDACS alerts. */
+.ncop-nested-items-container .ncop-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2px;
+    align-items: start;
+}
+
+.ncop-nested-items-container .ncop-grid:has(.ncop-item-button) {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Nested Section Loading States
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container .ncop-loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.ncop-nested-items-container .ncop-loading-state .ncop-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-dark);
+    border-top-color: var(--ndma-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Nested Section Empty States
+   --------------------------------------------------------------------- */
+.ncop-nested-items-container .ncop-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.ncop-nested-items-container .ncop-empty-state-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.ncop-nested-items-container .ncop-empty-state-text {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------
+   Accessibility & Focus States
+   --------------------------------------------------------------------- */
+.ncop-nested-header:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.ncop-nested-header:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.ncop-nested-header:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Visual Hierarchy Adjustments
+   --------------------------------------------------------------------- */
+/* Slightly indent nested items to show hierarchy */
+.ncop-nested-items-container .ncop-item {
+    margin-left: 4px;
+}
+
+/* Gap handled by the single-row grid rule above. */
+
+/* Adjust nested header title font size to be between subcategory and item */
+.ncop-nested-header > span:first-child {
+    font-size: 12px;
+    /* Between subcategory (13px) and items (11px/10px) */
+}
+
+/* ---------------------------------------------------------------------
+   Scrollbar Styling for Nested Containers
+   --------------------------------------------------------------------- */
+/* Match global scrollbar styles */
+.ncop-nested-items-container::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ncop-nested-items-container::-webkit-scrollbar-track {
+    background: var(--glass-light);
+    border-radius: 10px;
+}
+
+.ncop-nested-items-container::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+
+/* ---------------------------------------------------------------------
+   Print Styles
+   --------------------------------------------------------------------- */
+@media print {
+    .ncop-nested-subsection {
+        page-break-inside: avoid;
+    }
+
+    .ncop-nested-header .nested-chevron {
+        display: none;
+    }
+
+    .ncop-nested-items-container {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .ncop-nested-header::before {
+        display: none;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Smooth Transitions for All States
+   --------------------------------------------------------------------- */
+.ncop-nested-subsection,
+.ncop-nested-header,
+.ncop-nested-header::before,
+.ncop-nested-header span,
+.ncop-nested-header .nested-chevron,
+.ncop-nested-items-container {
+    /* Ensure consistent 0.2s ease transitions matching existing theme */
+    transition-timing-function: ease;
+}
+
+/* ============================================================================
+   END OF NESTED ACCORDION STYLES - NDMA THEME
+   ============================================================================ */
+
+

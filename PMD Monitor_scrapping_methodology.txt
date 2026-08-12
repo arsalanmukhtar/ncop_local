@@ -1,0 +1,500 @@
+# GCOP — PMD Monitor (115.186.56.181:12304) Scraping Reference
+
+Everything GCOP knows about PMD Monitor's private API: how authentication
+actually works, every token/cookie involved and what each one gates, the
+full catalog of endpoints GCOP currently scrapes, and the ones discovered
+but not used. This is the "how do we actually talk to this system" reference
+— pair it with `GCOP_PMD_Predictions_WRFPRS_Integration_Guide.md` for the
+detailed build-a-feature walkthrough of one specific sub-system
+(`/predictions`).
+
+**A note on the literal secret values**: this document documents the
+*mechanism* and *structure* of every credential/token PMD Monitor uses —
+cookie names, header names, JWT claim shapes, signing algorithms — in full.
+It does not reproduce the live credential values themselves (password,
+current bearer token, current session cookie). Those live in `.env`
+(`PMD_MONITOR_URL` / `PMD_MONITOR_USER` / `PMD_MONITOR_PASS`) per this
+project's existing convention of never committing secrets to a checked-in
+file — a JWT is time-limited but still a live bearer credential while valid,
+so it gets the same treatment as a password here, not special-cased just
+because it will eventually expire.
+
+---
+
+## 1. What PMD Monitor is
+
+A "Cloud-based Early Warning Supporting System (For PMD)" — a Chinese-vendor-
+built weather/hazard monitoring platform (`title lang="zh-CN"`, Chinese
+strings throughout the shipped JS, login success message `登录成功`) running
+at `https://115.186.56.181:12304`, self-signed cert, on an internal-looking
+IP. All requests to it happen **server-side only** — GCOP's Django backend
+holds the credentials and proxies data out as its own `/api/pmd/monitor/*`
+JSON endpoints; the browser never sees PMD Monitor's host, credentials, or
+tokens directly.
+
+---
+
+## 2. Authentication — the full mechanism
+
+PMD Monitor uses **two separate, independent auth tokens** issued by the
+same login call, gating two different layers:
+
+| Token | Where it comes from | What it gates | Transport |
+|---|---|---|---|
+| Bearer JWT | `token` field in the login JSON response body | The `/api/*` data endpoints | `Authorization: Bearer <token>` header on every API request |
+| `ews_jwt` cookie | `Set-Cookie` header on the same login response | Page-level routes (e.g. `/`, `/predictions`) at the reverse-proxy (openresty) layer | Cookie jar, `HttpOnly; Path=/; SameSite=Strict` |
+
+**You need both if you're doing anything beyond calling `/api/*` directly**
+— e.g. fetching the SPA shell to discover its JS bundle names (§5) requires
+the cookie; the cookie alone doesn't get you into `/api/*` (that needs the
+bearer token in the `Authorization` header).
+
+### 2.1 Login call
+
+```
+POST /user/login
+Content-Type: application/json
+
+{"username": "<PMD_MONITOR_USER>", "password": "<PMD_MONITOR_PASS>"}
+```
+
+Response (200 OK):
+```json
+{
+  "code": 200,
+  "message": "登录成功",
+  "token": "<JWT — see 2.2>",
+  "username": "PMD",
+  "identity": "普通用户",
+  "success": "true",
+  "data": "",
+  "time": "..."
+}
+```
+Response headers:
+```
+set-cookie: ews_jwt=<JWT>; HttpOnly; Path=/; SameSite=Strict
+```
+(Both the body's `token` field and the `ews_jwt` cookie are valid JWTs
+signed the same way — in practice they carry the same claims, just
+delivered through two different channels for two different consumers, the
+API layer vs. the page-routing layer.)
+
+### 2.2 Decoded JWT structure
+
+Standard three-part JWT (`header.payload.signature`), HS256. Decoded
+payload shape (values illustrative, not a live token):
+```json
+{
+  "sub": "PMD",
+  "exp": 1787807513,
+  "iat": 1785215513,
+  "iss": "ews",
+  "role": "PMD"
+}
+```
+`exp - iat` in the example above is exactly 30 days — that's the server-
+side token lifetime. GCOP does **not** rely on parsing `exp` itself; instead
+it just re-authenticates on any 401/403 (see §2.4), which is simpler and
+correctly handles both natural expiry and server-side session invalidation.
+
+### 2.3 TLS quirks
+
+The host has a self-signed certificate and, empirically, needed a relaxed
+cipher/TLS-version policy to connect reliably from a modern Python
+`ssl`/`requests` stack — plain `verify=False` was not sufficient on its own;
+a custom `SSLContext` with `SECLEVEL=0` and `minimum_version =
+TLSVersion.TLSv1` was needed (see the `_MonSSLAdapter` class in the code
+below). If you're building this fresh against a *different* target and it
+has a normal, current TLS setup, you likely only need `verify=False` (or
+nothing at all, for a properly-certed host) — don't copy the legacy-cipher
+adapter unless you actually hit a connection failure that indicates you need it.
+
+### 2.4 Session lifecycle in GCOP's implementation
+
+- One authenticated `requests.Session` is created and cached **per Django
+  worker process** (module-level global, not per-request) — login is
+  expensive-ish (a network round-trip) and the token is valid for a long
+  time, so there's no reason to re-login on every incoming request.
+- The cached session is reused for up to `_MON_SESSION_TTL` (1 hour) before
+  a proactive re-login, and is force-invalidated and rebuilt immediately on
+  any 401/403 response from PMD Monitor (with one automatic retry of the
+  failed call after re-login) — so an unexpected server-side token
+  invalidation self-heals within a single request, not just on the next
+  hourly refresh.
+- Thread-safe via a simple lock around the check-then-create sequence.
+
+---
+
+## 3. The authenticated session module (as implemented)
+
+This is the real code running in `ncop/api_ninja.py`, lightly excerpted —
+every one of GCOP's PMD Monitor endpoints (§4) goes through these functions,
+never calls `requests` directly.
+
+```python
+import ssl as _ssl
+import threading, time
+from typing import Any, Optional
+import requests
+from requests.adapters import HTTPAdapter
+from django.conf import settings
+from django.core.cache import cache
+
+_MON_BASE    = getattr(settings, "PMD_MONITOR_URL",  "https://115.186.56.181:12304").rstrip("/")
+_MON_USER    = getattr(settings, "PMD_MONITOR_USER", "")
+_MON_PASS    = getattr(settings, "PMD_MONITOR_PASS", "")
+_MON_TIMEOUT = 12
+_MON_HDRS = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept":          "application/json, text/html, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         _MON_BASE + "/",
+}
+# Headers that mimic browser AJAX calls originating from the /warning page —
+# needed specifically for the POST /api/warning_area call (§4.3), which
+# otherwise behaves differently for a bare server-side POST vs. one that
+# looks like it came from the page that normally issues it.
+_WARN_POST_HDRS = {
+    "Content-Type":     "application/json",
+    "Referer":          _MON_BASE + "/warning",
+    "Origin":           _MON_BASE,
+    "X-Requested-With": "XMLHttpRequest",
+}
+
+
+class _MonSSLAdapter(HTTPAdapter):
+    """Disables cert checks and allows legacy TLS versions/ciphers — needed
+    because this host uses a self-signed cert and may only support cipher
+    suites Python 3.10+ blocks by default."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+        try:
+            ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        except Exception:
+            pass
+        try:
+            ctx.minimum_version = _ssl.TLSVersion.TLSv1
+        except Exception:
+            pass
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+def _mon_make_bare_session() -> requests.Session:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    s = requests.Session()
+    s.mount("https://", _MonSSLAdapter())
+    s.mount("http://", HTTPAdapter())
+    s.headers.update(_MON_HDRS)
+    return s
+
+
+def _mon_extract_jwt(resp_json: Any) -> Optional[str]:
+    """Try common login-response shapes for a token field — kept generic
+    (not hardcoded to PMD Monitor's exact field name) since this same
+    pattern is reused for other vendor systems with slightly different
+    response shapes."""
+    if not isinstance(resp_json, dict):
+        return None
+    for key in ("token", "access_token", "jwt", "jwtToken", "accessToken", "id_token"):
+        val = resp_json.get(key)
+        if val and isinstance(val, str) and len(val) > 20:
+            return val
+    data = resp_json.get("data")
+    if isinstance(data, dict):
+        for key in ("token", "access_token", "jwt", "jwtToken", "accessToken"):
+            val = data.get(key)
+            if val and isinstance(val, str) and len(val) > 20:
+                return val
+        if isinstance(data, str) and len(data) > 20:
+            return data
+    return None
+
+
+def _mon_do_login(sess: requests.Session) -> bool:
+    """POST credentials to the confirmed login endpoint. A couple of
+    fallback path variants are tried in case of a sub-path deployment, but
+    /user/login (not under /api/ — that's fully JWT-gated) is the real one."""
+    creds = {"username": _MON_USER, "password": _MON_PASS}
+    for ep in ["/user/login", "/user/login/", "/api/user/login"]:
+        try:
+            r = sess.post(f"{_MON_BASE}{ep}", json=creds, timeout=_MON_TIMEOUT,
+                          verify=False, allow_redirects=False)
+            if r.status_code not in (200, 201):
+                continue
+            body = r.json()
+            token = _mon_extract_jwt(body)
+            if token:
+                sess.headers["Authorization"] = f"Bearer {token}"
+                return True
+            if body.get("success") is True or body.get("code") in (0, "0"):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+_mon_session:        Optional[requests.Session] = None
+_mon_session_expiry:  float = 0.0
+_mon_session_lock = threading.Lock()
+_MON_SESSION_TTL  = 3600  # 1 hour
+
+
+def _mon_sess() -> requests.Session:
+    global _mon_session, _mon_session_expiry
+    now = time.monotonic()
+    if _mon_session is not None and now < _mon_session_expiry:
+        return _mon_session
+    with _mon_session_lock:
+        if _mon_session is not None and now < _mon_session_expiry:
+            return _mon_session
+        sess = _mon_make_bare_session()
+        _mon_do_login(sess)
+        _mon_session, _mon_session_expiry = sess, now + _MON_SESSION_TTL
+    return _mon_session
+
+
+def _mon_invalidate_session() -> None:
+    global _mon_session, _mon_session_expiry
+    with _mon_session_lock:
+        _mon_session, _mon_session_expiry = None, 0.0
+
+
+def _mon_parse_response(r: requests.Response) -> Any:
+    ct = r.headers.get("Content-Type", "")
+    if "json" in ct or (r.text and r.text.lstrip()[:1] in ("{", "[")):
+        return r.json()
+    return r.text
+
+
+def _mon_get(path: str, params: Optional[dict] = None, timeout: int = _MON_TIMEOUT) -> Any:
+    """Authenticated GET → parsed JSON or raw text. Retries once, after a
+    forced re-login, if the current session's token has been rejected."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return _mon_parse_response(r)
+    raise requests.HTTPError(f"Authentication failed for {path}")
+
+
+def _mon_post(path: str, payload: Optional[dict] = None, timeout: int = _MON_TIMEOUT,
+              extra_headers: Optional[dict] = None) -> Any:
+    hdrs = {"Content-Type": "application/json", **(extra_headers or {})}
+    for attempt in range(2):
+        r = _mon_sess().post(f"{_MON_BASE}/{path.lstrip('/')}", json=payload or {},
+                             headers=hdrs, timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise requests.HTTPError(f"Authentication failed for POST {path}")
+
+
+def _mon_get_bytes(path: str, params: Optional[dict] = None, timeout: int = _MON_TIMEOUT) -> bytes:
+    """Same as _mon_get but returns raw bytes — used for binary files (the
+    /predictions .tif rasters); _mon_get would JSON/text-parse and corrupt them."""
+    for attempt in range(2):
+        r = _mon_sess().get(f"{_MON_BASE}/{path.lstrip('/')}", params=params,
+                            timeout=timeout, verify=False)
+        if r.status_code in (401, 403) and attempt == 0:
+            _mon_invalidate_session()
+            continue
+        r.raise_for_status()
+        return r.content
+    raise requests.HTTPError(f"Authentication failed for {path}")
+
+
+def _mon_cached(key: str, ttl: int, fetch_fn, fallback_key: Optional[str] = None) -> Any:
+    """Cache-with-stale-fallback: on hit, return immediately. On miss, fetch
+    and cache for ttl (and, if fallback_key given, also cache there for
+    ttl*6). On fetch failure, serve the stale fallback (tagged _stale) rather
+    than propagating the error — used by every endpoint in §4 so a transient
+    PMD Monitor outage degrades to "slightly old data" instead of a blank map."""
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    try:
+        data = fetch_fn()
+        cache.set(key, data, ttl)
+        if fallback_key:
+            cache.set(fallback_key, data, ttl * 6)
+        return data
+    except Exception as exc:
+        if fallback_key:
+            stale = cache.get(fallback_key)
+            if stale is not None:
+                return {**stale, "_stale": True} if isinstance(stale, dict) else stale
+        raise exc
+```
+
+---
+
+## 4. Full endpoint catalog — what GCOP actually scrapes
+
+All exposed to the browser as GCOP's own `GET /api/pmd/monitor/*` (django-
+ninja, tag `"PMD Monitor"`) — the upstream PMD Monitor path is what GCOP's
+backend calls via `_mon_get`/`_mon_post` above, never seen by the browser.
+
+| GCOP endpoint | Upstream PMD Monitor call | Cache TTL | What it returns |
+|---|---|---|---|
+| `/api/pmd/monitor/stations/` | `GET api/gts_warnning_data` (×3 parallel: no filter, `station_type=aws,floodaws`, `station_type=region_hour`, merged+deduped) | 5 min | GeoJSON — SYNOP/METAR/AWS live observations |
+| `/api/pmd/monitor/station-history/` | `GET api/getStationTimeList` (`station_code`, `last_days`, `data_type`) | 2 min | Time-series for one station, 1–30 days |
+| `/api/pmd/monitor/warnings/` | `GET api/get_warning_id` → `POST api/warning_area` per (model, init_time, ele) combo (§4.3) | 2 min | GeoJSON — active early-warning polygons |
+| `/api/pmd/monitor/monsoon/` | `GET api/monsoon_warnning_data` | 5 min | GeoJSON — monsoon-specific warnings |
+| `/api/pmd/monitor/glof-obs/` | `GET api/glofStationObsData` | 2 min | GeoJSON — GLOF station readings, pivoted + sanity-filtered per station (§4.4) |
+| `/api/pmd/monitor/lightning/` | `GET api/radar/thunder/lightHis` (`start_time`, `end_time`) | 3 min | GeoJSON — recent strikes, 1–48h configurable window |
+| `/api/pmd/monitor/city-forecast/` | `GET api/getBandRCityForecast12` | 30 min | GeoJSON — 12-period city forecasts, filtered to Pakistan bbox (23.5–37.5N, 60–78E) |
+| `/api/pmd/monitor/wfs-forecast/` | `GET geoserver/bjst/wfs` (`typeName=bjst:pakistan`) | 1 h | Raw GeoJSON — forecast polygons via PMD's internal GeoServer, optional `prov_code` → CQL_FILTER |
+| `/api/pmd/monitor/glacier-lakes/` | `GET geoserver/bjst/wfs` (`typeName=bjst:binghu18-21`) | 24 h | GeoJSON — 2018–2021 glacier lake survey polygons |
+| `/api/pmd/monitor/predictions/{element_key}/` | `GET api/modelTimeList` → `GET api/model` per run (see the dedicated Predictions guide) | 30 min / 3 h / ∞ (3-tier) | Georeferenced PNG steps — WRFPRS precipitation forecast rasters |
+| `/api/pmd/public-forecast/` | `pmd.gov.pk/phpapi/*` — **different host, no PMD Monitor auth** (public gov API, its own `api_key` param) | 30 min | Public daily forecast + press releases |
+| `/api/pmd/monitor/debug/` | Configurable raw probe (dev-only) | none | Full diagnostic trace of any PMD Monitor path — see §6 |
+
+### 4.1 Non-obvious per-endpoint details worth knowing
+
+- **`stations/`** fetches the *same* upstream endpoint 3 times with
+  different filters in parallel and merges — the unfiltered call alone
+  returns nulls for infrequently-synced station types at certain times of
+  day; the typed calls (`aws,floodaws` / `region_hour`) with an explicit
+  current-PKT-time param fill those gaps. Deduplicated by `station_id`,
+  preferring the richer typed-call records over the generic one.
+- **`glof-obs/`**: the upstream `warning` query param (`0`/`1`/`2`/absent)
+  is a **confirmed no-op** — verified byte-for-byte identical responses
+  across all four — so GCOP only calls it once, not per-value. The bulk of
+  this endpoint's code is sanity-filtering (rejecting `-9999`/`999`/int32-max
+  sentinel fault codes) and per-station pivoting/dedup, not the fetch itself.
+- **`city-forecast/`**: upstream returns a **global** dataset
+  (`getBandRCityForecast12`); GCOP filters to a Pakistan lat/lon bounding box
+  client-side (server-side, really) since there's no upstream region filter param.
+- **`wfs-forecast/` and `glacier-lakes/`** don't go through PMD Monitor's
+  own `/api/*` JWT-gated surface at all — they hit an **internal GeoServer**
+  reachable at `geoserver/bjst/wfs` on the same host, using the exact same
+  authenticated session (same cookies/headers apply, GeoServer itself isn't
+  separately gated behind them, but the host-level session context is
+  shared).
+- **`public-forecast/`** is the odd one out: a completely different
+  upstream host (`pmd.gov.pk`, the public government site, not the
+  115.186.56.181 monitor system) with its own separate `api_key` query
+  param (`PMD_FC_API_KEY` in settings) — no relationship to the
+  `_mon_*` session machinery at all. Included in the same GCOP Ninja tag
+  purely because it's conceptually "more PMD data," not because it shares
+  infrastructure.
+
+### 4.3 The warnings two-step flow, in detail
+
+`warnings/` is the most involved endpoint — worth understanding as its own
+pattern since "list IDs, then POST each one for detail" is a common shape
+for these vendor APIs:
+
+```
+GET api/get_warning_id?model_list=ICON,WRFPRS,GDFS,GRAPES&color_list=
+  → [{ data_time, ele, models: { <MODEL_NAME>: <hash>, ... } }, ...]
+```
+For every `(model, data_time, ele)` combination found across all returned
+items (deduplicated, capped at 25 combos per request to bound upstream
+load):
+```
+POST api/warning_area
+  { "mode": "<model>", "init_time": "<data_time, compacted to 14 digits>", "ele": "<ele>" }
+  (with _WARN_POST_HDRS — this call specifically needs to look like it came
+   from the /warning page; a bare POST without those headers behaves
+   differently)
+  → { data: { "<forecast_time>": [ {warning_status, area, polygon_coordinates (JSON string), ...}, ... ], ... } }
+```
+Only warnings with `warning_status == 1` and `area > 0` are kept as
+"active"; `polygon_coordinates` is itself a JSON-encoded string (not a
+nested object) containing a GeoJSON `Polygon`/`MultiPolygon` geometry —
+must be `json.loads`'d separately from the outer response.
+
+### 4.4 GLOF observation sanity-filtering
+
+Worth calling out because it's a real, previously-discovered data quality
+issue in the upstream feed, not speculative: some sensor channels
+occasionally report **INT32_MAX-style fault codes** (`~2147483.647`, seen
+as `2147483.75` after float rounding) or telemetry null-value sentinels
+(`-9999`, `-999`, `9999`, `999`) instead of a real reading. GCOP's
+`_sane()` filter rejects these — but with a carve-out for legitimately
+large cumulative counters (e.g. "Cumulative Flow," which can genuinely
+climb into the millions over an accumulation period), which the blanket
+"reject anything |value| ≥ 100,000" rule would otherwise wrongly flag.
+
+---
+
+## 5. `/predictions` sub-system — discovery summary
+
+Covered in full in `GCOP_PMD_Predictions_WRFPRS_Integration_Guide.md`; the
+short version for this reference:
+
+- `/predictions` is a separate SPA route (Vue, code-split via Vite chunks)
+  serving live NWP model output as raw GeoTIFFs — not covered by any of the
+  §4 JSON endpoints.
+- Two real endpoints drive it, found by reading the route's own lazy-loaded
+  JS chunk (`assets/index-CTDPnJ-Q.js` → further chunk `api-6H5RrAa8.js` at
+  time of discovery — chunk hashes will differ on any new deployment build):
+  - `GET /api/modelTimeList?data_type=<model>&element=<param>` — available
+    model run times, newest-first.
+  - `GET /api/model?data_type=<model>&element=<param>&date_time=<run>` —
+    full per-forecast-hour file list, each entry pointing at a `.tif`.
+- Internal parameter codes for the UI's precipitation panel
+  (`data_type=WRFPRS`): `HOURTPE`=3h, `SIXTPE`=6h, `TWELVETPE`=12h,
+  `DAYTPE`=24h precipitation accumulation. A separate "Anomaly" panel's
+  codes (`FengShunTem_2m` etc., under a `FENGSHUN Climate Predict Model`
+  data type) were found in the UI's own label strings but never confirmed
+  live — GCOP only implements the 4 confirmed precipitation elements.
+- Color scales for each confirmed element were extracted from a third
+  shipped chunk (`legendList-*.js`) — the source portal's own fixed mm→RGB
+  breakpoints, reused as-is rather than invented.
+
+---
+
+## 6. Discovered but NOT used: the typhoon API's signing scheme
+
+Found during reconnaissance of the shared `api-*.js` chunk, unrelated to
+anything GCOP currently implements — documented here for completeness since
+it's a genuinely different auth pattern from everything else on this host
+and worth knowing about if a future task ever needs typhoon data from this
+same vendor.
+
+Several `/ew4all/typh/api/...` endpoints require a custom
+`typhoon-access-key` header, computed **client-side per request** as:
+```
+timestamp        = <a fixed numeric app id> + <current UTC time + 8h, formatted YYYYMMDDHHmmss>
+signature         = MD5(timestamp + <a fixed secret string embedded in the portal's own JS bundle>)
+typhoon-access-key = Base64(timestamp + signature)
+```
+i.e. a short-lived, self-expiring signed token computed fresh for every
+request (the `+8h` UTC offset suggests the signature is meant to be valid
+within a China Standard Time-relative window). Both the numeric app id and
+the secret string are hardcoded in the portal's own shipped client bundle
+(so they ship to any browser that loads the page — not a server-side
+secret in the way GCOP's own `.env` credentials are) — not reproduced
+literally here since GCOP has no current use for these endpoints; if you
+need them later, the values are re-extractable the same way everything
+else in this document was (§ methodology in the Predictions guide, §4
+"Discovering the external API").
+
+---
+
+## 7. Quick-reference: every credential/token involved
+
+| Name | Type | Where it lives | Where it's used |
+|---|---|---|---|
+| `PMD_MONITOR_URL` | Base URL | `.env` → Django `settings` | `_MON_BASE` |
+| `PMD_MONITOR_USER` / `PMD_MONITOR_PASS` | Login credentials | `.env` → Django `settings` | `_mon_do_login()` request body |
+| Bearer JWT | Session token (~30-day server-side lifetime observed) | Returned in login response body, held only in the server-side `requests.Session` headers | `Authorization: Bearer <token>` on every `/api/*` call |
+| `ews_jwt` | Session cookie | `Set-Cookie` on login response, held only in the server-side `requests.Session` cookie jar | Page-route access at the reverse-proxy layer (only relevant if you're fetching HTML/JS, not the `/api/*` JSON endpoints) |
+| `PMD_FC_API_KEY` | Separate API key, unrelated host | `.env` → Django `settings` | `pmd.gov.pk` public-forecast calls only — not PMD Monitor |
+| `typhoon-access-key` | Per-request computed signature | Derived at call time from a fixed id+secret pair embedded in PMD Monitor's own client JS | Typhoon endpoints only — not implemented in GCOP |
+
+**None of the above ever reach the browser.** Every GCOP-facing endpoint in
+§4 is a same-origin Django route that does the PMD Monitor round-trip
+server-side and returns only the transformed data.

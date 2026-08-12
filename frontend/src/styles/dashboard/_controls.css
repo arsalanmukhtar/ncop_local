@@ -1,0 +1,1282 @@
+/* Navigation Controls Wrapper */
+.nav-controls-wrapper {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+/* Custom Navigation Controls Container */
+.custom-nav-control {
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    transform-origin: bottom right;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Hide navigation buttons when collapsed */
+.custom-nav-control.collapsed .custom-nav-btn:not(.nav-toggle-btn) {
+    transform: translateX(100%);
+    opacity: 0;
+    visibility: hidden;
+    margin-bottom: 0;
+    height: 0;
+    padding: 0;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.custom-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease, height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    color: var(--white);
+}
+
+.custom-nav-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-nav-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.custom-nav-btn .nav-icon {
+    font-size: 14px;
+    line-height: 1;
+    display: block;
+}
+
+/* Style for text labels in buttons */
+.custom-nav-btn .nav-text {
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0.5px;
+}
+
+/* Navigation Toggle Button */
+.nav-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--primary-bg);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-light);
+    margin-bottom: 0;
+    color: var(--text-primary);
+}
+
+.nav-toggle-btn:hover {
+    background: var(--accent-bg-blue);
+}
+
+.nav-toggle-btn i {
+    width: 16px;
+    height: 16px;
+    color: white;
+}
+
+/* Home Button Styling - Light Green Background */
+button#homeExtent.custom-nav-btn {
+    background: var(--ndma-green) !important;
+    /* Light green (green-500 with opacity) */
+    color: var(--text-primary) !important;
+    border-color: var(--border-strong) !important;
+}
+
+button#homeExtent.custom-nav-btn:hover {
+    background: var(--ndma-green-opaque) !important;
+    /* Darker green on hover */
+    color: var(--text-primary) !important;
+}
+
+/* 3D Toggle Button Active State */
+button.custom-nav-btn.terrain-active {
+    background: var(--ndma-blue) !important;
+    color: white !important;
+    /* Was `var(--ndma-blue-gradient)` — gradients are invalid for
+       `border-color` so the property dropped and the button fell back
+       to its default light border, producing a visible outline the
+       other active states didn't have.  Solid color blends with the
+       fill for an outline-free look in both day and night themes. */
+    border-color: var(--ndma-blue) !important;
+}
+
+button.custom-nav-btn.terrain-active:hover {
+    background: var(--ndma-blue) !important;
+}
+
+button.custom-nav-btn.active-wind {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    box-shadow: 0 0 12px var(--ndma-blue-glow) !important;
+    color: #fff !important;
+}
+
+button.custom-nav-btn.active-ocean {
+    background: var(--ndma-green) !important;
+    border-color: var(--ndma-green) !important;
+    box-shadow: 0 0 12px var(--ndma-green-glow) !important;
+    color: #fff !important;
+}
+
+/* News button — was referenced in the shared box-shadow rule below
+   but had no bg/border rule of its own, so the rail button stayed
+   gray while the news ticker was open.  Match the active-wind /
+   active-geoglows blue pattern so it lights up while the ticker is
+   visible and resets when the user toggles it off. */
+button.custom-nav-btn.active-news {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    box-shadow: 0 0 12px var(--ndma-blue-glow) !important;
+    color: #fff !important;
+}
+
+/* Custom User Control */
+.custom-user-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+}
+
+.custom-user-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-user-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-user-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* Custom Basemap Control */
+.custom-basemap-control {
+    z-index: 1000;
+    transition: all 0.3s ease;
+    color: var(--white);
+}
+
+/* Custom Menu Control */
+.custom-menu-control {
+    position: absolute;
+    top: 140px;
+    /* Below NCOP panel with proper margin */
+    left: 13px;
+    /* Aligned with NCOP panel */
+    z-index: 1000;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.custom-menu-control.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.custom-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(15px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+}
+
+.custom-menu-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-menu-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+/* ==========================================================================
+   UNIFIED RIGHT RAIL
+   ==========================================================================
+   At runtime dashboard.js#buildUnifiedRightRail moves the three legacy
+   wrapper groups (.custom-user-control, .map-controls-wrapper,
+   .nav-controls-wrapper) inside `.map-right-rail` so every right-side
+   icon sits inside ONE visible wrapper.  The legacy groups become
+   transparent flex columns; only the rail renders a background.
+   Theme tokens follow the rest of the dashboard.
+   ========================================================================== */
+:root {
+    --rail-bg:     rgba(28, 32, 40, 0.55);
+    --rail-border: rgba(255, 255, 255, 0.10);
+    --rail-inset:  rgba(0, 0, 0, 0.35);
+    --rail-hi:     rgba(255, 255, 255, 0.08);
+    --rail-drop:   rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="night"] {
+    --rail-bg:     rgba(210, 214, 220, 0.55);
+    --rail-border: rgba(0, 0, 0, 0.12);
+    --rail-inset:  rgba(255, 255, 255, 0.45);
+    --rail-hi:     rgba(255, 255, 255, 0.55);
+    --rail-drop:   rgba(0, 0, 0, 0.15);
+}
+
+.map-right-rail {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px;
+    background: var(--rail-bg);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--rail-border);
+    border-radius: 12px;
+    box-shadow:
+        inset 0 1px 0 var(--rail-hi),
+        inset 0 -1px 2px var(--rail-inset),
+        0 6px 18px var(--rail-drop);
+    pointer-events: auto;
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    transition: gap 0.25s ease, padding 0.25s ease;
+}
+
+/* Fully hide both axes' scrollbars while keeping scroll functional. */
+.map-right-rail::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
+/* When collapsed, no scroll is possible (content shrinks to just the
+   toggler) and gap between children must drop to 0 so the rail shrinks
+   to fit the toggler alone — otherwise the leftover inter-button gaps
+   (4 px × N) leave visible empty space under the chevron. */
+.map-right-rail.collapsed {
+    gap: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Buttons are now FLATTENED — direct children of `.map-right-rail`.
+   Enforce uniform geometry so the column reads professionally aligned
+   regardless of which legacy class each button carries (the original
+   classes had different paddings, borders, and margins that produced
+   visible misalignment when stacked). */
+.map-right-rail > .rail-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    /* Uniform 1 px border so neutral and active buttons share the same
+       outer geometry — the legacy 2 px border made active states (which
+       only swap border-color) appear to bulge against the rail. */
+    border: 1px solid var(--rail-border) !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    align-self: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition:
+        transform 0.25s ease,
+        opacity 0.18s ease,
+        height 0.2s ease,
+        width 0.2s ease,
+        margin 0.2s ease,
+        padding 0.2s ease,
+        border 0.2s ease,
+        background 0.2s ease,
+        visibility 0s linear 0s;
+}
+
+/* Force the lone <i>/<svg> child of every rail button to sit dead-center
+   regardless of any margin/positioning the legacy module CSS applied. */
+.map-right-rail > .rail-btn > * {
+    margin: 0 auto !important;
+    flex-shrink: 0;
+    line-height: 1 !important;
+}
+
+/* ------------------------------------------------------------------
+   UNIFIED HOVER — every rail button gets the same subtle bg shift on
+   hover in BOTH day and night themes, but only when the button is
+   NOT in any of its "active" / "selected" states (active panel
+   trigger, active layer toggle, etc.).  Without the `:not(...)`
+   chain, hovering an active button would repaint over its colored
+   active fill — particularly visible in night theme where the
+   `[data-theme="night"]` selector adds an extra class to specificity
+   and lets hover beat several active rules.
+
+   Specificity: with 8 negation classes inside `:not()`, the rule
+   reaches ~0,11,0 — well above any per-button hover rule, so it
+   forms a consistent baseline across legacy class names
+   (.custom-nav-btn, .custom-user-btn, .custom-menu-btn,
+   .custom-basemap-btn, .custom-layer-btn, .custom-layer-info-btn,
+   .custom-tour-btn, .custom-geocoder-btn, .custom-layer-style-btn). */
+.map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report):not(.active-split-compare) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .rail-btn:hover:not(.terrain-active):not(.active-wind):not(.active-ocean):not(.active-news):not(.active-gee):not(.active-geoglows):not(.active-geocoder):not(.active-layer-style):not(.active-weather-report):not(.active-split-compare) {
+    background: var(--glass-highlight) !important;
+}
+
+/* Normalize the active-state outer halo so colored buttons don't visually
+   poke out of the rail compared to neutral buttons.  Original rules
+   used `box-shadow: 0 0 12px <glow>` which extended ~12 px beyond the
+   button rim — replace with a tight 4 px glow that stays inside the
+   rail's padding. */
+.map-right-rail > .rail-btn.active-wind,
+.map-right-rail > .rail-btn.active-ocean,
+.map-right-rail > .rail-btn.active-news,
+.map-right-rail > .rail-btn.active-gee,
+.map-right-rail > .rail-btn.active-geoglows,
+.map-right-rail > .rail-btn.terrain-active {
+    box-shadow: 0 0 4px rgba(70, 178, 255, 0.45) !important;
+}
+
+/* Toggler at the TOP — clicking it collapses every other icon, leaving
+   only the toggler visible.  Buttons animate width + opacity + slide
+   off to the right.  Visibility delayed so the slide animation plays
+   before the element is removed from the a11y tree. */
+.map-right-rail.collapsed > .rail-btn:not(.nav-toggle-btn) {
+    width: 0 !important;
+    height: 0 !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-width: 0 !important;
+    opacity: 0 !important;
+    transform: translateX(120%) !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    overflow: hidden !important;
+    transition:
+        transform 0.25s ease,
+        opacity 0.18s ease,
+        height 0.2s ease 0.1s,
+        width 0.2s ease 0.1s,
+        margin 0.2s ease 0.1s,
+        padding 0.2s ease 0.1s,
+        border 0.2s ease 0.1s,
+        visibility 0s linear 0.25s !important;
+}
+
+/* The legacy wrappers (.custom-user-control, .map-controls-wrapper,
+   .nav-controls-wrapper) are emptied by buildUnifiedRightRail and then
+   hidden inline.  Belt-and-braces: ensure they don't claim space if
+   inline display:none is somehow stripped. */
+.custom-user-control:empty,
+.nav-controls-wrapper:empty {
+    display: none !important;
+}
+
+/* ---- Uniform icon color ----------------------------------------------
+   Each legacy class (.custom-user-btn, .custom-nav-btn, .custom-layer-btn,
+   …) inherited a slightly different `color` value from its module
+   stylesheet, which in turn tinted its <svg stroke="currentColor">
+   icon.  Inside the unified rail, force every icon to the same tone
+   so the column reads as one visual set:
+     - Day mode (default): white
+     - Night mode: medium gray (icons should not be pure white against
+       the lighter backdrop) */
+.map-right-rail > .rail-btn,
+.map-right-rail > .rail-btn i,
+.map-right-rail > .rail-btn svg {
+    /* Soft slate tint instead of pure white — sits more comfortably
+       against the rail's translucent dark wrapper. */
+    color: #cbd5e1 !important;
+}
+
+[data-theme="night"] .map-right-rail > .rail-btn,
+[data-theme="night"] .map-right-rail > .rail-btn i,
+[data-theme="night"] .map-right-rail > .rail-btn svg {
+    color: #494949 !important;
+}
+
+.map-right-rail > .rail-btn svg {
+    stroke: currentColor !important;
+}
+
+/* ---- Uniform icon scale ----------------------------------------------
+   Some legacy classes (.custom-layer-btn, .custom-layer-info-btn,
+   .custom-tour-btn) didn't set `i { width/height }`, so their SVGs
+   rendered at lucide's default 24 px and visually overpowered the
+   adjacent 14 px nav icons.  Force every rail icon to the same compact
+   13 px so the column reads as one tight, professionally scaled set. */
+.map-right-rail > .rail-btn i,
+.map-right-rail > .rail-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    /* lucide sets stroke-width:2 by default; thin it slightly to keep
+       the icon legible at the smaller size. */
+    stroke-width: 2 !important;
+    flex-shrink: 0 !important;
+}
+
+/* The "3D" toggle button uses a text label instead of an icon — keep
+   its sizing on the text node, not the (absent) svg. */
+.map-right-rail > .rail-btn .nav-text {
+    font-size: 9px !important;
+    line-height: 1 !important;
+}
+
+/* Keep the existing active-state colors (e.g. #homeExtent green,
+   .terrain-active blue) by NOT overriding them — those rules use
+   higher-specificity selectors like `button#homeExtent.custom-nav-btn`
+   so they win against the descendant selector above. */
+
+/* ---- Chevron rotation -----------------------------------------------
+   The legacy #handleNavToggle handler tries to swap the lucide
+   data-lucide attribute, but lucide already replaced the <i> with an
+   <svg> at icon-render time so the swap is a no-op.  Drive the
+   rotation purely from the rail's `.collapsed` class instead. */
+.map-right-rail .nav-toggle-btn i,
+.map-right-rail .nav-toggle-btn svg {
+    transition: transform 0.25s ease;
+    transform-origin: center;
+}
+
+.map-right-rail.collapsed .nav-toggle-btn i,
+.map-right-rail.collapsed .nav-toggle-btn svg {
+    transform: rotate(180deg);
+}
+
+/* ----------------------------------------------------------------------
+   FLOATING RAIL PANELS — gee-chat-modal, geoglows-forecast-panel,
+   story-modal.
+   ----------------------------------------------------------------------
+   These panels use inline `style.display` for visibility (not a class
+   toggle), so they're outside the `.right-rail-panel.visible` system.
+   dashboard.js#setupRailFloatingPanelAnchoring() observes their inline
+   style and recomputes `top` + `right` to anchor each panel beside
+   its rail button.  This block shrinks them to consistent compact
+   sizes that fit the column gap and overrides their legacy fixed
+   bottom-right positioning so the JS-set inline `top`/`right` win.
+   -------------------------------------------------------------------- */
+#gee-chat-modal.right-rail-float-panel,
+#geoglows-forecast-panel.right-rail-float-panel,
+#story-modal.right-rail-float-panel {
+    position: absolute !important;
+    bottom: auto !important;
+    left: auto !important;
+    /* width / height intentionally not in shorthand !important here so
+       per-panel rules below can specialize. */
+    max-height: calc(100vh - 40px) !important;
+    z-index: 1001 !important;
+    overflow: auto !important;
+    box-sizing: border-box;
+}
+
+#gee-chat-modal.right-rail-float-panel {
+    width: 320px !important;
+    height: 480px !important;
+    max-width: calc(100vw - 80px) !important;
+    /* Override the legacy 20 px outer radius so the input footer's
+       rounded bottom corners (set below to 12 px) match exactly. */
+    border-radius: 12px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel {
+    width: 380px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: calc(100vh - 40px) !important;
+}
+
+#story-modal.right-rail-float-panel {
+    /* 320 px clipped the trailing pencil/edit button; widen to fit
+       "Select story…" dropdown + 28 px button + container padding. */
+    width: 360px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: calc(100vh - 40px) !important;
+}
+
+/* ======================================================================
+   FLOATING PANEL — INTERNAL CONTENT SCALING
+   ======================================================================
+   Outer container placement and overall panel size are NOT touched;
+   only descendants of the three rail-anchored panels are restyled so
+   the content reads tight and professional at the panel's compact
+   width.  Each panel becomes a strict header/body/footer flex column
+   so the body region is the only thing that scrolls when content
+   overflows; the chrome (header / footer) stays anchored.
+   ====================================================================== */
+
+/* IMPORTANT: gate the flex layout on the panel NOT being hidden via
+   inline `style.display: none` — otherwise `display: flex !important`
+   would beat the handlers' `style.display = "none"` and the panels
+   would all stay visible on page load.  The :not() attribute selectors
+   match every visible state (block / flex / "" / unset) and skip only
+   the closed state. */
+#gee-chat-modal.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]),
+#geoglows-forecast-panel.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]),
+#story-modal.right-rail-float-panel:not([style*="display: none"]):not([style*="display:none"]) {
+    /* Switch the panels themselves to flex columns and clip their own
+       overflow so the inner body region owns the scrollbar. */
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+/* ---- 1. GeoGLOWS panel internals -----------------------------------
+   Keep the shell's original opaque dark background, border, radius
+   and shadow — stripping them earlier left the panel transparent and
+   the map showed through.  Only the layout is forced here: the shell
+   becomes the active flex column so the body region can own the
+   scroll. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-shell {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 12px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-header {
+    flex-shrink: 0 !important;
+    gap: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-logo {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    border-radius: 8px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-logo img {
+    width: 26px !important;
+    height: 26px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-info {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-kicker {
+    font-size: 9px !important;
+    letter-spacing: 0.06em !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    margin-top: 1px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-subtitle {
+    font-size: 10.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 4px !important;
+}
+
+/* The action row was "Mode pill | three buttons" on a single line —
+   too tight at 380 px.  Stack the mode pill above the button row so
+   the buttons get full width to share. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-actions {
+    flex-shrink: 0 !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label-wrap {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label-caption {
+    font-size: 9px !important;
+    letter-spacing: 0.06em !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-label {
+    min-height: 24px !important;
+    padding: 4px 10px !important;
+    font-size: 10.5px !important;
+    border-radius: 999px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-button-row {
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-view-btn,
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-unit-btn,
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-clear-btn {
+    flex: 1 1 0 !important;
+    padding: 6px 8px !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    min-height: 28px !important;
+    white-space: nowrap !important;
+}
+
+/* The body region is the only scrollable area inside the panel. */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    gap: 8px !important;
+    padding-right: 4px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-state {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-title {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-empty-copy {
+    font-size: 10.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 4px !important;
+}
+
+/* ---- 2. GEE Chat modal internals ----------------------------------- */
+#gee-chat-modal.right-rail-float-panel .gee-chat-header {
+    flex-shrink: 0 !important;
+    padding: 8px 10px !important;
+    /* Match the panel's outer 12 px radius on the top corners so the
+       header doesn't visually under-round the panel rim. */
+    border-radius: 12px 12px 0 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-title {
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    /* Single-line so "Earth Engine Data Assistant" doesn't wrap. */
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-title svg,
+#gee-chat-modal.right-rail-float-panel .gee-chat-title i {
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatClose {
+    width: 22px !important;
+    height: 22px !important;
+    flex-shrink: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatClose svg,
+#gee-chat-modal.right-rail-float-panel #geeChatClose i {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+/* Messages list = the scrollable body */
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
+    gap: 8px !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-message {
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+    border-radius: 10px !important;
+    max-width: 92% !important;
+}
+
+#gee-chat-modal.right-rail-float-panel .gee-chat-input-wrapper {
+    flex-shrink: 0 !important;
+    padding: 8px !important;
+    gap: 6px !important;
+    /* Match the panel's outer 12 px radius so the bottom rim aligns. */
+    border-radius: 0 0 12px 12px !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatInput {
+    padding: 7px 10px !important;
+    font-size: 11.5px !important;
+    border-radius: 7px !important;
+    min-width: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatSend {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 7px !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+}
+
+#gee-chat-modal.right-rail-float-panel #geeChatSend svg,
+#gee-chat-modal.right-rail-float-panel #geeChatSend i {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* ---- 3. Story modal internals -------------------------------------- */
+/* The story modal markup uses inline-styled wrapper divs (no class
+   names), so we have to address them positionally.  First child div =
+   header row; #story-root = body. */
+#story-modal.right-rail-float-panel > div:first-child {
+    flex-shrink: 0 !important;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+}
+
+#story-modal.right-rail-float-panel > div:first-child > div:first-child > div:first-of-type {
+    /* "Story" title */
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+}
+
+#story-modal.right-rail-float-panel > div:first-child > div:first-child > div:nth-of-type(2) {
+    /* "Create, pick and play interactive chapters" subtitle */
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+    margin-top: 1px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
+    font-size: 11.5px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select-container {
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    padding: 5px 8px !important;
+    font-size: 11.5px !important;
+    border-radius: 7px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-meta {
+    font-size: 10.5px !important;
+    margin-bottom: 4px !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-chapters {
+    gap: 6px !important;
+    max-height: 40vh !important;
+}
+
+/* The pencil "edit" button next to the dropdown — shrink to match the
+   compact dropdown height. */
+#story-modal.right-rail-float-panel #story-root .story-select-container button {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    border-radius: 5px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#story-modal.right-rail-float-panel #story-root .story-select-container button svg,
+#story-modal.right-rail-float-panel #story-root .story-select-container button i {
+    width: 10px !important;
+    height: 10px !important;
+    stroke-width: 2 !important;
+    flex-shrink: 0 !important;
+}
+
+/* Story modal close (X) button — overrides the legacy `.custom-nav-btn`
+   32 px geometry so the chrome stays compact. */
+#story-modal.right-rail-float-panel #storyCloseBtn {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 6px !important;
+    border: 1px solid var(--border-dark) !important;
+    flex-shrink: 0 !important;
+}
+
+#story-modal.right-rail-float-panel #storyCloseBtn svg,
+#story-modal.right-rail-float-panel #storyCloseBtn i {
+    width: 12px !important;
+    height: 12px !important;
+}
+
+/* ----------------------------------------------------------------------
+   HOME button — strip the legacy green default so it matches the rest
+   of the rail.  Selectors `.map-right-rail #homeExtent.rail-btn` and
+   `.map-right-rail button#homeExtent.custom-nav-btn.rail-btn` carry
+   higher specificity than the legacy `button#homeExtent.custom-nav-btn`
+   green rule (extra `.map-right-rail` ancestor class).
+   -------------------------------------------------------------------- */
+.map-right-rail button#homeExtent.rail-btn,
+.map-right-rail #homeExtent.custom-nav-btn.rail-btn {
+    /* Day mode: match the surrounding rail buttons' --secondary-bg. */
+    background: var(--secondary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: var(--white) !important;
+}
+
+.map-right-rail button#homeExtent.rail-btn:hover,
+.map-right-rail #homeExtent.custom-nav-btn.rail-btn:hover {
+    background: var(--primary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: var(--white) !important;
+}
+
+/* Night mode: _theme-night.css forces every other nav button to
+   `var(--tertiary-bg)` (a lighter glass).  Home was still showing
+   `--secondary-bg` because of the rule above, producing a visibly
+   darker tile.  Match the rest of the column. */
+[data-theme="night"] .map-right-rail button#homeExtent.rail-btn,
+[data-theme="night"] .map-right-rail #homeExtent.custom-nav-btn.rail-btn {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--rail-border) !important;
+}
+
+[data-theme="night"] .map-right-rail button#homeExtent.rail-btn:hover,
+[data-theme="night"] .map-right-rail #homeExtent.custom-nav-btn.rail-btn:hover {
+    background: var(--glass-highlight) !important;
+    border-color: var(--rail-border) !important;
+}
+
+/* ---- Slim themed scrollbars for the three body regions ------------- */
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar {
+    width: 4px;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar-thumb,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar-thumb,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar-thumb {
+    background: var(--rail-border);
+    border-radius: 2px;
+}
+
+#geoglows-forecast-panel.right-rail-float-panel .geoglows-panel-body::-webkit-scrollbar-track,
+#gee-chat-modal.right-rail-float-panel .gee-chat-messages::-webkit-scrollbar-track,
+#story-modal.right-rail-float-panel #story-root::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ======================================================================
+   SIDEBAR MENU BUTTON (#menuToggle / .custom-menu-btn)
+   ======================================================================
+   The hamburger button that opens the left sidebar lives outside the
+   right rail but should read as part of the same icon family.
+   `.custom-menu-control .custom-menu-btn` (specificity 0,2,0) wins
+   against the legacy day-mode `.custom-menu-btn` rule (0,1,0) and the
+   theme-night.css `[data-theme="night"] .custom-menu-btn` rule (0,1,1).
+   ====================================================================== */
+.custom-menu-control .custom-menu-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--rail-border) !important;
+    border-radius: 8px !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+    color: #cbd5e1 !important;
+    font-weight: normal !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.custom-menu-control .custom-menu-btn:hover {
+    background: var(--primary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: #cbd5e1 !important;
+}
+
+/* Icon inside the menu button — match the rail's compact 13 px scale. */
+.custom-menu-control .custom-menu-btn i,
+.custom-menu-control .custom-menu-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    stroke-width: 2 !important;
+    color: inherit !important;
+    stroke: currentColor !important;
+    flex-shrink: 0 !important;
+}
+
+/* Night-mode parity with the rail icons:
+     - Lighter `--tertiary-bg` matches the rest of the night-mode chrome
+     - Medium-gray icon (`#6b7280`) matches the rail's night-mode tone */
+[data-theme="night"] .custom-menu-control .custom-menu-btn {
+    background: var(--tertiary-bg) !important;
+    border-color: var(--rail-border) !important;
+    color: #6b7280 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+    font-weight: normal !important;
+}
+
+[data-theme="night"] .custom-menu-control .custom-menu-btn:hover {
+    background: var(--glass-highlight) !important;
+    border-color: var(--rail-border) !important;
+    color: #6b7280 !important;
+}
+
+/* ======================================================================
+   GEOCODER PANEL — opened by the new map-pin-search rail button.
+   ======================================================================
+   The geocoder is no longer a top-left bar; it lives inside the right
+   rail as a panel that slides in from the right just like every other
+   rail panel (basemap / layer-order / etc.).  Mounted by
+   geocoder-control.js as `#geocoderPanel.geocoder-panel` and stamped
+   with `.right-rail-panel` by buildUnifiedRightRail() so the unified
+   anchoring + slide-from-right animation already in _map-panels.css
+   takes over for free.
+
+   The wrapper `.custom-geocoder-control` only exists so the rail
+   builder has a known parent to pull the button out of; it has no
+   visible chrome and is hidden once its child button has been moved.
+   ====================================================================== */
+.custom-geocoder-control {
+    /* Rail builder pulls the button out and parks the empty wrapper
+       elsewhere — keep it invisible. */
+    display: none !important;
+}
+
+/* Resting background — match every other rail button.  Each legacy
+   button class (`.custom-nav-btn`, `.custom-user-btn`, etc.) carries
+   `background: var(--secondary-bg) + backdrop-filter: blur(10px)`
+   from its module stylesheet; without the blur, the same color
+   resolves to a noticeably lighter tile against the rail wrapper.
+   We replicate the full pair here so the geocoder button is visually
+   indistinguishable from its neighbors. */
+.map-right-rail > .custom-geocoder-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.map-right-rail > .custom-geocoder-btn:hover:not(.active-geocoder) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-geocoder-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-geocoder-btn:hover:not(.active-geocoder) {
+    background: var(--glass-highlight) !important;
+}
+
+/* Active state for the rail button while the geocoder panel is open
+   (driven by the body class set by the click handler so it persists
+   even when the button itself isn't directly under :has() support). */
+.map-right-rail > .custom-geocoder-btn.active-geocoder {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+#geocoderPanel.geocoder-panel {
+    width: 320px !important;
+    max-width: calc(100vw - 80px) !important;
+    background: var(--primary-bg) !important;
+    border: 2px solid var(--border-light) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    z-index: 1001 !important;
+    font-family: 'Inter', sans-serif !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Mapbox Geocoder skin — the geocoder element wraps the input row +
+   suggestions list.  Auto-height so the panel grows when results
+   appear.  The input itself is pinned to 32 px to match the rail
+   button height (rest of the panel grows below it). */
+#geocoderPanel .mapboxgl-ctrl-geocoder,
+#geocoderPanel .mapboxgl-ctrl.mapboxgl-ctrl-geocoder {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    /* No fixed height — let it grow with input + suggestions */
+    height: auto !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+/* Search icon anchored to the 32-px input row's vertical center
+   (top: 16 px) so it stays put even when suggestions push the
+   geocoder element taller. */
+#geocoderPanel .mapboxgl-ctrl-geocoder--icon-search {
+    position: absolute !important;
+    top: 16px !important;
+    left: 10px !important;
+    transform: translateY(-50%) !important;
+    width: 14px !important;
+    height: 14px !important;
+    fill: var(--text-secondary) !important;
+    margin: 0 !important;
+    z-index: 2;
+}
+
+#geocoderPanel .mapboxgl-ctrl-geocoder--input {
+    /* Match the rail button height (32 px). */
+    width: 100% !important;
+    height: 32px !important;
+    padding: 0 12px 0 30px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 12.5px !important;
+    color: var(--text-primary) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border-dark) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+
+#geocoderPanel .mapboxgl-ctrl-geocoder--input::placeholder {
+    color: var(--text-secondary) !important;
+    opacity: 0.85;
+    font-family: 'Inter', sans-serif !important;
+}
+
+#geocoderPanel .mapboxgl-ctrl-geocoder--input:focus {
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Hide every Mapbox auxiliary element (clear ×, loading spinner,
+   "powered by" attribution).  The panel itself is the close affordance. */
+#geocoderPanel .mapboxgl-ctrl-geocoder--icon-loading,
+#geocoderPanel .mapboxgl-ctrl-geocoder--powered-by,
+#geocoderPanel .mapboxgl-ctrl-geocoder--pin-right,
+#geocoderPanel .mapboxgl-ctrl-geocoder--button,
+#geocoderPanel .mapboxgl-ctrl-geocoder--icon-close {
+    display: none !important;
+}
+
+/* Suggestions list — sits inside the panel below the input.  The
+   default Mapbox geocoder positions `.suggestions` absolutely at
+   `top: 110%` of the geocoder element, which gets clipped by the
+   panel's `overflow: hidden`.  Force `position: relative; top: auto`
+   so the list flows naturally below the input row, allowing the
+   panel to grow downward to accommodate the results.  Capped at
+   exactly 5 rows. */
+#geocoderPanel .suggestions-wrapper {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: auto;
+    background: transparent !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+}
+
+#geocoderPanel .suggestions {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    overflow-y: auto !important;
+    max-height: calc(5 * 48px + 8px) !important;
+    font-family: 'Inter', sans-serif !important;
+    padding: 4px !important;
+    list-style: none !important;
+}
+
+#geocoderPanel .suggestions > li {
+    border-bottom: none !important;
+}
+
+#geocoderPanel .suggestions > li > a {
+    display: block !important;
+    padding: 8px 12px !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    line-height: 1.35 !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+#geocoderPanel .suggestions > li > a:hover,
+#geocoderPanel .suggestions > li.active > a {
+    background: var(--tertiary-bg) !important;
+    color: var(--text-primary) !important;
+}
+
+#geocoderPanel .suggestions > li .mapboxgl-ctrl-geocoder--suggestion-title {
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    color: var(--text-primary) !important;
+}
+
+#geocoderPanel .suggestions > li .mapboxgl-ctrl-geocoder--suggestion-address {
+    font-size: 11px !important;
+    color: var(--text-secondary) !important;
+}
+
+#geocoderPanel .suggestions::-webkit-scrollbar {
+    width: 4px;
+}
+
+#geocoderPanel .suggestions::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+    border-radius: 2px;
+}
+
+#geocoderPanel .suggestions::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ----------------------------------------------------------------------
+   NIGHT-MODE polish — lighter glass + dark borders so the panel reads
+   correctly against the lighter night-mode rail wrapper.
+   -------------------------------------------------------------------- */
+[data-theme="night"] #geocoderPanel.geocoder-panel {
+    background: var(--primary-bg) !important;
+    border-color: var(--border-dark) !important;
+}
+
+[data-theme="night"] #geocoderPanel .mapboxgl-ctrl-geocoder,
+[data-theme="night"] #geocoderPanel .mapboxgl-ctrl.mapboxgl-ctrl-geocoder {
+    border-bottom-color: var(--border-dark) !important;
+}
+
+[data-theme="night"] #geocoderPanel .mapboxgl-ctrl-geocoder--icon-search {
+    fill: var(--text-secondary) !important;
+}
+
+[data-theme="night"] #geocoderPanel .mapboxgl-ctrl-geocoder--input,
+[data-theme="night"] #geocoderPanel .mapboxgl-ctrl-geocoder--input::placeholder {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="night"] #geocoderPanel .suggestions > li > a {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="night"] #geocoderPanel .suggestions > li > a:hover,
+[data-theme="night"] #geocoderPanel .suggestions > li.active > a {
+    background: var(--glass-highlight) !important;
+}
+
+[data-theme="night"] #geocoderPanel .suggestions::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+}

@@ -1,16 +1,16 @@
 """
-ASGI config for ncop_project project.
+ASGI entry point for ncop_project.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
+Exposes the ASGI callable as a module-level variable named ``application``.
 
-For more information on this file, see
-https://docs.djangoproject.com/en/5.1/howto/deployment/asgi/
+The settings module is taken from the ``DJANGO_SETTINGS_MODULE`` environment
+variable and falls back to ``ncop_project.settings.prod``.
 """
 
 import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ncop_project.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ncop_project.settings.prod")
 
 application = get_asgi_application()

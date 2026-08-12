@@ -1,0 +1,11 @@
+/* ===========================================================================
+   RAINVIEWER STYLES — REMOVED
+   ---------------------------------------------------------------------------
+   The bespoke #rv-slider1 markup was deleted as part of the temporal-slider
+   unification (RainViewer's `realtime_radar` and `satellite_infrared` now
+   flow through #temp-slider1 just like every other temporal raster layer).
+   Every rule that used to live here targeted a #rv-* / .rv-* selector and
+   has no surviving DOM to apply to, so the file now intentionally contains
+   nothing but this notice. The @import in dashboard.css is preserved so
+   the cascade order documented at the top of that file still matches.
+   =========================================================================== */

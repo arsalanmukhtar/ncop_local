@@ -1,0 +1,1495 @@
+/* ===========================
+   LAYER ORDER CONTROL
+   =========================== */
+.custom-layer-control {
+    position: relative;
+    color: var(--white);
+    width: auto;
+    min-width: 40px;
+    max-width: 320px;
+    margin: 0;
+    box-sizing: border-box;
+    position: relative;
+    transition: box-shadow 0.2s;
+    z-index: 1;
+    align-items: flex-end;
+}
+
+.custom-layer-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    border: 2px solid var(--border-dark);
+    padding: 4px;
+    color: var(--white);
+    margin-left: auto;
+}
+
+.custom-layer-btn:hover {
+    background: var(--primary-bg);
+}
+
+.custom-layer-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.custom-layer-control.panel-collapsed .control-content {
+    display: none;
+}
+
+.custom-layer-control .control-content {
+    display: block;
+    width: 100%;
+}
+
+/* Layer Order Panel */
+.layer-order-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 320px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 10px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001;
+    /* Bring to front */
+    pointer-events: none;
+    /* Don't block clicks when hidden */
+}
+
+.layer-order-panel.visible {
+    pointer-events: auto;
+    /* Enable clicks when visible */
+}
+
+.layer-order-panel.visible {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+/* Layer Order Header */
+.layer-order-header {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.layer-order-title {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 600;
+    display: block;
+}
+
+.layer-order-subtitle {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+/* Layer Order List */
+.layer-order-list {
+    min-height: 60px;
+}
+
+.no-layers-message {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Layer Items */
+.layer-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 5px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.layer-item:hover {
+    background: var(--tertiary-bg);
+    border-color: var(--border-light);
+}
+
+.layer-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.layer-drag-handle {
+    margin-right: 6px;
+    color: var(--text-muted);
+    cursor: grab;
+    display: flex;
+    align-items: center;
+}
+
+.layer-drag-handle i,
+.layer-drag-handle svg {
+    width: 12px;
+    height: 12px;
+}
+
+.layer-info {
+    flex: 1;
+    min-width: 0;
+    margin-right: 6px;
+}
+
+.layer-name {
+    color: var(--white);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* white-space: nowrap; */
+}
+
+.layer-visibility {
+    color: var(--ndma-green);
+    opacity: 0.8;
+}
+
+.layer-visibility i {
+    width: 14px;
+    height: 14px;
+}
+
+/* ===========================
+   POPUP CONTROL BUTTON
+   =========================== */
+.layer-popup-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 4px;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.layer-popup-btn:hover {
+    background: var(--tertiary-bg);
+    border-color: var(--border-light);
+    color: var(--white);
+}
+
+.layer-popup-btn i {
+    width: 12px;
+    height: 12px;
+}
+
+/* Active state when popup is shown */
+.layer-popup-btn.popup-active {
+    background: var(--ndma-green);
+    border-color: var(--ndma-green);
+    color: var(--white);
+}
+
+.layer-popup-btn.popup-active:hover {
+    background: var(--ndma-green-dark);
+    border-color: var(--ndma-green-dark);
+}
+
+/* Ensure popup button doesn't interfere with drag */
+.layer-popup-btn {
+    pointer-events: auto;
+}
+
+.layer-item.dragging .layer-popup-btn {
+    pointer-events: none;
+}
+
+/* ===========================
+   LAYER INFO PANEL WITH LEGEND SUPPORT
+=========================== */
+
+.custom-layer-info-control {
+    position: relative;
+    color: var(--white);
+    width: auto;
+    min-width: 40px;
+    max-width: 320px;
+    margin: 0;
+    box-sizing: border-box;
+    position: relative;
+    transition: box-shadow 0.2s;
+    z-index: 1;
+    align-items: flex-end;
+}
+
+/* .layer-info-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 280px;
+    max-height: 400px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(15px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+    overflow-y: auto;
+    z-index: 1001;
+    pointer-events: none;
+} */
+
+/* Dynamic sizing when legends are visible */
+.layer-info-panel.has-legend {
+    width: 320px;
+    max-height: 600px;
+}
+
+/* .layer-info-panel.visible {
+    pointer-events: auto;
+    transform: translateX(0);
+    opacity: 1;
+} */
+
+.layer-info-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-dark);
+}
+
+.layer-info-title {
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 600;
+    display: block;
+}
+
+.layer-info-subtitle {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.layer-info-list {
+    min-height: 60px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.layer-info-panel.has-legend .layer-info-list {
+    max-height: 500px;
+}
+
+.layer-info-item {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.layer-info-label {
+    color: var(--white);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.layer-info-details {
+    color: var(--text-muted);
+    white-space: pre-line;
+    text-align: justify;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 5px;
+    padding: 5px 0;
+}
+
+/* Legend Toggle Button */
+.legend-toggle-btn {
+    display: inline-block;
+    background: var(--border-dark);
+    color: var(--white);
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 6px 0 8px 0;
+    transition: all 0.2s ease;
+}
+
+.legend-toggle-btn:hover {
+    background: var(--border-light);
+    border-color: var(--white);
+}
+
+.legend-toggle-btn:active {
+    opacity: 0.8;
+}
+
+/* Legend Image Container */
+.legend-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 8px 0;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    max-width: 100%;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        max-height: 0;
+        overflow: hidden;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 500px;
+        overflow: visible;
+    }
+}
+
+.legend-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    object-fit: contain;
+}
+
+/* ---------- Dynamic (declarative) legends ---------- */
+/*
+ * Rendered by LayerInfoPanel.#renderDynamicLegend for layers that
+ * declare `dynamicLegend: { entries: [...] }` on their config (see
+ * map-layers.js).  Same "Show/Hide Legend" button toggles it — the
+ * container reuses .legend-image-container so the existing "has-legend"
+ * panel-size CSS still applies.  These styles just theme the inner
+ * rows, swatches and icon chips.
+ */
+.dynamic-legend-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+}
+
+.dynamic-legend-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(203, 213, 225, 0.95);
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    margin-bottom: 2px;
+}
+
+.dynamic-legend-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dynamic-legend-row {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1.35;
+    color: rgba(226, 232, 240, 0.92);
+}
+
+.dynamic-legend-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid rgba(15, 23, 42, 0.45);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    flex-shrink: 0;
+}
+
+.dynamic-legend-swatch--circle { border-radius: 999px; }
+.dynamic-legend-swatch--square { border-radius: 3px; }
+.dynamic-legend-swatch--line {
+    height: 4px;
+    border-radius: 2px;
+    border: 0;
+    box-shadow: none;
+}
+.dynamic-legend-swatch--emoji {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    font-size: 15px;
+    line-height: 1;
+}
+.dynamic-legend-swatch--img {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+}
+.dynamic-legend-swatch--img img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: block;
+}
+.dynamic-legend-swatch--none {
+    background: transparent;
+    border: 1px dashed rgba(148, 163, 184, 0.35);
+}
+
+.dynamic-legend-label {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.dynamic-legend-note {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.18);
+    font-size: 10.5px;
+    color: rgba(148, 163, 184, 0.85);
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.custom-layer-info-control.panel-collapsed .control-content {
+    display: none;
+}
+
+.custom-layer-info-control .control-content {
+    display: block;
+    width: 100%;
+}
+
+/* Add this to your existing CSS file */
+.temporal-indicator {
+    font-size: 12px;
+    margin-left: 5px;
+    opacity: 0.7;
+}
+
+.layer-info-item.temporal-layer {
+    border-left: 3px solid #007bff;
+    padding-left: 12px;
+}
+
+.layer-info-item.temporal-layer .layer-info-label {
+    color: #007bff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .layer-info-panel {
+        width: 260px;
+        max-height: 350px;
+    }
+
+    .layer-info-panel.has-legend {
+        width: 280px;
+        max-height: 500px;
+    }
+
+    .legend-image-container {
+        padding: 6px;
+    }
+}
+
+/* 
+ * layer-info-panel-legend.css
+ * Styling for the Layer Info Panel with Legend support
+ * Import this file in your main stylesheet or dashboard HTML
+ */
+
+/* ============================================
+   LEGEND SECTION STYLING
+   ============================================ */
+
+.layer-legend-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.legend-toggle-btn {
+    padding: 4px 8px;
+    margin-top: 10px;
+    background-color: var(--tertiary-bg);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.legend-toggle-btn:hover {
+    background-color: var(--ndma-green);
+    border: 1px solid transparent;
+}
+
+.legend-toggle-btn:active {
+    background-color: var(--ndma-green);
+}
+
+.legend-toggle-btn:focus {
+    outline: none;
+}
+
+/* Legend image container */
+.legend-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 10px;
+    background-color: var(--secondary-bg);
+    border: 1px solid transparent;
+    border-radius: 5px;
+    overflow: auto;
+    max-height: 400px;
+    animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.layer-legend-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+/* ============================================
+   LAYER INFO ITEM REFINEMENTS
+   ============================================ */
+
+.layer-info-item {
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.layer-info-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.layer-info-header-item {
+    margin-bottom: 5px;
+}
+
+.layer-info-label {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.layer-info-details {}
+
+/* ============================================
+   PANEL SCROLLING & OVERFLOW HANDLING
+   ============================================ */
+
+/* .layer-info-panel {
+    transition: max-height 0.3s ease, height 0.3s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+} */
+
+/* Webkit scrollbar customization (Chrome, Safari, Edge) */
+.layer-info-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.layer-info-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.layer-info-panel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.layer-info-panel::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* Firefox scrollbar customization */
+.layer-info-panel {
+    scrollbar-color: #ccc #f1f1f1;
+    scrollbar-width: thin;
+}
+
+/* ============================================
+   NO LAYERS MESSAGE
+   ============================================ */
+
+.no-layers-message {
+    padding: 15px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ============================================
+   LAYER INFO LIST
+   ============================================ */
+
+.layer-info-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* ============================================
+   RESPONSIVE & MOBILE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    .layer-legend-image-container {
+        max-height: 300px;
+    }
+
+    .layer-legend-toggle-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    .layer-info-label {
+        font-size: 13px;
+    }
+
+    .layer-info-details {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .layer-legend-image-container {
+        max-height: 250px;
+        padding: 8px;
+    }
+
+    .layer-legend-toggle-btn {
+        font-size: 11px;
+        padding: 5px 8px;
+    }
+
+    .layer-legend-section {
+        gap: 8px;
+        margin-top: 8px;
+        padding-top: 8px;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+    .layer-legend-toggle-btn {
+        border-width: 2px;
+        font-weight: 700;
+    }
+
+    .layer-legend-image-container {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+
+    .layer-legend-toggle-btn,
+    .layer-legend-image-container {
+        transition: none;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+    .layer-legend-section {
+        border-top-color: #444;
+    }
+
+    .layer-legend-toggle-btn {
+        background-color: #333;
+        border-color: #555;
+        color: #e0e0e0;
+    }
+
+    .layer-legend-toggle-btn:hover {
+        background-color: #444;
+        border-color: #777;
+    }
+
+    .layer-legend-toggle-btn:active {
+        background-color: #555;
+    }
+
+    .layer-legend-image-container {
+        background-color: #2a2a2a;
+        border-color: #444;
+    }
+
+    .layer-info-item {
+        border-bottom-color: #333;
+    }
+
+    .layer-info-label {
+        color: #e0e0e0;
+    }
+
+    .layer-info-details {
+        color: #b0b0b0;
+    }
+
+    .no-layers-message {
+        color: #666;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-track {
+        background: #2a2a2a;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-thumb {
+        background: #555;
+    }
+
+    .layer-info-panel::-webkit-scrollbar-thumb:hover {
+        background: #777;
+    }
+
+    .layer-info-panel {
+        scrollbar-color: #555 #2a2a2a;
+    }
+}
+
+/* Layer-attribute popup styles now live in ./_popup.css
+   (unified popup system — day/night themed, feature-driven badges, universal tip).
+   Keep this single rule here: hide mapbox's default close button globally;
+   the unified popup scaffold opts back in via .ncop-popup-host. */
+.mapboxgl-popup-close-button {
+    display: none;
+}
+
+/* ==========================================================================
+   LAYER STYLE CONFIG  —  rail button (#layerStyleToggle, palette icon) and
+   attached panel (#layerStylePanel).  Ported visually from
+   misc/style-config.html with day/night theme tokens substituting for
+   the reference's Tailwind utility colors.  The rail button follows the
+   exact same bg + backdrop-filter consistency rules used by the geocoder
+   button so it tile-matches the rest of the rail.
+   ========================================================================== */
+
+/* Wrapper is empty after buildUnifiedRightRail moves the button onto the
+   rail — keep it visually absent. */
+.custom-layer-style-control {
+    display: none !important;
+}
+
+/* Rail-button visual parity with neighbors */
+.map-right-rail > .custom-layer-style-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* Hover only applies when the button is NOT active.  Without the
+   `:not(.active-layer-style)` gate, the night-theme hover rule's
+   specificity (with `[data-theme="night"]` as an extra class) was
+   beating the active rule's specificity and the panel-open blue
+   bg got repainted to grey on hover. */
+.map-right-rail > .custom-layer-style-btn:hover:not(.active-layer-style) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-layer-style-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-layer-style-btn:hover:not(.active-layer-style) {
+    background: var(--glass-highlight) !important;
+}
+
+.map-right-rail > .custom-layer-style-btn.active-layer-style {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ----- Panel shell ------------------------------------------------------- */
+#layerStylePanel.layer-style-panel {
+    width: 360px !important;
+    max-width: calc(100vw - 80px) !important;
+    max-height: 80vh !important;
+    background: var(--primary-bg) !important;
+    border: 2px solid var(--border-light) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text-primary);
+}
+
+/* Avoid flash before buildUnifiedRightRail anchors the panel */
+#layerStylePanel.layer-style-panel:not(.visible):not([style*="display: none"]):not([style*="display:none"]) {
+    /* right-rail-panel base rule already hides; this is a noop guard */
+}
+
+/* ----- Header ------------------------------------------------------------ */
+.layer-style-panel .lsp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--overlay-bg);
+    flex: none;
+}
+
+.layer-style-panel .lsp-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.layer-style-panel .lsp-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-subtitle {
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.layer-style-panel .lsp-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-close i,
+.layer-style-panel .lsp-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ----- Body (scrollable) ------------------------------------------------- */
+.layer-style-panel .lsp-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-top: 6px;
+    padding-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.layer-style-panel .lsp-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.layer-style-panel .lsp-body::-webkit-scrollbar-thumb {
+    background: var(--border-dark);
+    border-radius: 3px;
+}
+
+/* ----- Generic row ------------------------------------------------------- */
+.layer-style-panel .lsp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 32px;
+    padding: 6px 16px;
+}
+
+.layer-style-panel .lsp-row-label {
+    flex: none;
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+.layer-style-panel .lsp-row:hover .lsp-row-label {
+    color: var(--text-secondary);
+}
+
+.layer-style-panel .lsp-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ----- Native <select> wrapped to draw our own caret -------------------- */
+.layer-style-panel .lsp-select-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 120px;
+}
+
+.layer-style-panel .lsp-native-select {
+    /* color-scheme: dark forces Chromium / Firefox to render the native
+       option-list popup with dark UA chrome (dark bg, light text) instead
+       of switching to light mode and clashing with our overrides.  This
+       is the root fix for the dark-on-dark "id / inflow_*" illegibility. */
+    color-scheme: dark;
+    flex: 1;
+    width: 100%;
+    padding: 6px 26px 6px 10px;
+    /* Opaque-ish bg so the closed select reads cleanly against the
+       blurred panel — translucent rgba was letting the body show through
+       and dragging contrast below readability. */
+    background: rgba(20, 23, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    outline: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.2;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color 0.15s ease, background 0.15s ease,
+        box-shadow 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.layer-style-panel .lsp-native-select:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(30, 34, 38, 0.95);
+}
+
+.layer-style-panel .lsp-native-select:focus-visible {
+    border-color: var(--ndma-blue);
+    box-shadow: 0 0 0 2px var(--ndma-blue-glow);
+}
+
+.layer-style-panel .lsp-native-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* Native option list — Chromium / Firefox / Edge respect background-color
+   and color on <option>.  We force solid dark bg + bright white text so
+   neither the OS dark-mode chrome nor our translucent panel can drag the
+   contrast down. */
+.layer-style-panel .lsp-native-select option {
+    background-color: #14171a;
+    color: #ffffff;
+    padding: 6px 8px;
+    font-weight: 400;
+}
+
+.layer-style-panel .lsp-native-select option:checked {
+    background: var(--ndma-blue) linear-gradient(0deg, var(--ndma-blue), var(--ndma-blue));
+    color: #ffffff;
+    font-weight: 500;
+}
+
+/* Night theme — slightly elevated tone for the closed select and a
+   navy-tinted option popup so it sits comfortably in the night palette. */
+[data-theme="night"] .layer-style-panel .lsp-native-select {
+    background: rgba(31, 38, 48, 0.95);
+    border-color: rgba(255, 255, 255, 0.20);
+    /* --text-primary flips to near-black in night theme so the day-mode
+       inheritance would render the closed-state value as dark-on-dark.
+       Force light explicitly. */
+    color: #ffffff;
+}
+
+[data-theme="night"] .layer-style-panel .lsp-native-select:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(42, 50, 62, 0.97);
+}
+
+[data-theme="night"] .layer-style-panel .lsp-native-select option {
+    background-color: #1f2630;
+    color: #ffffff;
+}
+
+.layer-style-panel .lsp-select-caret {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.layer-style-panel .lsp-select-caret svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ----- Empty state ------------------------------------------------------- */
+.layer-style-panel .lsp-empty-state {
+    margin: 16px;
+    padding: 14px;
+    background: var(--overlay-bg);
+    border: 1px dashed var(--border-dark);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* ----- Section header (STYLE / LABELS) ----------------------------------- */
+.layer-style-panel .lsp-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border-dark);
+    border-bottom: 1px solid var(--border-dark);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.layer-style-panel .lsp-section-header:first-of-type {
+    margin-top: 8px;
+}
+
+.layer-style-panel .lsp-section-titlewrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: default;
+}
+
+.layer-style-panel .lsp-collapse-btn {
+    cursor: pointer;
+}
+
+.layer-style-panel .lsp-section-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-collapse-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.layer-style-panel .lsp-collapse-chevron svg {
+    width: 14px;
+    height: 14px;
+}
+
+.layer-style-panel .lsp-labels-header[data-collapsed="true"] .lsp-collapse-chevron {
+    transform: rotate(-90deg);
+}
+
+/* ----- Geometry pill (Line / Point / Polygon) ---------------------------- */
+.layer-style-panel .lsp-geometry-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 7px;
+    border: 1px solid var(--ndma-blue-light);
+    border-radius: 999px;
+    background: var(--ndma-blue-glow);
+    color: var(--ndma-blue);
+    /* Pin to the icon's box height so both children share the exact
+       same flex cross-axis size — eliminates the optical-vs-box-center
+       drift that kicks in when the text's line-box differs from the
+       icon's. */
+    line-height: 12px;
+}
+
+.layer-style-panel .lsp-geometry-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    color: var(--ndma-blue);
+}
+
+.layer-style-panel .lsp-geometry-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+.layer-style-panel .lsp-geometry-label {
+    display: inline-flex;
+    align-items: center;
+    height: 12px;
+    font-size: 11px;
+    line-height: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ndma-blue);
+}
+
+/* ----- Controls group (Width / Color / Opacity / …) ---------------------- */
+.layer-style-panel .lsp-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+/* ----- Slider control ---------------------------------------------------- */
+.layer-style-panel .lsp-control--slider {
+    width: 140px;
+    flex: 0 0 140px;
+    gap: 12px;
+}
+
+.layer-style-panel .lsp-slider {
+    position: relative;
+    flex: 1;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.layer-style-panel .lsp-slider-track {
+    position: relative;
+    width: 100%;
+    height: 3px;
+    background: var(--overlay-bg);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.layer-style-panel .lsp-slider-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--ndma-blue);
+    border-radius: 999px;
+}
+
+.layer-style-panel .lsp-slider-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    background: #fff;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.layer-style-panel .lsp-value {
+    flex: none;
+    min-width: 38px;
+    padding: 2px 6px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: right;
+    color: var(--text-muted);
+}
+
+/* ----- Color swatch (label wraps a hidden native color input) ----------- */
+.layer-style-panel .lsp-swatch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 4px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: border-color 0.15s ease;
+}
+
+.layer-style-panel .lsp-swatch:hover {
+    border-color: var(--border-light);
+}
+
+.layer-style-panel .lsp-swatch-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.layer-style-panel .lsp-swatch-chip {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0;
+}
+
+.layer-style-panel .lsp-swatch-hex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+/* ----- Segmented control ------------------------------------------------- */
+.layer-style-panel .lsp-segmented {
+    display: flex;
+    flex: 1;
+    padding: 2px;
+    background: var(--overlay-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.layer-style-panel .lsp-seg {
+    flex: 1;
+    padding: 4px 4px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.layer-style-panel .lsp-seg:hover:not(.active) {
+    color: var(--text-secondary);
+}
+
+.layer-style-panel .lsp-seg.active {
+    background: var(--frost-bg);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="night"] .layer-style-panel .lsp-seg.active {
+    background: var(--glass-highlight);
+}
+
+/* ----- Toggle switch (master labels on/off) ------------------------------ */
+.layer-style-panel .lsp-toggle {
+    width: 32px;
+    height: 18px;
+    padding: 2px;
+    border: 1px solid var(--border-dark);
+    border-radius: 999px;
+    background: var(--overlay-bg);
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.layer-style-panel .lsp-toggle.on {
+    background: var(--ndma-blue);
+    border-color: var(--ndma-blue);
+}
+
+.layer-style-panel .lsp-toggle-thumb {
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease;
+}
+
+.layer-style-panel .lsp-toggle.on .lsp-toggle-thumb {
+    transform: translateX(12px);
+}
+
+/* ----- Footer ------------------------------------------------------------ */
+.layer-style-panel .lsp-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-dark);
+    background: var(--overlay-bg);
+    flex: none;
+}
+
+.layer-style-panel .lsp-btn {
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.layer-style-panel .lsp-btn--ghost {
+    padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.layer-style-panel .lsp-btn--ghost:hover {
+    color: var(--text-primary);
+}
+
+.layer-style-panel .lsp-btn--primary {
+    padding: 6px 16px;
+    background: var(--ndma-blue);
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.layer-style-panel .lsp-btn--primary:hover {
+    filter: brightness(1.08);
+}
+

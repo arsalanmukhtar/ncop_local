@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     dashboard_view,
+    documentation_view,
     login_view,
     signup_view,
     logout_view,
@@ -29,13 +30,26 @@ from .views import (
     SlickPlusGeojsonApi,
     GdeltNewsEventsApi,
     WindOceanParticleDataApi,
+    HeatwaveMonitoringView,
+    HeatwaveDetailView,
+    IpcFoodSecurityAPIView,
+    IpcHistoryAPIView,
+    CropListAPIView,
+    CropYearsAPIView,
+    CropSummaryAPIView,
+    CropYearlyAPIView,
+    CropMapAPIView,
+    CropGeoJSONAPIView,
+    PmdMonitorPredictionsAPIView,
+    PmdDailyForecastProAPIView,
 
-    
+
 )
 
 
 urlpatterns = [
     path("", dashboard_view, name="dashboard"),
+    path("docs/", documentation_view, name="documentation"),
 
     path("login/", login_view, name="login"),
     path("signup/", signup_view, name="signup"),
@@ -65,5 +79,42 @@ urlpatterns = [
     path('api/gee/legend/', GenerateLegendView.as_view(), name='gee_legend'),
     path('api/gee/temporal-layer/', TemporalGEELayerView.as_view(), name='temporal_gee_layer'),
     path("api/wind-ocean-particles/", WindOceanParticleDataApi.as_view(), name="wind_ocean_particles"),
-    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" )
+    path( "get-gdelt-news-events/", GdeltNewsEventsApi.as_view(), name="gdelt-news-events" ),
+    path("get-heatwave-monitoring/", HeatwaveMonitoringView.as_view(), name="heatwave-monitoring"),
+    path("get-heatwave-detail/", HeatwaveDetailView.as_view(), name="heatwave-detail"),
+    # IPC / Food Security — one route, country in the path.  Resolves
+    # the latest analysis cycle server-side and returns GeoJSON directly
+    # to Mapbox's geojson source (see map-layers.js → Food Security).
+    path("api/ipc/<str:country>/", IpcFoodSecurityAPIView.as_view(), name="ipc-food-security"),
+    # PTT (Population Tracking Tool) historical time-series — used by
+    # the Food Security stats-modal's Historical Trend tab.
+    path("api/ipc/<str:country>/history/", IpcHistoryAPIView.as_view(), name="ipc-history"),
+    # Pakistan Crop Data (na.data.gov.pk / PBS)
+    path("api/crops/list/",    CropListAPIView.as_view(),    name="crops-list"),
+    path("api/crops/years/",   CropYearsAPIView.as_view(),   name="crops-years"),
+    path("api/crops/summary/", CropSummaryAPIView.as_view(), name="crops-summary"),
+    path("api/crops/yearly/",  CropYearlyAPIView.as_view(),  name="crops-yearly"),
+    path("api/crops/map/",     CropMapAPIView.as_view(),     name="crops-map"),
+    path("api/crops/geojson/", CropGeoJSONAPIView.as_view(), name="crops-geojson"),
+
+    # PMD Monitor — WRFPRS precipitation forecast rasters, colorized
+    # server-side into PNGs consumed by the temporal-slider system as
+    # Mapbox `image` sources.  <element_key> ∈ {hourtpe, sixtpe,
+    # twelvetpe, daytpe} — 3h / 6h / 12h / 24h accumulation windows.
+    path(
+        "api/pmd/monitor/predictions/<str:element_key>/",
+        PmdMonitorPredictionsAPIView.as_view(),
+        name="pmd-monitor-predictions",
+    ),
+
+    # PMD Provincial Daily Forecast — proxy for the public
+    # pmd.gov.pk/phpapi/daily-forecastpro.php feed.  Consumed by the
+    # Story panel's Provincial Forecast card (see
+    # frontend/src/modules/story-provincial-forecast.js).  30-min
+    # cache + 6 h stale fallback baked into the view.
+    path(
+        "api/pmd/monitor/daily-forecast-pro/",
+        PmdDailyForecastProAPIView.as_view(),
+        name="pmd-daily-forecast-pro",
+    ),
 ]
