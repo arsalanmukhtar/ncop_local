@@ -37,6 +37,7 @@ import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
 import { GisExportControl } from "./gis-export-control.js";
+import { NcopAssistantControl } from "./ncop-assistant.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initFfdHistoryPriming } from "./ffd-stats-modal.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
@@ -189,6 +190,12 @@ class DashboardManager {
     // own button + panel, only wraps addLayerByKey/removeLayerByKey for
     // live refresh (same pattern LayerInfoPanel already uses).
     new GisExportControl(this.#map, this.#sourceLayerControl);
+    // NCOP Assistant (Phase 1 — RAG Q&A). Standalone rail button + panel,
+    // deliberately separate from navigation-panel.js's own "#gee-chat-modal"
+    // (GEE Data Assistant, narrowly scoped to Earth Engine layers) so
+    // neither feature can regress the other. No sourceLayerControl
+    // dependency yet — Phase 1 only answers questions, no navigation.
+    new NcopAssistantControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -585,6 +592,10 @@ function buildUnifiedRightRail() {
     // GIS Export — pushed alongside the other data/analysis controls.
     // Wrapper div is injected by GisExportControl in its constructor.
     push(document.querySelector(".custom-gis-export-btn"));
+    // NCOP Assistant — grouped with the other data/analysis tools (not
+    // the raw map-nav cluster below), right after GIS Export. Wrapper div
+    // is injected by NcopAssistantControl in its constructor.
+    push(document.querySelector(".custom-ncop-assistant-btn"));
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }
@@ -712,6 +723,7 @@ const RAIL_FLOAT_PANEL_BUTTON_MAP = {
   "gee-chat-modal":          "geeChat",
   "geoglows-forecast-panel": "geoglowsForecast",
   "story-modal":             "storyBtn",
+  "ncop-assistant-modal":    "ncopAssistantToggle",
 };
 
 // Margin (in px) preserved between the panel and the map's top/bottom
@@ -897,6 +909,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "geoglows-forecast-panel", kind: "display",
     btn: { id: "geoglowsForecast", activeCls: "active-geoglows"  } },
   { id: "story-modal",             kind: "display" },
+  { id: "ncop-assistant-modal",    kind: "display",
+    btn: { id: "ncopAssistantToggle", activeCls: "active-ncop-assistant" } },
   // Note: #news-modal is intentionally NOT in this registry — it's a
   // bottom-anchored ticker bar (not a side panel) and is designed to
   // coexist with side panels.  The float-panel anchor logic treats its

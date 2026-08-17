@@ -141,6 +141,23 @@ MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
 METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
+GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
+
+# ---------------------------------------------------------------------------
+# Django REST Framework — first use is the NCOP Assistant chat endpoint
+# (ncop_internal.chatbot); its throttle scope is rate-limited here rather
+# than with custom throttle logic. Note: since this app has no shared cache
+# backend configured anywhere (dev/staging/prod all fall back to Django's
+# per-process, unshared LocMemCache — see settings/staging.py), this rate
+# limit is enforced PER WORKER PROCESS, not globally across all Gunicorn/
+# Waitress workers. Acceptable given how the rest of the app already runs,
+# but worth knowing before assuming this caps total traffic site-wide.
+# ---------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_RATES": {
+        "ncop_assistant_chat": "20/min",
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Applications

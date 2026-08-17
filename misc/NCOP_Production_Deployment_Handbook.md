@@ -1680,6 +1680,30 @@ fi
 log "✓ Static files collected"
 
 # =====================================================
+# STEP 7.5: BUILD NCOP ASSISTANT KNOWLEDGE BASE
+# =====================================================
+# Idempotent (deterministic chunk ids upsert cleanly) — safe to run on
+# every deploy. Two things happen here, both required before the NCOP
+# Assistant chat panel can work correctly in production:
+#   1. Chunks + embeds CONTEXT.md/the other root docs/GRAPH_REPORT.md/the
+#      live sidebar layer catalog into the persistent Chroma index at
+#      project/cache/chroma_db/.
+#   2. Downloads + caches Chroma's bundled ONNX embedding model (~90MB,
+#      one-time per machine, cached under this user's home directory) —
+#      running it here means that download happens during the deploy
+#      window, not silently on whichever live user sends the first real
+#      chat message (which would otherwise be slow, and would fail
+#      outright if this machine's outbound internet access doesn't reach
+#      chroma-onnx-models.s3.amazonaws.com — verify that reachability once
+#      per new deployment target if this step errors).
+log "Step 7.5/10: Building NCOP Assistant knowledge base..."
+
+cd "$BACKEND_DIR"
+python manage.py ingest_chat_knowledge --settings=ncop_project.settings.prod || warn "NCOP Assistant ingestion failed — chat panel will run in degraded mode (no retrieved context) until this is re-run successfully"
+
+log "✓ NCOP Assistant knowledge base ready"
+
+# =====================================================
 # STEP 8: FIX FILE PERMISSIONS
 # =====================================================
 log "Step 8/10: Setting correct file permissions..."
@@ -3340,6 +3364,11 @@ python -c 'from django.core.management.utils import get_random_secret_key; print
 - [ ] Build Vite assets (`npm run build`)
 - [ ] Run database migrations
 - [ ] Collect static files (`collectstatic`)
+- [ ] Build NCOP Assistant knowledge base (`ingest_chat_knowledge`) — REQUIRED
+      on first deploy of this feature and after any edit to CONTEXT.md/the
+      other root docs/map-layers.js; also warms the ~90MB ONNX embedding
+      model cache on THIS machine so the first real user chat message isn't
+      the one paying that download — see project/ncop_internal/chat_engine.py
 - [ ] Fix file permissions
 - [ ] Restart Waitress service
 - [ ] Reload Nginx

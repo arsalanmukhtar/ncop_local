@@ -78,7 +78,6 @@ import re
 import wbgapi as wb
 import threading
 import hashlib
-import chromadb
 import uuid
 import ssl
 import socket
@@ -87,8 +86,6 @@ import io
 import ee
 import urllib3
 from urllib3.util.retry import Retry
-from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage, SystemMessage
 
 # Disable SSL warnings for development - remove in production if you fix SSL properly
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
