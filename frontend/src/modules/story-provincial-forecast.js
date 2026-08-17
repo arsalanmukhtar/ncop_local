@@ -2316,6 +2316,42 @@ function _clearHazardEffects() {
   _story.hazardEffectActive = null;
 }
 
+// ---- Urdu voice selection -----------------------------------------------
+// Setting utter.lang alone is NOT enough — the actual voice used is still
+// whatever the engine's current DEFAULT voice is unless one is explicitly
+// assigned via utter.voice. A default English voice given Arabic-script
+// Urdu text silently skips whatever it can't pronounce — in practice that
+// means only the embedded Latin numerals get read aloud and the Urdu
+// prose itself goes silent. Voices also populate ASYNCHRONOUSLY
+// (getVoices() commonly returns [] until the browser's one-time
+// 'voiceschanged' event fires, even when a matching voice IS installed) —
+// cached eagerly here so a real voice list is already available by the
+// time playback starts.
+let _voicesCache = null;
+try {
+  const _ss = window.speechSynthesis;
+  if (_ss) {
+    _voicesCache = _ss.getVoices();
+    if (!_voicesCache.length) {
+      _ss.addEventListener("voiceschanged", () => { _voicesCache = _ss.getVoices(); }, { once: true });
+    }
+  }
+} catch (_) {}
+
+function _pickUrduVoice() {
+  const voices = (_voicesCache && _voicesCache.length) ? _voicesCache : (window.speechSynthesis?.getVoices() || []);
+  // Exact Urdu locale first, then any Urdu variant, then Arabic as a
+  // same-script fallback (Urdu and Arabic share the Arabic script, so an
+  // Arabic voice at least attempts to vocalize the characters instead of
+  // silently skipping them the way an English voice does).
+  return (
+    voices.find((v) => /^ur[-_]/i.test(v.lang)) ||
+    voices.find((v) => /^ur$/i.test(v.lang)) ||
+    voices.find((v) => /^ar/i.test(v.lang)) ||
+    null
+  );
+}
+
 // ---- Text-to-speech briefing narrator ---------------------------------
 // Uses the browser's SpeechSynthesis API (built-in, no server, no dep).
 // Cancels the current utterance every time a new focus sub-chapter is
@@ -2348,6 +2384,10 @@ function _speakChapterMessage(item) {
   utter.pitch = 1.0;
   utter.volume = 0.9;
   utter.lang  = _story.lang === "ur" ? "ur-PK" : "en-US";
+  if (_story.lang === "ur") {
+    const urVoice = _pickUrduVoice();
+    if (urVoice) utter.voice = urVoice;
+  }
   // TTS drives the pacing: when the narration ends, auto-advance if
   // we're still on the same item AND still playing AND TTS is still
   // enabled.  The auto-tick timer (safety cap 90s) covers the case

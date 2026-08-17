@@ -68,7 +68,7 @@ from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
 
-MAX_ITEMS = 150  # a full story's chapters/scenes/warnings, generously
+MAX_ITEMS = 400  # a full Dynamic Weather Report's distinct captions (nationwide district/station tours across 3 chapters) can exceed 150 — bumped after that tripped a real 400 in production
 MAX_CHARS_PER_ITEM = 2000
 MODEL_NAME = "facebook/nllb-200-distilled-600M"
 SRC_LANG = "eng_Latn"
@@ -155,7 +155,14 @@ def _get_model():
             torch.set_num_threads(TORCH_NUM_THREADS)
             _torch_threads_set = True
         _tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, src_lang=SRC_LANG)
-        _model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME, torch_dtype=torch.float16)
+        # low_cpu_mem_usage avoids materializing a full float32 copy in RAM
+        # before casting down to float16 — loads weights straight into
+        # target dtype instead, keeping the PEAK memory during the load
+        # itself (not just the steady-state footprint after) down near the
+        # ~1.2GB final size rather than briefly spiking toward ~2.4GB.
+        _model = AutoModelForSeq2SeqLM.from_pretrained(
+            MODEL_NAME, dtype=torch.float16, low_cpu_mem_usage=True
+        )
         _model.eval()
         _urdu_bos_token_id = _tokenizer.convert_tokens_to_ids(TGT_LANG)
     if not _watchdog_started:

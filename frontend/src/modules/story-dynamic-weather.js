@@ -235,6 +235,42 @@ function _hlNum(text) {
   return `<mark class="dwr-hl">${_escapeHtml(text)}</mark>`;
 }
 
+// ---- Urdu voice selection -----------------------------------------------
+// Setting utter.lang alone is NOT enough — the actual voice used is still
+// whatever the engine's current DEFAULT voice is unless one is explicitly
+// assigned via utter.voice. A default English voice given Arabic-script
+// Urdu text silently skips whatever it can't pronounce — in practice that
+// means only the embedded Latin numerals in a caption get read aloud and
+// the Urdu prose itself goes silent, which is exactly the "just reads
+// numbers" symptom. Voices also populate ASYNCHRONOUSLY (getVoices()
+// commonly returns [] until the browser's one-time 'voiceschanged' event
+// fires, even when a matching voice IS installed) — cached eagerly here so
+// a real voice list is already available by the time playback starts.
+let _voicesCache = null;
+try {
+  const _ss = window.speechSynthesis;
+  if (_ss) {
+    _voicesCache = _ss.getVoices();
+    if (!_voicesCache.length) {
+      _ss.addEventListener("voiceschanged", () => { _voicesCache = _ss.getVoices(); }, { once: true });
+    }
+  }
+} catch (_) {}
+
+function _pickUrduVoice() {
+  const voices = (_voicesCache && _voicesCache.length) ? _voicesCache : (window.speechSynthesis?.getVoices() || []);
+  // Exact Urdu locale first, then any Urdu variant, then Arabic as a
+  // same-script fallback (Urdu and Arabic share the Arabic script, so an
+  // Arabic voice at least attempts to vocalize the characters instead of
+  // silently skipping them the way an English voice does).
+  return (
+    voices.find((v) => /^ur[-_]/i.test(v.lang)) ||
+    voices.find((v) => /^ur$/i.test(v.lang)) ||
+    voices.find((v) => /^ar/i.test(v.lang)) ||
+    null
+  );
+}
+
 // Returns a promise that resolves once the utterance actually finishes
 // (or immediately if TTS is off/unavailable/there's no caption) — the
 // scene-advance timer awaits this directly instead of guessing a duration.
@@ -251,7 +287,11 @@ function _speak(text) {
       utter.rate = Math.min(3, 0.98 * (_state.speed || 1));
       // Only set explicitly for Urdu — leaving it unset in English mode
       // preserves the exact pre-existing (browser-default) behaviour.
-      if (_state.lang === "ur") utter.lang = "ur-PK";
+      if (_state.lang === "ur") {
+        utter.lang = "ur-PK";
+        const voice = _pickUrduVoice();
+        if (voice) utter.voice = voice;
+      }
       utter.onend = () => resolve();
       utter.onerror = () => resolve();
       window.speechSynthesis.speak(utter);
