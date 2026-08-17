@@ -1,5 +1,6 @@
 from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
+from .translate import NcopTranslateView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -177,5 +178,12 @@ urlpatterns = [
         "api/assistant/models/",
         NcopAssistantModelsView.as_view(),
         name="ncop-assistant-models",
+    ),
+    # English -> Urdu translation for the story-mode narrative cards. See
+    # ncop_internal/translate.py.
+    path(
+        "api/translate/",
+        NcopTranslateView.as_view(),
+        name="ncop-translate",
     ),
 ]

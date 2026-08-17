@@ -422,6 +422,7 @@ let _story = {
   savedFog: null,               // snapshot of map.getFog() before we override
   ttsEnabled: false,            // operator toggle — auto-speak each focus warning
   ttsSpeakingItem: null,        // playback item currently being spoken (dedupe guard)
+  lang: "en",                   // "en" | "ur" — operator toggle for narrative text + TTS language
 
   // Map popup for the current chapter
   chapterPopup:   null,   // mapboxgl.Popup instance
@@ -496,6 +497,30 @@ function _injectStyles() {
     }
     #${CARD_ID} .pf-mute.is-muted { color: rgba(234, 234, 234, 0.35); }
     #${CARD_ID} .pf-mute:hover { background: rgba(70, 178, 255, 0.25); color: #fff; }
+    #${CARD_ID} .pf-lang {
+      appearance: none;
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px;
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em;
+      color: rgba(234, 234, 234, 0.80);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    #${CARD_ID} .pf-lang:hover { background: rgba(70, 178, 255, 0.22); color: #fff; }
+    #${CARD_ID} .pf-lang.is-active { background: rgba(70, 178, 255, 0.30); color: #fff; border-color: rgba(70, 178, 255, 0.5); }
+    #${CARD_ID} .pf-lang.is-loading { opacity: 0.55; pointer-events: none; }
+
+    /* ---- Urdu narrative text (RTL + legible script font) ------------ */
+    .pf-lang-ur {
+      direction: rtl;
+      text-align: right;
+      font-family: "Noto Nastaliq Urdu", "Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif;
+      font-size: 1.05em;
+      line-height: 1.9;
+    }
 
     /* ---- Chapter header (province name + counter) ----------------- */
     #${CARD_ID} .pf-chapter-head {
@@ -1509,6 +1534,7 @@ function _ensureCard(root) {
         <span>7-Day Weather Outlook</span>
       </div>
       <button type="button" class="pf-mute is-muted" aria-label="Enable narration" title="Enable narration">${ICON_TTS_OFF}</button>
+      <button type="button" class="pf-lang" aria-label="Switch to Urdu" title="Switch narration to Urdu">اردو</button>
       <button type="button" class="pf-refresh" aria-label="Refresh outlook">Refresh</button>
     </div>
     <div class="pf-chapter-head">
@@ -1531,7 +1557,9 @@ function _ensureCard(root) {
     </div>
   `;
   root.insertBefore(card, root.firstChild);
+  _story.lang = _loadLangPref();
   _bindCardEvents(card);
+  _syncLangButton(card);
   return card;
 }
 
@@ -1549,6 +1577,31 @@ function _syncMuteButton(card) {
   const label = _story.ttsEnabled ? "Mute narration" : "Enable narration";
   m.setAttribute("aria-label", label);
   m.setAttribute("title", label);
+}
+
+// Syncs the header language-toggle button's label/state to the CURRENT
+// _story.lang.  Shows "اردو" (a call-to-action to switch TO Urdu) while in
+// English, "EN" (switch back) while in Urdu — same on/off pairing pattern
+// _syncMuteButton uses for the speaker icon.
+function _syncLangButton(card) {
+  const b = card?.querySelector(".pf-lang");
+  if (!b) return;
+  const isUr = _story.lang === "ur";
+  b.textContent = isUr ? "EN" : "اردو";
+  const label = isUr ? "Switch narration to English" : "Switch narration to Urdu";
+  b.setAttribute("aria-label", label);
+  b.setAttribute("title", label);
+  b.classList.toggle("is-active", isUr);
+}
+
+// Toggles the button into/out of a brief loading state while a translate
+// request is in flight — reuses the same visual pattern .pf-refresh.is-loading
+// already established (dimmed + non-interactive) rather than inventing a
+// new spinner.
+function _setLangButtonLoading(card, isLoading) {
+  const b = card?.querySelector(".pf-lang");
+  if (!b) return;
+  b.classList.toggle("is-loading", isLoading);
 }
 
 function _bindCardEvents(card) {
@@ -1569,6 +1622,28 @@ function _bindCardEvents(card) {
     // the word-count estimate; off returns to the fixed 14s) — restart
     // the tick so the new dwell takes effect immediately.
     if (_story.isPlaying) _startTick(card);
+  });
+  btn(".pf-lang").addEventListener("click", () => {
+    const next = _story.lang === "ur" ? "en" : "ur";
+    _story.lang = next;
+    _saveLangPref(next);
+    _syncLangButton(card);
+    // Re-render (and, if narration is on, re-speak) immediately with
+    // whatever's already cached (falls back to English via _tr()'s
+    // cache-miss no-op) — this also repaints the map popup via
+    // _renderChapter → _applyChapterHighlightDay → _showChapterPopup. NOT
+    // awaited: translating a full day's worth of warnings on this CPU-only
+    // model can take well over a minute (a real 15-item batch measured at
+    // ~105s) — blocking here would freeze the story on the current scene
+    // with only the button's own loading spinner as feedback.
+    // Fire-and-forget instead, silently upgrading (text AND narration)
+    // once ready.
+    _reapplyCurrentItemLanguage(card);
+    if (next === "ur") {
+      _ensureUrduTranslations(card).then((ok) => {
+        if (ok && _story.lang === "ur") _reapplyCurrentItemLanguage(card);
+      }).catch(() => {});
+    }
   });
   btn(".pf-refresh").addEventListener("click", () => {
     _story.started = true; // refreshing is an implicit start if it hadn't happened yet
@@ -1673,6 +1748,7 @@ function _renderChapter(card, opts = {}) {
   const bodyHtml = item.type === "focus"
     ? _buildFocusChapterHtml(item)
     : _buildDayChapterHtml(c);
+  bodyEl.classList.toggle("pf-lang-ur", _story.lang === "ur");
   if (opts.fade !== false) {
     bodyEl.classList.add("is-fading");
     setTimeout(() => {
@@ -1826,7 +1902,7 @@ function _hazardChipHtml(code, small = false) {
 // entry).  Shows the narrative text + province chips + auto-selected
 // PMD-warning hazard chips (color-matched to their sidebar badges).
 function _buildDayChapterHtml(chapter) {
-  const text = _sanitiseFragment(chapter.text);
+  const text = _sanitiseFragment(_tr(chapter.text));
   const provChips = (chapter.provinces || []).map((p) =>
     `<span class="pf-prov-chip">${_escapeHtml(p)}</span>`
   ).join("");
@@ -1879,8 +1955,8 @@ function _buildFocusChapterHtml(item) {
   const areaKm2 = p.area_km2 ? Number(p.area_km2) : null;
   const dataTime = _fmtIsoTime(p.data_time);
   const forecastTime = _fmtIsoTime(p.forecast_time);
-  const message = _stripPreventionMeasures(p.message || "");
-  const outlookLine = _sanitiseFragment(c.text || "");
+  const message = _stripPreventionMeasures(_tr(p.message || ""));
+  const outlookLine = _sanitiseFragment(_tr(c.text || ""));
 
   // Focused hazard chip stands out; the day's other hazard chips are dim.
   const hazChips = (c.hazards || []).map((code) => {
@@ -1934,7 +2010,7 @@ function _buildFocusChapterHtml(item) {
 // Popup content for a DAY chapter — date + outlook prose + province chips
 // + hazard chips (auto-selected PMD warnings) + district chips.
 function _overviewPopupHtml(chapter) {
-  const bodyHtml = _sanitiseFragment(chapter.text);
+  const bodyHtml = _sanitiseFragment(_tr(chapter.text));
   const provChips = (chapter.provinces || []).map((p) =>
     `<span class="nsp-prov-chip">${_escapeHtml(p)}</span>`
   ).join("");
@@ -1970,7 +2046,7 @@ function _focusPopupHtml(item) {
   const areaKm2 = p.area_km2 ? Number(p.area_km2) : null;
   const dataTime = _fmtIsoTime(p.data_time);
   const forecastTime = _fmtIsoTime(p.forecast_time);
-  const richMsgHtml = _buildRichFocusMessage(p.message || "", item.hazardCode);
+  const richMsgHtml = _buildRichFocusMessage(_tr(p.message || ""), item.hazardCode);
   const provChips = (item.featureProvinces || []).slice(0, 6).map((pr) =>
     `<span class="nsp-prov-chip">${_escapeHtml(pr)}</span>`
   ).join("");
@@ -2253,7 +2329,7 @@ function _speakChapterMessage(item) {
   try { ss.cancel(); } catch (_) {}
   if (!_story.ttsEnabled) return;
   if (!item || item.type !== "focus") return;
-  const raw = item.feature?.properties?.message || "";
+  const raw = _tr(item.feature?.properties?.message || "");
   if (!raw) return;
 
   // Prep clean prose for speech synthesis: drop numbered-list markers so
@@ -2271,7 +2347,7 @@ function _speakChapterMessage(item) {
   utter.rate  = 0.98;
   utter.pitch = 1.0;
   utter.volume = 0.9;
-  utter.lang  = "en-US";
+  utter.lang  = _story.lang === "ur" ? "ur-PK" : "en-US";
   // TTS drives the pacing: when the narration ends, auto-advance if
   // we're still on the same item AND still playing AND TTS is still
   // enabled.  The auto-tick timer (safety cap 90s) covers the case
@@ -2302,6 +2378,21 @@ function _stopSpeaking() {
   _story.ttsSpeakingItem = null;
 }
 
+// Re-renders the current item and — if narration is on — re-speaks it too.
+// Without this, a translation landing in the background (see
+// _ensureUrduTranslations' fire-and-forget call sites) would silently swap
+// the on-screen TEXT to Urdu while the voice that already read this item
+// stays whatever it said in English, or say nothing at all if narration
+// was toggled on mid-wait. _speakChapterMessage already no-ops safely for
+// non-"focus" items and always reads whatever's CURRENTLY at _story.index,
+// so this is safe to call any time, not just right after a language
+// switch. Shared by every background-upgrade call site so an item's text
+// and its narration always agree once a translation actually lands.
+function _reapplyCurrentItemLanguage(card) {
+  _renderChapter(card, { fade: false });
+  _speakChapterMessage(_story.playable[_story.index]);
+}
+
 // ---- TTS preference persistence ---------------------------------------
 const TTS_PREF_KEY = "ncop-story-tts-pref";
 function _loadTtsPref() {
@@ -2309,6 +2400,110 @@ function _loadTtsPref() {
 }
 function _saveTtsPref(choice) {
   try { localStorage.setItem(TTS_PREF_KEY, choice); } catch (_) {}
+}
+
+// ==========================================================================
+// English <-> Urdu narrative translation
+// --------------------------------------------------------------------------
+// Scope is deliberately narrow: only the narrated prose (chapter.text /
+// item.feature.properties.message) ever passes through _tr() — buttons,
+// hints, legends, and fact-pill labels stay English in both modes. Every
+// formatting function downstream of the raw string (_sanitiseFragment,
+// _stripPreventionMeasures, _buildRichFocusMessage, etc.) is regex/English-
+// word based but degrades gracefully on non-Latin text (no match = pass
+// the whole block through unsegmented, no crash, no mangling — verified by
+// reading each one), so _tr() only ever needs to swap WHICH string those
+// functions receive, never touch their internals.
+// ==========================================================================
+const LANG_PREF_KEY = "ncop-story-lang-pref"; // shared-by-convention key with
+// story-dynamic-weather.js's own toggle, same pattern as TTS_PREF_KEY above
+// (neither file imports the other — both just agree on the same string).
+function _loadLangPref() {
+  try { return localStorage.getItem(LANG_PREF_KEY) === "ur" ? "ur" : "en"; } catch (_) { return "en"; }
+}
+function _saveLangPref(lang) {
+  try { localStorage.setItem(LANG_PREF_KEY, lang); } catch (_) {}
+}
+
+// English -> Urdu translations, keyed by the ORIGINAL English string.
+// Content-addressed, so it never needs clearing on refresh — the same
+// English sentence recurring in a later fetch reuses its cached Urdu.
+let _translationCache = new Map();
+
+// Read-time helper — the ONLY thing every call site below wraps around a
+// raw narrative-string read. No-ops in English mode; in Urdu mode, returns
+// the cached translation or silently falls back to English on a cache miss
+// (untranslated-yet or a failed fetch) so the story can never break.
+function _tr(text) {
+  if (_story.lang !== "ur") return text;
+  return _translationCache.get(text) ?? text;
+}
+
+// Gathers every distinct narrative string currently loaded — deduplicated.
+// Pulls warning messages from the FULL warningsFC feature set (every
+// warning the API returned), not just the capped/selected playable-list
+// subset (MAX_PER_HAZARD/MAX_PER_CHAPTER can leave warnings out of the
+// scripted playback that the operator can still reach by hovering a
+// polygon directly — see _showWarningHoverPopup — so those need
+// translations cached too).
+function _collectNarrativeStrings() {
+  const set = new Set();
+  (_story.chapters || []).forEach((c) => { if (c.text) set.add(c.text); });
+  (_story.warningsFC?.features || []).forEach((f) => {
+    const msg = f.properties?.message;
+    if (msg) set.add(msg);
+  });
+  return Array.from(set);
+}
+
+// The backend (translate.py) internally splits a large batch into several
+// smaller SEQUENTIAL Groq calls itself, staying under a safe per-call
+// character budget — protects against Groq's tokens-per-minute rate limit,
+// which a single big/parallel-chunked request from here previously tripped
+// in production (a real 413 "Request too large ... TPM"). So this just
+// sends everything in ONE request and lets the server handle safe batching
+// — no client-side chunking, no parallel fan-out.
+const TRANSLATE_ENDPOINT = "/api/translate/";
+async function _translateBatch(texts) {
+  const res = await fetch(TRANSLATE_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ texts, target_lang: "ur" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !Array.isArray(data.translations) || data.translations.length !== texts.length) {
+    throw new Error(data?.error || `translate HTTP ${res.status}`);
+  }
+  return data.translations;
+}
+
+// Fills in any cache misses for the CURRENTLY loaded data in one shot.
+// De-duped against in-flight calls (a second toggle-click while one is
+// already running just awaits the same promise). Never throws — resolves
+// `false` on failure and leaves the cache as-is, so _tr()'s fallback keeps
+// the story showing English for whatever never got translated.
+let _translateInFlight = null;
+function _ensureUrduTranslations(card) {
+  if (_translateInFlight) return _translateInFlight;
+  const all = _collectNarrativeStrings();
+  const missing = all.filter((t) => !_translationCache.has(t));
+  if (!missing.length) return Promise.resolve(true);
+  _setLangButtonLoading(card, true);
+  _translateInFlight = _translateBatch(missing)
+    .then((translated) => {
+      missing.forEach((orig, i) => _translationCache.set(orig, translated[i]));
+      return true;
+    })
+    .catch((e) => {
+      console.warn("[story] Urdu translation failed:", e);
+      return false;
+    })
+    .finally(() => {
+      _setLangButtonLoading(card, false);
+      _translateInFlight = null;
+    });
+  return _translateInFlight;
 }
 
 // Render an inline preference prompt inside the story panel body and
@@ -2353,6 +2548,50 @@ function _showTtsPrompt(card) {
   });
 }
 
+// Same single-click-resolves pattern _showTtsPrompt uses just above,
+// asking English vs Urdu instead. Unlike the TTS prompt (asked once ever,
+// remembered forever via savedPref === null), this is shown every time
+// _fetchAndBuild actually runs — the very first open AND after every
+// manual Refresh, since a plain reopen resumes in place via
+// _handlePanelVisible and never reaches _fetchAndBuild at all — so the
+// operator is asked "before the story starts" each time there's genuinely
+// new data, and the choice holds until the next manual refresh. Pre-
+// highlights whichever language was picked last time (defaulting to
+// English) so a repeat refresh confirming the same choice is still one
+// click.
+function _showLangPrompt(card) {
+  return new Promise((resolve) => {
+    const bodyEl = card.querySelector(".pf-body");
+    if (!bodyEl) { resolve("en"); return; }
+    const prev = bodyEl.innerHTML;
+    const lastChoice = _loadLangPref();
+    bodyEl.innerHTML = `
+      <div class="pf-tts-prompt" role="dialog" aria-labelledby="pf-lang-prompt-title">
+        <div class="pf-tts-prompt-icon" aria-hidden="true">🌐</div>
+        <div id="pf-lang-prompt-title" class="pf-tts-prompt-title">Choose a Language</div>
+        <div class="pf-tts-prompt-desc">
+          Pick the language for this briefing's narrative text and voice narration.
+          You can switch anytime from the language button in the header.
+        </div>
+        <div class="pf-tts-prompt-buttons">
+          <button type="button" class="pf-tts-prompt-btn${lastChoice === "en" ? " is-primary" : ""}" data-choice="en">English</button>
+          <button type="button" class="pf-tts-prompt-btn${lastChoice === "ur" ? " is-primary" : ""}" data-choice="ur">اردو</button>
+        </div>
+        <div class="pf-tts-prompt-hint">Your choice holds until you refresh the data.</div>
+      </div>
+    `;
+    const onClick = (e) => {
+      const btn = e.target.closest("[data-choice]");
+      if (!btn) return;
+      bodyEl.removeEventListener("click", onClick);
+      const choice = btn.dataset.choice === "ur" ? "ur" : "en";
+      bodyEl.innerHTML = prev;
+      resolve(choice);
+    };
+    bodyEl.addEventListener("click", onClick);
+  });
+}
+
 function _toggleTTS(card) {
   _story.ttsEnabled = !_story.ttsEnabled;
   // Re-render the current chapter so the header button reflects the new
@@ -2380,6 +2619,7 @@ function _showChapterPopup(item) {
   if (!card) return;
   const isFocus = item.type === "focus";
   card.dataset.mode = isFocus ? "focus" : "overview";
+  card.classList.toggle("pf-lang-ur", _story.lang === "ur");
   card.innerHTML = isFocus ? _focusPopupHtml(item) : _overviewPopupHtml(item.chapter || item);
   // Wire the speaker toggle on the freshly-rendered header.
   const ttsBtn = card.querySelector("[data-nsp-tts]");
@@ -3710,7 +3950,10 @@ function _showWarningHoverPopup(feature, lngLat) {
   const areaKm2 = p.area_km2 ? Number(p.area_km2) : null;
   const dataTime = _fmtIsoTime(p.data_time);
   const forecastTime = _fmtIsoTime(p.forecast_time);
-  const message = _stripPreventionMeasures(p.message || "");
+  const message = _stripPreventionMeasures(_tr(p.message || ""));
+  // Location parsing stays on the RAW (untranslated) message — the
+  // extraction regex/alias tables match English province/district names,
+  // so this must never receive the Urdu string.
   const { provinces, districts } = _parseMessageLocations(p.message || "");
 
   // Header background driven by severity level (blue/yellow/orange/red/…)
@@ -3734,7 +3977,7 @@ function _showWarningHoverPopup(feature, lngLat) {
       ${level ? `<span class="nswp-level" data-level="${_escapeHtml(level.toLowerCase())}">${_escapeHtml(level)}</span>` : ""}
     </div>
     <div class="nswp-body">
-      ${message ? `<p class="nswp-msg">${_escapeHtml(message)}</p>` : ""}
+      ${message ? `<p class="nswp-msg${_story.lang === "ur" ? " pf-lang-ur" : ""}">${_escapeHtml(message)}</p>` : ""}
       <dl class="nswp-facts">
         ${dataTime     ? `<div class="nswp-fact"><dt>Data time</dt><dd>${_escapeHtml(dataTime)}</dd></div>` : ""}
         ${forecastTime ? `<div class="nswp-fact"><dt>Forecast</dt><dd>${_escapeHtml(forecastTime)}</dd></div>` : ""}
@@ -3896,23 +4139,40 @@ async function _fetchAndBuild(card) {
     _renderDots(card);
     _renderChapter(card, { fade: false });
 
+    // Preference prompts — pause playback, ask, apply, THEN start playing.
+    // _renderChapter above already painted the first slide's animations +
+    // polygon effect; the prompt(s) just gate auto-advance until the
+    // operator has answered. TTS still only asks once ever (savedPref ===
+    // null); language asks EVERY time this function runs — see
+    // _showLangPrompt's own comment.
+    _pause();
     if (savedPref === null) {
-      // First-open flow: pause playback, show the prompt, then apply
-      // the answer and start playing.  _renderChapter above already
-      // painted the first slide's animations + polygon effect — the
-      // prompt just gates the auto-advance until the operator chooses.
-      _pause();
       const choice = await _showTtsPrompt(card);
       _saveTtsPref(choice);
       _story.ttsEnabled = choice === "on";
       _syncMuteButton(card);
       if (card.style.display === "none") return; // hidden during the prompt's own await
-      // Re-render so the speaker button reflects the new state and
-      // (if enabled) TTS speaks the current chapter now.
-      _renderChapter(card, { fade: false });
-      _play();
-    } else {
-      _play();
+    }
+    const langChoice = await _showLangPrompt(card);
+    _story.lang = langChoice;
+    _saveLangPref(langChoice);
+    _syncLangButton(card);
+    if (card.style.display === "none") return; // hidden during the prompt's own await
+    // Re-render so the speaker/language buttons reflect the final state,
+    // and start playing right away — falls back to English via _tr()'s
+    // cache-miss no-op wherever a translation isn't ready yet.
+    _renderChapter(card, { fade: false });
+    _play();
+    if (langChoice === "ur") {
+      // NOT awaited — translating a full day's worth of warnings on this
+      // CPU-only model can take well over a minute (a real 15-item batch
+      // measured at ~105s). Blocking story start on that produced a
+      // "frozen with zero feedback for 100+ seconds" experience. Instead:
+      // play now, silently upgrade (text AND narration) scene-by-scene as
+      // translations land.
+      _ensureUrduTranslations(card).then((ok) => {
+        if (ok && _story.lang === "ur") _reapplyCurrentItemLanguage(card);
+      }).catch(() => {});
     }
   } catch (e) {
     console.error("[story] _fetchAndBuild failed:", e);

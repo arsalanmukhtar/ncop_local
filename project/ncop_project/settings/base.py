@@ -23,6 +23,26 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # .../project
 REPO_ROOT = BASE_DIR.parent                               # .../ncop_local
 
+# huggingface_hub/transformers default their model cache to the user's home
+# directory on the SYSTEM drive (~/.cache/huggingface) — on this machine
+# that's a nearly-full C: drive, which silently risks failed/degraded
+# downloads for local ML models (see ncop_internal/translate.py's local
+# Urdu translation model). Redirected here, at the very top of settings, so
+# it's set before transformers/huggingface_hub is ever imported anywhere in
+# the process — same drive/pattern as chat_engine.py's own project/cache/
+# directory for its Chroma vector store.
+os.environ.setdefault("HF_HOME", str(BASE_DIR / "cache" / "huggingface"))
+# Even with a local cache, transformers' from_pretrained() calls out to
+# huggingface.co on every load to check for file updates by default — on a
+# restricted/slow network path that can hang for a long time (observed:
+# /api/translate/ requests left pending indefinitely) before it ever gets
+# to running the model. The model is only ever loaded from a cache
+# populated by an explicit prior download here (see translate.py), never
+# needs to change at runtime, so there's no reason to ever hit the network
+# for it again — offline mode makes every load instant (or fails fast with
+# a clear "not in cache" error, instead of hanging, if it's ever missing).
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env(os.path.join(REPO_ROOT, ".env"))
 
@@ -156,6 +176,10 @@ GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "ncop_assistant_chat": "20/min",
+        # One batched request translates a WHOLE story (all chapters/scenes
+        # at once), so this needs far fewer calls per session than the chat
+        # endpoint — a lower rate is still generous.
+        "ncop_translate": "10/min",
     },
 }
 
