@@ -243,7 +243,9 @@
       "Bash(time curl -s -X POST http://127.0.0.1:8000/api/translate/ -H 'Content-Type: application/json' -d '{\"texts\": [\"Heavy rainfall is expected in Kashmir and Punjab tonight.\"], \"target_lang\": \"ur\"}' -w '\\\\nHTTP_CODE:%{http_code}\\\\n' --max-time 60)",
       "Bash(grep -n \"_renderScene\\(card\\);$\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-dynamic-weather.js)",
       "Bash(grep -n \"_renderScene\\(card\\);$\\\\|dwr-lang.*addEventListener\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-dynamic-weather.js)",
-      "Bash(grep -n \"_renderChapter\\(card, { fade: false }\\);\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-provincial-forecast.js)"
+      "Bash(grep -n \"_renderChapter\\(card, { fade: false }\\);\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-provincial-forecast.js)",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/docs/ --max-time 5)"
     ],
     "deny": [
       "Bash(git push *)",

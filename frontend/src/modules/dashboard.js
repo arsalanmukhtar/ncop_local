@@ -592,10 +592,9 @@ function buildUnifiedRightRail() {
     // GIS Export — pushed alongside the other data/analysis controls.
     // Wrapper div is injected by GisExportControl in its constructor.
     push(document.querySelector(".custom-gis-export-btn"));
-    // NCOP Assistant — grouped with the other data/analysis tools (not
-    // the raw map-nav cluster below), right after GIS Export. Wrapper div
-    // is injected by NcopAssistantControl in its constructor.
-    push(document.querySelector(".custom-ncop-assistant-btn"));
+    // NCOP Assistant has no rail button anymore — its sole entry point is
+    // the standalone floating mascot (NcopAssistantControl#renderMascot),
+    // which lives outside the rail entirely.
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }
@@ -723,7 +722,10 @@ const RAIL_FLOAT_PANEL_BUTTON_MAP = {
   "gee-chat-modal":          "geeChat",
   "geoglows-forecast-panel": "geoglowsForecast",
   "story-modal":             "storyBtn",
-  "ncop-assistant-modal":    "ncopAssistantToggle",
+  // ncop-assistant-modal is deliberately absent — its trigger (the floating
+  // mascot) lives outside the right rail entirely, so this rail-relative
+  // anchor math doesn't apply; it keeps its fixed bottom-right CSS position
+  // instead (see #ncop-assistant-modal in _chat-panel.css).
 };
 
 // Margin (in px) preserved between the panel and the map's top/bottom
@@ -910,7 +912,7 @@ const RAIL_PANEL_REGISTRY = [
     btn: { id: "geoglowsForecast", activeCls: "active-geoglows"  } },
   { id: "story-modal",             kind: "display" },
   { id: "ncop-assistant-modal",    kind: "display",
-    btn: { id: "ncopAssistantToggle", activeCls: "active-ncop-assistant" } },
+    btn: { id: "ncopAssistantMascot", activeCls: "active-ncop-assistant" } },
   // Note: #news-modal is intentionally NOT in this registry — it's a
   // bottom-anchored ticker bar (not a side panel) and is designed to
   // coexist with side panels.  The float-panel anchor logic treats its

@@ -678,6 +678,8 @@
                 <a href="#weather-report" class="sidebar-link">Weather Report</a>
                 <a href="#split-compare" class="sidebar-link">Split Compare View</a>
                 <a href="#guided-tour" class="sidebar-link">Guided Tour</a>
+                <a href="#story-mode" class="sidebar-link">Story Mode &mdash; EN/UR Narration</a>
+                <a href="#ncop-assistant" class="sidebar-link">NCOP Assistant (AI Q&amp;A)</a>
                 <a href="#popups" class="sidebar-link">Feature Popups</a>
                 <a href="#basemap-projection" class="sidebar-link">Basemaps</a>
             </div>
@@ -706,7 +708,7 @@
             <div class="page-meta">
                 <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
                 <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
-                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-28</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-08-17</span>
             </div>
 
             <!-- ============================================================ -->
@@ -1753,6 +1755,9 @@ seismological_global:seismic_hazard_map
                     <li><strong>Zoom In / Zoom Out / Reset Bearing</strong> pinned at the bottom.</li>
                 </ol>
                 <p>Only one slide-out panel is open at a time &mdash; clicking any rail button closes every other panel. The exceptions are the standalone hamburger menu (<code>#menuToggle</code>) at the top-left and the temporal slider under the map, both of which stay visible independent of the rail.</p>
+                <div class="callout callout--info">
+                    <b>GEE Chat vs. NCOP Assistant:</b> <strong>GEE Chat</strong> (rail button above) stays on this rail and is pure keyword/synonym matching over the Earth&nbsp;Engine dataset catalogue &mdash; no LLM call. The <strong>NCOP Assistant</strong> is a separate, Groq-backed feature and is deliberately <em>not</em> on this rail at all &mdash; its entry point is a floating animated mascot in the map&rsquo;s bottom-right corner. See <a href="#ncop-assistant">NCOP Assistant</a>.
+                </div>
                 <h3 class="subsection-title">Split-Compare mode adjustments</h3>
                 <p>When Split Compare View is active the rail (plus every rail-panel: layer-order, layer-info, layer-style, weather-report, basemap) is hidden via <code>body.split-compare-active .map-right-rail { display:none }</code> and analogous rules in <code>_split-compare.css</code>. The hamburger menu button stays visible on purpose so the user can still reach Map&nbsp;A&rsquo;s layer catalogue.</p>
             </section>
@@ -1948,7 +1953,7 @@ seismological_global:seismic_hazard_map
                     <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
                     <li><strong>Air Quality accordion</strong> (2 steps).</li>
                     <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
-                    <li><strong>Right rail</strong> (25 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the new <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps.</li>
+                    <li><strong>Right rail</strong> (26 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps, plus <strong>GEE Chat</strong> and, most recently, the <strong>NCOP Assistant</strong> floating mascot <em>(new)</em>.</li>
                     <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint (mentions every new feature).</li>
                 </ol>
 
@@ -2160,6 +2165,83 @@ PMD_MONITOR_USER  default PMD
 PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                 <p>Rotate the password by setting <code>PMD_MONITOR_PASS</code> in the environment &mdash; no code change needed. The auth session invalidates on the next 401/403 and re-logs in inline.</p>
                 <p><strong>PROJ_LIB bootstrap</strong> &mdash; base.py sets <code>PROJ_LIB</code> / <code>GDAL_DATA</code> to the OSGeo wheel&rsquo;s bundled data dirs <em>only</em> if the current env-var is unset OR points at a non-existent path (fixes the Windows-dev case where a QGIS/OSGeo4W install has already set a stale path). No-op on Linux prod where the pip GDAL wheel doesn&rsquo;t ship data/ and system <code>libproj-dev</code> takes over.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="story-mode">
+                <h2 class="section-title">Story Mode &mdash; Cinematic Briefings <span class="section-anchor">#</span></h2>
+                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts two live, data-driven narrative cards &mdash; not scripted demos. Both are built entirely from real PMD/NWFC feeds at play time, and both now support a full <strong>English &harr; Urdu</strong> toggle with spoken narration.</p>
+
+                <h3 class="subsection-title">7-Day Weather Outlook (<code>story-provincial-forecast.js</code>)</h3>
+                <p>Pulls PMD&rsquo;s Provincial Daily Forecast (<code>api/pmd/monitor/daily-forecast-pro/</code>) and current PMD Weather Warnings, then auto-plays a province-by-province outlook segment followed by a warning-focus segment (10&nbsp;s / 14&nbsp;s per beat).</p>
+
+                <h3 class="subsection-title">Dynamic Weather Report (<code>story-dynamic-weather.js</code>) &mdash; three chapters</h3>
+                <ol>
+                    <li><strong>Chapter 1 &mdash; Precipitation Outlook.</strong> National radar sweep (DWD Satellite Infrared) plus the NWFC 24-hour rainfall report (<code>api/pmd/nwfc/rainfall-report/</code>), then a guided tour of the heaviest-rainfall districts across every province, closing on an operational assessment.</li>
+                    <li><strong>Chapter 2 &mdash; Temperature Outlook.</strong> Built from PMD&rsquo;s Heatwave Monitoring network and historical max-temperature records, cross-checked against the PMD 2&nbsp;m temperature prediction layer, then a tour of the hottest reporting stations and a weekly outlook.</li>
+                    <li><strong>Chapter 3 &mdash; Forecasted Precipitation Outlook.</strong> District-level 24-hour precipitation values sampled from Meteoblue&rsquo;s forecast layers. Opens with a <strong>province-wise precipitation overview</strong> <em>(new)</em> &mdash; a national camera pass grouping the forecast by province, mirroring Chapter&nbsp;1&rsquo;s own province-overview pattern rather than the older per-district zoom loop &mdash; then a north-to-south flythrough of FFD-monitored barrages and dams and how the outlook may affect their inflows.</li>
+                </ol>
+
+                <h3 class="subsection-title">English &harr; Urdu narration</h3>
+                <p>Each card has a language-toggle button (<code>.pf-lang</code> / <code>.dwr-lang</code>, labelled <span dir="rtl">&#1575;&#1585;&#1583;&#1608;</span>) plus an upfront language-choice prompt shown before playback starts. Unlike the one-time narration-preference prompt, this one re-asks on every genuinely fresh load &mdash; first open and manual Refresh &mdash; rather than only once ever. Narration itself speaks through the browser&rsquo;s native <code>window.speechSynthesis</code>, the same zero-dependency mechanism used everywhere else in NCOP.</p>
+
+                <div class="callout callout--warn">
+                    <b>Urdu translation is deliberately NOT Groq.</b> The NCOP Assistant chatbot (see <a href="#ncop-assistant">next section</a>) is the <em>only</em> feature in NCOP that calls a hosted LLM. Story-mode Urdu text is produced by a fully separate, self-hosted, non-AI-API mechanism: a local <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener">NLLB-200</a> model (<code>facebook/nllb-200-distilled-600M</code>, Meta, CC-BY-NC-4.0) served from <code>POST /api/translate/</code> (<code>ncop_internal/translate.py</code>). No external translation API, no per-request cost, no network call once the model is cached locally.
+                </div>
+
+                <p>Playback is never blocked on translation &mdash; a real measured latency for a full story batch made that unacceptable. Instead, each card requests its Urdu text in the background the moment Urdu is selected; scenes silently re-render (and re-speak, if narration is on) once their translation lands, via <code>_reapplyCurrentItemLanguage</code> / <code>_reapplyCurrentSceneLanguage</code>. A content-addressed, process-level cache in <code>translate.py</code> means a recurring sentence is never retranslated.</p>
+
+                <h3 class="subsection-title">Production hardening (Waitress: one process, many threads)</h3>
+                <p>Because production runs behind Waitress &mdash; a single process, multiple threads, not Gunicorn&rsquo;s multi-worker model &mdash; <code>translate.py</code> holds a single global <code>threading.Lock</code> around the model load and every <code>generate()</code> call, so concurrent Urdu requests queue rather than fight each other and the rest of the app for CPU. <code>torch.set_num_threads(2)</code> caps PyTorch&rsquo;s own intra-op parallelism, the model loads in float16 (&sim;1.2&nbsp;GB instead of &sim;2.4&nbsp;GB), and a lazily-started idle-unload watchdog frees that memory back to the OS after 15 minutes with no Urdu activity &mdash; most sessions never touch Urdu at all, so there&rsquo;s no reason to hold the model resident for the life of the worker.</p>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>frontend/src/modules/story-dynamic-weather.js</code> &mdash; the two cards: scene building, camera work, language toggle, narration.</li>
+                    <li><code>project/ncop_internal/translate.py</code> &mdash; local NLLB-200 translation, throttled, cached, production-hardened.</li>
+                    <li><code>project/ncop_project/settings/base.py</code> &mdash; <code>HF_HOME</code> (redirects the HuggingFace model cache off the system drive) and <code>HF_HUB_OFFLINE=1</code> (never phones home once cached), set before any <code>transformers</code> import.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="ncop-assistant">
+                <h2 class="section-title">NCOP Assistant (AI Q&amp;A) <span class="section-anchor">#</span></h2>
+                <p>A floating, animated bot in the map&rsquo;s bottom-right corner (<code>#ncopAssistantMascot</code>) &mdash; the <em>sole</em> entry point into a Groq-backed retrieval-augmented chat panel that can answer questions about NCOP itself, explain what a layer/subcategory/category/control does, jump the user straight to it, and report live conditions.</p>
+
+                <h3 class="subsection-title">Knowledge base</h3>
+                <p>Built by <code>python manage.py ingest_chat_knowledge</code> (run manually/occasionally, never on server boot) into a persistent Chroma vector store, embedded with Chroma&rsquo;s bundled ONNX MiniLM-L6-v2 default &mdash; no torch/sentence-transformers, keeping the process footprint small. Ingested sources:</p>
+                <ul>
+                    <li><code>CONTEXT.md</code> and <code>TEMPORAL_LAYERS_GUIDE.md</code> &mdash; whole-codebase and temporal-layer-behaviour references.</li>
+                    <li><code>graphify-out/GRAPH_REPORT.md</code> &mdash; the tree-sitter code-graph summary.</li>
+                    <li>The full sidebar layer catalogue, parsed straight from <code>map-layers.js</code> (<code>layer_catalog_parser.py</code>) &mdash; the same source of truth the sidebar itself renders from.</li>
+                    <li><code>controls_catalog.py</code> &mdash; a hand-curated catalogue of the map-rail controls, so the assistant can explain what a <em>control</em> does, not just a layer.</li>
+                    <li>This documentation page itself, walked and stripped of markup.</li>
+                </ul>
+
+                <h3 class="subsection-title">Grounded, agentic answers</h3>
+                <p>Every factual claim is grounded in retrieved context, never invented. If the up-front retrieval doesn&rsquo;t cover the question, the model can call <code>search_knowledge_base</code> itself for a second, differently-worded look &mdash; bounded to one hop per turn &mdash; before it&rsquo;s allowed to say it doesn&rsquo;t know. A block of <strong>LIVE MAP STATE</strong> (which layers are actually active, the current temporal step) is sent with every message, so &ldquo;what&rsquo;s on the map right now&rdquo; is answered from real ground truth, not a retrieval guess.</p>
+
+                <h3 class="subsection-title">Navigation &amp; live-data tools</h3>
+                <ul>
+                    <li><code>navigate_to</code> &mdash; opens the sidebar and highlights the layer / subcategory / category / control the instant it&rsquo;s called, no click needed. Turning a <strong>layer</strong> on or opening a <strong>control&rsquo;s</strong> own panel still waits for the user&rsquo;s explicit click &mdash; the only two actions gated behind confirmation.</li>
+                    <li><code>get_rainfall_report</code> / <code>get_heatwave_monitoring</code> &mdash; live-data tools that each wrap the SAME view NCOP&rsquo;s own map features already call (<code>NwfcRainfallReportAPIView</code> / <code>HeatwaveMonitoringView</code>), so the assistant can never disagree with what a real map click on the same feature would show.</li>
+                </ul>
+
+                <h3 class="subsection-title">Model picker &amp; narration</h3>
+                <p>A header dropdown (backed by <code>GET /api/assistant/models/</code>) switches between four live Groq models &mdash; <strong>GPT-OSS 120B</strong> (default), <strong>GPT-OSS 20B</strong>, <strong>Llama 3.3 70B</strong>, and <strong>Llama 3.1 8B Instant</strong> &mdash; persisted per-browser in <code>localStorage</code>. An optional narration toggle reads replies aloud via the same <code>window.speechSynthesis</code> mechanism Story Mode uses, and a small status dot reports whether the assistant is currently reachable.</p>
+
+                <div class="callout callout--info">
+                    <b>Not the same as GEE Chat.</b> The pre-existing <strong>GEE Chat</strong> rail button (<code>navigation-panel.js</code>) is pure keyword/synonym matching over the Earth&nbsp;Engine dataset catalogue, scoped narrowly to discovering GEE layers &mdash; it makes no LLM call. The NCOP Assistant is the only feature in NCOP that talks to Groq, and the two panels share no code or state.
+                </div>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/ncop-assistant.js</code> &mdash; the floating mascot, chat panel, model picker, narration, markdown rendering.</li>
+                    <li><code>project/ncop_internal/chat_engine.py</code> &mdash; lazy, process-level singletons: the Chroma client/collection, the embedding function, and a per-model cached <code>ChatGroq</code> handle.</li>
+                    <li><code>project/ncop_internal/chatbot.py</code> &mdash; the chat view: retrieval, system-prompt assembly, tool-calling loop, session-backed conversation history.</li>
+                    <li><code>project/ncop_internal/assistant_tools.py</code> &mdash; the live-data tool definitions and executors.</li>
+                    <li><code>project/ncop_internal/controls_catalog.py</code>, <code>project/ncop_internal/layer_catalog_parser.py</code> &mdash; the two non-doc knowledge sources.</li>
+                    <li><code>project/ncop_internal/management/commands/ingest_chat_knowledge.py</code> &mdash; the ingestion command.</li>
+                </ul>
             </section>
 
             <!-- ============================================================ -->
@@ -2457,6 +2539,23 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/weekly-outlook/</code></td><td>Weekly outlook.</td></tr>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/press-release-text/</code></td><td>Latest NWFC press-release text.</td></tr>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/max-temperatures/</code></td><td>Station-wise max-temperature records.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="subsection-title" style="margin-top: 32px;">NCOP Assistant &amp; Story Mode endpoints</h3>
+                <p>All three are NCOP-native (implemented directly in <code>ncop_internal/</code>, not a GCOP proxy). See <a href="#ncop-assistant">NCOP Assistant</a> and <a href="#story-mode">Story Mode</a>.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--blue">POST</span></td><td><code>/api/assistant/chat/</code></td><td>NCOP Assistant chat turn &mdash; RAG retrieval, navigate_to actions, live-data tools, session history.</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/api/assistant/models/</code></td><td>Model picker list, sourced from <code>chat_engine.SUPPORTED_MODELS</code>.</td></tr>
+                            <tr><td><span class="pill pill--blue">POST</span></td><td><code>/api/translate/</code></td><td>English&nbsp;&rarr;&nbsp;Urdu translation for the story-mode cards (local NLLB-200, never Groq).</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/monitor/daily-forecast-pro/</code></td><td>PMD provincial daily forecast &mdash; feeds the 7-Day Weather Outlook card. 30-min cache + 6&nbsp;h stale fallback.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/rainfall-report/</code></td><td>NWFC daily rainfall report &mdash; feeds Dynamic Weather Report Chapter&nbsp;1 and the assistant&rsquo;s <code>get_rainfall_report</code> tool. 4&nbsp;h cache + 24&nbsp;h stale fallback.</td></tr>
                         </tbody>
                     </table>
                 </div>

@@ -152,18 +152,12 @@ export class NcopAssistantControl {
   }
 
   // ---- DOM ------------------------------------------------------------------
+  // No rail-button entry point anymore — the standalone floating mascot
+  // (#renderMascot) is the sole way to open this panel; a second, static
+  // rail icon next to it was redundant.
   #render() {
     const mapEl = document.getElementById("map");
     if (!mapEl) return;
-
-    const wrap = document.createElement("div");
-    wrap.className = "custom-ncop-assistant-control";
-    wrap.innerHTML = `
-      <button id="ncopAssistantToggle" class="custom-ncop-assistant-btn" type="button" title="NCOP Assistant">
-        <div class="ncop-assistant-lottie-icon" id="ncopAssistantToggleIcon"></div>
-      </button>
-    `;
-    mapEl.appendChild(wrap);
 
     const panel = document.createElement("div");
     panel.id = "ncop-assistant-modal";
@@ -205,24 +199,6 @@ export class NcopAssistantControl {
 
     this.#messagesEl = panel.querySelector("#ncopAssistantMessages");
     try { window.lucide?.createIcons(); } catch (_) {}
-
-    // Animated bot icon — replaces the static Lucide glyph the rail button
-    // used before. Same open-source, zero-server-cost approach as the
-    // narration/model-picker features: a self-contained Lottie animation
-    // (frontend/src/assets/images/chatbot/chatbot_normall.json), rendered
-    // client-side via lottie-web (already a declared project dependency).
-    const toggleIconEl = document.getElementById("ncopAssistantToggleIcon");
-    if (toggleIconEl) {
-      try {
-        lottie.loadAnimation({
-          container: toggleIconEl,
-          renderer: "svg",
-          loop: true,
-          autoplay: true,
-          animationData: chatbotLottieData,
-        });
-      } catch (_) { /* animation is decorative — a failure here must never break the button itself */ }
-    }
   }
 
   // ---- Standalone floating mascot --------------------------------------------
@@ -295,18 +271,12 @@ export class NcopAssistantControl {
 
   // ---- Show / hide ------------------------------------------------------------
   #wireEvents() {
-    const toggle = document.getElementById("ncopAssistantToggle");
     const closeBtn = document.getElementById("ncopAssistantClose");
     const sendBtn = document.getElementById("ncopAssistantSend");
     const input = document.getElementById("ncopAssistantInput");
     const modelPicker = document.getElementById("ncopAssistantModelPicker");
     const muteBtn = document.getElementById("ncopAssistantMute");
 
-    toggle?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (this.#isVisible) this.hidePanel();
-      else this.showPanel();
-    });
     closeBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
       this.hidePanel();
@@ -416,20 +386,20 @@ export class NcopAssistantControl {
 
   showPanel() {
     const panel = document.getElementById("ncop-assistant-modal");
-    const btn = document.getElementById("ncopAssistantToggle");
+    const mascot = document.getElementById("ncopAssistantMascot");
     if (!panel) return;
     panel.style.display = "flex";
-    btn?.classList.add("active-ncop-assistant");
+    mascot?.classList.add("active-ncop-assistant");
     this.#isVisible = true;
     document.getElementById("ncopAssistantInput")?.focus();
   }
 
   hidePanel() {
     const panel = document.getElementById("ncop-assistant-modal");
-    const btn = document.getElementById("ncopAssistantToggle");
+    const mascot = document.getElementById("ncopAssistantMascot");
     if (!panel) return;
     panel.style.display = "none";
-    btn?.classList.remove("active-ncop-assistant");
+    mascot?.classList.remove("active-ncop-assistant");
     this.#isVisible = false;
     try { window.speechSynthesis?.cancel(); } catch (_) {} // narration shouldn't keep talking after the panel closes
   }

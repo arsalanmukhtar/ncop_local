@@ -5,43 +5,6 @@
    regress the existing GEE Data Assistant.
    ============================================================================ */
 
-.custom-ncop-assistant-control { display: contents; }
-
-/* Rail button — mirrors the gis-export/split-compare button baseline so
-   resting fills, hover transitions, and the active-panel highlight all
-   read identically to the neighbouring rail controls. Base geometry
-   (width/height/border-radius) comes from the shared `.rail-btn` class,
-   added automatically once dashboard.js's buildUnifiedRightRail() moves
-   this button into `.map-right-rail`. */
-.map-right-rail > .custom-ncop-assistant-btn {
-    background: var(--secondary-bg) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    color: var(--text-primary) !important;
-    cursor: pointer;
-}
-.map-right-rail > .custom-ncop-assistant-btn:hover:not(.active-ncop-assistant) {
-    background: var(--primary-bg) !important;
-}
-[data-theme="night"] .map-right-rail > .custom-ncop-assistant-btn {
-    background: var(--tertiary-bg) !important;
-    backdrop-filter: blur(12px) saturate(105%) !important;
-    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.15),
-        0 1px 2px rgba(0, 0, 0, 0.10),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-}
-[data-theme="night"] .map-right-rail > .custom-ncop-assistant-btn:hover:not(.active-ncop-assistant) {
-    background: var(--glass-highlight) !important;
-}
-.custom-ncop-assistant-btn.active-ncop-assistant {
-    background: var(--ndma-blue) !important;
-    border-color: var(--ndma-blue) !important;
-    color: #fff !important;
-    box-shadow: 0 0 12px var(--ndma-blue-glow, var(--ndma-blue)) !important;
-}
-
 /* Panel shell — display-toggled (style.display), matching #gee-chat-modal
    exactly, so dashboard.js's RAIL_PANEL_REGISTRY "display" kind and its
    MutationObserver-based mutual exclusion pick it up with no extra wiring. */
@@ -407,24 +370,16 @@ h6.ncop-assistant-md-h { font-size: 12.5px; color: var(--text-secondary); text-t
 }
 
 /* ============================================================================
-   ANIMATED BOT ICON (Lottie) — rail button + standalone floating mascot.
-   frontend/src/assets/images/chatbot/chatbot_normall.json is a flat
-   dark-body/light-accent duotone (#2c2c2c / #f0f8fa) tuned for a LIGHT
-   surface. The app's DEFAULT theme is dark-glass chrome, so it's inverted
-   there; [data-theme="night"] (this app's light-glass theme — see
+   ANIMATED BOT ICON (Lottie) — standalone floating mascot only. The rail
+   button reverted to a static Lucide glyph; the mascot already provides the
+   animated bot visual, so a second concurrent Lottie instance in the rail
+   was redundant. frontend/src/assets/images/chatbot/chatbot_normall.json is
+   a flat dark-body/light-accent duotone (#2c2c2c / #f0f8fa) tuned for a
+   LIGHT surface. The app's DEFAULT theme is dark-glass chrome, so it's
+   inverted there; [data-theme="night"] (this app's light-glass theme — see
    _theme-night.css) already matches the animation's native tuning, so the
-   filter is reset to none. Same logic both places it's used.
+   filter is reset to none.
    ============================================================================ */
-.ncop-assistant-lottie-icon {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-    overflow: hidden;
-    filter: invert(1);
-}
-[data-theme="night"] .ncop-assistant-lottie-icon {
-    filter: none;
-}
 
 /* Standalone floating mascot — a second, independent animation instance in
    Mapbox's own bottom-right controls corner, right above the scale bar
@@ -448,7 +403,8 @@ h6.ncop-assistant-md-h { font-size: 12.5px; color: var(--text-secondary); text-t
     cursor: pointer;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
-.ncop-assistant-mascot:hover {
+.ncop-assistant-mascot:hover,
+.ncop-assistant-mascot.active-ncop-assistant {
     transform: scale(1.06);
     border-color: var(--ndma-blue);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), 0 0 14px 3px var(--ndma-blue-glow);
