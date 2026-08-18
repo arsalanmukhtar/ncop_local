@@ -105,26 +105,42 @@ SYSTEM_PROMPT_HEADER = (
     "phrase those as already done, since they genuinely wait on the user's "
     "click.\n\n"
     "TOOLS — you have navigate_to plus live-data tools (currently "
-    "get_rainfall_report, get_heatwave_monitoring). navigate_to: call it "
-    "whenever the user asks where something is, wants to find/open/see a "
-    "specific layer, a whole CATEGORY of layers, or a control, or asks you "
-    "to show them something. Use target_type \"category\" (not \"control\") "
-    "for a group of layers (\"where are the air quality layers\") rather "
-    "than routing a category question to the generic Sidebar Menu control "
-    "— that control is only for genuinely generic \"how do I open the "
-    "sidebar\" questions. target_id MUST be an item_key/category_key/"
-    "frontend_id that literally appears in CONTEXT; never invent one, and "
-    "never call it for something not present in CONTEXT (say you couldn't "
-    "find it instead). ALWAYS pair it with the real description required "
-    "above, never a bare pointer. Data tools: call one when the user asks "
-    "about CURRENT/live conditions (today's rainfall totals, current "
-    "temperatures/heatwave alerts) rather than what a layer generally "
-    "shows — answer using ONLY the numbers a tool actually returns, never "
-    "invented ones; if it errors, say that data source is temporarily "
-    "unavailable rather than guessing a number. get_heatwave_monitoring "
-    "accepts an optional `city` parameter — pass it whenever the user "
-    "names a specific Pakistani city so you look that one up directly "
-    "instead of only the hottest cities overall."
+    "get_rainfall_report, get_heatwave_monitoring, get_pmd_daily_forecast, "
+    "get_ffd_bulletins, get_nwfc_weekly_outlook, get_weather_forecast — all "
+    "backed by the same live PMD/NWFC/FFD/Open-Meteo feeds the dashboard's "
+    "own Weather Report panel and heatwave charts already use). "
+    "navigate_to: call it whenever the user asks where something is, wants "
+    "to find/open/see a specific layer, a whole CATEGORY of layers, or a "
+    "control, or asks you to show them something. Use target_type "
+    "\"category\" (not \"control\") for a group of layers (\"where are the "
+    "air quality layers\") rather than routing a category question to the "
+    "generic Sidebar Menu control — that control is only for genuinely "
+    "generic \"how do I open the sidebar\" questions. target_id MUST be an "
+    "item_key/category_key/frontend_id that literally appears in CONTEXT; "
+    "never invent one, and never call it for something not present in "
+    "CONTEXT (say you couldn't find it instead). ALWAYS pair it with the "
+    "real description required above, never a bare pointer. Data tools: "
+    "call one when the user asks about CURRENT/live conditions, an "
+    "upcoming forecast, or published PMD/FFD/NWFC material rather than "
+    "what a layer generally shows — answer using ONLY the numbers/text a "
+    "tool actually returns, never invented ones; if a tool returns a "
+    "`pdf_url`/`url` field, share that link so the user can open the "
+    "source document itself; if a tool errors, say that data source is "
+    "temporarily unavailable rather than guessing. When a tool resolves a "
+    "SPECIFIC city, the app automatically flies the map camera there for "
+    "you — never say things like \"let me know if you'd like me to zoom "
+    "in\", it already happened. Which tool: get_rainfall_report = today's/"
+    "recent rainfall totals; get_heatwave_monitoring = a specific city's "
+    "(pass `city`) or the country's CURRENT/live temperature/heatwave "
+    "conditions only; get_weather_forecast = a specific city's (`city`, "
+    "required) MULTI-DAY (up to 16 days, `days` optional, default 5) "
+    "forecast — use this, not get_heatwave_monitoring, for any forward-"
+    "looking \"what will the weather be like\" question; get_pmd_daily_"
+    "forecast = today's provincial forecast text (pass `province` for one "
+    "region); get_nwfc_weekly_outlook = the published hazard outlook for "
+    "the COMING WEEK; get_ffd_bulletins = flood bulletins/advisories and "
+    "river/barrage flood-level warnings from the Flood Forecasting "
+    "Division."
 )
 
 # OpenAI-style tool schema (Groq's function-calling follows the same
@@ -577,6 +593,16 @@ class NcopAssistantChatView(APIView):
             for turn in history
         ]
 
+        # Populated below if a data tool resolves a single, unambiguous
+        # city (see assistant_tools.py's `map_location` field) — the
+        # camera move is decided in CODE from the tool's own result, not
+        # left to the model to separately remember to call navigate_to
+        # for a place name (which isn't even a valid navigate_to target
+        # type). First one found wins; a turn that touches two different
+        # cities is rare enough that flying to the first is a reasonable
+        # call rather than adding UI for picking between them.
+        map_location_action = None
+
         try:
             llm_messages = [SystemMessage(_build_system_prompt()), *history_messages, HumanMessage(message)]
             # bind_tools() is a lightweight wrapper (no network call) — cheap
@@ -626,6 +652,12 @@ class NcopAssistantChatView(APIView):
                 for tc in data_calls:
                     executor = TOOL_EXECUTORS[tc["name"]]
                     result = executor(tc.get("args") or {})
+                    loc = result.get("map_location") if isinstance(result, dict) else None
+                    if loc and map_location_action is None and isinstance(loc.get("lat"), (int, float)) and isinstance(loc.get("lon"), (int, float)):
+                        map_location_action = {
+                            "type": "fly_to", "lat": loc["lat"], "lon": loc["lon"],
+                            "label": loc.get("name") or "location",
+                        }
                     tool_messages.append(ToolMessage(content=json.dumps(result), tool_call_id=tc["id"]))
                 follow_up_messages = [*llm_messages, response, *tool_messages]
                 response = chat_engine.get_llm(requested_model).invoke(follow_up_messages)  # no tools bound — force a plain text synthesis, not another round of calls
@@ -656,6 +688,14 @@ class NcopAssistantChatView(APIView):
                 or _fallback_description(actions[0], chunks)
                 or f"{actions[0]['label']}."
             )
+
+        # Appended AFTER the navigate_to-specific empty-reply fallback
+        # above (fly_to actions don't carry target_type/target_id, so
+        # they must never be mistaken for one there) — a data tool's
+        # follow-up call always forces real synthesized text anyway, so
+        # `reply` is essentially never empty for a fly_to-only turn.
+        if map_location_action:
+            actions = [*actions, map_location_action]
 
         # Store the plain text turn in history (not the tool-call payload —
         # actions are re-derived fresh from next turn's own retrieval, never

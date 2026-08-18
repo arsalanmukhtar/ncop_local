@@ -137,6 +137,7 @@ export class NcopAssistantControl {
   #messagesEl = null;
   #selectedModel = "";
   #ttsEnabled = false;
+  #typingAnimation = null;
 
   constructor(map) {
     this.#map = map;
@@ -364,10 +365,15 @@ export class NcopAssistantControl {
     btn.setAttribute("title", label);
   }
 
-  #speak(text) {
+  // `onBoundary(fraction)`/`onDone()` are optional — passed by
+  // #animateBubbleTypingWithSpeech to sync the typing reveal to this
+  // exact utterance. Every exit path (nothing to say, synth unavailable,
+  // muted, an exception) still calls onDone so a caller relying on it can
+  // never be left hanging.
+  #speak(text, { onBoundary, onDone } = {}) {
     try {
       const ss = window.speechSynthesis;
-      if (!ss || !this.#ttsEnabled || !text) return;
+      if (!ss || !this.#ttsEnabled || !text) { onDone?.(); return; }
       ss.cancel(); // never let two replies talk over each other
       const speech = String(text)
         .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -376,12 +382,22 @@ export class NcopAssistantControl {
         .replace(/\n+/g, ". ")
         .replace(/\s+/g, " ")
         .trim();
-      if (!speech) return;
+      if (!speech) { onDone?.(); return; }
       const utter = new SpeechSynthesisUtterance(speech);
       utter.rate = 1;
       utter.lang = "en-US";
+      if (onBoundary) {
+        utter.onboundary = (e) => {
+          const idx = typeof e.charIndex === "number" ? e.charIndex : speech.length;
+          onBoundary(Math.min(1, Math.max(0, idx / speech.length)));
+        };
+      }
+      utter.onend = () => onDone?.();
+      utter.onerror = () => onDone?.();
       ss.speak(utter);
-    } catch (_) { /* narration is a nicety, never blocks the chat */ }
+    } catch (_) {
+      onDone?.(); // narration is a nicety, never blocks the chat
+    }
   }
 
   showPanel() {
@@ -425,7 +441,17 @@ export class NcopAssistantControl {
     const bubble = document.createElement("div");
     bubble.className = "ncop-assistant-bubble";
     if (role === "assistant") {
-      bubble.innerHTML = _renderMarkdown(text);
+      const html = _renderMarkdown(text);
+      // When narration will actually play, the reveal is driven BY the
+      // speech itself (see #animateBubbleTypingWithSpeech) rather than a
+      // separate guessed duration, so the two can never visibly drift
+      // apart. #speak is called from inside that path — never separately
+      // — so there's exactly one place narration ever starts from.
+      if (speak && this.#ttsEnabled && window.speechSynthesis) {
+        this.#animateBubbleTypingWithSpeech(bubble, html, text);
+      } else {
+        this.#animateBubbleTyping(bubble, html);
+      }
     } else {
       bubble.textContent = text;
     }
@@ -435,15 +461,168 @@ export class NcopAssistantControl {
     this.#messagesEl.scrollTop = this.#messagesEl.scrollHeight;
     try { window.lucide?.createIcons(); } catch (_) {}
 
-    if (role === "assistant" && speak) this.#speak(text);
-
     // Navigation is authoritative, not opt-in — fires the instant the
     // message lands, no click required (see the header comment for why).
     if (Array.isArray(actions)) {
       for (const action of actions) {
         if (action.type === "navigate_to") this.#autoNavigate(action);
+        else if (action.type === "fly_to") this.#flyToLocation(action);
       }
     }
+  }
+
+  // A data tool (get_heatwave_monitoring/get_weather_forecast) resolved a
+  // single, unambiguous city — chatbot.py decided this in code from that
+  // tool's own coordinates, not something the model had to separately
+  // remember to request, so it's authoritative the same way navigate_to
+  // is: no click needed. City-scale zoom (not a street-level one) since
+  // this is "which part of the country", not "which building".
+  #flyToLocation(action) {
+    if (!this.#map || typeof action.lat !== "number" || typeof action.lon !== "number") return;
+    try {
+      this.#map.flyTo({
+        center: [action.lon, action.lat],
+        zoom: 9,
+        duration: 2000,
+        essential: true,
+      });
+    } catch (_) { /* camera move is a nicety, never blocks the chat */ }
+  }
+
+  // ---- Typing animation (assistant replies) ----------------------------
+  // A modern-chat-style progressive reveal, built on top of the ALREADY-
+  // rendered markdown HTML rather than raw text — re-running
+  // _renderMarkdown on every frame would re-parse the whole message
+  // dozens of times a second for no visual benefit, and revealing
+  // not-yet-complete markdown syntax (a half-typed "**bold" or a half-
+  // built <table>) looks broken rather than charming. Instead the HTML
+  // is parsed exactly once, its text nodes are walked in document order,
+  // and how much of each node's text is visible grows over time — table/
+  // list/heading STRUCTURE is complete and stable from the very first
+  // frame; only the letters fill in.
+
+  // Pure setup — parses `html` into `bubble`, empties its text nodes, and
+  // returns a reveal(count) closure plus the total character count. No
+  // timing of its own; shared by both variants below.
+  #prepareTypingReveal(bubble, html) {
+    bubble.innerHTML = html;
+    const walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    let totalChars = 0;
+    let node;
+    while ((node = walker.nextNode())) {
+      const full = node.nodeValue;
+      if (full) {
+        textNodes.push({ node, full });
+        totalChars += full.length;
+      }
+    }
+    for (const { node: n } of textNodes) n.nodeValue = "";
+    const reveal = (count) => {
+      let remaining = count;
+      for (const { node: n, full } of textNodes) {
+        if (remaining >= full.length) { n.nodeValue = full; remaining -= full.length; }
+        else { n.nodeValue = remaining > 0 ? full.slice(0, remaining) : ""; remaining = 0; }
+      }
+    };
+    return { reveal, totalChars };
+  }
+
+  // Registers `state` as the one active typing animation, cancelling and
+  // instantly completing whatever was still running before it — so
+  // replies can never finish out of order or leave a stray timer/RAF
+  // loop behind when a new message arrives mid-animation.
+  #startTyping(state) {
+    if (this.#typingAnimation) {
+      this.#typingAnimation.cancelled = true;
+      this.#typingAnimation.finish();
+    }
+    this.#typingAnimation = state;
+  }
+
+  // Fixed-duration reveal — used whenever narration is off or
+  // unavailable. A deliberately unhurried, legible typewriter pace
+  // (~18 characters/second) rather than a near-instant flash, bounded so
+  // a very long reply still finishes in a reasonable time instead of
+  // crawling for a minute.
+  #animateBubbleTyping(bubble, html) {
+    const { reveal, totalChars } = this.#prepareTypingReveal(bubble, html);
+    if (!totalChars) return; // nothing to type (e.g. an image-only reply) — HTML is already in place
+
+    const durationMs = Math.min(6000, Math.max(600, totalChars * 55));
+    const startedAt = performance.now();
+    const state = { cancelled: false, finish: null };
+    state.finish = () => {
+      state.cancelled = true;
+      reveal(totalChars);
+      if (this.#typingAnimation === state) this.#typingAnimation = null;
+    };
+    this.#startTyping(state);
+
+    const step = (now) => {
+      if (state.cancelled) return;
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      reveal(Math.round(totalChars * progress));
+      if (this.#messagesEl) this.#messagesEl.scrollTop = this.#messagesEl.scrollHeight;
+      if (progress < 1) requestAnimationFrame(step);
+      else state.finish();
+    };
+    requestAnimationFrame(step);
+  }
+
+  // TTS-synced reveal — text fills in step with the ACTUAL spoken audio
+  // (SpeechSynthesisUtterance's onboundary event reports how far the
+  // voice has progressed through the utterance) instead of a guessed
+  // duration, so the two can never visibly drift apart. `rawText` (not
+  // the rendered HTML) is what's actually spoken — see #speak for the
+  // markdown-stripping that produces its char-index space. Falls back to
+  // the same fixed, unhurried pace as #animateBubbleTyping if no
+  // boundary event arrives shortly after speech starts (some engines/
+  // voices only report per-sentence boundaries, or none at all), so the
+  // bubble is never left empty for the length of the whole reply.
+  #animateBubbleTypingWithSpeech(bubble, html, rawText) {
+    const { reveal, totalChars } = this.#prepareTypingReveal(bubble, html);
+    if (!totalChars) { this.#speak(rawText); return; }
+
+    const state = { cancelled: false, finish: null, usingFallback: false };
+    state.finish = () => {
+      state.cancelled = true;
+      reveal(totalChars);
+      if (this.#typingAnimation === state) this.#typingAnimation = null;
+    };
+    this.#startTyping(state);
+
+    const startFallback = () => {
+      if (state.cancelled || state.usingFallback) return;
+      state.usingFallback = true;
+      const durationMs = Math.min(6000, Math.max(600, totalChars * 55));
+      const startedAt = performance.now();
+      const step = (now) => {
+        if (state.cancelled) return;
+        const progress = Math.min(1, (now - startedAt) / durationMs);
+        reveal(Math.round(totalChars * progress));
+        if (this.#messagesEl) this.#messagesEl.scrollTop = this.#messagesEl.scrollHeight;
+        if (progress < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+
+    let sawBoundary = false;
+    const graceTimer = setTimeout(() => { if (!sawBoundary) startFallback(); }, 400);
+
+    this.#speak(rawText, {
+      onBoundary: (fraction) => {
+        if (state.cancelled || state.usingFallback) return;
+        sawBoundary = true;
+        clearTimeout(graceTimer);
+        reveal(Math.round(totalChars * fraction));
+        if (this.#messagesEl) this.#messagesEl.scrollTop = this.#messagesEl.scrollHeight;
+      },
+      onDone: () => {
+        clearTimeout(graceTimer);
+        if (!state.cancelled) state.finish();
+      },
+    });
   }
 
   // ---- Navigation actions (Phase 2) ------------------------------------------
