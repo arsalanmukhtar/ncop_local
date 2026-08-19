@@ -102,37 +102,58 @@ def get_collection():
     return _collection
 
 
-def get_llm(model_name=None):
-    """Lazy, per-model singleton — Groq via langchain-groq's ChatGroq, which
-    wraps the same Groq Cloud chat-completions endpoint the raw `groq` SDK
-    hits (confirmed live: identical `api.groq.com/openai/v1/chat/
-    completions` calls either way). `model_name` selects from
+def has_fallback_key():
+    """Whether a second Groq account's key (GROQ_API_KEY_FALLBACK) is
+    configured — chatbot.py's retry logic only attempts the key-switch
+    when this is true, so an unconfigured fallback just surfaces the
+    primary key's 429 as before, unchanged behavior."""
+    return bool(getattr(settings, "GROQ_API_KEY_FALLBACK", ""))
+
+
+def get_llm(model_name=None, key_index=0):
+    """Lazy, per-(model, key) singleton — Groq via langchain-groq's
+    ChatGroq, which wraps the same Groq Cloud chat-completions endpoint the
+    raw `groq` SDK hits (confirmed live: identical `api.groq.com/openai/v1/
+    chat/completions` calls either way). `model_name` selects from
     SUPPORTED_MODELS (the chat panel's model picker); an unrecognized or
-    omitted value falls back to DEFAULT_MODEL, never errors — each distinct
-    model gets its OWN cached ChatGroq instance (a worker process ends up
-    holding at most len(SUPPORTED_MODELS) of these, all lightweight client
-    handles, not model weights). `top_p`/`max_completion_tokens` aren't
-    declared ChatGroq fields, but its own `build_extra` validator routes any
-    unrecognized constructor kwarg into `model_kwargs`, which
-    `_default_params()` then merges straight into the request body sent to
-    Groq — passing them explicitly (rather than letting build_extra
-    silently absorb them with a warning) sends the exact params each
-    model's SUPPORTED_MODELS entry declares. Bounded timeout + a single
-    retry, matching the `TIMEOUT` convention already used on every
-    external-API view in views.py (e.g. NwfcRainfallReportAPIView), so a
-    hung upstream call can't pin a request/worker indefinitely."""
+    omitted value falls back to DEFAULT_MODEL, never errors.
+
+    `key_index`: 0 (default) uses GROQ_API_KEY; 1 switches to
+    GROQ_API_KEY_FALLBACK — a second Groq account's key, used automatically
+    by chatbot.py's `_invoke_with_tool_retry` when the primary key hits its
+    daily token-per-day cap (a real 429 observed live: "Rate limit reached
+    ... on tokens per day (TPD)"). Falls back to key_index=0's cached
+    instance if no fallback key is configured, so callers never need to
+    check `has_fallback_key()` themselves before calling this.
+
+    Each distinct (model, key) pair gets its OWN cached ChatGroq instance
+    (a worker process ends up holding at most 2x len(SUPPORTED_MODELS) of
+    these, all lightweight client handles, not model weights). `top_p`/
+    `max_completion_tokens` aren't declared ChatGroq fields, but its own
+    `build_extra` validator routes any unrecognized constructor kwarg into
+    `model_kwargs`, which `_default_params()` then merges straight into the
+    request body sent to Groq — passing them explicitly (rather than
+    letting build_extra silently absorb them with a warning) sends the
+    exact params each model's SUPPORTED_MODELS entry declares. Bounded
+    timeout + a single retry, matching the `TIMEOUT` convention already
+    used on every external-API view in views.py (e.g.
+    NwfcRainfallReportAPIView), so a hung upstream call can't pin a
+    request/worker indefinitely."""
     if model_name not in SUPPORTED_MODELS:
         model_name = DEFAULT_MODEL
-    if model_name not in _llm_cache:
+    use_fallback = key_index == 1 and has_fallback_key()
+    cache_key = (model_name, 1 if use_fallback else 0)
+    if cache_key not in _llm_cache:
         from langchain_groq import ChatGroq
-        _llm_cache[model_name] = ChatGroq(
+        api_key = settings.GROQ_API_KEY_FALLBACK if use_fallback else settings.GROQ_API_KEY
+        _llm_cache[cache_key] = ChatGroq(
             model=model_name,
-            api_key=settings.GROQ_API_KEY,
+            api_key=api_key,
             timeout=LLM_TIMEOUT_SECONDS,
             max_retries=1,
             **SUPPORTED_MODELS[model_name]["kwargs"],
         )
-    return _llm_cache[model_name]
+    return _llm_cache[cache_key]
 
 
 def retrieve(query, top_k=5):

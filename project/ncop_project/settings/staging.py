@@ -113,7 +113,7 @@ LOGGING = {
 # ---------------------------------------------------------------------------
 # Startup banner — visible on `waitress-serve` spin-up.
 # ---------------------------------------------------------------------------
-print("✅ NCOP Staging initialized (dev-arsalan replica on Waitress)")
+print("[OK] NCOP Staging initialized (dev-arsalan replica on Waitress)")
 print(f"   Debug: {DEBUG}")
 print(f"   Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"   Vite Dev Mode: {DJANGO_VITE['default']['dev_mode']}")

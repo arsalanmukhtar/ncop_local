@@ -40,6 +40,21 @@ const WELCOME_MESSAGE =
   "👋 **Hi! I'm the NCOP Assistant.**\nAsk me about NCOP itself, what a layer shows, " +
   "how a part of the dashboard works, or where to find something.";
 
+// Quick-prompt shortcuts — shown only at the start of a conversation (see
+// #syncQuickPrompts), not persistently, so they help a first-time user
+// discover what the live-data tools can do without permanently eating
+// vertical space in an already-compact panel once a real conversation is
+// underway. Each `prompt` is sent through the exact same #handleSend path
+// a typed message would take — no separate code path, so these can never
+// drift from normal chat behaviour.
+const QUICK_PROMPTS = [
+  { icon: "🌦️", label: "Forecast", prompt: "What's the weather forecast for Islamabad over the next few days?" },
+  { icon: "🌫️", label: "Air Quality", prompt: "What is the current air quality in Lahore, and how does it look this week?" },
+  { icon: "🌊", label: "Flood Status", prompt: "What is the current flood situation and river levels nationwide?" },
+  { icon: "🌧️", label: "Rainfall", prompt: "What's today's rainfall report?" },
+  { icon: "📰", label: "Advisories", prompt: "What are the latest PMD press releases?" },
+];
+
 // Narration icons — identical markup to story-provincial-forecast.js's own
 // .pf-mute button (same SVGs, same is-muted/aria-label convention), reused
 // here so the assistant panel's narration control reads as the same
@@ -67,12 +82,82 @@ function _renderInlineMarkdown(escapedText) {
     .replace(/`([^`]+?)`/g, "<code>$1</code>");
 }
 
+// FFD flood-status colors — kept in exact sync with the map's own circle
+// color expression + dynamic legend for the FFD Data layer (see
+// map-layers.js's "circle-color" match expression and `dynamicLegend`
+// entries), so a status mentioned in chat always matches what the marker
+// on the map looks like. Keys are normalized (lowercased, underscores ->
+// spaces) so it matches GCOP's "LOW"/"Low"/"VERY_HIGH" casing variants.
+const FFD_STATUS_COLORS = {
+  "normal": "#28a745",
+  "low": "#17a2b8",
+  "medium": "#ffc107",
+  "high": "#fd7e14",
+  "very high": "#dc3545",
+  "ex high": "#6f42c1",
+  "exceptionally high": "#6f42c1",
+};
+
+// AQI category colors — kept in exact sync with the map's own WAQI popup
+// badges (layer-attribute-popup.js's waqiAqiBin breakpoints + _popup.css's
+// --popup-aqi-* variables) and assistant_tools.py's `_aqi_bucket` (same
+// breakpoints, same label strings), so a category mentioned in chat always
+// matches the color a station popup on the map would show.
+const AQI_CATEGORY_COLORS = {
+  "good": "#22c55e",
+  "moderate": "#eab308",
+  "unhealthy for sensitive groups": "#f97316",
+  "unhealthy": "#dc2626",
+  "very unhealthy": "#7c3aed",
+  "hazardous": "#7f1d1d",
+};
+
+function _statusKey(label) {
+  return String(label ?? "").trim().toLowerCase().replace(/_/g, " ").replace(/\s+/g, " ");
+}
+
+function _statusBadgeHtml(label) {
+  const key = _statusKey(label);
+  const color = FFD_STATUS_COLORS[key] || AQI_CATEGORY_COLORS[key];
+  if (!color) return null;
+  const niceLabel = String(label).trim().replace(/_/g, " ");
+  return `<span class="ncop-status-badge"><span class="ncop-status-dot" style="background:${color}"></span>${_escapeHtml(niceLabel)}</span>`;
+}
+
+// Applied to already-escaped raw text (before inline-markdown/`**bold**`
+// parsing) so it works whether the model wrote the status as a bare word
+// or wrapped it in **bold** — only fires right after the literal word
+// "status" so ordinary prose ("high winds", "low pressure") is never
+// mistaken for a station's flood status.
+const _STATUS_INLINE_RE = /\b(status\**\s*[:\-]?\s*\**)(normal|low|medium|high|very[ _]high|ex(?:ceptionally)?[ _]high)\b/gi;
+// AQI categories are usually parenthesized after the number ("129
+// (Unhealthy for Sensitive Groups)") rather than following a fixed
+// keyword, so this anchors on the parens instead — "good"/"moderate" as
+// bare prose words are common enough that matching them unanchored would
+// mislabel ordinary sentences, but nobody parenthesizes those words for
+// any other reason in this app's replies.
+const _AQI_INLINE_RE = /\((good|moderate|unhealthy for sensitive groups|unhealthy|very unhealthy|hazardous)\)/gi;
+
+function _applyStatusBadgesInline(text) {
+  return text
+    .replace(_STATUS_INLINE_RE, (match, prefix, statusWord) => {
+      const badge = _statusBadgeHtml(statusWord);
+      return badge ? `${prefix}${badge}` : match;
+    })
+    .replace(_AQI_INLINE_RE, (match, category) => {
+      const badge = _statusBadgeHtml(category);
+      return badge ? `(${badge})` : match;
+    });
+}
+
 function _renderMarkdownTable(lines) {
   const rows = lines.map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()));
   const [header, sep, ...body] = rows;
   if (!sep || !/^:?-+:?$/.test(sep[0] || "")) return null; // not actually a table separator row
   const th = header.map((c) => `<th>${_renderInlineMarkdown(c)}</th>`).join("");
-  const trs = body.map((r) => `<tr>${r.map((c) => `<td>${_renderInlineMarkdown(c)}</td>`).join("")}</tr>`).join("");
+  const trs = body
+    .map((r) => `<tr>${r.map((c) => `<td>${_statusBadgeHtml(c) ?? _renderInlineMarkdown(_applyStatusBadgesInline(c))}</td>`).join("")}</tr>`)
+    .join("");
   return `<table class="ncop-assistant-table"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
 }
 
@@ -103,7 +188,7 @@ function _renderMarkdown(rawText) {
     if (/^\s*[-•]\s+/.test(line)) {
       const items = [];
       while (i < lines.length && /^\s*[-•]\s+/.test(lines[i])) {
-        items.push(`<li>${_renderInlineMarkdown(lines[i].replace(/^\s*[-•]\s+/, ""))}</li>`);
+        items.push(`<li>${_renderInlineMarkdown(_applyStatusBadgesInline(lines[i].replace(/^\s*[-•]\s+/, "")))}</li>`);
         i++;
       }
       htmlBlocks.push(`<ul class="ncop-assistant-md-list">${items.join("")}</ul>`);
@@ -113,7 +198,7 @@ function _renderMarkdown(rawText) {
     if (/^\s*\d+[.)]\s+/.test(line)) {
       const items = [];
       while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        items.push(`<li>${_renderInlineMarkdown(lines[i].replace(/^\s*\d+[.)]\s+/, ""))}</li>`);
+        items.push(`<li>${_renderInlineMarkdown(_applyStatusBadgesInline(lines[i].replace(/^\s*\d+[.)]\s+/, "")))}</li>`);
         i++;
       }
       htmlBlocks.push(`<ol class="ncop-assistant-md-list">${items.join("")}</ol>`);
@@ -125,7 +210,7 @@ function _renderMarkdown(rawText) {
       paraLines.push(lines[i]);
       i++;
     }
-    htmlBlocks.push(`<p class="ncop-assistant-md-p">${_renderInlineMarkdown(paraLines.join("\n")).replace(/\n/g, "<br>")}</p>`);
+    htmlBlocks.push(`<p class="ncop-assistant-md-p">${_renderInlineMarkdown(_applyStatusBadgesInline(paraLines.join("\n"))).replace(/\n/g, "<br>")}</p>`);
   }
   return htmlBlocks.join("");
 }
@@ -135,6 +220,7 @@ export class NcopAssistantControl {
   #isVisible = false;
   #busy = false;
   #messagesEl = null;
+  #quickPromptsEl = null;
   #selectedModel = "";
   #ttsEnabled = false;
   #typingAnimation = null;
@@ -183,6 +269,13 @@ export class NcopAssistantControl {
         </div>
       </div>
       <div class="ncop-assistant-messages" id="ncopAssistantMessages"></div>
+      <div class="ncop-assistant-quick-prompts" id="ncopAssistantQuickPrompts">
+        ${QUICK_PROMPTS.map((qp, i) => `
+          <button type="button" class="ncop-assistant-quick-prompt" data-quick-prompt-index="${i}" title="${_escapeHtml(qp.prompt)}">
+            <span class="ncop-assistant-quick-prompt-icon">${qp.icon}</span>${_escapeHtml(qp.label)}
+          </button>
+        `).join("")}
+      </div>
       <div class="ncop-assistant-input-wrapper">
         <input type="text"
                id="ncopAssistantInput"
@@ -199,6 +292,13 @@ export class NcopAssistantControl {
     mapEl.appendChild(panel);
 
     this.#messagesEl = panel.querySelector("#ncopAssistantMessages");
+    this.#quickPromptsEl = panel.querySelector("#ncopAssistantQuickPrompts");
+    this.#quickPromptsEl?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".ncop-assistant-quick-prompt");
+      if (!btn) return;
+      const qp = QUICK_PROMPTS[Number(btn.dataset.quickPromptIndex)];
+      if (qp) this.#sendText(qp.prompt);
+    });
     try { window.lucide?.createIcons(); } catch (_) {}
   }
 
@@ -831,11 +931,27 @@ export class NcopAssistantControl {
     return { active_layers: activeLayers, temporal };
   }
 
+  // Fills the input with `text` and sends it through the exact same path
+  // a typed message + Enter/Send click would take — used by the quick-
+  // prompt buttons (see QUICK_PROMPTS) so they can never drift from
+  // normal send behaviour.
+  #sendText(text) {
+    const input = document.getElementById("ncopAssistantInput");
+    if (!input) return;
+    input.value = text;
+    this.#handleSend();
+  }
+
   async #handleSend() {
     if (this.#busy) return;
     const input = document.getElementById("ncopAssistantInput");
     const message = input?.value.trim();
     if (!message) return;
+
+    // Quick prompts are a first-conversation affordance only — once a real
+    // exchange starts, they'd just eat vertical space in an already-
+    // compact panel for no further benefit.
+    if (this.#quickPromptsEl) this.#quickPromptsEl.style.display = "none";
 
     this.#addMessage("user", message);
     input.value = "";

@@ -51,7 +51,7 @@ def _strip_html(text):
 _GCOP_TIMEOUT = 15  # matches NwfcRainfallReportAPIView's own TIMEOUT for the same host
 
 
-def _run_gcop_get(path):
+def _run_gcop_get(path, retries=2):
     """GET `{GCOP_BASE_URL}{path}` server-side — same GCOP host/paths the
     frontend already calls directly (see gcop-api-cache.js), reusing
     NwfcRainfallReportAPIView's already-proven `_RAINFALL_GCOP_BASE_URL`
@@ -59,15 +59,57 @@ def _run_gcop_get(path):
     parsed JSON body, or None on any failure (timeout, unreachable host,
     non-JSON response) — GCOP is a separate live system this dev
     environment may not always reach, so every caller must degrade
-    gracefully, same convention as `_run_view_get`."""
+    gracefully, same convention as `_run_view_get`.
+
+    GCOP is known to blip transiently (see gcop-api-cache.js's own
+    retry-with-backoff on the frontend); a single failed attempt here
+    used to surface as a hard "unavailable" even when the map's own
+    client-side retries succeeded moments later, so this retries a
+    couple of times with a short backoff before giving up."""
+    import time
+    import requests
+    from .views import _RAINFALL_GCOP_BASE_URL
+    url = f"{_RAINFALL_GCOP_BASE_URL}{path}"
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, timeout=_GCOP_TIMEOUT)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last_exc = e
+            if attempt < retries:
+                time.sleep(0.6 * (attempt + 1))
+    logger.exception("assistant_tools: GCOP GET %s failed after %d attempt(s)", path, retries + 1, exc_info=last_exc)
+    return None
+
+
+_WEATHER_GOV_PK_TIMEOUT = 15
+
+
+def _cached_html_fetch(cache_key, ttl, url):
+    """GET a weather.gov.pk HTML page, cached via Django's cache framework
+    (same LocMemCache every other in-process cache in this app already
+    uses — no new infra). These two tools are the only ones in this module
+    that scrape a page rather than call a JSON API, so unlike the GCOP/
+    Open-Meteo tools (already cheap, already cached upstream or trivially
+    cheap to re-fetch) they're the ones actually worth NOT re-fetching on
+    every single chat message. Returns the HTML text, or None on failure —
+    never raises, same degrade-gracefully contract as every other fetch
+    helper here."""
+    from django.core.cache import cache
+    hit = cache.get(cache_key)
+    if hit is not None:
+        return hit
     try:
         import requests
-        from .views import _RAINFALL_GCOP_BASE_URL
-        r = requests.get(f"{_RAINFALL_GCOP_BASE_URL}{path}", timeout=_GCOP_TIMEOUT)
+        r = requests.get(url, timeout=_WEATHER_GOV_PK_TIMEOUT)
         r.raise_for_status()
-        return r.json()
+        html = r.text
+        cache.set(cache_key, html, ttl)
+        return html
     except Exception:
-        logger.exception("assistant_tools: GCOP GET %s failed", path)
+        logger.exception("assistant_tools: fetch failed for %s", url)
         return None
 
 GET_RAINFALL_REPORT_TOOL = {
@@ -192,6 +234,156 @@ GET_WEATHER_FORECAST_TOOL = {
     },
 }
 
+GET_AIR_QUALITY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_air_quality",
+        "description": (
+            "Fetch current air quality and a multi-day (up to 5-day) AQI "
+            "outlook for a specific Pakistani city — US AQI plus PM2.5, "
+            "PM10, ozone, NO2, SO2, and CO. Use this for ANY question about "
+            "air quality, pollution, smog, or AQI for a city, whether "
+            "asking about right now or the coming days — this is a live "
+            "data lookup, not a description of the WAQI-Stations/CAMS map "
+            "layers (mention those too if relevant, but always answer the "
+            "actual numbers via this tool first)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "A specific Pakistani city name (e.g. 'Lahore'). Required.",
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "How many days ahead to include in the outlook (1-5). Defaults to 5.",
+                },
+            },
+            "required": ["city"],
+        },
+    },
+}
+
+GET_SEASONAL_FORECAST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_seasonal_forecast",
+        "description": (
+            "Fetch a longer-range seasonal outlook (weekly mean temperature "
+            "trend, several months ahead) for a specific Pakistani city. Use "
+            "this for questions about the outlook over the coming MONTHS/"
+            "SEASON — clearly beyond the ~2-week horizon of "
+            "get_weather_forecast — e.g. 'how will the weather trend over "
+            "the next few months in Karachi'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "A specific Pakistani city name (e.g. 'Karachi'). Required.",
+                },
+                "weeks": {
+                    "type": "integer",
+                    "description": "How many weeks ahead to include (1-27, ~6 months max). Defaults to 12.",
+                },
+            },
+            "required": ["city"],
+        },
+    },
+}
+
+GET_CLIMATE_OUTLOOK_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_climate_outlook",
+        "description": (
+            "Fetch a multi-year climate projection (yearly mean/max "
+            "temperature and total precipitation, ~5 years ahead) for a "
+            "specific Pakistani city — a long-range CLIMATE trend, not a "
+            "weather forecast. Use this only for genuinely long-horizon "
+            "questions ('how is the climate expected to change', 'multi-"
+            "year outlook'), never for a normal forecast question."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "A specific Pakistani city name. Required.",
+                },
+            },
+            "required": ["city"],
+        },
+    },
+}
+
+GET_PAKISTAN_CLIMATE_REPORTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_pakistan_climate_reports",
+        "description": (
+            "List PMD's official published yearly \"Pakistan Climate\" "
+            "outlook report PDFs (weather.gov.pk/cdpc/pakistan-climate) — "
+            "PMD's own authored national climate summary for each year. Use "
+            "this when the user asks for PMD's official climate report/"
+            "publication, as distinct from a live Open-Meteo forecast/"
+            "projection (get_seasonal_forecast / get_climate_outlook)."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+GET_NWFC_PRESS_RELEASES_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_nwfc_press_releases",
+        "description": (
+            "Fetch PMD/NWFC's most recent official press releases (weather "
+            "advisories/warnings such as rain-wind, heat wave, cold wave, "
+            "smog, tsunami — weather.gov.pk/nwfc/all-press-releases). Use "
+            "this when the user asks about recent PMD press releases, "
+            "official advisories/warnings, or 'what has PMD announced "
+            "recently'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "description": "How many recent releases to return (1-6). Defaults to 6.",
+                },
+            },
+        },
+    },
+}
+
+GET_FFD_WATERLEVELS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_ffd_waterlevels",
+        "description": (
+            "Fetch live river/barrage gauge readings from the Flood "
+            "Forecasting Division — current water level and flood status "
+            "per station nationwide (the same live points the FFD Data map "
+            "layer shows). Use this for ANY question about current flood "
+            "conditions, river levels, or a specific barrage/station's "
+            "status — pairs well with get_ffd_bulletins for the narrative "
+            "advisory text."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "station": {
+                    "type": "string",
+                    "description": "A specific station/barrage/river name to filter to (e.g. 'Tarbela'). Omit to get all stations currently at an elevated/flood status, or the first several if none are elevated.",
+                },
+            },
+        },
+    },
+}
+
 ALL_TOOLS = [
     GET_RAINFALL_REPORT_TOOL,
     GET_HEATWAVE_MONITORING_TOOL,
@@ -199,6 +391,12 @@ ALL_TOOLS = [
     GET_FFD_BULLETINS_TOOL,
     GET_NWFC_WEEKLY_OUTLOOK_TOOL,
     GET_WEATHER_FORECAST_TOOL,
+    GET_AIR_QUALITY_TOOL,
+    GET_SEASONAL_FORECAST_TOOL,
+    GET_CLIMATE_OUTLOOK_TOOL,
+    GET_PAKISTAN_CLIMATE_REPORTS_TOOL,
+    GET_NWFC_PRESS_RELEASES_TOOL,
+    GET_FFD_WATERLEVELS_TOOL,
 ]
 DATA_TOOL_NAMES = {
     "get_rainfall_report",
@@ -207,6 +405,12 @@ DATA_TOOL_NAMES = {
     "get_ffd_bulletins",
     "get_nwfc_weekly_outlook",
     "get_weather_forecast",
+    "get_air_quality",
+    "get_seasonal_forecast",
+    "get_climate_outlook",
+    "get_pakistan_climate_reports",
+    "get_nwfc_press_releases",
+    "get_ffd_waterlevels",
 }
 
 
@@ -418,6 +622,321 @@ def run_get_weather_forecast(args):
     }
 
 
+# Unlike get_weather_forecast (which reuses HeatwaveDetailView, an EXISTING
+# server-side Open-Meteo integration), no view anywhere in this app wraps
+# Open-Meteo's separate air-quality-api host — the map's own WAQI-Stations/
+# CAMS AQI layers are a different source entirely (the real WAQI network /
+# Copernicus CAMS rasters, not Open-Meteo), so there was nothing to reuse.
+# This is a genuinely new, small, self-contained integration, following the
+# exact same "resolve city via PAKISTAN_HEATWAVE_CITIES, group hourly data
+# into a daily outlook, surface map_location for auto-zoom" shape every
+# other tool here already uses.
+_AQI_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+_AQI_TIMEOUT = 10
+
+
+def _aqi_bucket(us_aqi):
+    """US-EPA AQI bands — identical breakpoints to the map's own WAQI
+    popup badges (frontend/src/modules/layer-attribute-popup.js's
+    waqiAqiBin), so a number reported here always matches the label a
+    station click on the map would show."""
+    if not isinstance(us_aqi, (int, float)):
+        return None
+    if us_aqi <= 50: return "Good"
+    if us_aqi <= 100: return "Moderate"
+    if us_aqi <= 150: return "Unhealthy for Sensitive Groups"
+    if us_aqi <= 200: return "Unhealthy"
+    if us_aqi <= 300: return "Very Unhealthy"
+    return "Hazardous"
+
+
+def run_get_air_quality(args):
+    from .views import PAKISTAN_HEATWAVE_CITIES
+
+    city_query = (args.get("city") or "").strip().lower()
+    if not city_query:
+        return {"error": "A city name is required."}
+    match = next((c for c in PAKISTAN_HEATWAVE_CITIES if city_query in c["name"].lower()), None)
+    if not match:
+        return {"error": f"No air-quality location matching \"{args.get('city')}\" — try a major Pakistani city.", "requested_city": city_query}
+
+    requested_days = args.get("days")
+    days = requested_days if isinstance(requested_days, int) and 1 <= requested_days <= 5 else 5
+
+    try:
+        import requests
+        r = requests.get(_AQI_URL, params={
+            "latitude": match["lat"], "longitude": match["lon"],
+            "current": "us_aqi,pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone",
+            "hourly": "us_aqi",
+            "forecast_days": days,
+            "timezone": "Asia/Karachi",
+        }, timeout=_AQI_TIMEOUT)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        logger.exception("assistant_tools: air quality fetch failed for %s", match["name"])
+        return {"error": "Air quality data is currently unavailable."}
+
+    current = data.get("current") or {}
+    hourly = data.get("hourly") or {}
+    times = hourly.get("time") or []
+    aqi_series = hourly.get("us_aqi") or []
+    if not current and not times:
+        return {"error": "Air quality data is currently unavailable."}
+
+    # Open-Meteo's air-quality endpoint only ever returns HOURLY series (no
+    # native daily block the way the main forecast API has) — grouped here
+    # by calendar date, keeping each day's WORST (max) reading, since the
+    # peak-pollution moment is the actionable number for a health-risk
+    # outlook, not a smoothed average.
+    daily_max = {}
+    for t, v in zip(times, aqi_series):
+        if not isinstance(v, (int, float)):
+            continue
+        date = t[:10]
+        daily_max[date] = max(daily_max.get(date, v), v)
+
+    return {
+        "city": match["name"],
+        "province": match.get("province"),
+        "current": {
+            "us_aqi":      current.get("us_aqi"),
+            "category":    _aqi_bucket(current.get("us_aqi")),
+            "pm2_5":       current.get("pm2_5"),
+            "pm10":        current.get("pm10"),
+            "ozone":       current.get("ozone"),
+            "nitrogen_dioxide": current.get("nitrogen_dioxide"),
+            "sulphur_dioxide":  current.get("sulphur_dioxide"),
+            "carbon_monoxide":  current.get("carbon_monoxide"),
+        },
+        "days": [
+            {"date": d, "max_us_aqi": v, "category": _aqi_bucket(v)}
+            for d, v in sorted(daily_max.items())
+        ][:days],
+        "map_location": {"name": match["name"], "lat": match["lat"], "lon": match["lon"]},
+    }
+
+
+def run_get_seasonal_forecast(args):
+    """Wraps HeatwaveDetailView(type=seasonal) — same existing view as
+    get_weather_forecast, different `type`. Open-Meteo's seasonal API
+    returns per-member ensemble arrays (temperature_2m_max_member01..17,
+    …) alongside plain unsuffixed keys that are ALREADY the ensemble
+    mean/control run (confirmed live against the real endpoint) — only
+    those unsuffixed keys are used here, never the raw members, which
+    would be meaningless noise in a chat answer."""
+    from .views import HeatwaveDetailView, PAKISTAN_HEATWAVE_CITIES
+
+    city_query = (args.get("city") or "").strip().lower()
+    if not city_query:
+        return {"error": "A city name is required."}
+    match = next((c for c in PAKISTAN_HEATWAVE_CITIES if city_query in c["name"].lower()), None)
+    if not match:
+        return {"error": f"No forecast location matching \"{args.get('city')}\" — try a major Pakistani city.", "requested_city": city_query}
+
+    try:
+        from django.test import RequestFactory
+        request = RequestFactory().get("/", {"lat": match["lat"], "lon": match["lon"], "type": "seasonal"})
+        response = HeatwaveDetailView().get(request)
+        data = json.loads(response.content)
+    except Exception:
+        logger.exception("assistant_tools: seasonal forecast fetch failed for %s", match["name"])
+        return {"error": "Seasonal forecast is currently unavailable."}
+
+    weekly = ((data or {}).get("data") or {}).get("weekly") or {}
+    dates = weekly.get("time") or []
+    temps = weekly.get("temperature_2m_mean") or []
+    if not dates:
+        return {"error": "Seasonal forecast is currently unavailable."}
+
+    requested_weeks = args.get("weeks")
+    n = requested_weeks if isinstance(requested_weeks, int) and 1 <= requested_weeks <= 27 else 12
+    n = min(n, len(dates))
+
+    return {
+        "city": match["name"],
+        "province": match.get("province"),
+        "horizon_weeks_available": len(dates),
+        "weeks": [
+            {"week_starting": dates[i], "mean_temp_c": temps[i] if i < len(temps) else None}
+            for i in range(n)
+        ],
+        "map_location": {"name": match["name"], "lat": match["lat"], "lon": match["lon"]},
+    }
+
+
+def run_get_climate_outlook(args):
+    """Wraps HeatwaveDetailView(type=climate) — same existing view. The raw
+    upstream response is ~1800 DAILY entries spanning ~5 years (confirmed
+    live), far too much for a chat turn — aggregated here into one row per
+    calendar YEAR (mean of daily means, mean of daily maxes, sum of daily
+    precipitation), which is what "climate outlook" actually means as a
+    question, versus a day-by-day weather forecast."""
+    from .views import HeatwaveDetailView, PAKISTAN_HEATWAVE_CITIES
+
+    city_query = (args.get("city") or "").strip().lower()
+    if not city_query:
+        return {"error": "A city name is required."}
+    match = next((c for c in PAKISTAN_HEATWAVE_CITIES if city_query in c["name"].lower()), None)
+    if not match:
+        return {"error": f"No climate location matching \"{args.get('city')}\" — try a major Pakistani city.", "requested_city": city_query}
+
+    try:
+        from django.test import RequestFactory
+        request = RequestFactory().get("/", {"lat": match["lat"], "lon": match["lon"], "type": "climate"})
+        response = HeatwaveDetailView().get(request)
+        data = json.loads(response.content)
+    except Exception:
+        logger.exception("assistant_tools: climate outlook fetch failed for %s", match["name"])
+        return {"error": "Climate outlook is currently unavailable."}
+
+    daily = ((data or {}).get("data") or {}).get("daily") or {}
+    dates = daily.get("time") or []
+    means = daily.get("temperature_2m_mean") or []
+    maxes = daily.get("temperature_2m_max") or []
+    precs = daily.get("precipitation_sum") or []
+    if not dates:
+        return {"error": "Climate outlook is currently unavailable."}
+
+    by_year = {}  # year -> {"mean_sum":, "mean_n":, "max_sum":, "max_n":, "precip_sum":}
+    for i, date in enumerate(dates):
+        year = date[:4]
+        bucket = by_year.setdefault(year, {"mean_sum": 0.0, "mean_n": 0, "max_sum": 0.0, "max_n": 0, "precip_sum": 0.0})
+        if i < len(means) and isinstance(means[i], (int, float)):
+            bucket["mean_sum"] += means[i]; bucket["mean_n"] += 1
+        if i < len(maxes) and isinstance(maxes[i], (int, float)):
+            bucket["max_sum"] += maxes[i]; bucket["max_n"] += 1
+        if i < len(precs) and isinstance(precs[i], (int, float)):
+            bucket["precip_sum"] += precs[i]
+
+    years = [
+        {
+            "year": year,
+            "avg_mean_temp_c": round(b["mean_sum"] / b["mean_n"], 1) if b["mean_n"] else None,
+            "avg_max_temp_c":  round(b["max_sum"] / b["max_n"], 1) if b["max_n"] else None,
+            "total_precipitation_mm": round(b["precip_sum"], 1),
+        }
+        for year, b in sorted(by_year.items())
+    ]
+
+    return {
+        "city": match["name"],
+        "province": match.get("province"),
+        "model": "MRI-AGCM3.2S (Open-Meteo Climate API)",
+        "years": years,
+        "map_location": {"name": match["name"], "lat": match["lat"], "lon": match["lon"]},
+    }
+
+
+_CLIMATE_REPORTS_URL = "https://weather.gov.pk/cdpc/pakistan-climate"
+_CLIMATE_REPORTS_CACHE_KEY = "assistant_pakistan_climate_reports"
+_CLIMATE_REPORTS_TTL = 24 * 60 * 60  # published once a year — safe to cache generously
+_CLIMATE_PDF_RE = re.compile(
+    r'href="(https://weather\.gov\.pk/storage/uploads/cdpc/pakistan_climates/pdf/[^"]*Pakistan_Climate_(\d{4})[^"]*\.pdf)"'
+)
+
+
+def run_get_pakistan_climate_reports(_args):
+    html = _cached_html_fetch(_CLIMATE_REPORTS_CACHE_KEY, _CLIMATE_REPORTS_TTL, _CLIMATE_REPORTS_URL)
+    if html is None:
+        return {"error": "PMD's Pakistan Climate report page is currently unavailable."}
+
+    seen = {}
+    for url, year in _CLIMATE_PDF_RE.findall(html):
+        seen[year] = url  # last match for a given year wins — harmless if the page ever lists a year twice
+    if not seen:
+        return {"error": "No Pakistan Climate report PDFs found on the page."}
+
+    reports = [{"year": y, "pdf_url": u} for y, u in sorted(seen.items(), reverse=True)]
+    return {"reports": reports, "source_page": _CLIMATE_REPORTS_URL}
+
+
+_PRESS_RELEASES_URL = "https://weather.gov.pk/nwfc/all-press-releases"
+_PRESS_RELEASES_CACHE_KEY = "assistant_nwfc_press_releases"
+_PRESS_RELEASES_TTL = 30 * 60  # PMD posts these roughly daily-to-weekly
+# One "Archive Press Releases" sidebar entry: a link to the release, its
+# title, and its date — confirmed against the real page's actual markup
+# (fetched live during development), not guessed. The archive list is
+# already newest-first on the page itself.
+_PRESS_RELEASE_ITEM_RE = re.compile(
+    r'href="(https://weather\.gov\.pk/nwfc/all-press-releases/\d+[^"]*)"[^>]*>.*?'
+    r'<h6[^>]*>\s*(.*?)\s*</h6>.*?'
+    r'<small[^>]*>\s*(.*?)\s*</small>',
+    re.DOTALL,
+)
+
+
+def run_get_nwfc_press_releases(args):
+    html = _cached_html_fetch(_PRESS_RELEASES_CACHE_KEY, _PRESS_RELEASES_TTL, _PRESS_RELEASES_URL)
+    if html is None:
+        return {"error": "NWFC press releases page is currently unavailable."}
+
+    requested = args.get("count")
+    n = requested if isinstance(requested, int) and 1 <= requested <= 6 else 6
+
+    releases = []
+    for url, title, date in _PRESS_RELEASE_ITEM_RE.findall(html):
+        releases.append({
+            "title": _strip_html(title),
+            "date": _strip_html(date),
+            "url": url,
+        })
+        if len(releases) >= n:
+            break
+    if not releases:
+        return {"error": "No press releases found on the page."}
+
+    return {"releases": releases, "source_page": _PRESS_RELEASES_URL}
+
+
+def run_get_ffd_waterlevels(args):
+    data = _run_gcop_get("/get-ffd-waterlevels/")
+    features = (data or {}).get("features") or []
+    if not features:
+        return {"error": "FFD water-level data is currently unavailable."}
+
+    def _normalize(props):
+        # Mirrors layer-attribute-popup.js's normalizeFfdProps EXACTLY (same
+        # gauges-array-or-flat-fields fallback chain) so a number reported
+        # here can never disagree with what clicking the real station on
+        # the map would show.
+        gauges = props.get("gauges")
+        if isinstance(gauges, str) and gauges.strip().startswith("["):
+            try:
+                gauges = json.loads(gauges)
+            except Exception:
+                gauges = []
+        if not isinstance(gauges, list):
+            gauges = []
+        by_type = {str(g.get("type") or "").upper(): g for g in gauges if isinstance(g, dict)}
+        outflow = by_type.get("OUTFLOW", {})
+        inflow = by_type.get("INFLOW", {})
+        return {
+            "name": props.get("name"),
+            "status": props.get("status"),
+            "inflow_discharge": props.get("inflow_discharge") or inflow.get("discharge"),
+            "outflow_discharge": props.get("outflow_discharge") or outflow.get("discharge") or props.get("discharge"),
+            "recording_time": props.get("recording_time"),
+        }
+
+    stations = [_normalize(f.get("properties") or {}) for f in features if f.get("properties")]
+
+    requested_station = (args.get("station") or "").strip().lower()
+    if requested_station:
+        matches = [s for s in stations if s["name"] and requested_station in s["name"].lower()]
+        if not matches:
+            return {"error": f"No FFD station matching \"{args.get('station')}\".", "requested_station": requested_station}
+        return {"stations": matches}
+
+    # No specific station — surface whatever's currently elevated first
+    # (the genuinely actionable subset for "what's the flood situation"),
+    # falling back to the first several stations if nothing is elevated.
+    elevated = [s for s in stations if (s["status"] or "").strip().upper() not in ("", "NORMAL")]
+    result = elevated if elevated else stations[:10]
+    return {"stations": result, "total_stations": len(stations), "elevated_count": len(elevated)}
+
+
 TOOL_EXECUTORS = {
     "get_rainfall_report": run_get_rainfall_report,
     "get_heatwave_monitoring": run_get_heatwave_monitoring,
@@ -425,4 +944,10 @@ TOOL_EXECUTORS = {
     "get_ffd_bulletins": run_get_ffd_bulletins,
     "get_nwfc_weekly_outlook": run_get_nwfc_weekly_outlook,
     "get_weather_forecast": run_get_weather_forecast,
+    "get_air_quality": run_get_air_quality,
+    "get_seasonal_forecast": run_get_seasonal_forecast,
+    "get_climate_outlook": run_get_climate_outlook,
+    "get_pakistan_climate_reports": run_get_pakistan_climate_reports,
+    "get_nwfc_press_releases": run_get_nwfc_press_releases,
+    "get_ffd_waterlevels": run_get_ffd_waterlevels,
 }

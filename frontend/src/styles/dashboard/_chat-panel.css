@@ -24,6 +24,17 @@
     flex-direction: column;
     z-index: 1002;
     transition: all 0.3s ease;
+    /* Hard containment guarantee for this rounded card — any child's
+       width/flex miscalculation (e.g. .ncop-assistant-quick-prompts,
+       which needed its own explicit width/box-sizing fix for exactly
+       this) can now, at worst, get clipped at the panel edge instead of
+       visibly rendering past the rounded border into the map behind it.
+       Doesn't affect the model-picker <select>'s own dropdown (native
+       browser overlay, unaffected by ancestor overflow) or this box's
+       own box-shadow (painted around the border box, not clipped by the
+       element's own overflow). Nothing else in this panel relies on
+       overflow:visible.  */
+    overflow: hidden;
 }
 
 .ncop-assistant-header {
@@ -243,6 +254,26 @@ h6.ncop-assistant-md-h { font-size: 12.5px; color: var(--text-secondary); text-t
     color: var(--text-primary);
 }
 
+/* Flood-status badges — colored dot matches the FFD Data map layer's own
+   circle-color legend exactly (see map-layers.js dynamicLegend); text stays
+   in the normal ink color so it reads in both themes, the dot alone carries
+   status identity, same convention as the map's legend rows. */
+.ncop-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.ncop-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
 /* Typing indicator — three pulsing dots while awaiting the Groq reply. */
 .ncop-assistant-msg--thinking .ncop-assistant-bubble {
     display: flex;
@@ -315,6 +346,56 @@ h6.ncop-assistant-md-h { font-size: 12.5px; color: var(--text-secondary); text-t
     outline: 2px solid var(--ndma-blue);
     outline-offset: 2px;
 }
+
+/* Quick-prompt shortcuts — a first-conversation affordance only (see
+   #handleSend's own comment in ncop-assistant.js: hidden the moment any
+   real message is sent, whether typed or via one of these buttons), so
+   this row never competes with the messages area for space once a
+   conversation is actually underway. Horizontally scrollable rather than
+   wrapping so it stays a single compact row even with several prompts. */
+.ncop-assistant-quick-prompts {
+    display: flex;
+    gap: 6px;
+    padding: 0 12px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Explicit width/box-sizing rather than relying on #ncop-assistant-
+       modal's implicit column-flex stretch — flex items default to
+       min-width:auto (their content's own min-content size), which wins
+       over stretch when the content (5 flex-shrink:0 buttons) is wider
+       than the panel, letting the row spill past the panel's own edge
+       instead of scrolling within it. width/max-width/box-sizing pin the
+       box to the panel's content width outright (this file has no global
+       box-sizing:border-box reset, so border-box is set here explicitly
+       — without it the 12px side padding would add onto the 100% width
+       and reintroduce the same overflow); min-width:0 clears the
+       min-content floor so overflow-x:auto actually gets to do its job. */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.ncop-assistant-quick-prompts::-webkit-scrollbar { display: none; }
+.ncop-assistant-quick-prompt {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 14px;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.ncop-assistant-quick-prompt:hover {
+    color: var(--text-primary);
+    border-color: var(--ndma-blue);
+    background: var(--secondary-bg);
+}
+.ncop-assistant-quick-prompt-icon { font-size: 13px; line-height: 1; }
 
 .ncop-assistant-input-wrapper {
     display: flex;

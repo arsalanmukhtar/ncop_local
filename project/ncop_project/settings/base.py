@@ -162,6 +162,11 @@ METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
 GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
+# Second Groq account's key — used ONLY as an automatic fallback when the
+# primary key hits its daily token-per-day cap (see chat_engine.get_llm's
+# `key_index` param). Empty/unset is fine: chat_engine treats that as "no
+# fallback available" and simply surfaces the primary key's 429 as normal.
+GROQ_API_KEY_FALLBACK = env("GROQ_API_KEY_FALLBACK", default="")
 
 # ---------------------------------------------------------------------------
 # Django REST Framework — first use is the NCOP Assistant chat endpoint

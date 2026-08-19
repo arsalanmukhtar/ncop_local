@@ -12,6 +12,8 @@
 # ---------------------------------------------------------------------------
 
 import json
+import logging
+import re
 
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
@@ -22,6 +24,110 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from . import chat_engine
 from .assistant_tools import ALL_TOOLS, DATA_TOOL_NAMES, TOOL_EXECUTORS
+
+logger = logging.getLogger(__name__)
+
+
+def _is_rate_limit_error(exc):
+    text = str(exc)
+    return "429" in text or "rate_limit_exceeded" in text or "rate limit" in text.lower()
+
+
+def _invoke_with_tool_retry(build_llm, messages, retries=1):
+    """`build_llm` is a callable taking a Groq key slot (0=primary,
+    1=fallback — see chat_engine.get_llm's `key_index`) and returning a
+    freshly bound, tools-bound LLM handle for it. Called fresh on every
+    attempt (never reused across attempts) for two independent reasons:
+
+    1. Groq occasionally rejects a tool-calling generation outright with a
+       400 — either "Tool choice is none, but model called a tool" (see
+       the tool_choice="none" fix at its own call site) or a malformed
+       tool-call payload that fails Groq's own JSON-schema validation
+       (observed: an optional string parameter sent as something other
+       than a string). Both are non-deterministic generation artifacts at
+       temperature=1, not a real conversation-state problem — the
+       identical request commonly succeeds on a second attempt.
+    2. A 429 specifically means the PRIMARY key's daily token cap is hit
+       (a real, observed "Rate limit reached ... on tokens per day (TPD)")
+       — retrying the same key would just fail again, so this switches to
+       GROQ_API_KEY_FALLBACK (a second Groq account) for the next attempt
+       instead, transparently continuing the same conversation rather than
+       surfacing the 429 to the user. Only fires if a fallback key is
+       actually configured; otherwise behaves exactly as before.
+
+    Bounded to `retries` extra attempts so a persistently broken request
+    still fails fast (surfacing as the normal error response in post()'s
+    own try/except) rather than looping."""
+    last_exc = None
+    key_index = 0
+    for attempt in range(retries + 1):
+        try:
+            return build_llm(key_index).invoke(messages)
+        except Exception as e:
+            last_exc = e
+            if attempt >= retries:
+                raise
+            if key_index == 0 and _is_rate_limit_error(e) and chat_engine.has_fallback_key():
+                key_index = 1
+                logger.warning("chatbot: primary Groq key rate-limited, switching to fallback key for retry")
+            else:
+                logger.warning("chatbot: tool-calling invoke failed (attempt %d/%d), retrying: %s", attempt + 1, retries + 1, e)
+    raise last_exc
+
+
+# Groq's raw error strings include internal details that should never reach
+# an end user (org id, exact token counts/limits, service-tier name) — see
+# the 429 the user pasted verbatim: "...organization org_01kz.../on tokens
+# per day (TPD): Limit 200...". This maps any LLM-call failure to a short,
+# safe message, same spirit as ChatGPT/Claude's own "please try again in
+# Xm" copy. Groq's 429 body itself already contains a "Please try again in
+# 26m23.28s" phrase — extracted via regex (h/m/s captured separately, not
+# as one blob) rather than parsing rate-limit headers, since langchain-
+# groq's exception doesn't reliably expose those. Groq's own seconds value
+# is server-computed and can carry ugly float noise (observed live:
+# "12.344999999s") — always re-rounded before it's shown, never passed
+# through verbatim.
+_RETRY_AFTER_RE = re.compile(
+    r"try again in\s+(?:([0-9]+(?:\.[0-9]+)?)h)?(?:([0-9]+(?:\.[0-9]+)?)m)?(?:([0-9]+(?:\.[0-9]+)?)s)?",
+    re.IGNORECASE,
+)
+
+
+def _format_retry_after(hours, minutes, seconds):
+    total_seconds = round((float(hours or 0) * 3600) + (float(minutes or 0) * 60) + float(seconds or 0))
+    if total_seconds <= 0:
+        return None
+    h, remainder = divmod(total_seconds, 3600)
+    m, s = divmod(remainder, 60)
+    parts = []
+    if h:
+        parts.append(f"{h}h")
+    if m:
+        parts.append(f"{m}m")
+    if s or not parts:
+        parts.append(f"{s}s")
+    return " ".join(parts)
+
+
+def _friendly_llm_error(exc):
+    """Returns (user_message, http_status) — never includes raw exception
+    text, token counts, or org/account identifiers."""
+    raw = str(exc)
+    status_match = re.search(r"\b(4\d\d|5\d\d)\b", raw)
+    status_code = int(status_match.group(1)) if status_match else 502
+
+    if status_code == 429 or "rate limit" in raw.lower():
+        retry_match = _RETRY_AFTER_RE.search(raw)
+        duration = _format_retry_after(*retry_match.groups()) if retry_match else None
+        if duration:
+            return (f"I'm getting a lot of requests right now. Please try again in {duration}.", 429)
+        return ("I'm getting a lot of requests right now. Please try again in a few minutes.", 429)
+
+    if status_code == 413 or "too large" in raw.lower():
+        return ("That question needs more processing than I can handle in one go — try asking something shorter or more specific.", 413)
+
+    return ("The assistant is temporarily unavailable. Please try again in a moment.", 502)
+
 
 MAX_QUESTION_CHARS = 2000
 MAX_HISTORY_TURNS = 6  # 3 user/assistant exchanges — bounds both Groq token cost and session size
@@ -34,113 +140,74 @@ MAX_HISTORY_TURNS = 6  # 3 user/assistant exchanges — bounds both Groq token c
 TOP_K = 8
 SESSION_HISTORY_KEY = "ncop_chat_history"
 
+# Kept deliberately lean — every sentence here costs TPM budget on EVERY
+# single request (bound alongside 12+ tool schemas, each already ~100-200
+# tokens on its own). A per-tool "which tool does what" recap used to live
+# here too; it's gone now because it was pure duplication — each tool's
+# OWN `description` (in assistant_tools.py) already says exactly when to
+# use it, and the model sees those descriptions directly as part of the
+# bound schema. Restoring that kind of restatement here is exactly what
+# pushed a single request over Groq's on_demand TPM ceiling (a real,
+# observed 413 "Request too large") — don't re-add bulk here without
+# checking token cost first.
 SYSTEM_PROMPT_HEADER = (
     "You are the NCOP Assistant, embedded in NCOP (National Contingency/"
     "Common Operating Picture for Pakistan), a Django + Mapbox disaster-"
     "monitoring dashboard covering floods, fires, landslides, cyclones, "
     "seismic risk, drought, heatwaves, air quality, crop conditions, and "
     "weather forecasting.\n\n"
-    "GROUNDING: base every FACTUAL claim about NCOP on the CONTEXT below "
-    "(retrieved from NCOP's own documentation, code-structure summary, "
-    "sidebar layer catalog, and map-rail/control catalog) — never invent "
-    "details the context doesn't support. Conversation history is a "
-    "separate, legitimate source for resolving what the user is referring "
-    "to (\"it\", \"that layer\", a follow-up) even when this turn's CONTEXT "
-    "wasn't re-retrieved for that exact subject. If CONTEXT genuinely "
-    "doesn't cover the question, call search_knowledge_base with a "
-    "differently-worded query before giving up — only say you don't know "
-    "after that still comes back empty.\n\n"
-    "LIVE MAP STATE: a block below CONTEXT reports which layer(s) are "
-    "ACTUALLY active on the map right now — real, live ground truth from "
-    "the running app, not a retrieval guess. This is what backs any "
-    "question about what's currently displayed/shown/on the map, what the "
-    "map represents right now, what data source is currently visible, or "
-    "what a temporal layer's current date/step is. Never answer those from "
-    "CONTEXT alone when LIVE MAP STATE has the real answer, and never "
-    "describe a layer as active if LIVE MAP STATE doesn't list it — if it "
-    "says no layers are active, say that plainly.\n\n"
-    "FORMATTING — every reply, always: write clean Markdown — a short bold "
-    "header line or two when it helps scanning, **bold** on key terms/"
-    "numbers/names, bullet or numbered lists for anything with more than "
-    "two items, a short table for tabular data. Use one or two relevant "
-    "emoji naturally (📍 for locations, 🌧️ rain, 🌡️ temperature, ⚠️ "
-    "alerts, ✅ confirmations, 🗺️ layers/maps) — sparingly, not on every "
-    "line. Keep it tight: a couple of sentences or a short list, not an "
-    "essay, unless the user's question genuinely needs more.\n\n"
-    "LAYERS, SUBCATEGORIES, CATEGORIES, AND CONTROLS — never answer with "
-    "just a pointer phrase like \"Here's X\" or \"That's the X button\" and "
-    "nothing else. Every time you mention a specific layer, subcategory, "
-    "category, or control, actually describe what it shows/does/contains "
-    "in 1-3 sentences, grounded in its CONTEXT entry (for a subcategory or "
-    "category, name a few of the actual layers inside it, pulled from "
-    "CONTEXT). For a CONTROL specifically, also say what happens when it's "
-    "used.\n\n"
-    "DISAMBIGUATION — before calling navigate_to, check whether the user's "
-    "own wording matches a REAL category_key or subcategory string that "
-    "appears in CONTEXT (e.g. \"air quality\" genuinely IS the air_quality "
-    "category; \"radar layers\" genuinely IS the Radar Layers subcategory). "
-    "If so, that's a clean category/subcategory case — proceed normally, "
-    "target_type \"category\"/\"subcategory\". If the user's wording is "
-    "instead a general topic/keyword (\"precipitation\", \"weather "
-    "stations\", \"temperature\") that ISN'T itself a real category or "
-    "subcategory name, look at how many DIFFERENT layers in CONTEXT that "
-    "topic could mean. One obvious match → proceed normally, target_type "
-    "\"layer\". Several different, genuinely distinct layers (different "
-    "item_keys, different purposes/timeframes — e.g. weekly vs. hourly vs. "
-    "radar-rate precipitation, or two different weather-station point "
-    "layers) → this is the ambiguous case: do NOT call navigate_to and do "
-    "NOT pick a category as a shortcut around picking one layer — instead "
-    "reply with a short Markdown table (columns: Layer, What it shows, "
-    "Category/Subcategory) listing every real candidate from CONTEXT, then "
-    "ask which one they mean. Once they name one in a follow-up, that's a "
-    "normal single-layer request. Never fabricate a candidate not in "
-    "CONTEXT, and never present one option as the only one when CONTEXT "
-    "shows several.\n\n"
-    "NAVIGATION vs. ACTIONS — the app itself auto-opens the sidebar and "
-    "highlights whatever navigate_to points at the instant you call it, "
-    "with NO click or confirmation from the user — so never say things "
-    "like \"would you like me to open it\" for a plain navigate_to. The "
-    "app ONLY asks the user to explicitly confirm two things, and only "
-    "those two: turning a LAYER on, and opening a CONTROL's panel — never "
-    "phrase those as already done, since they genuinely wait on the user's "
-    "click.\n\n"
-    "TOOLS — you have navigate_to plus live-data tools (currently "
-    "get_rainfall_report, get_heatwave_monitoring, get_pmd_daily_forecast, "
-    "get_ffd_bulletins, get_nwfc_weekly_outlook, get_weather_forecast — all "
-    "backed by the same live PMD/NWFC/FFD/Open-Meteo feeds the dashboard's "
-    "own Weather Report panel and heatwave charts already use). "
-    "navigate_to: call it whenever the user asks where something is, wants "
-    "to find/open/see a specific layer, a whole CATEGORY of layers, or a "
-    "control, or asks you to show them something. Use target_type "
-    "\"category\" (not \"control\") for a group of layers (\"where are the "
-    "air quality layers\") rather than routing a category question to the "
-    "generic Sidebar Menu control — that control is only for genuinely "
-    "generic \"how do I open the sidebar\" questions. target_id MUST be an "
-    "item_key/category_key/frontend_id that literally appears in CONTEXT; "
-    "never invent one, and never call it for something not present in "
-    "CONTEXT (say you couldn't find it instead). ALWAYS pair it with the "
-    "real description required above, never a bare pointer. Data tools: "
-    "call one when the user asks about CURRENT/live conditions, an "
-    "upcoming forecast, or published PMD/FFD/NWFC material rather than "
-    "what a layer generally shows — answer using ONLY the numbers/text a "
-    "tool actually returns, never invented ones; if a tool returns a "
-    "`pdf_url`/`url` field, share that link so the user can open the "
-    "source document itself; if a tool errors, say that data source is "
-    "temporarily unavailable rather than guessing. When a tool resolves a "
-    "SPECIFIC city, the app automatically flies the map camera there for "
-    "you — never say things like \"let me know if you'd like me to zoom "
-    "in\", it already happened. Which tool: get_rainfall_report = today's/"
-    "recent rainfall totals; get_heatwave_monitoring = a specific city's "
-    "(pass `city`) or the country's CURRENT/live temperature/heatwave "
-    "conditions only; get_weather_forecast = a specific city's (`city`, "
-    "required) MULTI-DAY (up to 16 days, `days` optional, default 5) "
-    "forecast — use this, not get_heatwave_monitoring, for any forward-"
-    "looking \"what will the weather be like\" question; get_pmd_daily_"
-    "forecast = today's provincial forecast text (pass `province` for one "
-    "region); get_nwfc_weekly_outlook = the published hazard outlook for "
-    "the COMING WEEK; get_ffd_bulletins = flood bulletins/advisories and "
-    "river/barrage flood-level warnings from the Flood Forecasting "
-    "Division."
+    "GROUNDING: base factual claims about NCOP on CONTEXT below (NCOP's "
+    "docs, code-structure summary, layer catalog, control catalog) — never "
+    "invent details it doesn't support. History may resolve \"it\"/\"that "
+    "layer\" even without a fresh CONTEXT match. If CONTEXT truly doesn't "
+    "cover the question, call search_knowledge_base with a reworded query "
+    "before saying you don't know.\n\n"
+    "LIVE MAP STATE: the block below CONTEXT is real, live ground truth "
+    "for what's ACTUALLY on the map right now (active layers, current "
+    "temporal step) — always prefer it over CONTEXT for \"what's shown/"
+    "active/current\" questions; if it lists nothing active, say so "
+    "plainly rather than guessing from CONTEXT.\n\n"
+    "FORMATTING: clean Markdown always — bold headers where it aids "
+    "scanning, **bold** key terms/numbers, one or two relevant emoji used "
+    "sparingly. Tight — a couple sentences or a short list, not an essay, "
+    "unless genuinely warranted. Numeric tool data is ALWAYS a markdown "
+    "table, never a bullet list: multiple records sharing fields "
+    "(stations, forecast days, bulletins, press releases) get one row per "
+    "record; a single reading with several metrics (current AQI, current "
+    "weather) gets two columns (Metric | Value). Bullet lists are only "
+    "for non-numeric enumerations (e.g. a list of layer names). A status/"
+    "category value (flood status, AQI category) goes in the table "
+    "exactly as the tool returned it (e.g. \"LOW\", \"Unhealthy\") — never "
+    "paraphrase it — so it renders with its correct colored marker.\n\n"
+    "LAYERS/SUBCATEGORIES/CATEGORIES/CONTROLS: never a bare pointer "
+    "(\"Here's X\") — always describe what it shows/does in 1-3 sentences "
+    "grounded in its CONTEXT entry (for a subcategory/category, name a few "
+    "real layers inside it).\n\n"
+    "DISAMBIGUATION before navigate_to: if the user's wording IS a real "
+    "category/subcategory string in CONTEXT, proceed with that target_type "
+    "directly. If it's a general topic (\"precipitation\") matching "
+    "SEVERAL distinct layers in CONTEXT (different item_keys/purposes), "
+    "don't guess or fall back to a category — list the real candidates in "
+    "a short table (Layer / What it shows / Category) and ask which one. "
+    "Never invent a candidate not in CONTEXT.\n\n"
+    "NAVIGATION vs ACTIONS: navigate_to auto-opens/highlights instantly, "
+    "no click needed — never offer to do it, it already happened. Only "
+    "turning a LAYER on and opening a CONTROL's panel wait for the user's "
+    "explicit click.\n\n"
+    "TOOLS: navigate_to (layer/subcategory/category/control — target_id "
+    "must literally appear in CONTEXT, never invented; category for a "
+    "group of layers, not the generic Sidebar Menu control) plus live-data "
+    "tools — each tool's own description says exactly when to use it and "
+    "what it needs, so pick by matching the question to those, not by "
+    "guessing. A question covering SEVERAL distinct facets (e.g. current "
+    "conditions AND a multi-day outlook) calls EVERY relevant tool in "
+    "this same turn, never just the first one that matches. General "
+    "rules for all data tools: answer using ONLY what "
+    "the tool actually returns, never invented numbers; share any "
+    "`pdf_url`/`url` field so the user can open the source; on a tool "
+    "error, say that source is temporarily unavailable, don't guess; when "
+    "a tool resolves one specific city, the app already flew the map "
+    "there for you — never offer to zoom in, it's done."
 )
 
 # OpenAI-style tool schema (Groq's function-calling follows the same
@@ -443,7 +510,16 @@ def _llm_authored_navigate_description(action, llm_messages, first_response, mod
                 "in the system prompt. Plain text only, no tool calls."
             ),
         ]
-        follow_up = chat_engine.get_llm(model_name).invoke(follow_up_messages)  # no tools bound — force plain text
+        # tool_choice="none" — see the other follow-up call's own comment
+        # in post() for why binding-with-none is the actual fix, not just
+        # leaving tools unbound. This call already has a full try/except
+        # around it (falls back to _fallback_description), so this is a
+        # quality improvement on top of an already-safe path, not a new
+        # failure mode being introduced.
+        follow_up = _invoke_with_tool_retry(
+            lambda k: chat_engine.get_llm(model_name, key_index=k).bind_tools([NAVIGATE_TOOL, *ALL_TOOLS], tool_choice="none"),
+            follow_up_messages,
+        )
         return (follow_up.content or "").strip()
     except Exception:
         return ""
@@ -609,8 +685,10 @@ class NcopAssistantChatView(APIView):
             # to build per-request rather than caching on the chat_engine
             # singleton, and keeps the tool schemas (a chatbot.py concern)
             # out of chat_engine.py (pure infra: client/embedding/LLM handles).
-            llm_with_tools = chat_engine.get_llm(requested_model).bind_tools([NAVIGATE_TOOL, SEARCH_KB_TOOL, *ALL_TOOLS])
-            first_response = llm_with_tools.invoke(llm_messages)
+            first_response = _invoke_with_tool_retry(
+                lambda k: chat_engine.get_llm(requested_model, key_index=k).bind_tools([NAVIGATE_TOOL, SEARCH_KB_TOOL, *ALL_TOOLS]),
+                llm_messages,
+            )
             response = first_response
             nav_response = first_response  # navigate_to is honored from whichever response actually carries it — see below
 
@@ -636,8 +714,10 @@ class NcopAssistantChatView(APIView):
                     tool_messages.append(ToolMessage(content=json.dumps({"error": "Already searched this turn."}), tool_call_id=tc["id"]))
                 llm_messages = [SystemMessage(_build_system_prompt()), *history_messages, HumanMessage(message)]
                 follow_up_messages = [*llm_messages, first_response, *tool_messages]
-                llm_with_tools_round2 = chat_engine.get_llm(requested_model).bind_tools([NAVIGATE_TOOL, *ALL_TOOLS])
-                response = llm_with_tools_round2.invoke(follow_up_messages)
+                response = _invoke_with_tool_retry(
+                    lambda k: chat_engine.get_llm(requested_model, key_index=k).bind_tools([NAVIGATE_TOOL, *ALL_TOOLS]),
+                    follow_up_messages,
+                )
                 nav_response = response
 
             # Data tools (get_rainfall_report/get_heatwave_monitoring) ARE
@@ -659,14 +739,36 @@ class NcopAssistantChatView(APIView):
                             "label": loc.get("name") or "location",
                         }
                     tool_messages.append(ToolMessage(content=json.dumps(result), tool_call_id=tc["id"]))
-                follow_up_messages = [*llm_messages, response, *tool_messages]
-                response = chat_engine.get_llm(requested_model).invoke(follow_up_messages)  # no tools bound — force a plain text synthesis, not another round of calls
+                # Both an explicit textual instruction AND tool_choice=
+                # "none" — confirmed live that tool_choice="none" ALONE is
+                # not reliably enough for this model: it still attempted
+                # get_ffd_waterlevels again with tool_choice="none" bound,
+                # which Groq then rejected with the same 400 ("Tool choice
+                # is none, but model called a tool"). Some models, having
+                # just seen their own tool_call + the tool's results,
+                # simply keep trying to call another tool regardless of
+                # the API-level setting. The explicit HumanMessage nudge
+                # mirrors the ALREADY-proven-effective pattern
+                # _llm_authored_navigate_description uses for the exact
+                # same problem. _invoke_with_tool_retry is the final
+                # safety net if both still aren't enough.
+                follow_up_messages = [
+                    *llm_messages, response, *tool_messages,
+                    HumanMessage(
+                        "Now answer the user's original question using ONLY the tool "
+                        "result(s) above. Plain text only, no further tool calls."
+                    ),
+                ]
+                response = _invoke_with_tool_retry(
+                    lambda k: chat_engine.get_llm(requested_model, key_index=k).bind_tools([NAVIGATE_TOOL, *ALL_TOOLS], tool_choice="none"),
+                    follow_up_messages,
+                )
 
             reply = response.content or ""
         except Exception as e:
-            return JsonResponse(
-                {"error": f"assistant unavailable: {str(e)[:200]}"}, status=502
-            )
+            logger.warning("chatbot: LLM call failed: %s", e)
+            message_text, status_code = _friendly_llm_error(e)
+            return JsonResponse({"error": message_text}, status=status_code)
 
         # navigate_to is read from nav_response — the first response,
         # unless a search_knowledge_base hop happened this turn, in which

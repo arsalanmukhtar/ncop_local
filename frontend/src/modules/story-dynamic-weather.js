@@ -271,6 +271,32 @@ function _pickUrduVoice() {
   );
 }
 
+// One-time (per page load) heads-up when NO Urdu/Arabic voice exists on
+// this browser/OS at all — confirmed live (Chrome, no matching voice
+// installed) that this silently degrades to "only numbers get read
+// aloud" with zero on-screen indication why. Purely a DOM side-effect: no
+// network call, no extra work on the TTS hot path (_speak already has the
+// answer in hand — `voice === null` — this just surfaces it once), and it
+// never touches _speak's own resolve/reject timing, so scene-advance
+// pacing is completely unaffected. Guarded by a flag set BEFORE any DOM
+// work so two near-simultaneous _speak() calls can't both pass the check.
+let _urduVoiceWarningShown = false;
+function _showNoUrduVoiceWarning() {
+  if (_urduVoiceWarningShown) return;
+  _urduVoiceWarningShown = true;
+  console.warn("[story] No Urdu/Arabic speech voice found on this system — Urdu narration will only read numbers aloud. Install an Urdu or Arabic language pack (Windows Settings > Time & Language > Language & region), or try a different browser.");
+  try {
+    const card = document.getElementById(CARD_ID);
+    const body = card?.querySelector(".dwr-body");
+    if (!body) return;
+    const el = document.createElement("div");
+    el.className = "dwr-voice-warning";
+    el.textContent = "No Urdu voice found on this system — narration will only read numbers aloud. Install an Urdu/Arabic language pack in Windows Settings for full voice narration.";
+    body.prepend(el);
+    setTimeout(() => el.remove(), 8000);
+  } catch (_) { /* the console.warn above already covers this — the on-screen note is a bonus, never load-bearing */ }
+}
+
 // Returns a promise that resolves once the utterance actually finishes
 // (or immediately if TTS is off/unavailable/there's no caption) — the
 // scene-advance timer awaits this directly instead of guessing a duration.
@@ -291,6 +317,7 @@ function _speak(text) {
         utter.lang = "ur-PK";
         const voice = _pickUrduVoice();
         if (voice) utter.voice = voice;
+        else _showNoUrduVoiceWarning();
       }
       utter.onend = () => resolve();
       utter.onerror = () => resolve();
@@ -741,6 +768,16 @@ function _injectStyles() {
       margin-top: 6px;
       font-size: 11px; font-style: italic;
       color: rgba(234, 234, 234, 0.6);
+    }
+    #${CARD_ID} .dwr-voice-warning {
+      margin-bottom: 8px;
+      padding: 6px 9px;
+      border-radius: 6px;
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+      color: #fde68a;
+      font-size: 10.5px;
+      line-height: 1.4;
     }
 
     #${CARD_ID} .dwr-progress-row {
@@ -1199,56 +1236,6 @@ async function _fetchRainfallReport() {
   const res = await fetch("/api/pmd/nwfc/rainfall-report/");
   if (!res.ok) throw new Error(`rainfall report HTTP ${res.status}`);
   return res.json();
-}
-
-// Recent news/context for the opening scene — reuses NCOP's own existing
-// GDELT endpoint (project/ncop_internal/views.py: GdeltNewsEventsApi,
-// already consumed elsewhere by navigation-panel.js's news ticker with
-// the same `include_social_media=false` pattern) rather than a new
-// backend route. A short client-side timeout and a broad try/catch make
-// this purely additive — the briefing plays exactly the same with zero
-// articles if GDELT is slow/unavailable, it just skips the news section.
-//
-// Module-level cache (survives across story open/close within the same
-// page load, not just within one _loadAndPlay call) — the backend's own
-// cache is bucketed in 10-minute windows, so re-fetching sooner than that
-// can only ever return the same data anyway. Reopening the story, hitting
-// Prev back to scene 1, etc. all reuse this instead of hitting the
-// network again. The empty/error result gets cached too, for the same
-// TTL — GDELT being rate-limited shouldn't mean every reopen retries it.
-let _newsCache = { articles: null, fetchedAt: 0 };
-const NEWS_CACHE_TTL_MS = 10 * 60 * 1000;
-
-async function _fetchGdeltNews() {
-  const now = Date.now();
-  if (_newsCache.articles !== null && (now - _newsCache.fetchedAt) < NEWS_CACHE_TTL_MS) {
-    return _newsCache.articles;
-  }
-  let articles = [];
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch("/get-gdelt-news-events/?include_social_media=false&days=2&max_records=10", {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const geojson = await res.json();
-      if (!geojson?.metadata?.error) {
-        articles = (geojson.features || [])
-          .map((f) => f.properties || {})
-          .filter((p) => p.title && p.url)
-          .sort((a, b) => new Date(b.seendate || 0) - new Date(a.seendate || 0))
-          .slice(0, 4);
-      }
-    }
-  } catch (_) {
-    // best-effort — the briefing works fine with zero articles; falls
-    // through to caching the empty result below rather than retrying
-    // immediately on the next call.
-  }
-  _newsCache = { articles, fetchedAt: now };
-  return articles;
 }
 
 // Chapter 2's primary station data source — NCOP's own Heatwave
@@ -3087,10 +3074,12 @@ async function _runIntro(map, token, seq) {
 // layers/data feed it, in plain operator-facing terms. Replaced by the
 // radar's own stats popup a few seconds later (same shared popup shell).
 // News rows for the opening popup's "Recent news & context" section —
-// GDELT articles fetched alongside the rainfall report in _loadAndPlay
-// (see _fetchGdeltNews). Renders nothing if the fetch came back empty
-// (slow/unavailable GDELT, or genuinely no recent matching coverage) —
-// purely additive, never blocks or alters the rest of the briefing.
+// GDELT news fetching was removed from the story's data load (see
+// _loadAndPlay) — it's a frequently rate-limited third-party API this
+// briefing never depended on for anything essential. `_state.newsArticles`
+// is now always [], so this always renders nothing; left in place rather
+// than ripped out in case news context is reintroduced from a different
+// source later.
 function _newsSectionHtml() {
   const articles = _state.newsArticles || [];
   if (!articles.length) return "";
@@ -3321,7 +3310,19 @@ async function _runTemporalLoop(slider, maxVal, stepMs, token, seq) {
       const cur = parseInt(slider.value, 10) || 0;
       const next = cur < maxVal ? cur + 1 : 0;
       slider.value = next;
+      // The native slider's own "input" handler (temporal-controls.js) re-
+      // shows #temp-slider1's panel as a normal side effect of ANY slider
+      // interaction — reasonable for a real user dragging it, but this is
+      // a synthetic event fired every frame of an unattended story-mode
+      // animation, so it was undoing _activateTemporalLayer's own
+      // _hideTempSlider() call on every single step (confirmed live: the
+      // panel stayed fully visible, populated, and updating throughout
+      // Chapter 2's temperature animation). Re-asserting hidden right
+      // after is the same "re-assert" pattern _activateTemporalLayer
+      // already uses for the exact same race, just applied every step
+      // instead of once.
       try { slider.dispatchEvent(new Event("input", { bubbles: true })); } catch (_) { /* best-effort */ }
+      _hideTempSlider();
     }
   } finally {
     window.isTemporalAnimating = false;
@@ -5063,18 +5064,24 @@ async function _loadAndPlay(card, forceRefresh = false) {
   card.querySelector(".dwr-chapter-title").textContent = "Dynamic Weather Report";
   card.querySelector(".dwr-chapter-counter").textContent = "";
 
-  let report, observations, newsArticles;
+  // GDELT news context was dropped from the story's data load — it's a
+  // third-party API that's frequently 429-rate-limited (observed live,
+  // burning its full ~50s retry budget on every fresh story open), and
+  // the briefing never depended on it for anything beyond an optional
+  // "Recent news & context" section. `newsArticles` stays an empty array
+  // throughout, so `_newsSectionHtml()`/`_introNarrative()` fall through
+  // their existing "no articles" branches unchanged (see below).
+  const newsArticles = [];
+  let report, observations;
   if (useCached) {
     report = _state.report;
     observations = _state.observations;
-    newsArticles = _state.newsArticles;
   } else {
     let heatwaveStations, maxTempRecords, ffdStations, ffdRivers;
     try {
-      [report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
+      [report, observations, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
         _fetchRainfallReport(),
         getNwfcObservations().catch(() => null),
-        _fetchGdeltNews(), // best-effort — never rejects, resolves [] on any failure
         _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
         _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
         _fetchFfdStations(), // best-effort — resolves null on any failure
@@ -5093,7 +5100,7 @@ async function _loadAndPlay(card, forceRefresh = false) {
 
     _state.report = report;
     _state.observations = observations;
-    _state.newsArticles = newsArticles || [];
+    _state.newsArticles = [];
     _state.heatwaveStations = heatwaveStations;
     _state.maxTempRecords = maxTempRecords || [];
     _state.ffdStations = ffdStations;
