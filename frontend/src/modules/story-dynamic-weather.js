@@ -398,13 +398,6 @@ function _collectNarrativeStrings() {
   return Array.from(set);
 }
 
-// The backend (translate.py) internally splits a large batch into several
-// smaller SEQUENTIAL Groq calls itself, staying under a safe per-call
-// character budget — protects against Groq's tokens-per-minute rate limit,
-// which a single big/parallel-chunked request from here previously tripped
-// in production (a real 413 "Request too large ... TPM"). So this just
-// sends everything in ONE request and lets the server handle safe batching
-// — no client-side chunking, no parallel fan-out.
 const TRANSLATE_ENDPOINT = "/api/translate/";
 async function _translateBatch(texts) {
   const res = await fetch(TRANSLATE_ENDPOINT, {
@@ -420,10 +413,24 @@ async function _translateBatch(texts) {
   return data.translations;
 }
 
-// Fills in any cache misses for the CURRENTLY built scenes in one shot.
-// De-duped against in-flight calls. Never throws — resolves `false` on
-// failure and leaves the cache as-is, so _tr()'s fallback keeps showing
-// English for whatever never got translated.
+// Sent in small SEQUENTIAL chunks rather than one request for the whole
+// story (a real production 504: nginx's gateway timeout expired while a
+// single big batch ran CPU-bound local NLLB generation, deliberately
+// capped to 2 threads server-side — see translate.py's TORCH_NUM_THREADS
+// — so it never starves the shared VM). Matches GENERATE_BATCH_SIZE, the
+// server's own internal per-generate() unit, so one chunk here costs
+// roughly one generate() call — comfortably under any gateway timeout,
+// default or otherwise, without needing an nginx config change. Sequential
+// (not parallel) for the same reason: firing several at once would just
+// contend for the SAME 2 CPU threads server-side, not finish any faster.
+const TRANSLATE_CHUNK_SIZE = 16;
+
+// Fills in any cache misses for the CURRENTLY built scenes. De-duped
+// against in-flight calls. Never throws — resolves `false` only if EVERY
+// chunk failed; a partial failure still keeps whatever chunks DID
+// succeed cached (an improvement over the old all-or-nothing single
+// request), so _tr()'s fallback only shows English for what's genuinely
+// still missing.
 let _translateInFlight = null;
 function _ensureUrduTranslations(card) {
   if (_translateInFlight) return _translateInFlight;
@@ -431,15 +438,20 @@ function _ensureUrduTranslations(card) {
   const missing = all.filter((t) => !_translationCache.has(t));
   if (!missing.length) return Promise.resolve(true);
   _setLangButtonLoading(card, true);
-  _translateInFlight = _translateBatch(missing)
-    .then((translated) => {
-      missing.forEach((orig, i) => _translationCache.set(orig, translated[i]));
-      return true;
-    })
-    .catch((e) => {
-      console.warn("[story] Urdu translation failed:", e);
-      return false;
-    })
+  _translateInFlight = (async () => {
+    let anySucceeded = false;
+    for (let i = 0; i < missing.length; i += TRANSLATE_CHUNK_SIZE) {
+      const chunk = missing.slice(i, i + TRANSLATE_CHUNK_SIZE);
+      try {
+        const translated = await _translateBatch(chunk);
+        chunk.forEach((orig, j) => _translationCache.set(orig, translated[j]));
+        anySucceeded = true;
+      } catch (e) {
+        console.warn("[story] Urdu translation chunk failed:", e);
+      }
+    }
+    return anySucceeded;
+  })()
     .finally(() => {
       _setLangButtonLoading(card, false);
       _translateInFlight = null;

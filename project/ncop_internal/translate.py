@@ -171,6 +171,27 @@ def _get_model():
     return _tokenizer, _model, _urdu_bos_token_id
 
 
+def warm_up():
+    """Pre-loads the model — called from apps.py's ready() on a
+    background thread at process start, so the ~2.4GB cold-load cost
+    happens once, off the request path, before any real /api/translate/
+    request arrives. A real production 504 was traced to nginx's gateway
+    timeout expiring while the FIRST request paid this exact cost itself
+    on top of actually translating. Takes the SAME _lock _get_model()
+    always requires — if a real request's own call races in while this is
+    still loading, it simply waits for the same in-progress load rather
+    than starting a second one, then returns instantly once this
+    finishes. Never raises: a failure here is silently deferred to the
+    next real request's own _get_model() call, which already logs/handles
+    a load failure and degrades to English text — this is a head-start,
+    never a new hard dependency."""
+    try:
+        with _lock:
+            _get_model()
+    except Exception:
+        logger.exception("translate.py: background model warm-up failed (will retry lazily on first real request)")
+
+
 # Content-addressed, process-level cache — same simplicity convention as
 # everything else in this codebase (no Redis/Celery job queue for a
 # dashboard this size; the only shared cache backend wired up anywhere is
