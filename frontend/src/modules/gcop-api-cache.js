@@ -135,7 +135,7 @@ export function getFfdBulletins() {
 // needs a fully-qualified URL (see its own docstring), so the same TTL/
 // retry/in-flight-coalescing cache applies here unmodified — nothing about
 // that helper is actually GCOP-specific.
-export const FFD_HISTORY_ALL_BASE_URL = "http://172.18.1.113:8000/proxy_api_daily";
+export const FFD_HISTORY_ALL_BASE_URL = "http://172.18.7.35:8000/proxy_api_daily";
 
 /**
  * Bulk discharge history — {days, stations: {NAME: {inflow:[{x,y}], outflow:[{x,y}]}}}

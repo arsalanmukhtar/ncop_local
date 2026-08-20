@@ -200,6 +200,7 @@ const _state = {
   pendingMinDwellMs: 0,  // set by a layer scene once it knows its own frame count,
                          // read once by _gotoScene's next _scheduleAdvance call so the
                          // scene holds long enough to actually show a full timelapse lap
+  lang: "en",            // "en" | "ur" — operator toggle for narrative text + TTS language
 };
 
 // Standard dwell when narration is muted. When narration IS on, the
@@ -234,6 +235,68 @@ function _hlNum(text) {
   return `<mark class="dwr-hl">${_escapeHtml(text)}</mark>`;
 }
 
+// ---- Urdu voice selection -----------------------------------------------
+// Setting utter.lang alone is NOT enough — the actual voice used is still
+// whatever the engine's current DEFAULT voice is unless one is explicitly
+// assigned via utter.voice. A default English voice given Arabic-script
+// Urdu text silently skips whatever it can't pronounce — in practice that
+// means only the embedded Latin numerals in a caption get read aloud and
+// the Urdu prose itself goes silent, which is exactly the "just reads
+// numbers" symptom. Voices also populate ASYNCHRONOUSLY (getVoices()
+// commonly returns [] until the browser's one-time 'voiceschanged' event
+// fires, even when a matching voice IS installed) — cached eagerly here so
+// a real voice list is already available by the time playback starts.
+let _voicesCache = null;
+try {
+  const _ss = window.speechSynthesis;
+  if (_ss) {
+    _voicesCache = _ss.getVoices();
+    if (!_voicesCache.length) {
+      _ss.addEventListener("voiceschanged", () => { _voicesCache = _ss.getVoices(); }, { once: true });
+    }
+  }
+} catch (_) {}
+
+function _pickUrduVoice() {
+  const voices = (_voicesCache && _voicesCache.length) ? _voicesCache : (window.speechSynthesis?.getVoices() || []);
+  // Exact Urdu locale first, then any Urdu variant, then Arabic as a
+  // same-script fallback (Urdu and Arabic share the Arabic script, so an
+  // Arabic voice at least attempts to vocalize the characters instead of
+  // silently skipping them the way an English voice does).
+  return (
+    voices.find((v) => /^ur[-_]/i.test(v.lang)) ||
+    voices.find((v) => /^ur$/i.test(v.lang)) ||
+    voices.find((v) => /^ar/i.test(v.lang)) ||
+    null
+  );
+}
+
+// One-time (per page load) heads-up when NO Urdu/Arabic voice exists on
+// this browser/OS at all — confirmed live (Chrome, no matching voice
+// installed) that this silently degrades to "only numbers get read
+// aloud" with zero on-screen indication why. Purely a DOM side-effect: no
+// network call, no extra work on the TTS hot path (_speak already has the
+// answer in hand — `voice === null` — this just surfaces it once), and it
+// never touches _speak's own resolve/reject timing, so scene-advance
+// pacing is completely unaffected. Guarded by a flag set BEFORE any DOM
+// work so two near-simultaneous _speak() calls can't both pass the check.
+let _urduVoiceWarningShown = false;
+function _showNoUrduVoiceWarning() {
+  if (_urduVoiceWarningShown) return;
+  _urduVoiceWarningShown = true;
+  console.warn("[story] No Urdu/Arabic speech voice found on this system — Urdu narration will only read numbers aloud. Install an Urdu or Arabic language pack (Windows Settings > Time & Language > Language & region), or try a different browser.");
+  try {
+    const card = document.getElementById(CARD_ID);
+    const body = card?.querySelector(".dwr-body");
+    if (!body) return;
+    const el = document.createElement("div");
+    el.className = "dwr-voice-warning";
+    el.textContent = "No Urdu voice found on this system — narration will only read numbers aloud. Install an Urdu/Arabic language pack in Windows Settings for full voice narration.";
+    body.prepend(el);
+    setTimeout(() => el.remove(), 8000);
+  } catch (_) { /* the console.warn above already covers this — the on-screen note is a bonus, never load-bearing */ }
+}
+
 // Returns a promise that resolves once the utterance actually finishes
 // (or immediately if TTS is off/unavailable/there's no caption) — the
 // scene-advance timer awaits this directly instead of guessing a duration.
@@ -248,6 +311,14 @@ function _speak(text) {
       // just polls speechSynthesis.speaking) stay in lockstep automatically,
       // no separate dwell-time math needed for the TTS path.
       utter.rate = Math.min(3, 0.98 * (_state.speed || 1));
+      // Only set explicitly for Urdu — leaving it unset in English mode
+      // preserves the exact pre-existing (browser-default) behaviour.
+      if (_state.lang === "ur") {
+        utter.lang = "ur-PK";
+        const voice = _pickUrduVoice();
+        if (voice) utter.voice = voice;
+        else _showNoUrduVoiceWarning();
+      }
       utter.onend = () => resolve();
       utter.onerror = () => resolve();
       window.speechSynthesis.speak(utter);
@@ -271,6 +342,137 @@ function _loadTtsPref() {
 }
 function _saveTtsPref(choice) {
   try { localStorage.setItem(TTS_PREF_KEY, choice); } catch (_) {}
+}
+
+// ==========================================================================
+// English <-> Urdu narrative translation
+// --------------------------------------------------------------------------
+// Scope is deliberately narrow: only scene.caption (the narrated prose) is
+// ever translated — fact pills ("Wind", "Feels", "RH", table headers, etc.)
+// stay English in both modes. scene.caption is a plain precomputed string
+// (composed once by the ~19 _xNarrative() functions when scenes are
+// built) — _tr() below only swaps WHICH string gets read at each display/
+// TTS site, never touches how it's composed.
+// ==========================================================================
+// Same key story-provincial-forecast.js's own toggle uses — shared by
+// convention (see TTS_PREF_KEY's comment above for why that's safe even
+// though neither file imports the other).
+const LANG_PREF_KEY = "ncop-story-lang-pref";
+function _loadLangPref() {
+  try { return localStorage.getItem(LANG_PREF_KEY) === "ur" ? "ur" : "en"; } catch (_) { return "en"; }
+}
+function _saveLangPref(lang) {
+  try { localStorage.setItem(LANG_PREF_KEY, lang); } catch (_) {}
+}
+
+// English -> Urdu translations, keyed by the ORIGINAL English caption.
+// Content-addressed, so it's never cleared on refresh — a recurring
+// caption (e.g. the same phrasing pattern across two districts never
+// collides since captions are per-district/per-station specific, but a
+// literal repeat just reuses its cached translation for free).
+let _translationCache = new Map();
+
+// Read-time helper — the ONLY thing every scene.caption display/TTS site
+// wraps around the raw read. No-ops in English mode; in Urdu mode returns
+// the cached translation or silently falls back to English on a cache miss
+// so the story can never break.
+function _tr(text) {
+  if (_state.lang !== "ur") return text;
+  return _translationCache.get(text) ?? text;
+}
+
+// Shared caption markup for the map-popup builders (_showStationPopup and
+// friends, below) — wraps the (possibly-translated) caption in its own
+// block so the RTL/Urdu-font class applies ONLY to the narrative text,
+// never to the popup's title/badges/tables (those stay English + LTR
+// regardless of _state.lang, per the "static UI chrome" scope rule).
+function _captionHtml(caption) {
+  const cls = _state.lang === "ur" ? "dwrp-caption dwr-lang-ur" : "dwrp-caption";
+  return `<div class="${cls}">${_highlightNumbers(_escapeHtml(_tr(caption) || ""))}</div>`;
+}
+
+// Every distinct caption across all CURRENTLY built scenes, deduplicated.
+function _collectNarrativeStrings() {
+  const set = new Set();
+  (_state.scenes || []).forEach((s) => { if (s.caption) set.add(s.caption); });
+  return Array.from(set);
+}
+
+// The backend (translate.py) internally splits a large batch into several
+// smaller SEQUENTIAL Groq calls itself, staying under a safe per-call
+// character budget — protects against Groq's tokens-per-minute rate limit,
+// which a single big/parallel-chunked request from here previously tripped
+// in production (a real 413 "Request too large ... TPM"). So this just
+// sends everything in ONE request and lets the server handle safe batching
+// — no client-side chunking, no parallel fan-out.
+const TRANSLATE_ENDPOINT = "/api/translate/";
+async function _translateBatch(texts) {
+  const res = await fetch(TRANSLATE_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ texts, target_lang: "ur" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !Array.isArray(data.translations) || data.translations.length !== texts.length) {
+    throw new Error(data?.error || `translate HTTP ${res.status}`);
+  }
+  return data.translations;
+}
+
+// Fills in any cache misses for the CURRENTLY built scenes in one shot.
+// De-duped against in-flight calls. Never throws — resolves `false` on
+// failure and leaves the cache as-is, so _tr()'s fallback keeps showing
+// English for whatever never got translated.
+let _translateInFlight = null;
+function _ensureUrduTranslations(card) {
+  if (_translateInFlight) return _translateInFlight;
+  const all = _collectNarrativeStrings();
+  const missing = all.filter((t) => !_translationCache.has(t));
+  if (!missing.length) return Promise.resolve(true);
+  _setLangButtonLoading(card, true);
+  _translateInFlight = _translateBatch(missing)
+    .then((translated) => {
+      missing.forEach((orig, i) => _translationCache.set(orig, translated[i]));
+      return true;
+    })
+    .catch((e) => {
+      console.warn("[story] Urdu translation failed:", e);
+      return false;
+    })
+    .finally(() => {
+      _setLangButtonLoading(card, false);
+      _translateInFlight = null;
+    });
+  return _translateInFlight;
+}
+
+// Re-renders the current scene with whatever's now cached, and — if
+// narration is on — re-speaks it too. Without this, a translation landing
+// in the background (see _ensureUrduTranslations' fire-and-forget call
+// sites below) would silently swap the on-screen TEXT to Urdu while the
+// voice that already read this scene stays whatever it said in English —
+// or say nothing at all if narration was toggled on mid-wait. Shared by
+// every background-upgrade call site so a scene's text and its narration
+// always agree once a translation actually lands.
+function _reapplyCurrentSceneLanguage(card) {
+  _renderScene(card);
+  const scene = _state.scenes[_state.index];
+  if (scene) _speak(_tr(scene.caption) || "");
+}
+
+// Fire-and-forget helper for scene-splice sites (Chapter 2/3's late-built
+// scenes) — if the operator is already in Urdu mode when new scenes get
+// spliced in, their captions weren't part of the original toggle-time
+// batch. Re-checks for cache misses and, if any land, re-applies to the
+// CURRENTLY shown scene so a caption that happens to be visible right now
+// updates in place. Never awaited by the splice sites — translation
+// latency must never stall scene entry/auto-advance.
+function _queueTranslateNewCaptions(card) {
+  if (_state.lang !== "ur" || !card) return;
+  _ensureUrduTranslations(card).then((ok) => {
+    if (ok && _state.lang === "ur") _reapplyCurrentSceneLanguage(card);
+  }).catch(() => {});
 }
 
 // Shown once, before the very first scene of a fresh load, ONLY when no
@@ -305,6 +507,47 @@ function _showTtsPrompt(card) {
       if (!btn) return;
       bodyEl.removeEventListener("click", onClick);
       resolve(btn.dataset.choice === "on" ? "on" : "off");
+    };
+    bodyEl.addEventListener("click", onClick);
+  });
+}
+
+// Same single-click-resolves pattern _showTtsPrompt uses just above,
+// asking English vs Urdu instead. Unlike the TTS decision above (this
+// story always starts muted regardless of any saved preference — see the
+// "no exceptions" comment where _state.ttsEnabled is force-set in
+// _loadAndPlay), language is shown every time a genuine fetch happens
+// (first-ever open, or after Refresh — gated by _loadAndPlay's own
+// `!useCached` check, since a plain reopen never re-fetches at all) so the
+// operator is asked "before the story starts" whenever there's genuinely
+// new data, and the choice holds until the next manual refresh. Pre-
+// highlights whichever language was picked last time (defaulting to
+// English) so confirming the same choice again is still one click.
+function _showLangPrompt(card) {
+  return new Promise((resolve) => {
+    const bodyEl = card.querySelector(".dwr-body");
+    if (!bodyEl) { resolve("en"); return; }
+    const lastChoice = _loadLangPref();
+    bodyEl.innerHTML = `
+      <div class="dwr-tts-prompt" role="dialog" aria-labelledby="dwr-lang-prompt-title">
+        <div class="dwr-tts-prompt-icon" aria-hidden="true">🌐</div>
+        <div id="dwr-lang-prompt-title" class="dwr-tts-prompt-title">Choose a Language</div>
+        <div class="dwr-tts-prompt-desc">
+          Pick the language for this report's narrative text and voice narration.
+          You can switch anytime from the language button in the header.
+        </div>
+        <div class="dwr-tts-prompt-buttons">
+          <button type="button" class="dwr-tts-prompt-btn${lastChoice === "en" ? " is-primary" : ""}" data-choice="en">English</button>
+          <button type="button" class="dwr-tts-prompt-btn${lastChoice === "ur" ? " is-primary" : ""}" data-choice="ur">اردو</button>
+        </div>
+        <div class="dwr-tts-prompt-hint">Your choice holds until you refresh the data.</div>
+      </div>
+    `;
+    const onClick = (e) => {
+      const btn = e.target.closest("[data-choice]");
+      if (!btn) return;
+      bodyEl.removeEventListener("click", onClick);
+      resolve(btn.dataset.choice === "ur" ? "ur" : "en");
     };
     bodyEl.addEventListener("click", onClick);
   });
@@ -374,6 +617,28 @@ function _injectStyles() {
     #${CARD_ID} .dwr-refresh:disabled { cursor: default; opacity: 0.6; }
     #${CARD_ID} .dwr-refresh.is-spinning svg { animation: dwr-refresh-spin 0.9s linear infinite; }
     @keyframes dwr-refresh-spin { to { transform: rotate(360deg); } }
+    #${CARD_ID} .dwr-lang {
+      appearance: none; border: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 3px 9px;
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; line-height: 1;
+      color: rgba(234, 234, 234, 0.80);
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    #${CARD_ID} .dwr-lang:hover { background: rgba(70, 178, 255, 0.22); color: #fff; }
+    #${CARD_ID} .dwr-lang.is-active { background: rgba(70, 178, 255, 0.30); color: #fff; border-color: rgba(70, 178, 255, 0.5); }
+    #${CARD_ID} .dwr-lang.is-loading { opacity: 0.55; pointer-events: none; }
+
+    /* ---- Urdu narrative text (RTL + legible script font) ------------ */
+    .dwr-lang-ur {
+      direction: rtl;
+      text-align: right;
+      font-family: "Noto Nastaliq Urdu", "Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif;
+      font-size: 1.05em;
+      line-height: 1.9;
+    }
 
     #${CARD_ID} .dwr-tts-prompt {
       display: grid; gap: 10px;
@@ -503,6 +768,16 @@ function _injectStyles() {
       margin-top: 6px;
       font-size: 11px; font-style: italic;
       color: rgba(234, 234, 234, 0.6);
+    }
+    #${CARD_ID} .dwr-voice-warning {
+      margin-bottom: 8px;
+      padding: 6px 9px;
+      border-radius: 6px;
+      background: rgba(234, 179, 8, 0.12);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+      color: #fde68a;
+      font-size: 10.5px;
+      line-height: 1.4;
     }
 
     #${CARD_ID} .dwr-progress-row {
@@ -824,6 +1099,7 @@ function _ensureCard(root) {
       <div class="dwr-head-actions">
         <button type="button" class="dwr-refresh" aria-label="Refresh data" title="Refresh all data (re-fetches every layer/API) and restart from Chapter 1">${ICON_REFRESH}</button>
         <button type="button" class="dwr-mute is-muted" aria-label="Unmute narration" title="Unmute narration">${ICON_TTS_OFF}</button>
+        <button type="button" class="dwr-lang" aria-label="Switch to Urdu" title="Switch narration to Urdu">اردو</button>
         <button type="button" class="dwr-close" aria-label="Close Dynamic Weather Report" title="Close and return to 7-Day Outlook">✕</button>
       </div>
     </div>
@@ -856,7 +1132,9 @@ function _ensureCard(root) {
   } else {
     root.appendChild(card);
   }
+  _state.lang = _loadLangPref();
   _bindCardEvents(card);
+  _syncLangButton(card);
   return card;
 }
 
@@ -873,6 +1151,29 @@ function _syncMuteButton(card) {
   const label = _state.ttsEnabled ? "Mute narration" : "Unmute narration";
   m.setAttribute("aria-label", label);
   m.setAttribute("title", label);
+}
+
+// Syncs the header language-toggle button's label/state to the CURRENT
+// _state.lang — same on/off pairing pattern _syncMuteButton uses above.
+// Shows "اردو" (call-to-action to switch TO Urdu) while in English, "EN"
+// (switch back) while in Urdu.
+function _syncLangButton(card) {
+  const b = card?.querySelector(".dwr-lang");
+  if (!b) return;
+  const isUr = _state.lang === "ur";
+  b.textContent = isUr ? "EN" : "اردو";
+  const label = isUr ? "Switch narration to English" : "Switch narration to Urdu";
+  b.setAttribute("aria-label", label);
+  b.setAttribute("title", label);
+  b.classList.toggle("is-active", isUr);
+}
+
+// Brief loading state on the language button while a translate request is
+// in flight — same visual pattern .dwr-refresh.is-spinning already uses.
+function _setLangButtonLoading(card, isLoading) {
+  const b = card?.querySelector(".dwr-lang");
+  if (!b) return;
+  b.classList.toggle("is-loading", isLoading);
 }
 
 function _bindCardEvents(card) {
@@ -892,6 +1193,33 @@ function _bindCardEvents(card) {
     _stopSpeaking();
     _syncMuteButton(card);
   });
+  btn(".dwr-lang").addEventListener("click", () => {
+    const next = _state.lang === "ur" ? "en" : "ur";
+    _state.lang = next;
+    _saveLangPref(next);
+    _syncLangButton(card);
+    // Re-render (and, if narration is on, re-speak) the current scene
+    // immediately so the switch is visible/audible right away, with
+    // whatever's already cached (falls back to English via _tr()'s
+    // cache-miss no-op). A currently open map popup keeps its already-
+    // rendered text until the NEXT scene navigation — popups are rebuilt
+    // fresh on every scene entry by the _run*() functions, and some of
+    // those (e.g. _showFfdBarragePopup) carry real side effects (auto-
+    // opening the FFD stats modal, kicking off fetches), so they're
+    // deliberately not re-invoked here just to swap displayed text.
+    _reapplyCurrentSceneLanguage(card);
+    if (next === "ur") {
+      // NOT awaited — translating a full report's worth of captions on
+      // this CPU-only model can take well over a minute (a real 15-item
+      // batch measured at ~105s). Blocking here would freeze the current
+      // scene with only the button's own loading spinner as feedback.
+      // Fire-and-forget instead, silently upgrading (text AND narration)
+      // once ready.
+      _ensureUrduTranslations(card).then((ok) => {
+        if (ok && _state.lang === "ur") _reapplyCurrentSceneLanguage(card);
+      }).catch(() => {});
+    }
+  });
   btn(".dwr-refresh").addEventListener("click", () => _handleRefreshClick(card));
   card.querySelector(".dwr-dots").addEventListener("click", (e) => {
     const dot = e.target.closest(".dwr-dot");
@@ -908,56 +1236,6 @@ async function _fetchRainfallReport() {
   const res = await fetch("/api/pmd/nwfc/rainfall-report/");
   if (!res.ok) throw new Error(`rainfall report HTTP ${res.status}`);
   return res.json();
-}
-
-// Recent news/context for the opening scene — reuses NCOP's own existing
-// GDELT endpoint (project/ncop_internal/views.py: GdeltNewsEventsApi,
-// already consumed elsewhere by navigation-panel.js's news ticker with
-// the same `include_social_media=false` pattern) rather than a new
-// backend route. A short client-side timeout and a broad try/catch make
-// this purely additive — the briefing plays exactly the same with zero
-// articles if GDELT is slow/unavailable, it just skips the news section.
-//
-// Module-level cache (survives across story open/close within the same
-// page load, not just within one _loadAndPlay call) — the backend's own
-// cache is bucketed in 10-minute windows, so re-fetching sooner than that
-// can only ever return the same data anyway. Reopening the story, hitting
-// Prev back to scene 1, etc. all reuse this instead of hitting the
-// network again. The empty/error result gets cached too, for the same
-// TTL — GDELT being rate-limited shouldn't mean every reopen retries it.
-let _newsCache = { articles: null, fetchedAt: 0 };
-const NEWS_CACHE_TTL_MS = 10 * 60 * 1000;
-
-async function _fetchGdeltNews() {
-  const now = Date.now();
-  if (_newsCache.articles !== null && (now - _newsCache.fetchedAt) < NEWS_CACHE_TTL_MS) {
-    return _newsCache.articles;
-  }
-  let articles = [];
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch("/get-gdelt-news-events/?include_social_media=false&days=2&max_records=10", {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const geojson = await res.json();
-      if (!geojson?.metadata?.error) {
-        articles = (geojson.features || [])
-          .map((f) => f.properties || {})
-          .filter((p) => p.title && p.url)
-          .sort((a, b) => new Date(b.seendate || 0) - new Date(a.seendate || 0))
-          .slice(0, 4);
-      }
-    }
-  } catch (_) {
-    // best-effort — the briefing works fine with zero articles; falls
-    // through to caching the empty result below rather than retrying
-    // immediately on the next call.
-  }
-  _newsCache = { articles, fetchedAt: now };
-  return articles;
 }
 
 // Chapter 2's primary station data source — NCOP's own Heatwave
@@ -2033,6 +2311,49 @@ function _precipDistrictNarrative(entry, precipSamples) {
   return bits.filter(Boolean).join(" ");
 }
 
+// Groups the SAME already-sampled precipSamples (no new fetch, no map-
+// layer dependency) by province, mirroring weather-report-control.js's
+// own Dynamic Report tab presentation (province groups, each with an
+// average + its districts) — used for a single national, province-wise
+// overview instead of the individual per-district zoom-ins the "precip-
+// district" scene kind still does elsewhere. precipSamples is already
+// sorted desc by mm nationally (see _fetchPrecipSamples), so each
+// province's own district list comes out desc-sorted too, for free.
+// Provinces themselves are ranked by average mm, matching the Dynamic
+// Report tab's own #provinceAggregate (mean, not max, for precipitation).
+function _groupPrecipByProvince(precipSamples) {
+  const byProvince = new Map();
+  for (const d of precipSamples) {
+    if (!byProvince.has(d.province)) byProvince.set(d.province, []);
+    byProvince.get(d.province).push(d);
+  }
+  const groups = Array.from(byProvince.entries()).map(([province, districts]) => ({
+    province,
+    districts,
+    avgMm: districts.reduce((sum, d) => sum + (d.mm || 0), 0) / districts.length,
+  }));
+  groups.sort((a, b) => b.avgMm - a.avgMm);
+  return groups;
+}
+
+function _joinProvinceAverages(groups) {
+  const parts = groups.map((g) =>
+    `${g.province} (avg ${g.avgMm.toFixed(1)} mm across ${g.districts.length} district${g.districts.length === 1 ? "" : "s"})`
+  );
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function _precipProvinceOverviewNarrative(groups) {
+  if (!groups.length) return "No province currently shows a sampled precipitation forecast above the reporting threshold.";
+  const totalDistricts = groups.reduce((n, g) => n + g.districts.length, 0);
+  const bits = [
+    `Province-wise, the 24-hour precipitation forecast is led by ${_joinProvinceAverages(groups.slice(0, 3))}.`,
+    `This national overview covers ${groups.length} province${groups.length === 1 ? "" : "s"} and ${totalDistricts} sampled district${totalDistricts === 1 ? "" : "s"}.`,
+  ];
+  return bits.join(" ");
+}
+
 function _precipAssessmentNarrative(precipSamples) {
   const bits = ["Precipitation outlook assessment:"];
   bits.push(precipSamples.length
@@ -2311,17 +2632,22 @@ async function _buildChapter3Scenes(report, liveFeatures, candidatesOverride) {
   _state.topPrecipDistricts = precipSamples;
 
   scenes.push({ kind: "precip-layer", chapter: 3, precipSamples, caption: _precipLayerNarrative(precipSamples) });
-  // Only districts forecasting a meaningful amount get an individual
-  // zoom-in — a 1mm trace reading isn't worth a dedicated flyover.
-  // precipSamples is already sorted desc by mm, so this naturally keeps
-  // the top (up to 6) districts that clear the bar, in order.
-  let addedPrecip = 0;
-  for (const entry of precipSamples) {
-    if (addedPrecip >= 6) break;
-    if (!entry.coords) continue; // nowhere real to fly the camera
-    if (entry.mm < PRECIP_DISTRICT_ZOOM_THRESHOLD_MM) continue;
-    scenes.push({ kind: "precip-district", chapter: 3, entry, precipSamples, caption: _precipDistrictNarrative(entry, precipSamples) });
-    addedPrecip += 1;
+  // Province-wise national overview — no individual district zoom-ins for
+  // the precipitation forecast (that's still what "precip-district"/
+  // _runPrecipDistrict do, just no longer scheduled here). Groups the SAME
+  // already-sampled precipSamples by province (_groupPrecipByProvince, no
+  // new fetch, no boundary-layer dependency) and shows them all in one
+  // broad national shot, mirroring weather-report-control.js's own Dynamic
+  // Report tab presentation (province groups + per-district values).
+  const precipProvinceGroups = _groupPrecipByProvince(precipSamples.filter((d) => d.mm > 0));
+  if (precipProvinceGroups.length) {
+    scenes.push({
+      kind: "precip-province-overview",
+      chapter: 3,
+      precipSamples,
+      groups: precipProvinceGroups,
+      caption: _precipProvinceOverviewNarrative(precipProvinceGroups),
+    });
   }
   scenes.push({ kind: "precip-assessment", chapter: 3, precipSamples, caption: _precipAssessmentNarrative(precipSamples) });
 
@@ -2431,6 +2757,7 @@ function _sceneTitle(scene) {
     case "ch3-intro":       return "Chapter 3 — Forecasted Precipitation Outlook";
     case "precip-layer":    return "24h Precipitation Forecast";
     case "precip-district": return `Forecast Focus — ${scene.entry.name} (${scene.entry.province})`;
+    case "precip-province-overview": return "Province-Wise Precipitation Overview";
     case "precip-assessment": return "Precipitation Outlook Assessment";
     case "ffd-intro":       return "FFD Barrage & Dam Tour";
     case "ffd-routing-map": return "FFD Flood Routing Map";
@@ -2490,6 +2817,9 @@ function _renderSceneBody(card, scene) {
     const e = scene.entry;
     const pillClass = e.mm >= 25 ? "dwr-fact-pill is-alert" : "dwr-fact-pill";
     factsHtml = `<div class="dwr-facts"><span class="${pillClass}">${_hlNum(`${e.mm} ${e.unit}`)} forecast (24h)</span></div>`;
+  } else if (scene.kind === "precip-province-overview") {
+    const pills = (scene.groups || []).slice(0, 3).map((g) => `${g.province}: avg ${g.avgMm.toFixed(1)} mm`);
+    factsHtml = pills.length ? `<div class="dwr-facts">${pills.map((p) => `<span class="dwr-fact-pill">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>` : "";
   } else if (scene.kind === "precip-assessment") {
     const lead = (scene.precipSamples || _state.topPrecipDistricts)?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill${lead.mm >= 25 ? " is-alert" : ""}">${_hlNum(`${lead.mm} ${lead.unit}`)} leading forecast</span></div>` : "";
@@ -2505,7 +2835,8 @@ function _renderSceneBody(card, scene) {
     const wp = (_state.ffdWaypoints || [])[0];
     factsHtml = wp ? `<div class="dwr-facts"><span class="dwr-fact-pill">${_state.ffdWaypoints.length} barrages monitored</span></div>` : "";
   }
-  bodyEl.innerHTML = `<div class="dwr-caption">${_highlightNumbers(_escapeHtml(scene.caption || ""))}</div>${factsHtml}`;
+  bodyEl.classList.toggle("dwr-lang-ur", _state.lang === "ur");
+  bodyEl.innerHTML = `<div class="dwr-caption">${_highlightNumbers(_escapeHtml(_tr(scene.caption) || ""))}</div>${factsHtml}`;
 }
 
 function _renderScene(card) {
@@ -2743,10 +3074,12 @@ async function _runIntro(map, token, seq) {
 // layers/data feed it, in plain operator-facing terms. Replaced by the
 // radar's own stats popup a few seconds later (same shared popup shell).
 // News rows for the opening popup's "Recent news & context" section —
-// GDELT articles fetched alongside the rainfall report in _loadAndPlay
-// (see _fetchGdeltNews). Renders nothing if the fetch came back empty
-// (slow/unavailable GDELT, or genuinely no recent matching coverage) —
-// purely additive, never blocks or alters the rest of the briefing.
+// GDELT news fetching was removed from the story's data load (see
+// _loadAndPlay) — it's a frequently rate-limited third-party API this
+// briefing never depended on for anything essential. `_state.newsArticles`
+// is now always [], so this always renders nothing; left in place rather
+// than ripped out in case news context is reintroduced from a different
+// source later.
 function _newsSectionHtml() {
   const articles = _state.newsArticles || [];
   if (!articles.length) return "";
@@ -2977,7 +3310,19 @@ async function _runTemporalLoop(slider, maxVal, stepMs, token, seq) {
       const cur = parseInt(slider.value, 10) || 0;
       const next = cur < maxVal ? cur + 1 : 0;
       slider.value = next;
+      // The native slider's own "input" handler (temporal-controls.js) re-
+      // shows #temp-slider1's panel as a normal side effect of ANY slider
+      // interaction — reasonable for a real user dragging it, but this is
+      // a synthetic event fired every frame of an unattended story-mode
+      // animation, so it was undoing _activateTemporalLayer's own
+      // _hideTempSlider() call on every single step (confirmed live: the
+      // panel stayed fully visible, populated, and updating throughout
+      // Chapter 2's temperature animation). Re-asserting hidden right
+      // after is the same "re-assert" pattern _activateTemporalLayer
+      // already uses for the exact same race, just applied every step
+      // instead of once.
       try { slider.dispatchEvent(new Event("input", { bubbles: true })); } catch (_) { /* best-effort */ }
+      _hideTempSlider();
     }
   } finally {
     window.isTemporalAnimating = false;
@@ -3259,7 +3604,7 @@ function _showProvinceOverviewPopup(scene) {
       <span class="dwrp-badge">${top3.length + rest.length} districts</span>
     </div>
     <div class="dwrp-body">
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_captionHtml(scene.caption)}
       ${topRows ? `
       <div class="dwrp-table-label">Districts just toured</div>
       <table class="dwrp-table">
@@ -3364,6 +3709,7 @@ async function _runChapter2Intro(map, token, seq) {
     _state.chapter2WeeklyScenesBuilt = true;
     const cardEl = document.getElementById(CARD_ID);
     if (cardEl) _renderDots(cardEl);
+    _queueTranslateNewCaptions(cardEl);
   }
 }
 
@@ -3564,6 +3910,7 @@ async function _runChapter3Intro(map, token, seq) {
     _state.chapter3ScenesBuilt = true;
     const cardEl = document.getElementById(CARD_ID);
     if (cardEl) _renderDots(cardEl);
+    _queueTranslateNewCaptions(cardEl);
   }
 }
 
@@ -3647,6 +3994,27 @@ async function _runPrecipDistrict(map, scene, token, seq) {
     setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
   }
   _showPrecipDistrictPopup(scene);
+}
+
+// Province-wise national overview — deliberately NO camera zoom into any
+// single district (that's still what _runPrecipDistrict does, just no
+// longer scheduled by _buildChapter3Scenes); a single wide national shot,
+// same cinematicFitBounds(PAKISTAN_BOUNDS) framing _runPrecipAssessment
+// already uses to close this section out. Blinks every district that
+// actually has a group entry (mirrors _runPrecipLayer's own "blink every
+// wet district" overlay), so the boundary highlight still visually backs
+// up the numbers in the popup.
+async function _runPrecipProvinceOverview(map, scene, token, seq) {
+  _setActiveLayerVisibility(map, true); // undoes _runPrecipDistrict's visibility:none, in case of a direct Prev/dot jump
+
+  const wetNames = (scene.precipSamples || [])
+    .filter((d) => d.mm > 0)
+    .map((d) => ({ name: d.name }));
+  _prepareDistrictHighlight(wetNames).then(() => { if (!_isStale(token, seq)) _startDistrictBlink(); });
+
+  await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
+  if (_isStale(token, seq)) return;
+  _showPrecipProvinceOverviewPopup(scene);
 }
 
 async function _runPrecipAssessment(map) {
@@ -3824,7 +4192,7 @@ function _showStationPopup(scene) {
       <span class="dwrp-badge">${_escapeHtml(props.obs_time || district.province)}</span>
     </div>
     <div class="dwrp-body">
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_captionHtml(scene.caption)}
       ${rows ? `
       <div class="dwrp-table-label">Stations in ${_escapeHtml(district.name)}</div>
       <table class="dwrp-table">
@@ -4026,7 +4394,7 @@ function _showTempStationPopup(scene) {
         <span class="dwrp-heatwave-now-value">${_hlNum(`${scene.entry.temp}°C`)}</span>
         ${subParts.length ? `<span class="dwrp-heatwave-now-sub">${_escapeHtml(subParts.join(" · "))}</span>` : ""}
       </div>
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_captionHtml(scene.caption)}
     </div>
     ${chips.length ? `<div class="dwrp-chips">${chips.map((p) => `<span class="dwrp-chip">${_highlightNumbers(_escapeHtml(p))}</span>`).join("")}</div>` : ""}
     <div class="dwrp-pdf-list">
@@ -4122,8 +4490,44 @@ function _showPrecipDistrictPopup(scene) {
         <span class="dwrp-heatwave-now-sub">forecast, next 24h</span>
       </div>
       ${peakLine}
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_captionHtml(scene.caption)}
       ${_dayWiseRowsMarkup(e.weeklySeries)}
+    </div>
+  `);
+}
+
+// Province-wise national overview popup — one table per province (sorted
+// by that province's own average, districts within it already sorted desc
+// by mm), mirroring weather-report-control.js's Dynamic Report tab shape
+// (province group + per-district values) with this file's own existing
+// dwrp-* classes — no new CSS needed.
+function _showPrecipProvinceOverviewPopup(scene) {
+  const groups = scene.groups || [];
+  const totalDistricts = groups.reduce((n, g) => n + g.districts.length, 0);
+  const groupsHtml = groups.map((g) => {
+    const rows = g.districts.map((d) => `
+      <tr>
+        <td>${_escapeHtml(d.name)}</td>
+        <td>${_hlNum(`${d.mm} ${d.unit}`)}</td>
+      </tr>
+    `).join("");
+    return `
+      <div class="dwrp-table-label">${_escapeHtml(g.province)} <span class="dwrp-district-prov">avg ${_hlNum(`${g.avgMm.toFixed(1)} mm`)} · ${g.districts.length} district${g.districts.length === 1 ? "" : "s"}</span></div>
+      <table class="dwrp-table">
+        <thead><tr><th>District</th><th>Forecast (24h)</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }).join("");
+  _presentPopup(`
+    <div class="dwrp-head">
+      <span class="dwrp-dot" aria-hidden="true"></span>
+      <span class="dwrp-title">Province-Wise Precipitation Overview</span>
+      <span class="dwrp-badge">${groups.length} province${groups.length === 1 ? "" : "s"} · ${totalDistricts} district${totalDistricts === 1 ? "" : "s"}</span>
+    </div>
+    <div class="dwrp-body">
+      ${_captionHtml(scene.caption)}
+      ${groupsHtml}
     </div>
   `);
 }
@@ -4226,7 +4630,7 @@ function _showFfdRiverOverviewPopup(scene) {
       <span class="dwrp-badge">${scene.members.length} station${scene.members.length === 1 ? "" : "s"}</span>
     </div>
     <div class="dwrp-body">
-      ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+      ${_captionHtml(scene.caption)}
       <div class="dwrp-table-label">Every monitored station on this river — outflow / inflow</div>
       <table class="dwrp-table">
         <thead><tr><th>Station</th><th>Outflow / Inflow</th></tr></thead>
@@ -4300,7 +4704,7 @@ async function _showFfdBarragePopup(scene, token, seq) {
     <div class="ncop-popup__body-scroll">
       ${drawer}
       <div class="dwrp-body">
-        ${_highlightNumbers(_escapeHtml(scene.caption || ""))}
+        ${_captionHtml(scene.caption)}
         ${precipNote}
       </div>
     </div>
@@ -4361,7 +4765,7 @@ function _isStale(token, seq) {
 async function _enterScene(card, scene, token, seq) {
   const map = window.ncop_map;
   _renderScene(card);
-  _speak(scene.caption || "");
+  _speak(_tr(scene.caption) || "");
   if (!map) { await wait(2000); return; }
 
   try {
@@ -4430,6 +4834,16 @@ async function _enterScene(card, scene, token, seq) {
         await wait(320);
       }
       await _runPrecipDistrict(map, scene, token, seq);
+    } else if (scene.kind === "precip-province-overview") {
+      if (_isStale(token, seq)) return;
+      const prevKind = _state.scenes[_state.index - 1]?.kind;
+      if (prevKind === "precip-layer" || prevKind === "precip-district") {
+        // Same layer-stays-on, popup-swaps handoff every other scene
+        // transition in this chapter already uses.
+        _closePopup();
+        await wait(320);
+      }
+      await _runPrecipProvinceOverview(map, scene, token, seq);
     } else if (scene.kind === "precip-assessment") {
       if (_isStale(token, seq)) return;
       await _runPrecipAssessment(map);
@@ -4650,18 +5064,24 @@ async function _loadAndPlay(card, forceRefresh = false) {
   card.querySelector(".dwr-chapter-title").textContent = "Dynamic Weather Report";
   card.querySelector(".dwr-chapter-counter").textContent = "";
 
-  let report, observations, newsArticles;
+  // GDELT news context was dropped from the story's data load — it's a
+  // third-party API that's frequently 429-rate-limited (observed live,
+  // burning its full ~50s retry budget on every fresh story open), and
+  // the briefing never depended on it for anything beyond an optional
+  // "Recent news & context" section. `newsArticles` stays an empty array
+  // throughout, so `_newsSectionHtml()`/`_introNarrative()` fall through
+  // their existing "no articles" branches unchanged (see below).
+  const newsArticles = [];
+  let report, observations;
   if (useCached) {
     report = _state.report;
     observations = _state.observations;
-    newsArticles = _state.newsArticles;
   } else {
     let heatwaveStations, maxTempRecords, ffdStations, ffdRivers;
     try {
-      [report, observations, newsArticles, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
+      [report, observations, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
         _fetchRainfallReport(),
         getNwfcObservations().catch(() => null),
-        _fetchGdeltNews(), // best-effort — never rejects, resolves [] on any failure
         _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
         _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
         _fetchFfdStations(), // best-effort — resolves null on any failure
@@ -4680,7 +5100,7 @@ async function _loadAndPlay(card, forceRefresh = false) {
 
     _state.report = report;
     _state.observations = observations;
-    _state.newsArticles = newsArticles || [];
+    _state.newsArticles = [];
     _state.heatwaveStations = heatwaveStations;
     _state.maxTempRecords = maxTempRecords || [];
     _state.ffdStations = ffdStations;
@@ -4710,6 +5130,30 @@ async function _loadAndPlay(card, forceRefresh = false) {
   // completely unchanged; this only forces the initial value.
   _state.ttsEnabled = false;
   _syncMuteButton(card);
+
+  // Language prompt — shown only when this run involved a genuine fetch
+  // (first-ever open, or after Refresh; useCached being true means this
+  // is a plain reopen of already-loaded data, which never re-prompts —
+  // see _showLangPrompt's own comment for why this differs from the
+  // TTS decision above).
+  if (!useCached) {
+    const langChoice = await _showLangPrompt(card);
+    if (token !== _state.runToken) return;
+    _state.lang = langChoice;
+    _saveLangPref(langChoice);
+    _syncLangButton(card);
+    if (langChoice === "ur") {
+      // NOT awaited — translating a full report's worth of captions on
+      // this CPU-only model can take well over a minute (a real 15-item
+      // batch measured at ~105s). Blocking story start on that produced a
+      // "frozen with zero feedback for 100+ seconds" experience. Instead:
+      // play now (falls back to English via _tr()'s cache-miss no-op),
+      // silently upgrade scene-by-scene as translations land.
+      _ensureUrduTranslations(card).then((ok) => {
+        if (ok && _state.lang === "ur") _reapplyCurrentSceneLanguage(card);
+      }).catch(() => {});
+    }
+  }
 
   await _gotoScene(0, false);
   if (token !== _state.runToken) return;

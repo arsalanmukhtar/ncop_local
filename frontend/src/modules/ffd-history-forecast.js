@@ -5,7 +5,7 @@
 //
 //   1. A simple linear-regression extrapolation of the REAL 30-day
 //      discharge history (getFfdHistoryAll — see gcop-api-cache.js —
-//      http://172.18.1.113:8000/proxy_api_daily/api/history-all).
+//      http://172.18.7.35:8000/proxy_api_daily/api/history-all).
 //   2. GeoGLOWS's physically-simulated river-discharge forecast, where a
 //      nearby reach resolves (story-dynamic-weather.js's own
 //      _fetchGeoglowsForecastSeries feeds this the FULL forecast series,

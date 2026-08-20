@@ -105,6 +105,18 @@
             width: 100%;
             height: auto;
         }
+        /* Compact variant — for figures whose SOURCE image is naturally
+           narrow/tall (e.g. a vertical rail screenshot) rather than a wide
+           16:9 dashboard capture. The default .doc-figure forces width:100%
+           of the content column, which blows a 327x1067 source image up to
+           an enormous multi-thousand-pixel-tall render. Capped + centred
+           instead, at roughly the image's own natural width. Every other
+           .doc-figure is untouched. */
+        .doc-figure--compact {
+            max-width: 260px;
+            margin-left: auto;
+            margin-right: auto;
+        }
         .doc-placeholder {
             display: flex;
             align-items: center;
@@ -284,20 +296,6 @@
             letter-spacing: 0.02em;
         }
 
-        /* ---------- Callout box ---------- */
-        .callout {
-            padding: 12px 16px;
-            margin: 16px 0;
-            border-left: 4px solid var(--accent);
-            background: var(--accent-soft);
-            border-radius: 6px;
-            font-size: 13.5px;
-            color: var(--text-primary);
-        }
-        .callout--warning { border-left-color: var(--warning); background: rgba(251, 191, 36, 0.10); }
-        .callout--success { border-left-color: var(--success); background: rgba(45, 212, 191, 0.10); }
-        .callout b { color: var(--text-primary); }
-
         /* ---------- ASCII diagram styling (for the terminal-style pipelines) ---------- */
         pre.ascii-diagram {
             background: var(--code-bg);
@@ -354,17 +352,26 @@
             color: var(--text-primary);
         }
         .topbar-brand-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: var(--gradient);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 15px;
-            letter-spacing: 0.5px;
+            padding: 3px;
+            flex-shrink: 0;
+        }
+        .topbar-brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        /* Same 3D-spin identity animation the auth pages already use on the
+           NDMA logo (frontend/src/styles/auth-base.css .logo-spin) —
+           duplicated here rather than shared since this Django template has
+           no build-step dependency on the Vite frontend bundle. */
+        .logo-spin { animation: docs-logo-spin-y 3s linear infinite; }
+        @keyframes docs-logo-spin-y {
+            0%   { transform: rotateY(0deg); }
+            100% { transform: rotateY(360deg); }
         }
         .topbar-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
         .topbar-brand-title { font-size: 15px; font-weight: 600; }
@@ -388,6 +395,48 @@
         .topbar-btn:hover { color: var(--text-primary); border-color: var(--border-strong); background: var(--bg-hover); }
         .topbar-btn--primary { background: var(--accent); border-color: var(--accent); color: white; }
         .topbar-btn--primary:hover { filter: brightness(1.1); }
+
+        /* ---------- Export menu ---------- */
+        .docs-export-wrap { position: relative; }
+        .docs-export-toggle svg { width: 14px; height: 14px; }
+        .docs-export-toggle .chevron { width: 11px; height: 11px; margin-left: -2px; transition: transform 0.15s ease; }
+        .docs-export-wrap[data-open="true"] .chevron { transform: rotate(180deg); }
+        .docs-export-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            min-width: 220px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+            padding: 6px;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 50;
+        }
+        .docs-export-wrap[data-open="true"] .docs-export-menu { display: flex; }
+        .docs-export-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 9px 10px;
+            background: transparent;
+            border: none;
+            border-radius: 7px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .docs-export-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .docs-export-item svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--accent); }
+        .docs-export-item-text { display: flex; flex-direction: column; line-height: 1.35; }
+        .docs-export-item-desc { font-size: 11px; color: var(--text-muted); }
 
         /* ---------- Layout ---------- */
         .layout { display: grid; grid-template-columns: var(--sidebar-width) 1fr; min-height: calc(100vh - 65px); }
@@ -529,19 +578,40 @@
         tbody tr:hover { background: var(--bg-card); }
         td code { font-size: 11.5px; }
 
-        /* ---------- Callouts ---------- */
-        .callout { display: flex; gap: 14px; padding: 14px 18px; border-radius: 8px; margin: 18px 0; border: 1px solid; font-size: 13.5px; }
-        .callout-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
-        .callout-body { color: var(--text-secondary); }
+        /* ---------- Callouts ----------
+           Single, consolidated definition (a duplicate, conflicting base
+           rule used to live near the ASCII-diagram styles above — it forced
+           display:flex onto callouts that only had plain inline content, no
+           .callout-icon/.callout-body wrapper, which fragmented that text
+           into a broken run of individual flex items). Every callout in
+           this document now uses the same icon+body shape, so one rule
+           handles all of them consistently, in both themes. */
+        .callout { display: flex; gap: 14px; padding: 14px 18px; border-radius: 8px; margin: 18px 0; border: 1px solid; font-size: 13.5px; color: var(--text-primary); }
+        .callout b { color: var(--text-primary); }
+        .callout-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            line-height: 1;
+        }
+        .callout-body { color: var(--text-secondary); line-height: 1.55; }
         .callout-body strong { display: block; color: var(--text-primary); margin-bottom: 4px; font-size: 13.5px; }
-        .callout--info    { background: rgba(79, 159, 255, 0.05);  border-color: rgba(79, 159, 255, 0.25); }
-        .callout--info .callout-icon { color: var(--accent); }
-        .callout--warn    { background: rgba(251, 191, 36, 0.05);  border-color: rgba(251, 191, 36, 0.25); }
-        .callout--warn .callout-icon { color: var(--warning); }
-        .callout--danger  { background: rgba(248, 113, 113, 0.05); border-color: rgba(248, 113, 113, 0.25); }
-        .callout--danger .callout-icon { color: var(--danger); }
-        .callout--success { background: rgba(45, 212, 191, 0.05);  border-color: rgba(45, 212, 191, 0.25); }
-        .callout--success .callout-icon { color: var(--success); }
+        .callout--info    { background: rgba(79, 159, 255, 0.06);  border-color: rgba(79, 159, 255, 0.3); }
+        .callout--info .callout-icon { color: var(--accent); background: rgba(79, 159, 255, 0.14); }
+        .callout--warn    { background: rgba(251, 191, 36, 0.06);  border-color: rgba(251, 191, 36, 0.3); }
+        .callout--warn .callout-icon { color: var(--warning); background: rgba(251, 191, 36, 0.16); }
+        .callout--danger  { background: rgba(248, 113, 113, 0.06); border-color: rgba(248, 113, 113, 0.3); }
+        .callout--danger .callout-icon { color: var(--danger); background: rgba(248, 113, 113, 0.16); }
+        .callout--success { background: rgba(45, 212, 191, 0.06);  border-color: rgba(45, 212, 191, 0.3); }
+        .callout--success .callout-icon { color: var(--success); background: rgba(45, 212, 191, 0.16); }
+        @media (max-width: 640px) {
+            .callout { flex-direction: column; gap: 8px; }
+        }
 
         /* ---------- Pills ---------- */
         .pill { display: inline-block; padding: 2px 9px; font-size: 11px; font-weight: 600; border-radius: 11px; letter-spacing: 0.3px; }
@@ -583,19 +653,86 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+        /* ---------- Print / "Export as PDF" ----------
+           window.print() -> the browser's own Save-as-PDF destination is
+           the export mechanism (see docsExportPdf below) — zero new
+           dependencies, and it renders the SAME live DOM/CSS the user is
+           currently looking at, so the current theme genuinely carries
+           through. Browsers strip background colours from print output by
+           default (ink-saving); print-color-adjust:exact overrides that so
+           dark-theme colours actually reach the PDF instead of silently
+           flattening to white. */
+        @media print {
+            * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            @page { margin: 14mm 12mm; }
+            body { background: var(--bg-primary); }
+            .topbar, .sidebar, .docs-export-menu, #docsExportToggle,
+            #docsThemeToggle, .section-anchor, .topbar-btn { display: none !important; }
+            .layout { display: block; }
+            .main { max-width: none; padding: 0; }
+            .section-title, .subsection-title { break-after: avoid; }
+            .callout, .card, table, figure, .diagram, pre { break-inside: avoid; }
+            section { break-inside: avoid-page; }
+            a[href^="#"]::after { content: ""; }
+            a[href^="http"]:not([href*="127.0.0.1"]):not([href*="localhost"])::after {
+                content: " (" attr(href) ")";
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+        }
     </style>
 </head>
 <body>
     <!-- Top Bar -->
     <header class="topbar">
         <a href="/" class="topbar-brand">
-            <div class="topbar-brand-icon">NC</div>
+            <div class="topbar-brand-icon">
+                <img src="{% static 'docs_images/ndma-logo.png' %}" alt="NDMA Logo" class="logo-spin">
+            </div>
             <div class="topbar-brand-text">
                 <span class="topbar-brand-title">NCOP Documentation</span>
                 <span class="topbar-brand-subtitle">National Common Operating Picture</span>
             </div>
         </a>
         <div class="topbar-actions">
+            <div class="docs-export-wrap" id="docsExportWrap">
+                <button id="docsExportToggle" type="button" class="topbar-btn docs-export-toggle"
+                        aria-haspopup="true" aria-expanded="false" aria-controls="docsExportMenu"
+                        title="Download this documentation">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="docs-export-menu" id="docsExportMenu" role="menu">
+                    <button type="button" class="docs-export-item" id="docsExportPdf" role="menuitem">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span class="docs-export-item-text">
+                            Download as PDF
+                            <span class="docs-export-item-desc">Opens print dialog &mdash; choose &ldquo;Save as PDF&rdquo;</span>
+                        </span>
+                    </button>
+                    <button type="button" class="docs-export-item" id="docsExportWord" role="menuitem">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span class="docs-export-item-text">
+                            Download as Word
+                            <span class="docs-export-item-desc">.doc file, opens directly in Microsoft Word</span>
+                        </span>
+                    </button>
+                </div>
+            </div>
             <button id="docsThemeToggle" type="button" class="docs-theme-toggle"
                     aria-label="Toggle documentation theme" title="Toggle light / dark theme">
                 <!-- Both icons ship; CSS reveals the correct one per theme. -->
@@ -678,6 +815,8 @@
                 <a href="#weather-report" class="sidebar-link">Weather Report</a>
                 <a href="#split-compare" class="sidebar-link">Split Compare View</a>
                 <a href="#guided-tour" class="sidebar-link">Guided Tour</a>
+                <a href="#story-mode" class="sidebar-link">Story Mode &mdash; EN/UR Narration</a>
+                <a href="#ncop-assistant" class="sidebar-link">NCOP Assistant (AI Q&amp;A)</a>
                 <a href="#popups" class="sidebar-link">Feature Popups</a>
                 <a href="#basemap-projection" class="sidebar-link">Basemaps</a>
             </div>
@@ -706,7 +845,7 @@
             <div class="page-meta">
                 <span><strong style="color: var(--text-secondary)">Version</strong> &middot; 1.0</span>
                 <span><strong style="color: var(--text-secondary)">Owner</strong> &middot; NDMA / NEOC</span>
-                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-07-28</span>
+                <span><strong style="color: var(--text-secondary)">Last updated</strong> &middot; 2026-08-17</span>
             </div>
 
             <!-- ============================================================ -->
@@ -714,8 +853,12 @@
                 <h2 class="section-title">Why NCOP Exists <span class="section-anchor">#</span></h2>
                 <p>Pakistan sits in the middle of one of the world&rsquo;s most disaster-exposed geographies. Monsoon floods on the Indus. Glacial-lake outburst floods in the Karakoram. Heatwaves in Sindh. Cyclones on the Arabian coast. Wildfires in KP. Earthquakes across the northern belt. Locust swarms coming in from the west. Between them, dozens of institutions publish authoritative data every single day &mdash; and until NCOP, an emergency operator responding to a real incident had to open <em>eight browser tabs</em> just to see what was happening.</p>
 
-                <div class="callout callout--warning">
-                    <b>The core problem:</b> the data existed. The <em>picture</em> didn&rsquo;t. Weather, floods, air quality, seismic activity, food security, live station feeds, satellite imagery &mdash; each source lived on its own website, in its own format, on its own refresh cadence, behind its own login. Analysts spent hours <em>collecting</em> before they could start <em>deciding</em>.
+                <div class="callout callout--warn">
+                    <div class="callout-icon">⚠</div>
+                    <div class="callout-body">
+                        <strong>The core problem</strong>
+                        The data existed. The <em>picture</em> didn&rsquo;t. Weather, floods, air quality, seismic activity, food security, live station feeds, satellite imagery &mdash; each source lived on its own website, in its own format, on its own refresh cadence, behind its own login. Analysts spent hours <em>collecting</em> before they could start <em>deciding</em>.
+                    </div>
                 </div>
 
                 <p>NCOP was commissioned by Pakistan&rsquo;s <strong>National Disaster Management Authority (NDMA)</strong> to solve that specific problem. Not a new dataset. Not a new model. A <strong>single operational picture</strong> where every meaningful feed &mdash; PMD, FFD, NWFC, ECMWF, GDACS, EONET, USGS, IPC, PBS, WAQI, GloFAS, GeoServer, IMERG, DWD, Meteoblue, Copernicus, GEE &mdash; is fused onto one Mapbox canvas, live, cached, colour-coded, playable through a shared temporal slider, and comparable side-by-side.</p>
@@ -879,7 +1022,7 @@
                     <div class="flow-node"><b>Zoom</b><span>+ / − / reset bearing</span></div>
                 </div>
 
-                <figure class="doc-figure">
+                <figure class="doc-figure doc-figure--compact">
                     <img src="{% static 'docs_images/right-hand_tools_rail.png' %}" alt="Right rail expanded, showing every button with tooltips" loading="lazy">
                     <figcaption>The right rail. Every icon is a single well-defined action; click for details or hover for a tooltip. The <b>Guided Tour</b> (graduation-cap) walks a first-time user through <em>every</em> icon in the correct order.</figcaption>
                 </figure>
@@ -902,7 +1045,11 @@
                 <p>If any of the above feels unfamiliar, click the <b>graduation-cap icon</b> on the right rail. It walks you through all <strong>58 workflow-ordered steps</strong>: every category, every subcategory, every button on the rail, the temporal slider anatomy, split-compare, the weather-report panel, the popups, everything. The tour drives the sidebar and panels itself &mdash; you just click Next.</p>
 
                 <div class="callout callout--success">
-                    <b>Tip:</b> the tour is safe to restart at any time. Great for training new operators, refreshing after a release, or showing a briefing audience how NCOP works.
+                    <div class="callout-icon">✓</div>
+                    <div class="callout-body">
+                        <strong>Tip</strong>
+                        The tour is safe to restart at any time. Great for training new operators, refreshing after a release, or showing a briefing audience how NCOP works.
+                    </div>
                 </div>
             </section>
 
@@ -1753,6 +1900,13 @@ seismological_global:seismic_hazard_map
                     <li><strong>Zoom In / Zoom Out / Reset Bearing</strong> pinned at the bottom.</li>
                 </ol>
                 <p>Only one slide-out panel is open at a time &mdash; clicking any rail button closes every other panel. The exceptions are the standalone hamburger menu (<code>#menuToggle</code>) at the top-left and the temporal slider under the map, both of which stay visible independent of the rail.</p>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>GEE Chat vs. NCOP Assistant</strong>
+                        <b>GEE Chat</b> (rail button above) stays on this rail and is pure keyword/synonym matching over the Earth&nbsp;Engine dataset catalogue &mdash; no LLM call. The <b>NCOP Assistant</b> is a separate, Groq-backed feature and is deliberately <em>not</em> on this rail at all &mdash; its entry point is a floating animated mascot in the map&rsquo;s bottom-right corner. See <a href="#ncop-assistant">NCOP Assistant</a>.
+                    </div>
+                </div>
                 <h3 class="subsection-title">Split-Compare mode adjustments</h3>
                 <p>When Split Compare View is active the rail (plus every rail-panel: layer-order, layer-info, layer-style, weather-report, basemap) is hidden via <code>body.split-compare-active .map-right-rail { display:none }</code> and analogous rules in <code>_split-compare.css</code>. The hamburger menu button stays visible on purpose so the user can still reach Map&nbsp;A&rsquo;s layer catalogue.</p>
             </section>
@@ -1948,7 +2102,7 @@ seismological_global:seismic_hazard_map
                     <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
                     <li><strong>Air Quality accordion</strong> (2 steps).</li>
                     <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
-                    <li><strong>Right rail</strong> (25 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the new <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps.</li>
+                    <li><strong>Right rail</strong> (26 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps, plus <strong>GEE Chat</strong> and, most recently, the <strong>NCOP Assistant</strong> floating mascot <em>(new)</em>.</li>
                     <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint (mentions every new feature).</li>
                 </ol>
 
@@ -2160,6 +2314,91 @@ PMD_MONITOR_USER  default PMD
 PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                 <p>Rotate the password by setting <code>PMD_MONITOR_PASS</code> in the environment &mdash; no code change needed. The auth session invalidates on the next 401/403 and re-logs in inline.</p>
                 <p><strong>PROJ_LIB bootstrap</strong> &mdash; base.py sets <code>PROJ_LIB</code> / <code>GDAL_DATA</code> to the OSGeo wheel&rsquo;s bundled data dirs <em>only</em> if the current env-var is unset OR points at a non-existent path (fixes the Windows-dev case where a QGIS/OSGeo4W install has already set a stale path). No-op on Linux prod where the pip GDAL wheel doesn&rsquo;t ship data/ and system <code>libproj-dev</code> takes over.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="story-mode">
+                <h2 class="section-title">Story Mode &mdash; Cinematic Briefings <span class="section-anchor">#</span></h2>
+                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts two live, data-driven narrative cards &mdash; not scripted demos. Both are built entirely from real PMD/NWFC feeds at play time, and both now support a full <strong>English &harr; Urdu</strong> toggle with spoken narration.</p>
+
+                <h3 class="subsection-title">7-Day Weather Outlook (<code>story-provincial-forecast.js</code>)</h3>
+                <p>Pulls PMD&rsquo;s Provincial Daily Forecast (<code>api/pmd/monitor/daily-forecast-pro/</code>) and current PMD Weather Warnings, then auto-plays a province-by-province outlook segment followed by a warning-focus segment (10&nbsp;s / 14&nbsp;s per beat).</p>
+
+                <h3 class="subsection-title">Dynamic Weather Report (<code>story-dynamic-weather.js</code>) &mdash; three chapters</h3>
+                <ol>
+                    <li><strong>Chapter 1 &mdash; Precipitation Outlook.</strong> National radar sweep (DWD Satellite Infrared) plus the NWFC 24-hour rainfall report (<code>api/pmd/nwfc/rainfall-report/</code>), then a guided tour of the heaviest-rainfall districts across every province, closing on an operational assessment.</li>
+                    <li><strong>Chapter 2 &mdash; Temperature Outlook.</strong> Built from PMD&rsquo;s Heatwave Monitoring network and historical max-temperature records, cross-checked against the PMD 2&nbsp;m temperature prediction layer, then a tour of the hottest reporting stations and a weekly outlook.</li>
+                    <li><strong>Chapter 3 &mdash; Forecasted Precipitation Outlook.</strong> District-level 24-hour precipitation values sampled from Meteoblue&rsquo;s forecast layers. Opens with a <strong>province-wise precipitation overview</strong> <em>(new)</em> &mdash; a national camera pass grouping the forecast by province, mirroring Chapter&nbsp;1&rsquo;s own province-overview pattern rather than the older per-district zoom loop &mdash; then a north-to-south flythrough of FFD-monitored barrages and dams and how the outlook may affect their inflows.</li>
+                </ol>
+
+                <h3 class="subsection-title">English &harr; Urdu narration</h3>
+                <p>Each card has a language-toggle button (<code>.pf-lang</code> / <code>.dwr-lang</code>, labelled <span dir="rtl">&#1575;&#1585;&#1583;&#1608;</span>) plus an upfront language-choice prompt shown before playback starts. Unlike the one-time narration-preference prompt, this one re-asks on every genuinely fresh load &mdash; first open and manual Refresh &mdash; rather than only once ever. Narration itself speaks through the browser&rsquo;s native <code>window.speechSynthesis</code>, the same zero-dependency mechanism used everywhere else in NCOP.</p>
+
+                <div class="callout callout--warn">
+                    <div class="callout-icon">⚠</div>
+                    <div class="callout-body">
+                        <strong>Urdu translation is deliberately NOT Groq</strong>
+                        The NCOP Assistant chatbot (see <a href="#ncop-assistant">next section</a>) is the <em>only</em> feature in NCOP that calls a hosted LLM. Story-mode Urdu text is produced by a fully separate, self-hosted, non-AI-API mechanism: a local <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener">NLLB-200</a> model (<code>facebook/nllb-200-distilled-600M</code>, Meta, CC-BY-NC-4.0) served from <code>POST /api/translate/</code> (<code>ncop_internal/translate.py</code>). No external translation API, no per-request cost, no network call once the model is cached locally.
+                    </div>
+                </div>
+
+                <p>Playback is never blocked on translation &mdash; a real measured latency for a full story batch made that unacceptable. Instead, each card requests its Urdu text in the background the moment Urdu is selected; scenes silently re-render (and re-speak, if narration is on) once their translation lands, via <code>_reapplyCurrentItemLanguage</code> / <code>_reapplyCurrentSceneLanguage</code>. A content-addressed, process-level cache in <code>translate.py</code> means a recurring sentence is never retranslated.</p>
+
+                <h3 class="subsection-title">Production hardening (Waitress: one process, many threads)</h3>
+                <p>Because production runs behind Waitress &mdash; a single process, multiple threads, not Gunicorn&rsquo;s multi-worker model &mdash; <code>translate.py</code> holds a single global <code>threading.Lock</code> around the model load and every <code>generate()</code> call, so concurrent Urdu requests queue rather than fight each other and the rest of the app for CPU. <code>torch.set_num_threads(2)</code> caps PyTorch&rsquo;s own intra-op parallelism, the model loads in float16 (&sim;1.2&nbsp;GB instead of &sim;2.4&nbsp;GB), and a lazily-started idle-unload watchdog frees that memory back to the OS after 15 minutes with no Urdu activity &mdash; most sessions never touch Urdu at all, so there&rsquo;s no reason to hold the model resident for the life of the worker.</p>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>frontend/src/modules/story-dynamic-weather.js</code> &mdash; the two cards: scene building, camera work, language toggle, narration.</li>
+                    <li><code>project/ncop_internal/translate.py</code> &mdash; local NLLB-200 translation, throttled, cached, production-hardened.</li>
+                    <li><code>project/ncop_project/settings/base.py</code> &mdash; <code>HF_HOME</code> (redirects the HuggingFace model cache off the system drive) and <code>HF_HUB_OFFLINE=1</code> (never phones home once cached), set before any <code>transformers</code> import.</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="ncop-assistant">
+                <h2 class="section-title">NCOP Assistant (AI Q&amp;A) <span class="section-anchor">#</span></h2>
+                <p>A floating, animated bot in the map&rsquo;s bottom-right corner (<code>#ncopAssistantMascot</code>) &mdash; the <em>sole</em> entry point into a Groq-backed retrieval-augmented chat panel that can answer questions about NCOP itself, explain what a layer/subcategory/category/control does, jump the user straight to it, and report live conditions.</p>
+
+                <h3 class="subsection-title">Knowledge base</h3>
+                <p>Built by <code>python manage.py ingest_chat_knowledge</code> (run manually/occasionally, never on server boot) into a persistent Chroma vector store, embedded with Chroma&rsquo;s bundled ONNX MiniLM-L6-v2 default &mdash; no torch/sentence-transformers, keeping the process footprint small. Ingested sources:</p>
+                <ul>
+                    <li><code>CONTEXT.md</code> and <code>TEMPORAL_LAYERS_GUIDE.md</code> &mdash; whole-codebase and temporal-layer-behaviour references.</li>
+                    <li><code>graphify-out/GRAPH_REPORT.md</code> &mdash; the tree-sitter code-graph summary.</li>
+                    <li>The full sidebar layer catalogue, parsed straight from <code>map-layers.js</code> (<code>layer_catalog_parser.py</code>) &mdash; the same source of truth the sidebar itself renders from.</li>
+                    <li><code>controls_catalog.py</code> &mdash; a hand-curated catalogue of the map-rail controls, so the assistant can explain what a <em>control</em> does, not just a layer.</li>
+                    <li>This documentation page itself, walked and stripped of markup.</li>
+                </ul>
+
+                <h3 class="subsection-title">Grounded, agentic answers</h3>
+                <p>Every factual claim is grounded in retrieved context, never invented. If the up-front retrieval doesn&rsquo;t cover the question, the model can call <code>search_knowledge_base</code> itself for a second, differently-worded look &mdash; bounded to one hop per turn &mdash; before it&rsquo;s allowed to say it doesn&rsquo;t know. A block of <strong>LIVE MAP STATE</strong> (which layers are actually active, the current temporal step) is sent with every message, so &ldquo;what&rsquo;s on the map right now&rdquo; is answered from real ground truth, not a retrieval guess.</p>
+
+                <h3 class="subsection-title">Navigation &amp; live-data tools</h3>
+                <ul>
+                    <li><code>navigate_to</code> &mdash; opens the sidebar and highlights the layer / subcategory / category / control the instant it&rsquo;s called, no click needed. Turning a <strong>layer</strong> on or opening a <strong>control&rsquo;s</strong> own panel still waits for the user&rsquo;s explicit click &mdash; the only two actions gated behind confirmation.</li>
+                    <li><code>get_rainfall_report</code> / <code>get_heatwave_monitoring</code> &mdash; live-data tools that each wrap the SAME view NCOP&rsquo;s own map features already call (<code>NwfcRainfallReportAPIView</code> / <code>HeatwaveMonitoringView</code>), so the assistant can never disagree with what a real map click on the same feature would show.</li>
+                </ul>
+
+                <h3 class="subsection-title">Model picker &amp; narration</h3>
+                <p>A header dropdown (backed by <code>GET /api/assistant/models/</code>) switches between four live Groq models &mdash; <strong>GPT-OSS 120B</strong> (default), <strong>GPT-OSS 20B</strong>, <strong>Llama 3.3 70B</strong>, and <strong>Llama 3.1 8B Instant</strong> &mdash; persisted per-browser in <code>localStorage</code>. An optional narration toggle reads replies aloud via the same <code>window.speechSynthesis</code> mechanism Story Mode uses, and a small status dot reports whether the assistant is currently reachable.</p>
+
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>Not the same as GEE Chat</strong>
+                        The pre-existing <b>GEE Chat</b> rail button (<code>navigation-panel.js</code>) is pure keyword/synonym matching over the Earth&nbsp;Engine dataset catalogue, scoped narrowly to discovering GEE layers &mdash; it makes no LLM call. The NCOP Assistant is the only feature in NCOP that talks to Groq, and the two panels share no code or state.
+                    </div>
+                </div>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>frontend/src/modules/ncop-assistant.js</code> &mdash; the floating mascot, chat panel, model picker, narration, markdown rendering.</li>
+                    <li><code>project/ncop_internal/chat_engine.py</code> &mdash; lazy, process-level singletons: the Chroma client/collection, the embedding function, and a per-model cached <code>ChatGroq</code> handle.</li>
+                    <li><code>project/ncop_internal/chatbot.py</code> &mdash; the chat view: retrieval, system-prompt assembly, tool-calling loop, session-backed conversation history.</li>
+                    <li><code>project/ncop_internal/assistant_tools.py</code> &mdash; the live-data tool definitions and executors.</li>
+                    <li><code>project/ncop_internal/controls_catalog.py</code>, <code>project/ncop_internal/layer_catalog_parser.py</code> &mdash; the two non-doc knowledge sources.</li>
+                    <li><code>project/ncop_internal/management/commands/ingest_chat_knowledge.py</code> &mdash; the ingestion command.</li>
+                </ul>
             </section>
 
             <!-- ============================================================ -->
@@ -2460,6 +2699,23 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                         </tbody>
                     </table>
                 </div>
+
+                <h3 class="subsection-title" style="margin-top: 32px;">NCOP Assistant &amp; Story Mode endpoints</h3>
+                <p>All three are NCOP-native (implemented directly in <code>ncop_internal/</code>, not a GCOP proxy). See <a href="#ncop-assistant">NCOP Assistant</a> and <a href="#story-mode">Story Mode</a>.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--blue">POST</span></td><td><code>/api/assistant/chat/</code></td><td>NCOP Assistant chat turn &mdash; RAG retrieval, navigate_to actions, live-data tools, session history.</td></tr>
+                            <tr><td><span class="pill pill--blue">GET</span></td><td><code>/api/assistant/models/</code></td><td>Model picker list, sourced from <code>chat_engine.SUPPORTED_MODELS</code>.</td></tr>
+                            <tr><td><span class="pill pill--blue">POST</span></td><td><code>/api/translate/</code></td><td>English&nbsp;&rarr;&nbsp;Urdu translation for the story-mode cards (local NLLB-200, never Groq).</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/monitor/daily-forecast-pro/</code></td><td>PMD provincial daily forecast &mdash; feeds the 7-Day Weather Outlook card. 30-min cache + 6&nbsp;h stale fallback.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/pmd/nwfc/rainfall-report/</code></td><td>NWFC daily rainfall report &mdash; feeds Dynamic Weather Report Chapter&nbsp;1 and the assistant&rsquo;s <code>get_rainfall_report</code> tool. 4&nbsp;h cache + 24&nbsp;h stale fallback.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- ============================================================ -->
@@ -2636,6 +2892,116 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                 const current = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
                 apply(current === 'light' ? 'dark' : 'light');
             });
+        })();
+
+        // ---------- Export menu (PDF / Word) ------------------------------
+        // PDF: the browser's own Print -> "Save as PDF" destination. Zero
+        // dependencies, renders the SAME live page the user is looking at
+        // (see the @media print rules above for what that preserves/hides),
+        // so the currently-selected theme genuinely carries into the PDF.
+        //
+        // Word: there's no client-side way to build a real .docx (OOXML is
+        // a zip of XML parts) without a new library, and this template has
+        // no build step to bundle one. What DOES work with zero
+        // dependencies is the long-standing MS-Word HTML-import format —
+        // an .doc file that's actually HTML with an Office XML namespace
+        // and inline styles, which Word opens natively (this is the same
+        // mechanism behind "Save As -> Web Page, Filtered" workflows).
+        // CSS custom properties don't survive into Word's renderer, so the
+        // current theme's resolved var() values are read off the live page
+        // and baked in as literal colours below.
+        (function initDocsExport() {
+            const wrap = document.getElementById('docsExportWrap');
+            const toggle = document.getElementById('docsExportToggle');
+            const menu = document.getElementById('docsExportMenu');
+            const pdfBtn = document.getElementById('docsExportPdf');
+            const wordBtn = document.getElementById('docsExportWord');
+            if (!wrap || !toggle || !menu) return;
+
+            function closeMenu() {
+                wrap.setAttribute('data-open', 'false');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+            function toggleMenu() {
+                const willOpen = wrap.getAttribute('data-open') !== 'true';
+                wrap.setAttribute('data-open', String(willOpen));
+                toggle.setAttribute('aria-expanded', String(willOpen));
+            }
+            toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(); });
+            document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) closeMenu(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+
+            pdfBtn && pdfBtn.addEventListener('click', () => {
+                closeMenu();
+                window.print();
+            });
+
+            wordBtn && wordBtn.addEventListener('click', () => {
+                closeMenu();
+                try { exportAsWord(); } catch (err) { console.error('[docs export] Word export failed:', err); }
+            });
+
+            function exportAsWord() {
+                const main = document.querySelector('main.main');
+                if (!main) return;
+                const clone = main.cloneNode(true);
+
+                // Pure UI chrome — never meant to be part of the readable
+                // document itself.
+                clone.querySelectorAll('.section-anchor').forEach((el) => el.remove());
+
+                // Absolute-ify every image src so the exported file still
+                // resolves pictures when opened later/elsewhere, not just
+                // right now in this tab.
+                clone.querySelectorAll('img[src]').forEach((img) => {
+                    img.setAttribute('src', new URL(img.getAttribute('src'), window.location.href).href);
+                    img.removeAttribute('loading');
+                });
+
+                const cs = getComputedStyle(document.documentElement);
+                const v = (name) => cs.getPropertyValue(name).trim();
+                const styles = `
+                    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: ${v('--text-primary')}; background: ${v('--bg-primary')}; margin: 0.6in; }
+                    h1 { font-size: 22pt; margin: 0 0 4pt; color: ${v('--text-primary')}; }
+                    h2 { font-size: 16pt; margin: 22pt 0 8pt; padding-bottom: 4pt; border-bottom: 2pt solid ${v('--border')}; color: ${v('--text-primary')}; }
+                    h3 { font-size: 12.5pt; margin: 14pt 0 6pt; color: ${v('--text-primary')}; }
+                    p, li { color: ${v('--text-secondary')}; line-height: 1.5; }
+                    a { color: ${v('--accent')}; }
+                    code { background: ${v('--code-bg')}; border: 1pt solid ${v('--code-border')}; padding: 1pt 3pt; font-family: 'Courier New', monospace; font-size: 10pt; }
+                    pre, .diagram, pre.ascii-diagram { background: ${v('--code-bg')}; border: 1pt solid ${v('--code-border')}; padding: 8pt; font-family: 'Courier New', monospace; font-size: 9pt; white-space: pre-wrap; }
+                    table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+                    td, th { border: 1pt solid ${v('--border')}; padding: 5pt 8pt; text-align: left; font-size: 10pt; }
+                    th { background: ${v('--bg-card')}; font-weight: 700; }
+                    img { max-width: 100%; }
+                    .callout, .card { border: 1pt solid ${v('--border-strong')}; background: ${v('--bg-card')}; padding: 8pt 10pt; margin: 10pt 0; }
+                    .callout-icon { display: none; }
+                    .callout-body strong, .card-title { display: block; color: ${v('--text-primary')}; margin-bottom: 3pt; }
+                    .pill { padding: 1pt 6pt; border-radius: 8pt; font-size: 8.5pt; background: ${v('--accent-soft')}; color: ${v('--accent')}; }
+                    .card-grid { display: block; }
+                    .flow-diagram, .flow-node, .flow-arrow { display: inline; }
+                    .page-meta span { margin-right: 14pt; color: ${v('--text-muted')}; font-size: 9.5pt; }
+                `;
+
+                const html =
+                    '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+                    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+                    'xmlns="http://www.w3.org/TR/REC-html40">' +
+                    '<head><meta charset="utf-8"><title>NCOP Documentation</title>' +
+                    '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View>' +
+                    '<w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->' +
+                    '<style>' + styles + '</style></head>' +
+                    '<body>' + clone.innerHTML + '</body></html>';
+
+                const blob = new Blob(['﻿', html], { type: 'application/msword' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'NCOP-Documentation.doc';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
         })();
     </script>
 </body>

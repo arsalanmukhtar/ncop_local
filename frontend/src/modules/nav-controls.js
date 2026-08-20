@@ -536,6 +536,13 @@ const TOUR_STEPS = [
     position: "left",
   },
   {
+    target: "#ncopAssistantMascot",
+    title: "NCOP Assistant — AI Q&A",
+    content:
+      "That friendly animated bot floating near the bottom-right of the map is the NCOP Assistant — ask it anything about NCOP: what a layer shows, how a feature works, or where to find something. It's grounded in NCOP's own documentation and live data (current rainfall totals, heatwave alerts), can jump you straight to a layer, category, or control, and can describe what's actually on your map right now — active layers, the current temporal step, all of it. Pick between AI models in its header, and turn on narration to have replies read aloud.",
+    position: "left",
+  },
+  {
     target: "#homeExtent",
     title: "Home Extent — South Asia",
     content:
@@ -546,7 +553,7 @@ const TOUR_STEPS = [
     target: "#storyBtn",
     title: "Story Panel",
     content:
-      "Opens the story-mode panel where map-based narratives (guided walkthroughs of past events, briefings, training scenarios) can be played back turn-by-turn.",
+      "Opens two live, cinematic briefing cards built entirely from real PMD/NWFC data: the 7-Day Weather Outlook and the 3-chapter Dynamic Weather Report (precipitation → temperature → forecasted precipitation, with a province-wise overview and an FFD barrage/dam flythrough). Both support a full English ⇄ Urdu toggle with spoken narration — pick a language before playback starts, or switch mid-story.",
     position: "left",
   },
   {
@@ -592,7 +599,7 @@ const TOUR_STEPS = [
     target: "#ncopTourToggle",
     title: "That's the full tour",
     content:
-      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), and the newest addition — the PMD Forecast subcategory with nine authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity, and 24h extreme highs/lows), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider. Click this graduation-cap icon any time to restart the tour.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), the PMD Forecast subcategory with nine authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity, and 24h extreme highs/lows), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider, the NCOP Assistant — the animated bot that can answer questions, navigate you anywhere, and describe what's live on your map, and the Story panel's two cinematic briefing cards with full English ⇄ Urdu narration. Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];

@@ -37,6 +37,7 @@ import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
 import { GisExportControl } from "./gis-export-control.js";
+import { NcopAssistantControl } from "./ncop-assistant.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initFfdHistoryPriming } from "./ffd-stats-modal.js";
 import { initGcopPmdIntegration } from "./gcop-pmd-integration.js";
@@ -189,6 +190,12 @@ class DashboardManager {
     // own button + panel, only wraps addLayerByKey/removeLayerByKey for
     // live refresh (same pattern LayerInfoPanel already uses).
     new GisExportControl(this.#map, this.#sourceLayerControl);
+    // NCOP Assistant (Phase 1 — RAG Q&A). Standalone rail button + panel,
+    // deliberately separate from navigation-panel.js's own "#gee-chat-modal"
+    // (GEE Data Assistant, narrowly scoped to Earth Engine layers) so
+    // neither feature can regress the other. No sourceLayerControl
+    // dependency yet — Phase 1 only answers questions, no navigation.
+    new NcopAssistantControl(this.#map);
     new NCOPTourControl();
     new SidebarMenu();
 
@@ -585,6 +592,9 @@ function buildUnifiedRightRail() {
     // GIS Export — pushed alongside the other data/analysis controls.
     // Wrapper div is injected by GisExportControl in its constructor.
     push(document.querySelector(".custom-gis-export-btn"));
+    // NCOP Assistant has no rail button anymore — its sole entry point is
+    // the standalone floating mascot (NcopAssistantControl#renderMascot),
+    // which lives outside the rail entirely.
     push(mapWrapper.querySelector(".custom-basemap-btn"));
     push(mapWrapper.querySelector(".custom-tour-btn"));
   }
@@ -712,6 +722,10 @@ const RAIL_FLOAT_PANEL_BUTTON_MAP = {
   "gee-chat-modal":          "geeChat",
   "geoglows-forecast-panel": "geoglowsForecast",
   "story-modal":             "storyBtn",
+  // ncop-assistant-modal is deliberately absent — its trigger (the floating
+  // mascot) lives outside the right rail entirely, so this rail-relative
+  // anchor math doesn't apply; it keeps its fixed bottom-right CSS position
+  // instead (see #ncop-assistant-modal in _chat-panel.css).
 };
 
 // Margin (in px) preserved between the panel and the map's top/bottom
@@ -897,6 +911,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "geoglows-forecast-panel", kind: "display",
     btn: { id: "geoglowsForecast", activeCls: "active-geoglows"  } },
   { id: "story-modal",             kind: "display" },
+  { id: "ncop-assistant-modal",    kind: "display",
+    btn: { id: "ncopAssistantMascot", activeCls: "active-ncop-assistant" } },
   // Note: #news-modal is intentionally NOT in this registry — it's a
   // bottom-anchored ticker bar (not a side panel) and is designed to
   // coexist with side panels.  The float-panel anchor logic treats its

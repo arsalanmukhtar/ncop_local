@@ -23,6 +23,26 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # .../project
 REPO_ROOT = BASE_DIR.parent                               # .../ncop_local
 
+# huggingface_hub/transformers default their model cache to the user's home
+# directory on the SYSTEM drive (~/.cache/huggingface) — on this machine
+# that's a nearly-full C: drive, which silently risks failed/degraded
+# downloads for local ML models (see ncop_internal/translate.py's local
+# Urdu translation model). Redirected here, at the very top of settings, so
+# it's set before transformers/huggingface_hub is ever imported anywhere in
+# the process — same drive/pattern as chat_engine.py's own project/cache/
+# directory for its Chroma vector store.
+os.environ.setdefault("HF_HOME", str(BASE_DIR / "cache" / "huggingface"))
+# Even with a local cache, transformers' from_pretrained() calls out to
+# huggingface.co on every load to check for file updates by default — on a
+# restricted/slow network path that can hang for a long time (observed:
+# /api/translate/ requests left pending indefinitely) before it ever gets
+# to running the model. The model is only ever loaded from a cache
+# populated by an explicit prior download here (see translate.py), never
+# needs to change at runtime, so there's no reason to ever hit the network
+# for it again — offline mode makes every load instant (or fails fast with
+# a clear "not in cache" error, instead of hanging, if it's ever missing).
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env(os.path.join(REPO_ROOT, ".env"))
 
@@ -141,6 +161,32 @@ MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
 METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
+GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
+# Second Groq account's key — used ONLY as an automatic fallback when the
+# primary key hits its daily token-per-day cap (see chat_engine.get_llm's
+# `key_index` param). Empty/unset is fine: chat_engine treats that as "no
+# fallback available" and simply surfaces the primary key's 429 as normal.
+GROQ_API_KEY_FALLBACK = env("GROQ_API_KEY_FALLBACK", default="")
+
+# ---------------------------------------------------------------------------
+# Django REST Framework — first use is the NCOP Assistant chat endpoint
+# (ncop_internal.chatbot); its throttle scope is rate-limited here rather
+# than with custom throttle logic. Note: since this app has no shared cache
+# backend configured anywhere (dev/staging/prod all fall back to Django's
+# per-process, unshared LocMemCache — see settings/staging.py), this rate
+# limit is enforced PER WORKER PROCESS, not globally across all Gunicorn/
+# Waitress workers. Acceptable given how the rest of the app already runs,
+# but worth knowing before assuming this caps total traffic site-wide.
+# ---------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_RATES": {
+        "ncop_assistant_chat": "20/min",
+        # One batched request translates a WHOLE story (all chapters/scenes
+        # at once), so this needs far fewer calls per session than the chat
+        # endpoint — a lower rate is still generous.
+        "ncop_translate": "10/min",
+    },
+}
 
 # ---------------------------------------------------------------------------
 # Applications

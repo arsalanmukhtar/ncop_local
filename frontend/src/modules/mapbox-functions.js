@@ -69,11 +69,30 @@ export function initializeSourceLayerControl(sourceLayerControlInstance) {
 
 /**
  * Toggle a spinner on a sidebar item while its source is loading.
- * We listen for the first `sourcedata` event that reports the source as
- * loaded, then remove the loading class. Safety timeout of 20s in case the
- * event never fires (e.g. source errors out).
+ *
+ * Two distinct kinds of toggle source exist in map-layers.js:
+ *   - A plain `data: "<url>"` GeoJSON source (e.g. waqi_stations) — Mapbox
+ *     fetches it itself, and `sourcedata`'s `isSourceLoaded` genuinely
+ *     fires once that real fetch completes. Trust it directly.
+ *   - An inline empty-seed source, `data: {type:"FeatureCollection",
+ *     features:[]}` (every GCOP-backed layer — pmd_glof_obs, pmd_warnings,
+ *     nwfc_observations, ffd_data, pmd_weather_stations, …). Mapbox parses
+ *     that tiny empty object essentially instantly and reports the source
+ *     "loaded" long before the REAL data lands — the owning integration
+ *     module (gcop-monitor-integration.js / gcop-pmd-integration.js /
+ *     gcop-ffd-integration.js) fetches it separately and swaps it in via
+ *     `.setData()` afterwards. Trusting `isSourceLoaded` here would clear
+ *     the spinner within a frame or two of turning the toggle on, which is
+ *     exactly why these layers previously looked like they had no loading
+ *     state at all. For these, wait instead for the
+ *     "ncop:source-hydrated" event those modules dispatch themselves the
+ *     moment their own setData()/catch() actually resolves — the only
+ *     place that genuinely knows when hydration is done.
+ *
+ * Safety timeout of 20s either way, in case the expected signal never
+ * arrives (e.g. the fetch hangs with no rejection).
  */
-function showLayerLoading(itemKey, sourceId) {
+function showLayerLoading(itemKey, sourceId, isAsyncHydrated) {
     const row = document.querySelector(
         `.ncop-item[data-item-key="${itemKey}"], input[data-item-key="${itemKey}"]`
     );
@@ -93,12 +112,20 @@ function showLayerLoading(itemKey, sourceId) {
         done = true;
         itemEl.classList.remove("is-loading");
         map.off("sourcedata", onData);
+        window.removeEventListener("ncop:source-hydrated", onHydrated);
         clearTimeout(bailout);
     };
     const onData = (e) => {
         if (e.sourceId === sourceId && e.isSourceLoaded) finish();
     };
-    map.on("sourcedata", onData);
+    const onHydrated = (e) => {
+        if (e.detail?.sourceId === sourceId) finish();
+    };
+    if (isAsyncHydrated) {
+        window.addEventListener("ncop:source-hydrated", onHydrated);
+    } else {
+        map.on("sourcedata", onData);
+    }
     // Safety net: never leave the spinner spinning forever.
     const bailout = setTimeout(finish, 20000);
 }
@@ -114,7 +141,11 @@ export function handleToggleInteraction(categoryKey, subcategoryKey, itemKey, is
 
     if (sourceLayerControl && itemData && itemData.source && itemData.layers) {
         if (isChecked) {
-            showLayerLoading(itemKey, itemData.source.id);
+            // A string `data` is a URL Mapbox fetches itself (real
+            // isSourceLoaded signal); an inline object is the GCOP
+            // empty-seed pattern (see showLayerLoading's own comment).
+            const isAsyncHydrated = itemData.source.data != null && typeof itemData.source.data === "object";
+            showLayerLoading(itemKey, itemData.source.id, isAsyncHydrated);
             sourceLayerControl.addLayerByKey(itemKey);
         } else {
             sourceLayerControl.removeLayerByKey(itemKey);
