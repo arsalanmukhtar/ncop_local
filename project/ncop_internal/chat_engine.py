@@ -94,8 +94,18 @@ def get_collection():
     global _client, _collection
     if _collection is None:
         import chromadb
+        from chromadb.config import Settings
         CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
-        _client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+        # anonymized_telemetry defaults to True — Chroma phones home to
+        # PostHog (us.i.posthog.com) on collection operations otherwise.
+        # Purely unrelated background noise for this app (confirmed live:
+        # its DNS failures were showing up in chat logs next to genuine
+        # Groq connection errors, making them harder to tell apart), and
+        # one less outbound dependency/retry-with-backoff cost on every
+        # retrieval when the network is flaky.
+        _client = chromadb.PersistentClient(
+            path=str(CHROMA_DB_DIR), settings=Settings(anonymized_telemetry=False)
+        )
         _collection = _client.get_or_create_collection(
             COLLECTION_NAME, embedding_function=get_embedding_function()
         )

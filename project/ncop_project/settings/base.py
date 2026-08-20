@@ -181,10 +181,16 @@ GROQ_API_KEY_FALLBACK = env("GROQ_API_KEY_FALLBACK", default="")
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "ncop_assistant_chat": "20/min",
-        # One batched request translates a WHOLE story (all chapters/scenes
-        # at once), so this needs far fewer calls per session than the chat
-        # endpoint — a lower rate is still generous.
-        "ncop_translate": "10/min",
+        # Sent as several small SEQUENTIAL chunks per story now (see
+        # story-dynamic-weather.js's TRANSLATE_CHUNK_SIZE — added to avoid
+        # a real production 504, one oversized request timing out nginx),
+        # not one single request — a full Dynamic Weather Report (150+
+        # distinct captions) can be ~10 chunked requests in one translate
+        # pass. This is a free, local, no-external-cost endpoint (no Groq
+        # involved), so a generous rate here only bounds CPU contention on
+        # the shared VM, not spend — 40/min comfortably covers even a
+        # large story's full chunk sequence with headroom.
+        "ncop_translate": "40/min",
     },
 }
 

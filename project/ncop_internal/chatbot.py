@@ -11,10 +11,13 @@
 # the knowledge base gets built.
 # ---------------------------------------------------------------------------
 
+import hashlib
 import json
 import logging
 import re
+import time
 
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -71,7 +74,17 @@ def _invoke_with_tool_retry(build_llm, messages, retries=1):
                 key_index = 1
                 logger.warning("chatbot: primary Groq key rate-limited, switching to fallback key for retry")
             else:
+                # A bare connection error (DNS blip, dropped connection —
+                # observed live, not a Groq-side rejection) retried with
+                # ZERO delay just repeats the same failure if the blip
+                # hasn't cleared yet — confirmed live: two back-to-back
+                # attempts both failed identically, while a DIFFERENT
+                # request that happened to hit a real Groq 429 succeeded
+                # because Groq's own client backed off 8s before retrying.
+                # A short pause here gives a transient blip the same
+                # chance to clear before the one retry this function gets.
                 logger.warning("chatbot: tool-calling invoke failed (attempt %d/%d), retrying: %s", attempt + 1, retries + 1, e)
+                time.sleep(1)
     raise last_exc
 
 
@@ -139,6 +152,28 @@ MAX_HISTORY_TURNS = 6  # 3 user/assistant exchanges — bounds both Groq token c
 # whichever single one happened to embed closest.
 TOP_K = 8
 SESSION_HISTORY_KEY = "ncop_chat_history"
+
+# Response cache for an EXACT repeat request — same session, same message
+# text, same model, same live map state. Not real KV-caching (that's an
+# internal Groq inference-server optimization no API client can see or
+# control) — this is the client-side analog available to us: skip
+# retrieval + the entire Groq round-trip (1-3 calls depending on the
+# question) altogether when the answer for this exact input is already
+# known. Directly targets a real, observed pattern — the SAME question
+# asked twice in a row (an accidental double-send, or a retry right after
+# a transient failure; session history is only written on SUCCESS, so a
+# retry right after a failed attempt has byte-identical session state)
+# — which was quietly doubling Groq load exactly when the account was
+# already under capacity pressure. 90s is short enough that a live-data
+# question (weather/flood levels) is never at real risk of looking stale —
+# the underlying data tools already tolerate comparable or longer windows
+# via their own individual caches.
+RESPONSE_CACHE_TTL_SECONDS = 90
+
+
+def _response_cache_key(session_key, message, requested_model, map_state_block):
+    raw = f"{session_key}|{requested_model}|{map_state_block}|{message}"
+    return "ncop_chat_resp:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 # Kept deliberately lean — every sentence here costs TPM budget on EVERY
 # single request (bound alongside 12+ tool schemas, each already ~100-200
@@ -639,6 +674,23 @@ class NcopAssistantChatView(APIView):
 
         history = request.session.get(SESSION_HISTORY_KEY, [])
 
+        # Cache check — see RESPONSE_CACHE_TTL_SECONDS's own comment. Only
+        # possible once the session already has a key (i.e. at least one
+        # prior successful turn saved something), which is exactly the
+        # population this is meant to help: a session mid-conversation
+        # asking something it just asked. A brand-new session's very
+        # first message can't be a "repeat" by definition, so skipping the
+        # cache entirely when there's no session_key yet costs nothing.
+        map_state = _sanitize_map_state(body.get("map_state"))
+        map_state_block = _build_map_state_context(map_state)
+        session_key = request.session.session_key
+        cache_key = _response_cache_key(session_key, message, requested_model, map_state_block) if session_key else None
+        if cache_key:
+            cached_payload = cache.get(cache_key)
+            if cached_payload is not None:
+                logger.info("chatbot: served cached response for an identical repeat request")
+                return JsonResponse(cached_payload)
+
         # A vague follow-up ("which category is it under?") embeds poorly
         # on its own — retrieval pulls back unrelated chunks, and the model
         # then (correctly) refuses to state anything not grounded in THIS
@@ -654,8 +706,6 @@ class NcopAssistantChatView(APIView):
             retrieval_query = f"{history[-1]['content']} {message}"
 
         chunks = chat_engine.retrieve(retrieval_query, top_k=TOP_K)
-        map_state = _sanitize_map_state(body.get("map_state"))
-        map_state_block = _build_map_state_context(map_state)
 
         def _build_system_prompt():
             return (
@@ -809,9 +859,12 @@ class NcopAssistantChatView(APIView):
         request.session[SESSION_HISTORY_KEY] = history
         request.session.modified = True  # mutating a session value in place doesn't auto-mark dirty
 
-        return JsonResponse({
+        payload = {
             "reply": reply,
             "sources": [_format_source_label(c) for c in chunks],
             "actions": actions,
             "model": requested_model,
-        })
+        }
+        if cache_key:
+            cache.set(cache_key, payload, RESPONSE_CACHE_TTL_SECONDS)
+        return JsonResponse(payload)

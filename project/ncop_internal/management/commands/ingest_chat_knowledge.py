@@ -179,9 +179,11 @@ class Command(BaseCommand):
 
         if options["rebuild"]:
             self.stdout.write("Rebuilding collection from scratch...")
-            import chromadb
-            client = chromadb.PersistentClient(path=str(chat_engine.CHROMA_DB_DIR))
-            client.delete_collection(chat_engine.COLLECTION_NAME)
+            # Reuses the SAME client get_collection() above already built
+            # (telemetry-disabled, see chat_engine.get_collection's own
+            # comment) rather than constructing a second PersistentClient
+            # just for this one call.
+            chat_engine._client.delete_collection(chat_engine.COLLECTION_NAME)
             chat_engine._collection = None  # force re-creation on next get_collection()
             collection = chat_engine.get_collection()
 
