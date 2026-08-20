@@ -44,7 +44,15 @@ function hydrateWaterlevels(map) {
       const fresh = map.getSource(FFD_SOURCE_ID);
       if (fresh && geo && Array.isArray(geo.features)) fresh.setData(geo);
     })
-    .catch((err) => console.warn("[FFD] waterlevels hydration failed:", err));
+    .catch((err) => console.warn("[FFD] waterlevels hydration failed:", err))
+    .finally(() => {
+      // See gcop-monitor-integration.js's identical comment — the sidebar
+      // loading spinner (mapbox-functions.js's showLayerLoading) waits for
+      // this event rather than Mapbox's own sourcedata signal, which fires
+      // on the empty seed almost instantly, well before this real fetch
+      // resolves.
+      window.dispatchEvent(new CustomEvent("ncop:source-hydrated", { detail: { sourceId: FFD_SOURCE_ID } }));
+    });
 }
 
 /**

@@ -106,11 +106,22 @@ function hydrate(map, sourceId) {
   entry.fetch()
     .then((raw) => {
       const fresh = map.getSource(sourceId);
-      if (!fresh) return;
-      const fc = entry.normalize ? entry.normalize(raw) : toFC(raw);
-      fresh.setData(fc);
+      if (fresh) {
+        const fc = entry.normalize ? entry.normalize(raw) : toFC(raw);
+        fresh.setData(fc);
+      }
     })
-    .catch((err) => console.warn(`[GCOP Monitor] hydration failed (${sourceId}):`, err));
+    .catch((err) => console.warn(`[GCOP Monitor] hydration failed (${sourceId}):`, err))
+    .finally(() => {
+      // Tells mapbox-functions.js's sidebar loading-spinner (showLayerLoading)
+      // that this empty-seed source has now genuinely finished hydrating —
+      // Mapbox's own `sourcedata`/isSourceLoaded fires almost instantly on
+      // the tiny empty seed itself, long before this real fetch resolves,
+      // so that signal alone isn't enough for these layers. Fires on
+      // failure too, so an upstream error still clears the spinner instead
+      // of leaving it stuck until the 20s bailout.
+      window.dispatchEvent(new CustomEvent("ncop:source-hydrated", { detail: { sourceId } }));
+    });
 }
 
 /**

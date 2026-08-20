@@ -1,0 +1,517 @@
+/* ============================================================================
+   NCOP ASSISTANT (Phase 1 — RAG Q&A) — NDMA glassmorphic theme, matching
+   #gee-chat-modal's visual shape (_story-gee.css) for consistency, but a
+   wholly separate module/panel — no shared classes/ids, so this can never
+   regress the existing GEE Data Assistant.
+   ============================================================================ */
+
+/* Panel shell — display-toggled (style.display), matching #gee-chat-modal
+   exactly, so dashboard.js's RAIL_PANEL_REGISTRY "display" kind and its
+   MutationObserver-based mutual exclusion pick it up with no extra wiring. */
+#ncop-assistant-modal {
+    position: absolute;
+    bottom: 13px;
+    right: 116px;
+    width: 420px;
+    height: 550px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 20px;
+    backdrop-filter: blur(15px) saturate(110%);
+    -webkit-backdrop-filter: blur(15px) saturate(110%);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    z-index: 1002;
+    transition: all 0.3s ease;
+    /* Hard containment guarantee for this rounded card — any child's
+       width/flex miscalculation (e.g. .ncop-assistant-quick-prompts,
+       which needed its own explicit width/box-sizing fix for exactly
+       this) can now, at worst, get clipped at the panel edge instead of
+       visibly rendering past the rounded border into the map behind it.
+       Doesn't affect the model-picker <select>'s own dropdown (native
+       browser overlay, unaffected by ancestor overflow) or this box's
+       own box-shadow (painted around the border box, not clipped by the
+       element's own overflow). Nothing else in this panel relies on
+       overflow:visible.  */
+    overflow: hidden;
+}
+
+.ncop-assistant-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    border-radius: 20px 20px 0 0;
+}
+
+.ncop-assistant-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-size: 19px;
+    font-weight: 600;
+}
+.ncop-assistant-title i { color: var(--ndma-blue); }
+
+/* Connection status — combines navigator.onLine's instant browser-level
+   signal with the assistant's OWN real fetch outcomes (see #setStatus in
+   ncop-assistant.js). Dot-only + a tooltip/aria-label rather than a text
+   label, to keep the already-busy header compact. */
+.ncop-assistant-status {
+    display: inline-flex;
+    align-items: center;
+    margin-left: -2px;
+}
+.ncop-assistant-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.ncop-assistant-status.is-checking .ncop-assistant-status-dot {
+    background: var(--text-muted);
+    animation: ncopAssistantStatusPulse 1.2s ease-in-out infinite;
+}
+.ncop-assistant-status.is-online .ncop-assistant-status-dot {
+    background: var(--ndma-green);
+    box-shadow: 0 0 5px var(--ndma-green-glow);
+}
+.ncop-assistant-status.is-offline .ncop-assistant-status-dot {
+    background: var(--ndma-red);
+    box-shadow: 0 0 5px var(--ndma-red-glow);
+}
+@keyframes ncopAssistantStatusPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+.ncop-assistant-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Model picker — options come from GET /api/assistant/models/, see
+   #loadModels in ncop-assistant.js; chat_engine.SUPPORTED_MODELS is the
+   single source of truth for what's listed. */
+.ncop-assistant-model-picker {
+    appearance: none;
+    max-width: 132px;
+    padding: 4px 20px 4px 8px;
+    background: var(--tertiary-bg)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a0aab5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")
+        no-repeat right 2px center / 14px;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.3;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.ncop-assistant-model-picker:hover,
+.ncop-assistant-model-picker:focus {
+    border-color: var(--ndma-blue);
+    color: var(--text-primary);
+    outline: none;
+}
+.ncop-assistant-model-picker option {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+
+/* Narration mute button — same shape/interaction as story-provincial-
+   forecast.js's own .pf-mute (see that file's ICON_TTS_ON/OFF), just
+   restyled to this panel's own header sizing. */
+.ncop-assistant-mute {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--ndma-blue);
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.ncop-assistant-mute.is-muted { color: var(--text-muted); }
+.ncop-assistant-mute:hover { background: var(--glass-highlight, rgba(255, 255, 255, 0.08)); }
+
+#ncopAssistantClose {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 5px;
+}
+#ncopAssistantClose:hover {
+    background: var(--ndma-red-opaque);
+    transition: all 0.3s ease;
+}
+
+.ncop-assistant-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+}
+.ncop-assistant-messages::-webkit-scrollbar { width: 4px; }
+.ncop-assistant-messages::-webkit-scrollbar-track { background: var(--glass-light); }
+.ncop-assistant-messages::-webkit-scrollbar-thumb { background: transparent; }
+
+.ncop-assistant-msg { display: flex; flex-direction: column; max-width: 85%; animation: ncopAssistantFadeIn 0.3s ease; }
+@keyframes ncopAssistantFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.ncop-assistant-msg--user { align-self: flex-end; }
+.ncop-assistant-msg--assistant { align-self: flex-start; }
+
+.ncop-assistant-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+/* User bubbles are always plain text (see #addMessage) — pre-wrap keeps
+   manual line breaks the user typed; assistant bubbles are rendered
+   markdown HTML (see _renderMarkdown) whose own block elements already
+   carry their own spacing, so pre-wrap there would double up whitespace. */
+.ncop-assistant-msg--user .ncop-assistant-bubble {
+    background: var(--ndma-blue-gradient);
+    color: var(--text-primary);
+    border: 1px solid var(--ndma-blue);
+    white-space: pre-wrap;
+}
+.ncop-assistant-msg--assistant .ncop-assistant-bubble {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-dark);
+}
+
+/* ---- Markdown rendering (assistant replies only, see _renderMarkdown) --- */
+.ncop-assistant-md-h {
+    margin: 6px 0 4px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text-primary);
+}
+.ncop-assistant-md-h:first-child { margin-top: 0; }
+h4.ncop-assistant-md-h { font-size: 14.5px; }
+h5.ncop-assistant-md-h { font-size: 13.5px; color: var(--text-accent-blue); }
+h6.ncop-assistant-md-h { font-size: 12.5px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+.ncop-assistant-md-p {
+    margin: 0 0 8px;
+}
+.ncop-assistant-md-p:last-child { margin-bottom: 0; }
+.ncop-assistant-bubble strong { color: var(--text-accent-blue); font-weight: 700; }
+.ncop-assistant-bubble code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+.ncop-assistant-md-list {
+    margin: 0 0 8px;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.ncop-assistant-md-list:last-child { margin-bottom: 0; }
+.ncop-assistant-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0 10px;
+    font-size: 12px;
+}
+.ncop-assistant-table th, .ncop-assistant-table td {
+    padding: 4px 8px;
+    border: 1px solid var(--border-dark);
+    text-align: left;
+}
+.ncop-assistant-table th {
+    background: rgba(255, 255, 255, 0.06);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Flood-status badges — colored dot matches the FFD Data map layer's own
+   circle-color legend exactly (see map-layers.js dynamicLegend); text stays
+   in the normal ink color so it reads in both themes, the dot alone carries
+   status identity, same convention as the map's legend rows. */
+.ncop-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.ncop-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Typing indicator — three pulsing dots while awaiting the Groq reply. */
+.ncop-assistant-msg--thinking .ncop-assistant-bubble {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 16px;
+}
+.ncop-assistant-msg--thinking .ncop-assistant-bubble span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    animation: ncopAssistantPulse 1.1s ease-in-out infinite;
+}
+.ncop-assistant-msg--thinking .ncop-assistant-bubble span:nth-child(2) { animation-delay: 0.15s; }
+.ncop-assistant-msg--thinking .ncop-assistant-bubble span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ncopAssistantPulse {
+    0%, 60%, 100% { opacity: 0.25; transform: scale(0.85); }
+    30% { opacity: 1; transform: scale(1); }
+}
+
+/* Phase 2 — navigate_to action buttons (layer/control pointer) and the
+   Yes/No layer-toggle confirm that follows one. */
+.ncop-assistant-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+.ncop-assistant-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-dark);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.ncop-assistant-action-btn i { width: 13px; height: 13px; }
+.ncop-assistant-action-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--ndma-blue);
+}
+.ncop-assistant-action-btn:disabled { opacity: 0.5; cursor: default; }
+.ncop-assistant-action-btn--primary {
+    background: var(--ndma-blue);
+    border-color: var(--ndma-blue);
+}
+.ncop-assistant-action-btn--primary:hover:not(:disabled) {
+    background: var(--ndma-blue);
+    filter: brightness(1.1);
+}
+
+/* Shared "point to this" pulse — applied to BOTH a sidebar .ncop-item row
+   (navigateToItem, sidebar-menu.js) and a rail control button
+   (#pulseControl, this file) so the two navigation targets read as the
+   same visual language regardless of where they live in the DOM. */
+@keyframes ncopAssistantTargetPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(57, 135, 229, 0.55); }
+    50% { box-shadow: 0 0 0 8px rgba(57, 135, 229, 0); }
+}
+.ncop-assistant-highlight {
+    animation: ncopAssistantTargetPulse 0.85s ease-out 3;
+    border-radius: 8px;
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+
+/* Quick-prompt shortcuts — a first-conversation affordance only (see
+   #handleSend's own comment in ncop-assistant.js: hidden the moment any
+   real message is sent, whether typed or via one of these buttons), so
+   this row never competes with the messages area for space once a
+   conversation is actually underway. Horizontally scrollable rather than
+   wrapping so it stays a single compact row even with several prompts. */
+.ncop-assistant-quick-prompts {
+    display: flex;
+    gap: 6px;
+    padding: 0 12px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Explicit width/box-sizing rather than relying on #ncop-assistant-
+       modal's implicit column-flex stretch — flex items default to
+       min-width:auto (their content's own min-content size), which wins
+       over stretch when the content (5 flex-shrink:0 buttons) is wider
+       than the panel, letting the row spill past the panel's own edge
+       instead of scrolling within it. width/max-width/box-sizing pin the
+       box to the panel's content width outright (this file has no global
+       box-sizing:border-box reset, so border-box is set here explicitly
+       — without it the 12px side padding would add onto the 100% width
+       and reintroduce the same overflow); min-width:0 clears the
+       min-content floor so overflow-x:auto actually gets to do its job. */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.ncop-assistant-quick-prompts::-webkit-scrollbar { display: none; }
+.ncop-assistant-quick-prompt {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 14px;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.ncop-assistant-quick-prompt:hover {
+    color: var(--text-primary);
+    border-color: var(--ndma-blue);
+    background: var(--secondary-bg);
+}
+.ncop-assistant-quick-prompt-icon { font-size: 13px; line-height: 1; }
+
+.ncop-assistant-input-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px;
+    border-top: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    border-radius: 0 0 20px 20px;
+}
+
+#ncopAssistantInput {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--tertiary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+#ncopAssistantInput:focus {
+    outline: none;
+    border-color: var(--ndma-blue);
+    background: var(--primary-bg);
+}
+#ncopAssistantInput::placeholder { color: var(--text-secondary); }
+#ncopAssistantInput:disabled { opacity: 0.6; cursor: not-allowed; }
+
+#ncopAssistantSend {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border-radius: 8px;
+    color: var(--text-primary);
+}
+#ncopAssistantSend:hover:not(:disabled) {
+    background: var(--ndma-blue);
+    transition: all 0.3s ease;
+}
+#ncopAssistantSend:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+    #ncop-assistant-modal {
+        width: calc(100vw - 24px);
+        height: 70vh;
+        right: 12px;
+    }
+}
+
+/* ============================================================================
+   ANIMATED BOT ICON (Lottie) — standalone floating mascot only. The rail
+   button reverted to a static Lucide glyph; the mascot already provides the
+   animated bot visual, so a second concurrent Lottie instance in the rail
+   was redundant. frontend/src/assets/images/chatbot/chatbot_normall.json is
+   a flat dark-body/light-accent duotone (#2c2c2c / #f0f8fa) tuned for a
+   LIGHT surface. The app's DEFAULT theme is dark-glass chrome, so it's
+   inverted there; [data-theme="night"] (this app's light-glass theme — see
+   _theme-night.css) already matches the animation's native tuning, so the
+   filter is reset to none.
+   ============================================================================ */
+
+/* Standalone floating mascot — a second, independent animation instance in
+   Mapbox's own bottom-right controls corner, right above the scale bar
+   (see #renderMascot in ncop-assistant.js for why that corner/ordering).
+   A circular glass badge matching the rail's own visual language. */
+.ncop-assistant-mascot {
+    pointer-events: auto;
+    width: 76px;
+    height: 76px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 50%;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.ncop-assistant-mascot:hover,
+.ncop-assistant-mascot.active-ncop-assistant {
+    transform: scale(1.06);
+    border-color: var(--ndma-blue);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), 0 0 14px 3px var(--ndma-blue-glow);
+}
+.ncop-assistant-mascot:focus-visible {
+    outline: 2px solid var(--ndma-blue);
+    outline-offset: 2px;
+}
+/* The animation's own artwork only fills roughly the middle third of its
+   256x256 frame (built-in padding around the character), so sizing the
+   container to the badge alone leaves a tiny, hard-to-read glyph — scaling
+   the inner content up (while the OUTER badge stays circular+overflow:
+   hidden, clipping anything that spills past the edge) is what actually
+   makes the bot read clearly, centered, at a glance. */
+.ncop-assistant-mascot-lottie {
+    width: 100%;
+    height: 100%;
+    filter: invert(1);
+    transform: scale(1.6);
+}
+[data-theme="night"] .ncop-assistant-mascot-lottie {
+    filter: none;
+}
+
+@media (max-width: 480px) {
+    /* The rail button remains the entry point on small screens — the
+       bottom-right map corner is too cramped there for a second control. */
+    .ncop-assistant-mascot { display: none; }
+}

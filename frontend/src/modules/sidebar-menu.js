@@ -43,6 +43,12 @@ export class SidebarMenu {
     this.addEventListeners();
     // console.log("✅ Event listeners added");
 
+    // Exposed the same way window.sourceLayerControl/window.__ncop_layer_registry
+    // already are — lets an external, unrelated module (ncop-assistant.js's
+    // "navigate to a layer" chat action) drive the sidebar without this
+    // class importing anything FROM that module (one-directional coupling).
+    window.__ncop_sidebar_menu = this;
+
     // console.log("📋 Sidebar menu initialized");
   }
 
@@ -77,6 +83,171 @@ export class SidebarMenu {
   closeSidebar() {
     this.#sidebarPanel?.classList.remove("visible");
     this.#menuControlDiv?.classList.remove("hidden");
+  }
+
+  // ---- NCOP Assistant navigation (Phase 2) ---------------------------------
+  // Opens the sidebar, expands whatever accordion/subcategory the target
+  // layer lives under (same expanded/active/visible classes #performSearch
+  // already uses for a text search — direct id lookup here instead), scrolls
+  // it into view, and applies a transient pulse highlight. Returns
+  // {found, label} so the caller (ncop-assistant.js) knows whether to show
+  // its own "couldn't find that in the sidebar" fallback message — the
+  // sidebar's own DOM is the source of truth here, not a re-derivation of
+  // ncop_menu_items, so this can never disagree with what's actually
+  // rendered. `data-item-key` sits on the <input type="checkbox"> for
+  // TOGGLE items or directly on the .ncop-item row for RASTER/TEMPORAL
+  // items — .closest(".ncop-item") normalizes either case to the row
+  // element (a no-op when the match IS already the row).
+  navigateToItem(itemKey) {
+    const target = document.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
+    const row = target?.closest(".ncop-item");
+    if (!row) return { found: false, label: null };
+
+    this.openSidebar();
+
+    const subcategory = row.closest(".ncop-subcategory");
+    const subcategoryHeader = subcategory?.querySelector(".ncop-subcategory-header");
+    const itemsContainer = subcategory?.querySelector(".ncop-items-container");
+    const accordion = row.closest(".accordion-item");
+    const accordionHeader = accordion?.querySelector(".accordion-header");
+    const accordionContent = accordion?.querySelector(".accordion-content");
+
+    // Force every ancestor visible/expanded regardless of whatever state a
+    // previous sidebar search left them in — never assume, always assert.
+    if (accordion) accordion.style.display = "block";
+    if (accordionContent) accordionContent.classList.add("expanded");
+    if (accordionHeader) accordionHeader.classList.add("active");
+    if (subcategory) subcategory.style.display = "block";
+    if (itemsContainer) itemsContainer.classList.add("visible");
+    if (subcategoryHeader) subcategoryHeader.classList.add("expanded");
+    row.style.display = "flex";
+
+    // Two-stage: let the just-applied expand/visible classes actually
+    // reflow BEFORE scrolling — scrollIntoView on a still-collapsed
+    // ancestor can land short.
+    requestAnimationFrame(() => {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.add("ncop-assistant-highlight");
+      setTimeout(() => row.classList.remove("ncop-assistant-highlight"), 2600);
+    });
+
+    const labelEl = row.querySelector(".ncop-item-label");
+    return { found: true, label: labelEl?.textContent?.trim() || itemKey };
+  }
+
+  // Turns a layer ON via the SAME real DOM event a user's own click/change
+  // would fire — deliberately never calls sourceLayerControl.addLayerByKey
+  // directly. A TOGGLE item's checkbox/is-selected visual state and a
+  // TEMPORAL item's single-selection + #temp-slider1 timeline UI (legend,
+  // play/pause, opacity) are BOTH driven entirely by the click/change
+  // handlers #createToggleItem/#createTemporalItem attach at render time
+  // (see mapbox-functions.js's handleToggleInteraction/
+  // handleTemporalInteraction, which those handlers call into) — calling
+  // addLayerByKey directly would add the layer to the map but leave the
+  // checkbox unchecked, and for a temporal item would skip building the
+  // slider/legend entirely (a genuinely different, richer activation path
+  // than a plain toggle — see temporal-controls.js/time-functions.js/
+  // temporal-layer-legends.js). Simulating the real event is what makes
+  // this correct for every item type without this method needing to know
+  // which type it's dealing with. Returns {found, alreadyOn, label}.
+  toggleItemOn(itemKey) {
+    const target = document.querySelector(`[data-item-key="${CSS.escape(itemKey)}"]`);
+    if (!target) return { found: false, alreadyOn: false, label: null };
+
+    const row = target.closest(".ncop-item") || target;
+    const labelEl = row.querySelector(".ncop-item-label");
+    const label = labelEl?.textContent?.trim() || itemKey;
+
+    // Non-raster TOGGLE items: an <input type="checkbox"> is the actual
+    // data-item-key target (see #createToggleItem's non-raster branch).
+    if (target.tagName === "INPUT" && target.type === "checkbox") {
+      if (target.checked) return { found: true, alreadyOn: true, label };
+      target.checked = true;
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      return { found: true, alreadyOn: false, label };
+    }
+
+    // Raster-toggle (multi-select) rows and TEMPORAL rows both put
+    // data-item-key on the row itself and drive everything from a click
+    // handler bound to that row, gated on its own .is-selected class.
+    if (row.classList.contains("is-selected")) return { found: true, alreadyOn: true, label };
+    row.click();
+    return { found: true, alreadyOn: false, label };
+  }
+
+  // Same shape as navigateToItem, one level up — expands a whole CATEGORY
+  // accordion (e.g. "Air Quality") rather than a single layer row, for
+  // "where are the X layers" / "what's in Y monitoring" style questions
+  // where the user isn't asking about one specific layer. Matched via the
+  // data-category-key set in #createNCOPCategorySection — direct key
+  // lookup, not text matching, so it can't be confused by the marquee/
+  // highlight wrapper spans elsewhere in this file.
+  navigateToCategory(categoryKey) {
+    const accordion = this.#accordionContainer?.querySelector(
+      `.accordion-item[data-category-key="${CSS.escape(categoryKey)}"]`
+    );
+    if (!accordion) return { found: false, label: null };
+
+    this.openSidebar();
+
+    const header = accordion.querySelector(".accordion-header");
+    const content = accordion.querySelector(".accordion-content");
+    accordion.style.display = "block";
+    if (content) content.classList.add("expanded");
+    if (header) header.classList.add("active");
+
+    requestAnimationFrame(() => {
+      accordion.scrollIntoView({ behavior: "smooth", block: "start" });
+      header?.classList.add("ncop-assistant-highlight");
+      setTimeout(() => header?.classList.remove("ncop-assistant-highlight"), 2600);
+    });
+
+    const labelEl = header?.querySelector(".accordion-title-text");
+    return { found: true, label: labelEl?.textContent?.trim() || categoryKey };
+  }
+
+  // One level deeper than navigateToCategory — expands the CATEGORY
+  // accordion AND the specific SUBCATEGORY inside it (e.g. "Radar Layers"
+  // under "Weather Systems"), highlighting the subcategory header itself
+  // rather than the whole category. Used when a question names a grouping
+  // that's actually a real sidebar subcategory ("radar layers",
+  // "meteoblue forecast layers") rather than a whole top-level category
+  // ("air quality layers") or one specific layer. Matched via
+  // data-category-key + data-subcategory-key (both set at render time) —
+  // never text matching.
+  navigateToSubcategory(categoryKey, subcategoryKey) {
+    const accordion = this.#accordionContainer?.querySelector(
+      `.accordion-item[data-category-key="${CSS.escape(categoryKey)}"]`
+    );
+    const subcategory = accordion?.querySelector(
+      `.ncop-subcategory[data-subcategory-key="${CSS.escape(subcategoryKey)}"]`
+    );
+    if (!subcategory) return { found: false, label: null };
+
+    this.openSidebar();
+
+    // Force the parent category open too — a subcategory can't be visible
+    // if its own accordion is still collapsed.
+    const accordionHeader = accordion.querySelector(".accordion-header");
+    const accordionContent = accordion.querySelector(".accordion-content");
+    accordion.style.display = "block";
+    if (accordionContent) accordionContent.classList.add("expanded");
+    if (accordionHeader) accordionHeader.classList.add("active");
+
+    const subcategoryHeader = subcategory.querySelector(".ncop-subcategory-header");
+    const itemsContainer = subcategory.querySelector(".ncop-items-container");
+    subcategory.style.display = "block";
+    if (itemsContainer) itemsContainer.classList.add("visible");
+    if (subcategoryHeader) subcategoryHeader.classList.add("expanded");
+
+    requestAnimationFrame(() => {
+      subcategory.scrollIntoView({ behavior: "smooth", block: "center" });
+      subcategoryHeader?.classList.add("ncop-assistant-highlight");
+      setTimeout(() => subcategoryHeader?.classList.remove("ncop-assistant-highlight"), 2600);
+    });
+
+    const labelEl = subcategoryHeader?.querySelector(".ncop-subcategory-title-text");
+    return { found: true, label: labelEl?.textContent?.trim() || subcategoryKey };
   }
 
   #handleKeydown(event) {
@@ -186,6 +357,11 @@ export class SidebarMenu {
   #createNCOPCategorySection(categoryKey, categoryData) {
     const sectionDiv = document.createElement("div");
     sectionDiv.className = "accordion-item";
+    // Additive — lets an external module (ncop-assistant.js's "navigate to
+    // a whole category" chat action) find the right accordion directly by
+    // key instead of matching on rendered title text (which the marquee/
+    // highlight-text machinery elsewhere in this file wraps in extra spans).
+    sectionDiv.dataset.categoryKey = categoryKey;
     const config = this.#getCategoryConfig(categoryKey);
 
     const iconHtml = config.customIcon
@@ -218,6 +394,10 @@ export class SidebarMenu {
   #createNCOPSubcategorySection(categoryKey, subcategoryKey, subcategoryData) {
     const subcategoryDiv = document.createElement("div");
     subcategoryDiv.className = "ncop-subcategory";
+    // Additive — same reasoning as .accordion-item's data-category-key:
+    // lets navigateToSubcategory find the right subcategory directly by
+    // key rather than matching on rendered title text.
+    subcategoryDiv.dataset.subcategoryKey = subcategoryKey;
 
     const subcategoryHeader = document.createElement("div");
     subcategoryHeader.className = "ncop-subcategory-header";
@@ -1396,4 +1576,62 @@ export class SidebarMenu {
   #removeNoResultsMessage() {
     document.querySelector(".no-results-message")?.remove();
   }
+}
+
+// Standalone entry point for external modules (ncop-assistant.js's
+// "navigate to a layer" chat action) — resolves the live SidebarMenu
+// singleton via window.__ncop_sidebar_menu (set in the constructor) rather
+// than this module importing/instantiating anything, keeping the coupling
+// one-directional. A short retry-poll covers the (normally impossible,
+// since chat requires user interaction well after page load) case of this
+// firing before SidebarMenu has constructed itself — same pattern
+// dashboard.js#applyDefaultLayers() already uses for an async-rendered
+// sidebar checkbox.
+export async function ncopNavigateToLayerItem(itemKey, { maxAttempts = 10, pollMs = 150 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const menu = window.__ncop_sidebar_menu;
+    if (menu && typeof menu.navigateToItem === "function") {
+      return menu.navigateToItem(itemKey);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return { found: false, label: null };
+}
+
+// Turn-on counterpart — see toggleItemOn above. Kept as a SEPARATE call
+// from navigation (never auto-run together) since this one is only ever
+// invoked after the user explicitly confirms "yes, turn it on".
+export async function ncopToggleLayerOn(itemKey, { maxAttempts = 10, pollMs = 150 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const menu = window.__ncop_sidebar_menu;
+    if (menu && typeof menu.toggleItemOn === "function") {
+      return menu.toggleItemOn(itemKey);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return { found: false, alreadyOn: false, label: null };
+}
+
+// Category-level counterpart — see navigateToCategory above.
+export async function ncopNavigateToCategory(categoryKey, { maxAttempts = 10, pollMs = 150 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const menu = window.__ncop_sidebar_menu;
+    if (menu && typeof menu.navigateToCategory === "function") {
+      return menu.navigateToCategory(categoryKey);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return { found: false, label: null };
+}
+
+// Subcategory-level counterpart — see navigateToSubcategory above.
+export async function ncopNavigateToSubcategory(categoryKey, subcategoryKey, { maxAttempts = 10, pollMs = 150 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const menu = window.__ncop_sidebar_menu;
+    if (menu && typeof menu.navigateToSubcategory === "function") {
+      return menu.navigateToSubcategory(categoryKey, subcategoryKey);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return { found: false, label: null };
 }

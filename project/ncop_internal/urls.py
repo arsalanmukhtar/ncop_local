@@ -1,4 +1,6 @@
 from django.urls import path
+from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
+from .translate import NcopTranslateView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -161,5 +163,27 @@ urlpatterns = [
         "api/pmd/nwfc/rainfall-report/",
         NwfcRainfallReportAPIView.as_view(),
         name="nwfc-rainfall-report",
+    ),
+
+    # NCOP Assistant (Phase 1 — RAG Q&A). See ncop_internal/chatbot.py +
+    # chat_engine.py. Route left room under api/assistant/ for a future
+    # Phase 2 (e.g. api/assistant/navigate/) without a namespace rename.
+    path(
+        "api/assistant/chat/",
+        NcopAssistantChatView.as_view(),
+        name="ncop-assistant-chat",
+    ),
+    # Model picker — see chat_engine.SUPPORTED_MODELS / NcopAssistantModelsView.
+    path(
+        "api/assistant/models/",
+        NcopAssistantModelsView.as_view(),
+        name="ncop-assistant-models",
+    ),
+    # English -> Urdu translation for the story-mode narrative cards. See
+    # ncop_internal/translate.py.
+    path(
+        "api/translate/",
+        NcopTranslateView.as_view(),
+        name="ncop-translate",
     ),
 ]

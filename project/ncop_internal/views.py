@@ -78,7 +78,6 @@ import re
 import wbgapi as wb
 import threading
 import hashlib
-import chromadb
 import uuid
 import ssl
 import socket
@@ -87,8 +86,6 @@ import io
 import ee
 import urllib3
 from urllib3.util.retry import Retry
-from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage, SystemMessage
 
 # Disable SSL warnings for development - remove in production if you fix SSL properly
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -2946,20 +2943,24 @@ class NcopRasterUploadView(View):
                 for chunk in upload.chunks():
                     f.write(chunk)
 
-            src_ds = gdal.Open(src_path)
-            if src_ds is None:
-                return JsonResponse({"error": "Could not open uploaded file as a raster."}, status=400)
-            if not src_ds.GetProjection():
-                return JsonResponse({"error": "Uploaded raster has no coordinate reference system (CRS)."}, status=400)
-
-            width, height = src_ds.RasterXSize, src_ds.RasterYSize
-            warp_kwargs = {"dstSRS": "EPSG:3857", "resampleAlg": "bilinear"}
-            if max(width, height) > self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE:
-                scale = self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE / max(width, height)
-                warp_kwargs["width"] = max(1, round(width * scale))
-                warp_kwargs["height"] = max(1, round(height * scale))
-
+            # gdal.Open() moved inside the lock too — it used to run
+            # unprotected before this `with` block started, the same
+            # "not actually just Warp" gap _mon_pred_convert_step had (see
+            # that function's own comment for the full rationale).
             with _MON_PRED_GDAL_LOCK:
+                src_ds = gdal.Open(src_path)
+                if src_ds is None:
+                    return JsonResponse({"error": "Could not open uploaded file as a raster."}, status=400)
+                if not src_ds.GetProjection():
+                    return JsonResponse({"error": "Uploaded raster has no coordinate reference system (CRS)."}, status=400)
+
+                width, height = src_ds.RasterXSize, src_ds.RasterYSize
+                warp_kwargs = {"dstSRS": "EPSG:3857", "resampleAlg": "bilinear"}
+                if max(width, height) > self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE:
+                    scale = self.MAX_INPUT_PX_BEFORE_DOWNSAMPLE / max(width, height)
+                    warp_kwargs["width"] = max(1, round(width * scale))
+                    warp_kwargs["height"] = max(1, round(height * scale))
+
                 warped_ds = gdal.Warp(warped_path, src_ds, **warp_kwargs)
                 if warped_ds is None:
                     return JsonResponse({"error": "Reprojection to EPSG:3857 failed."}, status=502)
@@ -3409,17 +3410,29 @@ class GdacsEventDetailsApi(View):
 GEE_PROJECT_ID = getattr(settings, 'GEE_PROJECT_ID', 'flood-mapping-dashboard-471116')
 
 def initialize_earth_engine():
-    """Initialize Earth Engine with error handling"""
+    """Initialize Earth Engine with error handling.
+
+    Runs at MODULE IMPORT TIME (see GEE_INITIALIZED below) — i.e. outside
+    any Django exception-handling wrapper, and re-executed on every
+    autoreload restart, not just once per machine boot. An emoji
+    (checkmark/cross) in these print() calls used to raise
+    UnicodeEncodeError on a Windows console still on a legacy codepage
+    (cp1252) that can't encode it — that's a SECOND, unhandled exception
+    on top of whatever GEE itself raised, which propagates straight out of
+    module import and kills the entire process with no Django error page,
+    no request log, nothing — exactly the "crashes without warning"
+    failure mode this was rewritten to eliminate. Plain ASCII only, ever,
+    in code that runs this early."""
     try:
         ee.Initialize(project=GEE_PROJECT_ID)
         print("=" * 60)
-        print("✅ Google Earth Engine Initialized Successfully")
+        print("[OK] Google Earth Engine Initialized Successfully")
         print(f"   Project: {GEE_PROJECT_ID}")
         print("=" * 60)
         return True
     except Exception as e:
         print("=" * 60)
-        print(f"❌ GEE Initialization Failed: {e}")
+        print(f"[FAILED] GEE Initialization Failed: {e}")
         print("=" * 60)
         return False
 
@@ -4846,7 +4859,7 @@ class EnhancedCompute:
             return uhii.updateMask(urban)
             
         except Exception as e:
-            print(f"❌ UHII Error: {e}")
+            print(f"[FAILED] UHII Error: {e}")
             return ee.Image.constant(0).clip(aoi).rename('UHII_Fallback')
     
     @staticmethod
@@ -4858,7 +4871,7 @@ class EnhancedCompute:
             coastal_mask = dem.lt(10).And(dem.gt(-5))
             return slr_risk.updateMask(coastal_mask)
         except Exception as e:
-            print(f"❌ SLR 2050 Error: {e}")
+            print(f"[FAILED] SLR 2050 Error: {e}")
             return ee.Image.constant(0).clip(aoi).rename('SLR_Fallback')
     
     @staticmethod
@@ -4870,7 +4883,7 @@ class EnhancedCompute:
             coastal_mask = dem.lt(15).And(dem.gt(-5))
             return slr_risk.updateMask(coastal_mask)
         except Exception as e:
-            print(f"❌ SLR 2100 Error: {e}")
+            print(f"[FAILED] SLR 2100 Error: {e}")
             return ee.Image.constant(0).clip(aoi).rename('SLR_Fallback')
     
     @staticmethod
@@ -4889,7 +4902,7 @@ class EnhancedCompute:
             comfort = temp.multiply(2).clamp(0, 100).rename('Thermal_Comfort')
             return comfort
         except Exception as e:
-            print(f"❌ Thermal Comfort Error: {e}")
+            print(f"[FAILED] Thermal Comfort Error: {e}")
             return ee.Image.constant(50).clip(aoi).rename('Comfort_Fallback')
 
 # ============================================================================
@@ -4982,7 +4995,7 @@ class AHPModels:
             return susceptibility.rename('Flood_Susceptibility_AHP')
             
         except Exception as e:
-            print(f"❌ AHP Flood Error: {e}")
+            print(f"[FAILED] AHP Flood Error: {e}")
             dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
             dem = dem_collection.select('DEM').mosaic().clip(aoi)
             simple = dem.lt(200).multiply(1.0) \
@@ -5055,7 +5068,7 @@ class AHPModels:
             return susceptibility.rename('Fire_Susceptibility_AHP')
             
         except Exception as e:
-            print(f"❌ AHP Fire Error: {e}")
+            print(f"[FAILED] AHP Fire Error: {e}")
             return ee.Image.constant(0.5).clip(aoi).rename('Fire_Risk_Fallback')
     
     @staticmethod
@@ -5149,7 +5162,7 @@ class AHPModels:
             return susceptibility.rename('Landslide_Susceptibility_AHP')
             
         except Exception as e:
-            print(f"❌ AHP Landslide Error: {e}")
+            print(f"[FAILED] AHP Landslide Error: {e}")
             dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
             slope = ee.Terrain.slope(dem).clip(aoi)
             simple = slope.gt(15).multiply(1.0) \
@@ -5204,7 +5217,7 @@ class AHPModels:
             return susceptibility.rename('Cyclone_Susceptibility_AHP')
             
         except Exception as e:
-            print(f"❌ AHP Cyclone Error: {e}")
+            print(f"[FAILED] AHP Cyclone Error: {e}")
             try:
                 dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
                 dem = dem_collection.select('DEM').mosaic().clip(aoi)
@@ -5247,7 +5260,7 @@ class AHPModels:
             return susceptibility.rename('Seismic_Susceptibility_AHP')
             
         except Exception as e:
-            print(f"❌ AHP Seismic Error: {e}")
+            print(f"[FAILED] AHP Seismic Error: {e}")
             dem = ee.Image('USGS/SRTMGL1_003').select('elevation')
             slope = ee.Terrain.slope(dem).clip(aoi)
             simple = dem.clip(aoi).gt(500).And(slope.gt(15)).multiply(1.0) \
@@ -5327,7 +5340,7 @@ class AHPModels:
             return drought_severity.rename('Drought_Severity')
             
         except Exception as e:
-            print(f"❌ Drought Composite Error: {e}")
+            print(f"[FAILED] Drought Composite Error: {e}")
             return ee.Image.constant(0.5).clip(aoi).rename('Drought_Fallback')
 
 
@@ -5358,7 +5371,7 @@ class DynamicGEELayerView(View):
             if not dataset_key:
                 return JsonResponse({
                     'error': 'Dataset not recognized',
-                    'response': f"❌ Couldn't find hazard data for '{message}'.\n\nTry: flood extent, fire susceptibility, urban heat island, sea level rise, etc."
+                    'response': f"[FAILED]Couldn't find hazard data for '{message}'.\n\nTry: flood extent, fire susceptibility, urban heat island, sea level rise, etc."
                 }, status=400)
             
             location_name, bbox = GEEDataCatalog.get_location(message)
@@ -8811,7 +8824,17 @@ def _mon_pred_ramp_file(element_key):
     ramp_dir = os.path.join(settings.MEDIA_ROOT, _PRED_RAMP_SUBDIR)
     os.makedirs(ramp_dir, exist_ok=True)
     path = os.path.join(ramp_dir, f"{element_key}.txt")
-    if os.path.exists(path):
+    # Real, reproduced-live incident: a 0-byte temp2m.txt sat here
+    # permanently — open(path, "w") truncates to empty immediately, and
+    # the process died (an unrelated native crash) before the write
+    # finished, leaving a corrupt file the `exists()` check below happily
+    # kept serving forever after. gdal.DEMProcessing's color-relief parser
+    # doesn't validate an empty ramp file — it native-crashes on it
+    # (Windows access violation, confirmed live), which is why "2m
+    # Temperature" was reliably unrenderable. `exists()` alone can't tell
+    # a complete file from a half-written one, so this also rejects a
+    # 0-byte leftover and regenerates it instead of trusting it.
+    if os.path.exists(path) and os.path.getsize(path) > 0:
         return path
     lines = ["nv 0 0 0 0"]                              # nodata → transparent
     if stops[0][0] > 0:                                 # additive quantity
@@ -8819,8 +8842,15 @@ def _mon_pred_ramp_file(element_key):
         lines.append(f"0 {r} {g} {b} 0")                # 0 mm → transparent
     for value, (r, g, b) in stops:
         lines.append(f"{value} {r} {g} {b} 255")
-    with open(path, "w") as f:
+    # Write to a temp file then atomically replace — os.replace() is
+    # atomic on both POSIX and Windows (same volume), so a crash mid-write
+    # can never again leave a truncated/partial file at `path`: either the
+    # old content (if any) stays, or the new content fully lands, never
+    # something in between.
+    tmp_path = f"{path}.tmp{os.getpid()}"
+    with open(tmp_path, "w") as f:
         f.write("\n".join(lines))
+    os.replace(tmp_path, path)
     return path
 
 
@@ -8918,146 +8948,154 @@ def _mon_pred_convert_step(element_key, item):
         with open(src_path, "wb") as f:
             f.write(tif_bytes)
 
-        src_ds = gdal.Open(src_path)
-        if src_ds is None:
-            raise ValueError("could not open fetched GeoTIFF")
-        _diag.append(
-            f"src {src_ds.RasterXSize}x{src_ds.RasterYSize} b={src_ds.RasterCount} "
-            f"gt={src_ds.GetGeoTransform()} proj={(src_ds.GetProjection() or '')[:60]!r}"
-        )
-        # Defensive shape check — some vendor feeds ship 1-D vector data
-        # dressed up as a 1-pixel-tall raster (observed: ICON/VMAX10M is
-        # 561×1).  gdal.Warp under the ThreadPoolExecutor can segfault
-        # trying to reproject such degenerate rasters — a C-level crash
-        # Python can't catch, which brings down the whole waitress
-        # process.  Reject anything with fewer than 4 rows or 4 columns
-        # of source data; a real 2D forecast raster is never that flat.
-        if src_ds.RasterXSize < 4 or src_ds.RasterYSize < 4:
-            raise ValueError(
-                f"source raster too flat ({src_ds.RasterXSize}x{src_ds.RasterYSize}) "
-                f"— likely 1-D vector data, skipping to avoid GDAL crash"
-            )
-        try:
-            _srcband = src_ds.GetRasterBand(1)
-            _s_mn, _s_mx, _, _ = _srcband.GetStatistics(False, True)
-            _diag.append(f"src_b1 min={_s_mn} max={_s_mx} nodata={_srcband.GetNoDataValue()}")
-        except Exception as _e:
-            _diag.append(f"src_b1 stats-fail={_e}")
-
-        # Optional per-element clip (lat/lon bbox from the registry).  For
-        # global-grid feeds like GDFS this collapses the output texture
-        # from ~2847×2846 (global mercator) to ~800×640 (Pakistan region),
-        # ~50× smaller PNG and dramatically less GPU memory in the browser.
-        # WRFPRS layers omit `bbox` because they're already Pakistan-native.
-        _bbox = _MON_PRED_ELEMENTS.get(element_key, {}).get("bbox")
-        _warp_kwargs = dict(
-            dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
-        )
-        if _bbox:
-            # outputBounds passed in the src CRS (EPSG:4326 lat/lon here)
-            # via `outputBoundsSRS`; GDAL reprojects both bounds and pixels
-            # into dstSRS in a single pass.
-            _warp_kwargs["outputBounds"]    = _bbox
-            _warp_kwargs["outputBoundsSRS"] = "EPSG:4326"
-        # GDAL / PROJ thread-safety: serialise the Warp call.  This is the
-        # actual root cause of the "prod PNGs are all 2894-byte empty" bug
-        # observed on Linux prod but not on Windows dev/staging — under a
-        # ThreadPoolExecutor concurrent Warps silently corrupt the output
-        # because they compete for the same proj_context.  The lock scope
-        # is intentionally as tight as possible so the auth fetch above
-        # (which is I/O-bound) keeps running in parallel across workers.
-        try:
-            with _MON_PRED_GDAL_LOCK:
-                warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
-        except Exception as _we:
-            raise ValueError(f"gdal.Warp raised: {_we}")
-        src_ds = None
-        if warped_ds is None:
-            raise ValueError("reprojection failed (Warp returned None)")
-        _diag.append(f"warped {warped_ds.RasterXSize}x{warped_ds.RasterYSize} b={warped_ds.RasterCount}")
-        try:
-            _wband = warped_ds.GetRasterBand(1)
-            _w_mn, _w_mx, _, _ = _wband.GetStatistics(False, True)
-            _diag.append(f"warped_b1 min={_w_mn} max={_w_mx} nodata={_wband.GetNoDataValue()}")
-        except Exception as _e:
-            _diag.append(f"warped_b1 stats-fail={_e}")
-
-        # Corner-based WGS84 bounds — 4-corner math handles any rotation
-        # the warp introduces; 2-corner min/max shortcut would miss it.
-        gt = warped_ds.GetGeoTransform()
-        w, h = warped_ds.RasterXSize, warped_ds.RasterYSize
-        _MERC_MAX = 20037508.3427892
-        cx = [gt[0], gt[0]+gt[1]*w, gt[0]+gt[2]*h, gt[0]+gt[1]*w+gt[2]*h]
-        cy = [gt[3], gt[3]+gt[4]*w, gt[3]+gt[5]*h, gt[3]+gt[4]*w+gt[5]*h]
-        minx_m, maxx_m = max(min(cx), -_MERC_MAX), min(max(cx), _MERC_MAX)
-        miny_m, maxy_m = max(min(cy), -_MERC_MAX), min(max(cy), _MERC_MAX)
-
-        def _lon(x): return (x / _MERC_MAX) * 180.0
-        def _lat(y): return math.degrees(2.0*math.atan(math.exp(y / 6378137.0)) - math.pi/2.0)
-        minx, maxx = round(_lon(minx_m), 6), round(_lon(maxx_m), 6)
-        miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
-
-        ramp = _mon_pred_ramp_file(element_key)
-        # Same thread-safety concern as gdal.Warp above — DEMProcessing
-        # touches the shared PROJ/GDAL state too.  Serialise for safety.
+        # GDAL / PROJ thread-safety: the ENTIRE GDAL-touching sequence below
+        # (Open/GetRasterBand/GetStatistics, not just Warp/DEMProcessing) is
+        # now serialised under one lock. It used to wrap only the Warp and
+        # DEMProcessing calls specifically — that was the fix for the "prod
+        # PNGs are all 2894-byte empty" bug (concurrent Warps silently
+        # corrupting output by competing for the same proj_context) — but
+        # gdal.Open()/GetRasterBand()/GetStatistics() running unprotected
+        # between/around those two calls, under the SAME 5-way
+        # ThreadPoolExecutor, is exactly the same class of native, Python-
+        # uncatchable crash risk the docstring below already warns about:
+        # "a C-level crash Python can't catch, which brings down the whole
+        # waitress process" with no traceback and no warning — which is
+        # what this whole lock exists to prevent. The auth fetch above
+        # (_mon_get_bytes, I/O-bound) still runs in parallel across workers
+        # either way; only the GDAL compute itself is now strictly
+        # one-at-a-time process-wide.
         with _MON_PRED_GDAL_LOCK:
+            src_ds = gdal.Open(src_path)
+            if src_ds is None:
+                raise ValueError("could not open fetched GeoTIFF")
+            _diag.append(
+                f"src {src_ds.RasterXSize}x{src_ds.RasterYSize} b={src_ds.RasterCount} "
+                f"gt={src_ds.GetGeoTransform()} proj={(src_ds.GetProjection() or '')[:60]!r}"
+            )
+            # Defensive shape check — some vendor feeds ship 1-D vector data
+            # dressed up as a 1-pixel-tall raster (observed: ICON/VMAX10M is
+            # 561×1), which can ALSO crash gdal.Warp on some inputs. Reject
+            # anything with fewer than 4 rows or 4 columns of source data;
+            # a real 2D forecast raster is never that flat.
+            if src_ds.RasterXSize < 4 or src_ds.RasterYSize < 4:
+                raise ValueError(
+                    f"source raster too flat ({src_ds.RasterXSize}x{src_ds.RasterYSize}) "
+                    f"— likely 1-D vector data, skipping to avoid GDAL crash"
+                )
+            try:
+                _srcband = src_ds.GetRasterBand(1)
+                _s_mn, _s_mx, _, _ = _srcband.GetStatistics(False, True)
+                _diag.append(f"src_b1 min={_s_mn} max={_s_mx} nodata={_srcband.GetNoDataValue()}")
+            except Exception as _e:
+                _diag.append(f"src_b1 stats-fail={_e}")
+
+            # Optional per-element clip (lat/lon bbox from the registry).
+            # For global-grid feeds like GDFS this collapses the output
+            # texture from ~2847×2846 (global mercator) to ~800×640
+            # (Pakistan region), ~50× smaller PNG and dramatically less GPU
+            # memory in the browser. WRFPRS layers omit `bbox` because
+            # they're already Pakistan-native.
+            _bbox = _MON_PRED_ELEMENTS.get(element_key, {}).get("bbox")
+            _warp_kwargs = dict(
+                dstSRS="EPSG:3857", format="GTiff", resampleAlg="bilinear",
+            )
+            if _bbox:
+                # outputBounds passed in the src CRS (EPSG:4326 lat/lon here)
+                # via `outputBoundsSRS`; GDAL reprojects both bounds and
+                # pixels into dstSRS in a single pass.
+                _warp_kwargs["outputBounds"]    = _bbox
+                _warp_kwargs["outputBoundsSRS"] = "EPSG:4326"
+            try:
+                warped_ds = gdal.Warp(warped_path, src_ds, options=gdal.WarpOptions(**_warp_kwargs))
+            except Exception as _we:
+                raise ValueError(f"gdal.Warp raised: {_we}")
+            src_ds = None
+            if warped_ds is None:
+                raise ValueError("reprojection failed (Warp returned None)")
+            _diag.append(f"warped {warped_ds.RasterXSize}x{warped_ds.RasterYSize} b={warped_ds.RasterCount}")
+            try:
+                _wband = warped_ds.GetRasterBand(1)
+                _w_mn, _w_mx, _, _ = _wband.GetStatistics(False, True)
+                _diag.append(f"warped_b1 min={_w_mn} max={_w_mx} nodata={_wband.GetNoDataValue()}")
+            except Exception as _e:
+                _diag.append(f"warped_b1 stats-fail={_e}")
+
+            # Corner-based WGS84 bounds — 4-corner math handles any rotation
+            # the warp introduces; 2-corner min/max shortcut would miss it.
+            gt = warped_ds.GetGeoTransform()
+            w, h = warped_ds.RasterXSize, warped_ds.RasterYSize
+            _MERC_MAX = 20037508.3427892
+            cx = [gt[0], gt[0]+gt[1]*w, gt[0]+gt[2]*h, gt[0]+gt[1]*w+gt[2]*h]
+            cy = [gt[3], gt[3]+gt[4]*w, gt[3]+gt[5]*h, gt[3]+gt[4]*w+gt[5]*h]
+            minx_m, maxx_m = max(min(cx), -_MERC_MAX), min(max(cx), _MERC_MAX)
+            miny_m, maxy_m = max(min(cy), -_MERC_MAX), min(max(cy), _MERC_MAX)
+
+            def _lon(x): return (x / _MERC_MAX) * 180.0
+            def _lat(y): return math.degrees(2.0*math.atan(math.exp(y / 6378137.0)) - math.pi/2.0)
+            minx, maxx = round(_lon(minx_m), 6), round(_lon(maxx_m), 6)
+            miny, maxy = round(_lat(miny_m), 6), round(_lat(maxy_m), 6)
+
+            ramp = _mon_pred_ramp_file(element_key)
             colored_ds = gdal.DEMProcessing(
                 png_path, warped_path, "color-relief",
                 colorFilename=ramp, format="PNG", addAlpha=True,
             )
-        warped_ds = None
-        if colored_ds is None:
-            raise ValueError("color-relief render failed")
-        colored_ds = None
+            warped_ds = None
+            if colored_ds is None:
+                raise ValueError("color-relief render failed")
+            colored_ds = None
 
-        # Post-write PNG validation.  GDAL can produce an entirely-empty
-        # colorized PNG when the upstream warp silently landed on NoData
-        # pixels (has happened on Linux prod when PROJ_LIB was misconfigured
-        # — Warp returned a Dataset object rather than None, so the earlier
-        # "reprojection failed" check let it through; DEMProcessing then
-        # wrote a technically-valid, 100%-transparent PNG that Nginx serves
-        # with HTTP 200 and Mapbox loads without a console error).
-        #
-        # Two-stage guard:
-        #   1. size floor — filters truly-broken (0-byte / a-few-hundred-
-        #      bytes) writes only.  Some legitimate layers (e.g. ICON's
-        #      coarse-grid VMAX10M clipped to Pakistan) produce a real
-        #      valid ~3 KB PNG, so the primary validity signal is (2).
-        #   2. content variance — opens the PNG and confirms at least one
-        #      band has min != max (i.e. actual pixel diversity).  This
-        #      catches every all-transparent / all-uniform "empty" PNG
-        #      regardless of size (including the 2894-byte case that hit
-        #      prod when PROJ_LIB was misconfigured).
-        # Any failure deletes the broken file and raises — the surrounding
-        # try/except returns None, the endpoint drops the step from the
-        # response, and no broken URL propagates to the browser.
-        if not os.path.isfile(png_path) or os.path.getsize(png_path) < 512:
-            try: os.remove(png_path)
-            except Exception: pass
-            raise ValueError(
-                f"colorized PNG missing or truncated ({element_key}/{run}/{fh}) "
-                f"— check PROJ_LIB / GDAL_DATA at startup log."
-            )
-        try:
-            _check_ds = gdal.Open(png_path)
-            if _check_ds is None or _check_ds.RasterCount < 1:
-                raise ValueError("cannot re-open written PNG")
-            _has_variance = False
-            for _bi in range(1, _check_ds.RasterCount + 1):
-                try:
-                    _mn, _mx, _, _ = _check_ds.GetRasterBand(_bi).GetStatistics(False, True)
-                    if _mx > _mn:
-                        _has_variance = True
-                        break
-                except Exception:
-                    pass
-            _check_ds = None
-            if not _has_variance:
-                raise ValueError("all bands uniform — warp produced empty raster")
-        except Exception as _e:
-            try: os.remove(png_path)
-            except Exception: pass
-            raise ValueError(f"colorized PNG failed validation: {_e}")
+            # Post-write PNG validation.  GDAL can produce an entirely-empty
+            # colorized PNG when the upstream warp silently landed on NoData
+            # pixels (has happened on Linux prod when PROJ_LIB was
+            # misconfigured — Warp returned a Dataset object rather than
+            # None, so the earlier "reprojection failed" check let it
+            # through; DEMProcessing then wrote a technically-valid, 100%-
+            # transparent PNG that Nginx serves with HTTP 200 and Mapbox
+            # loads without a console error).
+            #
+            # Two-stage guard:
+            #   1. size floor — filters truly-broken (0-byte / a-few-
+            #      hundred-bytes) writes only.  Some legitimate layers
+            #      (e.g. ICON's coarse-grid VMAX10M clipped to Pakistan)
+            #      produce a real valid ~3 KB PNG, so the primary validity
+            #      signal is (2).
+            #   2. content variance — opens the PNG and confirms at least
+            #      one band has min != max (i.e. actual pixel diversity).
+            #      This catches every all-transparent / all-uniform "empty"
+            #      PNG regardless of size (including the 2894-byte case
+            #      that hit prod when PROJ_LIB was misconfigured).
+            # Any failure deletes the broken file and raises — the
+            # surrounding try/except returns None, the endpoint drops the
+            # step from the response, and no broken URL propagates to the
+            # browser.
+            if not os.path.isfile(png_path) or os.path.getsize(png_path) < 512:
+                try: os.remove(png_path)
+                except Exception: pass
+                raise ValueError(
+                    f"colorized PNG missing or truncated ({element_key}/{run}/{fh}) "
+                    f"— check PROJ_LIB / GDAL_DATA at startup log."
+                )
+            try:
+                _check_ds = gdal.Open(png_path)
+                if _check_ds is None or _check_ds.RasterCount < 1:
+                    raise ValueError("cannot re-open written PNG")
+                _has_variance = False
+                for _bi in range(1, _check_ds.RasterCount + 1):
+                    try:
+                        _mn, _mx, _, _ = _check_ds.GetRasterBand(_bi).GetStatistics(False, True)
+                        if _mx > _mn:
+                            _has_variance = True
+                            break
+                    except Exception:
+                        pass
+                _check_ds = None
+                if not _has_variance:
+                    raise ValueError("all bands uniform — warp produced empty raster")
+            except Exception as _e:
+                try: os.remove(png_path)
+                except Exception: pass
+                raise ValueError(f"colorized PNG failed validation: {_e}")
 
         payload = {
             "date":        item.get("forecast_time"),
@@ -9131,43 +9169,56 @@ def _mon_pred_sample(warped_path, lat, lon):
     way, just without the numpy bridge."""
     import math, struct
     from osgeo import gdal
-    ds = gdal.Open(warped_path)
-    if ds is None:
-        return None
-    band = ds.GetRasterBand(1)
-    gt = ds.GetGeoTransform()
 
-    # Forward Web-Mercator projection — inverse of the _lon()/_lat() helpers
-    # _mon_pred_convert_step already uses to turn its warped bounds back
-    # into lat/lon (same R=6378137 sphere, same formula run in reverse).
-    _MERC_MAX = 20037508.3427892
-    x = lon * _MERC_MAX / 180.0
-    y = math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * 6378137.0
+    # Same _MON_PRED_GDAL_LOCK as _mon_pred_convert_step (see that
+    # function's own comment) — this runs from a DIFFERENT view
+    # (PmdMonitorPredictionValueAPIView) than the one whose
+    # ThreadPoolExecutor the lock was originally added for, but it's the
+    # exact same unprotected gdal.Open()/GetRasterBand() pattern, and can
+    # genuinely race against those workers if a value-sample request lands
+    # while a predictions-list request is still mid-render. Sequential with
+    # (not nested inside) _mon_pred_ensure_warped's own use of the lock —
+    # that call already returned by the time this function runs, so there's
+    # no reentrancy/deadlock concern.
+    with _MON_PRED_GDAL_LOCK:
+        ds = gdal.Open(warped_path)
+        if ds is None:
+            return None
+        band = ds.GetRasterBand(1)
+        gt = ds.GetGeoTransform()
 
-    # Assumes north-up, unrotated geotransform — the same assumption
-    # _mon_pred_convert_step's own corner-bounds math makes (gt[2]/gt[4]
-    # are the rotation terms and are 0 for every GDAL Warp output here).
-    px = int((x - gt[0]) / gt[1])
-    py = int((y - gt[3]) / gt[5])
-    if px < 0 or py < 0 or px >= ds.RasterXSize or py >= ds.RasterYSize:
-        return None
+        # Forward Web-Mercator projection — inverse of the _lon()/_lat()
+        # helpers _mon_pred_convert_step already uses to turn its warped
+        # bounds back into lat/lon (same R=6378137 sphere, same formula run
+        # in reverse).
+        _MERC_MAX = 20037508.3427892
+        x = lon * _MERC_MAX / 180.0
+        y = math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * 6378137.0
 
-    _STRUCT_FMT = {
-        gdal.GDT_Byte: "B", gdal.GDT_UInt16: "H", gdal.GDT_Int16: "h",
-        gdal.GDT_UInt32: "I", gdal.GDT_Int32: "i",
-        gdal.GDT_Float32: "f", gdal.GDT_Float64: "d",
-    }
-    fmt = _STRUCT_FMT.get(band.DataType)
-    if fmt is None:
-        return None
-    raw = band.ReadRaster(px, py, 1, 1, buf_type=band.DataType)
-    if not raw:
-        return None
-    value = float(struct.unpack(fmt, raw)[0])
-    nodata = band.GetNoDataValue()
-    if nodata is not None and value == nodata:
-        return None
-    return value
+        # Assumes north-up, unrotated geotransform — the same assumption
+        # _mon_pred_convert_step's own corner-bounds math makes (gt[2]/gt[4]
+        # are the rotation terms and are 0 for every GDAL Warp output here).
+        px = int((x - gt[0]) / gt[1])
+        py = int((y - gt[3]) / gt[5])
+        if px < 0 or py < 0 or px >= ds.RasterXSize or py >= ds.RasterYSize:
+            return None
+
+        _STRUCT_FMT = {
+            gdal.GDT_Byte: "B", gdal.GDT_UInt16: "H", gdal.GDT_Int16: "h",
+            gdal.GDT_UInt32: "I", gdal.GDT_Int32: "i",
+            gdal.GDT_Float32: "f", gdal.GDT_Float64: "d",
+        }
+        fmt = _STRUCT_FMT.get(band.DataType)
+        if fmt is None:
+            return None
+        raw = band.ReadRaster(px, py, 1, 1, buf_type=band.DataType)
+        if not raw:
+            return None
+        value = float(struct.unpack(fmt, raw)[0])
+        nodata = band.GetNoDataValue()
+        if nodata is not None and value == nodata:
+            return None
+        return value
 
 
 def _mon_cached(key, ttl, fetch_fn, fallback_key=None):
