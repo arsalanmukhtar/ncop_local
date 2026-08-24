@@ -201,3 +201,21 @@ project/cache/
 # couple minutes via `graphify update .` but are kept committed so
 # CONTEXT.md's graph links work without re-running the tool)
 graphify-out/cache/
+
+# Flash-flood model runtime cache (see FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md,
+# ncop_internal/flood_model.py + flood_exposure.py). Per-catchment DEM/HAND
+# pipeline rasters, flood-zone masks/PNGs, and OSM/Overture exposure caches
+# (confirmed live: 272MB total for the one Nullah Lai pilot catchment,
+# 220MB of that a single Overture buildings cache) — all regenerate
+# on-demand (DEM/HAND: ~28s cold; Overture buildings: ~225-270s cold, by
+# far the slowest; OSM bridges/hospitals/drainage/roads: seconds to
+# ~80s), same "safe to never commit" reasoning as pmd_predictions/ above.
+# Same narrow-scoping reasoning too — NOT project/media/ as a whole.
+project/media/flood_model/
+
+# pip's own local HTTP cache (misc/pip_cache/ — used during dependency
+# testing this session, e.g. verifying pyarrow/shapely resolve cleanly
+# together). Pure binary cache, ~46MB, regenerates automatically on next
+# pip install; the rest of misc/ (docs, setup scripts, the pinned GDAL
+# wheel) stays tracked as before — only this one cache subdirectory is new.
+misc/pip_cache/

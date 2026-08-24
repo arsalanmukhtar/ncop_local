@@ -37,6 +37,7 @@ import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
 import { GisExportControl } from "./gis-export-control.js";
+import { FloodModelControl } from "./flood-model-control.js";
 import { NcopAssistantControl } from "./ncop-assistant.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initFfdHistoryPriming } from "./ffd-stats-modal.js";
@@ -190,6 +191,13 @@ class DashboardManager {
     // own button + panel, only wraps addLayerByKey/removeLayerByKey for
     // live refresh (same pattern LayerInfoPanel already uses).
     new GisExportControl(this.#map, this.#sourceLayerControl);
+    // Flash-Flood Early Warning (Phase 1.6, first slice — see
+    // FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md §0.15). Same zero-coupling
+    // shape as GisExportControl above: own button + panel, calls the
+    // async job endpoints in ncop_internal/flood_model_views.py, renders
+    // the result as a temporary raster overlay (never added to the
+    // permanent layer catalog).
+    new FloodModelControl(this.#map);
     // NCOP Assistant (Phase 1 — RAG Q&A). Standalone rail button + panel,
     // deliberately separate from navigation-panel.js's own "#gee-chat-modal"
     // (GEE Data Assistant, narrowly scoped to Earth Engine layers) so
@@ -526,6 +534,7 @@ const RAIL_PANEL_BUTTON_MAP = {
   weatherReportPanel: { btnId: "weatherReportToggle", visibleClass: "visible" },
   ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
   gisExportPanel:  { btnId: "gisExportToggle",  visibleClass: "visible" },
+  floodModelPanel: { btnId: "floodModelToggle", visibleClass: "visible" },
 };
 
 function buildUnifiedRightRail() {
@@ -592,6 +601,10 @@ function buildUnifiedRightRail() {
     // GIS Export — pushed alongside the other data/analysis controls.
     // Wrapper div is injected by GisExportControl in its constructor.
     push(document.querySelector(".custom-gis-export-btn"));
+    // Flash-Flood Early Warning — pushed alongside the other data/analysis
+    // controls, right after GIS Export. Wrapper div is injected by
+    // FloodModelControl in its constructor.
+    push(document.querySelector(".custom-flood-model-btn"));
     // NCOP Assistant has no rail button anymore — its sole entry point is
     // the standalone floating mascot (NcopAssistantControl#renderMascot),
     // which lives outside the rail entirely.
@@ -905,6 +918,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "ncopTourPanel",        kind: "class",   cls: "visible" },
   { id: "gisExportPanel",       kind: "class",   cls: "visible",
     btn: { id: "gisExportToggle",  activeCls: "active-gis-export" } },
+  { id: "floodModelPanel",      kind: "class",   cls: "visible",
+    btn: { id: "floodModelToggle", activeCls: "active-flood-model" } },
   // Display-driven float panels
   { id: "gee-chat-modal",          kind: "display",
     btn: { id: "geeChat",          activeCls: "active-gee"       } },

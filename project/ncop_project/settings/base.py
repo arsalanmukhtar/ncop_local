@@ -191,6 +191,25 @@ REST_FRAMEWORK = {
         # the shared VM, not spend — 40/min comfortably covers even a
         # large story's full chunk sequence with headroom.
         "ncop_translate": "40/min",
+        # Flash-flood early-warning job submission (ncop_internal.
+        # flood_model_views) — deliberately TIGHT, not just "conservative
+        # by default" like the endpoints above. The job executor behind
+        # this endpoint is a single-worker queue (see flood_model_views.py's
+        # own module docstring — jobs already serialize internally on the
+        # GDAL/WBT locks anyway, so a second worker would only add thread
+        # overhead, not real parallelism). Confirmed live a single run
+        # takes 64-85s even warm (§0.12/§0.13/§0.14 of the methodology
+        # doc). Without a tight cap here, a burst of run requests would
+        # each queue behind the last, and the Nth queued job would wait
+        # roughly N * 70s before even starting — 3/min bounds that queue
+        # depth to something a real interactive user would never hit
+        # while still allowing a few threshold-comparison runs in a row.
+        "flood_model_run": "3/min",
+        # Status polling — cheap (an in-memory dict lookup, no compute),
+        # expected to be hit frequently (every 2-3s) while a job runs, so
+        # generous by design, not an oversight relative to the tight
+        # run-submission rate above.
+        "flood_model_status": "120/min",
     },
 }
 

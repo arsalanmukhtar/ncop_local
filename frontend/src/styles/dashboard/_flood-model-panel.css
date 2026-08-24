@@ -1,0 +1,286 @@
+/* =========================================================================
+ * _flood-model-panel.css
+ * -------------------------------------------------------------------------
+ * Styles for the Flash-Flood Early Warning control (see
+ * frontend/src/modules/flood-model-control.js). Every selector is
+ * namespaced under `.flood-model-*`/`.custom-flood-model-*` so nothing
+ * here bleeds into existing rail/panel chrome. Baseline lifted directly
+ * from _gis-export.css's own rail-button/panel/section conventions —
+ * deliberately kept visually identical, not reinvented.
+ * ========================================================================= */
+
+.custom-flood-model-control { display: contents; }
+
+/* ============================================================
+ * Rail button — same baseline as the GIS Export button
+ * (_gis-export.css:12-47) so resting fills, hover transitions,
+ * and the active-panel highlight all read identically to the
+ * neighbouring rail controls.
+ * ============================================================ */
+.map-right-rail > .custom-flood-model-btn {
+    background: var(--secondary-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: var(--white) !important;
+    cursor: pointer;
+}
+
+.map-right-rail > .custom-flood-model-btn:hover:not(.active-flood-model) {
+    background: var(--primary-bg) !important;
+}
+
+[data-theme="night"] .map-right-rail > .custom-flood-model-btn {
+    background: var(--tertiary-bg) !important;
+    backdrop-filter: blur(12px) saturate(105%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(105%) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.15),
+        0 1px 2px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="night"] .map-right-rail > .custom-flood-model-btn:hover:not(.active-flood-model) {
+    background: var(--glass-highlight) !important;
+}
+
+.map-right-rail > .custom-flood-model-btn.active-flood-model {
+    background: var(--ndma-blue) !important;
+    border-color: var(--ndma-blue) !important;
+    color: #fff !important;
+}
+
+/* ============================================================
+ * Panel — same base look/positioning contract as
+ * .gis-export-panel (_gis-export.css:49-71): `.right-rail-panel`
+ * (_map-panels.css) takes over position/slide-in once
+ * dashboard.js#buildUnifiedRightRail lifts this out to be a
+ * sibling of #map; these rules are the panel's own look.
+ * ============================================================ */
+.flood-model-panel {
+    position: absolute;
+    top: 0;
+    right: 42px;
+    width: 340px;
+    max-height: 560px;
+    background: var(--primary-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 8px 32px var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.flood-model-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
+}
+
+.flood-model-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.flood-model-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flood-model-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.flood-model-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.flood-model-close:hover {
+    color: var(--text-primary);
+    background: var(--tertiary-bg);
+}
+
+.flood-model-content {
+    padding: 10px 12px 12px;
+    overflow-y: auto;
+}
+
+.flood-model-section {
+    margin-bottom: 14px;
+}
+
+.flood-model-section-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.flood-model-select {
+    width: 100%;
+    font-size: 12.5px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+
+.flood-model-slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.flood-model-slider-label {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.flood-model-slider-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--ndma-blue);
+}
+
+.flood-model-slider-readout {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ndma-blue);
+    align-self: flex-end;
+}
+
+.flood-model-note {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+.flood-model-run-btn {
+    width: 100%;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--ndma-blue);
+    background: var(--ndma-blue-opaque);
+    color: #fff;
+    cursor: pointer;
+}
+.flood-model-run-btn:hover:not(:disabled) {
+    background: var(--ndma-blue);
+}
+.flood-model-run-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.flood-model-status {
+    font-size: 11.5px;
+    margin-top: 6px;
+    min-height: 14px;
+}
+.flood-model-status-info    { color: var(--text-secondary); }
+.flood-model-status-success { color: var(--success, #2e7d32); }
+.flood-model-status-error   { color: var(--danger, #c0392b); }
+
+.flood-model-checklist {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.flood-model-checklist-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text-secondary);
+}
+.flood-model-checklist-row.is-done  { color: var(--text-primary); }
+.flood-model-checklist-row.is-active {
+    color: var(--ndma-blue);
+    font-weight: 600;
+}
+
+.flood-model-checklist-icon {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+    font-weight: 700;
+}
+.flood-model-checklist-row.is-done .flood-model-checklist-icon { color: var(--success, #2e7d32); }
+.flood-model-checklist-row.is-active .flood-model-checklist-icon { color: var(--ndma-blue); }
+
+.flood-model-note-methodology {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 6px;
+}
+
+.flood-model-accuracy-note {
+    border-top: 1px solid var(--border-dark);
+    padding-top: 10px;
+}
+.flood-model-accuracy-note .flood-model-note {
+    font-size: 11px;
+}
+
+.flood-model-marker-tooltip {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flood-model-results {
+    border-top: 1px solid var(--border-dark);
+    padding-top: 10px;
+}
+
+.flood-model-result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    padding: 4px 0;
+}
+
+.flood-model-result-label {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.flood-model-result-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: right;
+}
+
+.flood-model-result-hint {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 10.5px;
+}

@@ -1,6 +1,7 @@
 from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
+from .flood_model_views import FloodModelRunView, FloodModelStatusView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -185,5 +186,18 @@ urlpatterns = [
         "api/translate/",
         NcopTranslateView.as_view(),
         name="ncop-translate",
+    ),
+    # Flash-flood early warning — Phase 1.6's first real HTTP endpoints.
+    # Async job-id polling, not a blocking request — see
+    # ncop_internal/flood_model_views.py's own module docstring for why.
+    path(
+        "api/flood-model/run/",
+        FloodModelRunView.as_view(),
+        name="flood-model-run",
+    ),
+    path(
+        "api/flood-model/status/<str:job_id>/",
+        FloodModelStatusView.as_view(),
+        name="flood-model-status",
     ),
 ]

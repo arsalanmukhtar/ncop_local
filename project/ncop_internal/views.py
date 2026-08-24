@@ -3730,7 +3730,7 @@ class GEEDataCatalog:
         },
         'flood_depth_proxy': {
             'name': 'Potential Flood Depth (Elevation-based)',
-            'collection': 'COPERNICUS/DEM/GLO30',
+            'collection': 'COPERNICUS/DEM/GLO30_2024_1',
             'compute': lambda img: ee.Image(50).subtract(img.select('DEM')).clamp(0, 50).rename('Flood_Depth'),
             'vis': {'min': 0, 'max': 20, 'palette': ['ffffff', 'c7e9b4', '7fcdbb', '41b6c4', '1d91c0', '225ea8', '0c2c84']},
             'type': 'susceptibility_flood',
@@ -4866,7 +4866,7 @@ class EnhancedCompute:
     def compute_slr_2050(aoi):
         """Sea Level Rise 2050 - 1-3m inundation scenario"""
         try:
-            dem = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic().clip(aoi)
+            dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM').mosaic().clip(aoi)
             slr_risk = dem.lt(3).multiply(3).subtract(dem).clamp(0, 3).rename('SLR_2050')
             coastal_mask = dem.lt(10).And(dem.gt(-5))
             return slr_risk.updateMask(coastal_mask)
@@ -4878,7 +4878,7 @@ class EnhancedCompute:
     def compute_slr_2100(aoi):
         """Sea Level Rise 2100 - 1-5m worst case scenario"""
         try:
-            dem = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').mosaic().clip(aoi)
+            dem = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1').select('DEM').mosaic().clip(aoi)
             slr_risk = dem.lt(5).multiply(5).subtract(dem).clamp(0, 5).rename('SLR_2100')
             coastal_mask = dem.lt(15).And(dem.gt(-5))
             return slr_risk.updateMask(coastal_mask)
@@ -4916,7 +4916,7 @@ class AHPModels:
     def compute_flood_susceptibility(aoi):
         """Multi-criteria flood susceptibility using AHP"""
         try:
-            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1')
             dem = dem_collection.select('DEM').mosaic().clip(aoi)
             
             elevation_risk = dem.lt(100).multiply(1.0) \
@@ -4996,7 +4996,7 @@ class AHPModels:
             
         except Exception as e:
             print(f"[FAILED] AHP Flood Error: {e}")
-            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1')
             dem = dem_collection.select('DEM').mosaic().clip(aoi)
             simple = dem.lt(200).multiply(1.0) \
                 .where(dem.gte(200).And(dem.lt(500)), 0.5) \
@@ -5175,7 +5175,7 @@ class AHPModels:
     def compute_cyclone_susceptibility(aoi):
         """Coastal cyclone susceptibility - PRESERVED"""
         try:
-            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+            dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1')
             dem = dem_collection.select('DEM').mosaic().clip(aoi)
             
             coastal_risk = dem.lt(10).And(dem.gt(-5)).multiply(1.0) \
@@ -5219,7 +5219,7 @@ class AHPModels:
         except Exception as e:
             print(f"[FAILED] AHP Cyclone Error: {e}")
             try:
-                dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+                dem_collection = ee.ImageCollection('COPERNICUS/DEM/GLO30_2024_1')
                 dem = dem_collection.select('DEM').mosaic().clip(aoi)
             except:
                 dem = ee.Image('USGS/SRTMGL1_003').select('elevation').clip(aoi)
