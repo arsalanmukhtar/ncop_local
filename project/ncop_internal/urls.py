@@ -1,7 +1,7 @@
 from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
-from .flood_model_views import FloodModelRunView, FloodModelStatusView
+from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -199,5 +199,27 @@ urlpatterns = [
         "api/flood-model/status/<str:job_id>/",
         FloodModelStatusView.as_view(),
         name="flood-model-status",
+    ),
+    # Sub-phase 5 — viewport-bounded buildings-on-zoom (see
+    # flood_model_views.py's own FloodModelAhpBuildingsInViewView
+    # docstring). Synchronous, not job-id based.
+    path(
+        "api/flood-model/ahp-buildings-in-view/",
+        FloodModelAhpBuildingsInViewView.as_view(),
+        name="flood-model-ahp-buildings-in-view",
+    ),
+    # §0.37 — fire-and-forget custom-AOI prewarm (see flood_model_views.py's
+    # own FloodModelPrewarmCustomAoiView docstring).
+    path(
+        "api/flood-model/prewarm-custom-aoi/",
+        FloodModelPrewarmCustomAoiView.as_view(),
+        name="flood-model-prewarm-custom-aoi",
+    ),
+    # §0.47 — download a finished job's own result as GeoJSON (see
+    # flood_model_views.py's own FloodModelExportView docstring).
+    path(
+        "api/flood-model/export/<str:job_id>/",
+        FloodModelExportView.as_view(),
+        name="flood-model-export",
     ),
 ]

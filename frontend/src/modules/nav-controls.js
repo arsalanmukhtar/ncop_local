@@ -450,6 +450,13 @@ const TOUR_STEPS = [
     action: "openWeatherReportPanel",
   },
   {
+    target: "#floodModelToggle",
+    title: "Flash-Flood Early Warning — new",
+    content:
+      "Opens the Flash-Flood Early Warning panel: a real, DEM-derived flood model you can run on demand, not just a fixed set of pre-computed layers. Pick from 6 flash-flood pilots (Nullah Lai, Bhudni Nullah, Karachi Urban, Swat–Mingora, Lasbela–Uthal, Hunza–Karimabad — one per major region) or 31 real riverine gauge/barrage stations across every province, or define your own area by drawing a polygon, uploading a shapefile/GeoJSON/KML, or entering a bbox. Four modes — fixed HAND threshold, rainfall-scenario discharge-driven, AHP susceptibility, and live gauge-driven riverine — each returning a full exposure breakdown (buildings, population, roads, drainage, admin context), a live accuracy check where real ground truth exists, and a one-click GeoJSON download of the result.",
+    position: "left",
+  },
+  {
     target: "#splitCompareToggle",
     title: "Split Compare View — new",
     content:

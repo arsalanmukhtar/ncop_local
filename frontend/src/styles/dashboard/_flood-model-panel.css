@@ -160,6 +160,20 @@
     accent-color: var(--ndma-blue);
 }
 
+/* Discharge-mode rainfall/duration inputs — same slider-row layout as
+   the threshold slider (label above, control below), a number input in
+   place of a range so an operator can type an exact scenario value
+   rather than only drag to it. */
+.flood-model-number-input {
+    width: 100%;
+    font-size: 12.5px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+}
+
 .flood-model-slider-readout {
     font-size: 11.5px;
     font-weight: 600;
@@ -174,8 +188,105 @@
     margin-top: 4px;
 }
 
+/* Real visual treatment for key terms (real numbers, mode names, the
+   one caveat that matters) — reuses this panel's own existing accent
+   color rather than inventing a new one, so a highlighted term reads
+   as "the same accent as an active/selected state elsewhere in this
+   panel," not an unrelated new color. Previously <strong> rendered as
+   unstyled default browser bold — this is the first real emphasis
+   treatment for this panel's note text. */
+.flood-model-note strong {
+    color: var(--ndma-blue);
+    font-weight: 700;
+}
+
+/* ============================================================
+ * §0.39 — the real, NCOP-themed draw/trash control: icon-only
+ * square buttons (Lucide `lasso` / `trash-2`), matching the shape
+ * of @mapbox/mapbox-gl-draw's own documented control (two stacked
+ * squares) but reskinned entirely in this panel's own tokens and
+ * living inside the Area section itself — not a map-corner widget,
+ * not gated behind picking anything from the catchment dropdown
+ * (that dropdown only ever lists real, named catchments now). The
+ * lasso button IS how a custom draw starts; clicking it is what
+ * switches the active area to "custom" and enters draw_polygon
+ * mode — see flood-model-control.js's own click handler.
+ * ============================================================ */
+.flood-model-draw-ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+/* §0.46 — the real <input type="file"> behind #floodModelUploadBtn's own
+   click proxy. Standard clip-rect hidden pattern (not display:none —
+   keeps it focusable/operable for assistive tech and .click()-triggerable
+   in every browser) rather than a new global utility class, since this
+   is the only hidden file input this panel has. */
+.flood-model-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.flood-model-draw-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.flood-model-draw-icon-btn svg {
+    width: 15px;
+    height: 15px;
+}
+.flood-model-draw-icon-btn:hover:not(:disabled) {
+    background: var(--tertiary-bg);
+    border-color: var(--ndma-blue);
+    color: var(--ndma-blue);
+}
+.flood-model-draw-icon-btn.is-active {
+    background: var(--ndma-blue);
+    border-color: var(--ndma-blue);
+    color: #fff;
+}
+.flood-model-draw-icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.flood-model-draw-icon-btn--danger:hover:not(:disabled) {
+    background: var(--danger, #c0392b);
+    border-color: var(--danger, #c0392b);
+    color: #fff;
+}
+
+.flood-model-draw-ctrl-label {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
+.flood-model-run-row {
+    display: flex;
+    gap: 6px;
+}
+
 .flood-model-run-btn {
-    width: 100%;
+    flex: 1;
     font-size: 12.5px;
     font-weight: 600;
     padding: 8px 10px;
@@ -193,6 +304,39 @@
     cursor: not-allowed;
 }
 
+.flood-model-clear-btn {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-dark);
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.flood-model-clear-btn:hover {
+    background: var(--tertiary-bg);
+}
+
+/* §0.47 — the download link reuses .flood-model-clear-btn's own base
+   look (same border/background/hover) but renders as a plain <a>, not a
+   <button> — this modifier resets link-specific defaults (underline,
+   link color) and centers the icon the same way .flood-model-draw-
+   icon-btn's own square buttons already do. */
+.flood-model-download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    padding: 8px;
+    text-decoration: none;
+}
+.flood-model-download-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
 .flood-model-status {
     font-size: 11.5px;
     margin-top: 6px;
@@ -204,33 +348,66 @@
 
 .flood-model-checklist {
     margin-top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+}
+
+/* §0.37 — redesigned as a real table (was a plain div list), themed
+   entirely with this app's own existing tokens so it matches both day
+   and night theme automatically, same as the rest of this panel. */
+.flood-model-checklist-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    overflow: hidden;
 }
 
 .flood-model-checklist-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     font-size: 11px;
     line-height: 1.3;
     color: var(--text-secondary);
+}
+.flood-model-checklist-row:not(:last-child) td {
+    border-bottom: 1px solid var(--border-dark);
 }
 .flood-model-checklist-row.is-done  { color: var(--text-primary); }
 .flood-model-checklist-row.is-active {
     color: var(--ndma-blue);
     font-weight: 600;
+    background: color-mix(in srgb, var(--ndma-blue) 8%, transparent);
 }
 
 .flood-model-checklist-icon {
-    flex-shrink: 0;
-    width: 14px;
+    width: 22px;
+    padding: 5px 4px 5px 8px;
     text-align: center;
     font-weight: 700;
+    vertical-align: top;
 }
 .flood-model-checklist-row.is-done .flood-model-checklist-icon { color: var(--success, #2e7d32); }
 .flood-model-checklist-row.is-active .flood-model-checklist-icon { color: var(--ndma-blue); }
+
+.flood-model-checklist-label {
+    padding: 5px 4px;
+    vertical-align: top;
+}
+
+.flood-model-checklist-time {
+    padding: 5px 8px 5px 4px;
+    text-align: right;
+    white-space: nowrap;
+    vertical-align: top;
+    font-variant-numeric: tabular-nums;
+}
+
+.flood-model-checklist-hint {
+    font-size: 9.5px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    white-space: normal;
+    max-width: 140px;
+    margin-top: 1px;
+}
 
 .flood-model-note-methodology {
     background: var(--secondary-bg);
@@ -251,7 +428,12 @@
 .flood-model-marker-tooltip {
     font-size: 11.5px;
     font-weight: 600;
-    color: var(--text-primary);
+    /* Explicit black, NOT var(--text-primary) — that token is light/white
+       in this app's own dark theme, correct for panels on the app's dark
+       background, but invisible here: Mapbox's own Popup renders on ITS
+       OWN white background by default, unrelated to the app's theme.
+       Confirmed live: white-on-white was rendering as an empty box. */
+    color: #1a1a1a;
 }
 
 .flood-model-results {
@@ -283,4 +465,145 @@
     color: var(--text-secondary);
     font-weight: 400;
     font-size: 10.5px;
+}
+
+/* ============================================================
+ * AHP susceptibility mode's own weight breakdown (§0.29/§0.30) —
+ * a small horizontal-bar list, sorted heaviest-first, so an
+ * operator can see at a glance which literature-cited factor
+ * actually dominated this catchment's own result.
+ * ============================================================ */
+.flood-model-ahp-weights {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.flood-model-ahp-weight-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 32px;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+}
+
+.flood-model-ahp-weight-label {
+    color: var(--text-secondary);
+    text-transform: capitalize;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.flood-model-ahp-weight-bar-track {
+    display: block;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+    overflow: hidden;
+}
+
+.flood-model-ahp-weight-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--ndma-blue);
+    border-radius: 3px;
+}
+
+.flood-model-ahp-weight-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: right;
+}
+
+/* ============================================================
+ * AHP zonation additions — legend, per-zone exposure blocks,
+ * admin-context sentences, AUC chart wrapper. Legend itself
+ * reuses .dynamic-legend-* from _layer-panels.css (already
+ * loaded globally) — .flood-model-ahp-legend only trims its
+ * own spacing to sit naturally inside this narrower panel.
+ * ============================================================ */
+.flood-model-ahp-legend {
+    padding: 6px 0 2px;
+    margin-top: 4px;
+}
+.flood-model-ahp-legend .dynamic-legend-title {
+    font-size: 10.5px;
+    padding-bottom: 3px;
+}
+.flood-model-ahp-legend .dynamic-legend-rows {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.flood-model-ahp-legend .dynamic-legend-row {
+    grid-template-columns: 14px auto;
+    gap: 5px;
+    width: auto;
+}
+.flood-model-ahp-legend .dynamic-legend-swatch {
+    width: 12px;
+    height: 12px;
+}
+.flood-model-ahp-legend .dynamic-legend-label {
+    font-size: 11px;
+}
+
+.flood-model-ahp-zone-block {
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-dark);
+}
+
+.flood-model-ahp-zone-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.flood-model-ahp-zone-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.flood-model-admin-sentences {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.flood-model-admin-sentence {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    padding: 3px 0;
+    border-bottom: 1px dashed var(--border-dark);
+}
+.flood-model-admin-sentence:last-child {
+    border-bottom: none;
+}
+.flood-model-admin-sentence strong {
+    color: var(--ndma-blue);
+    font-weight: 700;
+}
+
+.flood-model-auc-chart-wrap {
+    height: 90px;
+    margin-top: 8px;
+    position: relative;
+}
+
+.flood-model-auc-chart-caption {
+    margin-top: 4px;
 }

@@ -210,6 +210,26 @@ REST_FRAMEWORK = {
         # generous by design, not an oversight relative to the tight
         # run-submission rate above.
         "flood_model_status": "120/min",
+        # Sub-phase 5 — buildings-on-zoom (ncop_internal.flood_model_views.
+        # FloodModelAhpBuildingsInViewView). Fires on moveend while zoomed
+        # in close, client-side debounced to ~150ms — generous like status
+        # polling above (this is a cheap, bounded in-memory STRtree query
+        # on a warm cache, not a heavy compute), but not left unbounded.
+        "flood_model_buildings_view": "60/min",
+        # §0.37 — custom-AOI prewarm (FloodModelPrewarmCustomAoiView).
+        # Fired once per real polygon draw (debounced client-side), never
+        # in a tight loop like status polling — a tighter cap than that,
+        # but generous enough for a user redrawing their area a few
+        # times while getting the shape right. The endpoint itself is
+        # cheap regardless (fire-and-forget, never blocks on the real
+        # fetch) — this bounds submission frequency, not compute cost.
+        "flood_model_prewarm": "20/min",
+        # §0.47 — export a finished job's own result as a GeoJSON
+        # download (FloodModelExportView). A real, deliberate user
+        # action (clicking "Download"), never polled — generous enough
+        # for a user re-downloading a few times, tight enough to still
+        # be a real cap against abuse.
+        "flood_model_export": "20/min",
     },
 }
 

@@ -3995,6 +3995,17 @@ export default class LayerAttributePopup {
   #bindEvents() {
     // Enhanced click handler
     this.map.on("click", async (e) => {
+      // §0.37 — a real, confirmed interference bug: this handler is
+      // global/unscoped (no layer-id filter), so it fired on every
+      // click INCLUDING clicks a user makes while placing polygon
+      // vertices in flood-model-control.js's own custom-AOI draw tool,
+      // popping up an attribute popup on top of the map exactly where
+      // the next vertex was meant to go. Guarded the same way this app
+      // already signals cross-module state (window.ncopFloodModelControl,
+      // set in that module's own constructor) — skip entirely while a
+      // polygon is actively being drawn.
+      if (window.ncopFloodModelControl?.isDrawModeActive?.()) return;
+
       this.#refreshDynamicExposureLookups();
 
       const features = this.#queryFeaturesAtPoint(e.point);

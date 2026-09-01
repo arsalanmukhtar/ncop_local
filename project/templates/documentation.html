@@ -793,6 +793,7 @@
                 <a href="#layer-catalogue" class="sidebar-link">Layer Catalogue</a>
                 <a href="#new-gis-layers" class="sidebar-link">New GIS Layers &mdash; Hydrology / Geology / Seismology</a>
                 <a href="#agriculture-monitoring" class="sidebar-link">Agriculture Monitoring &mdash; IPC &amp; PBS Crops</a>
+                <a href="#flash-flood-early-warning" class="sidebar-link">Flash-Flood Early Warning &mdash; HAND / AHP / Riverine</a>
                 <a href="#pmd-predictions" class="sidebar-link">PMD Forecast &mdash; WRFPRS / GDFS Rasters</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
@@ -2255,6 +2256,57 @@ seismological_global:seismic_hazard_map
 
                 <h4 class="subsection-title" style="font-size:14px">Sidebar-injection pattern</h4>
                 <p>The crop filter card and the PMD Warnings hazard filter both follow the same injection strategy: a <code>MutationObserver</code> watches for the first <code>input[data-item-key=&quot;crop_provincial&quot;]</code> (or <code>pmd_warnings</code>) toggle to render, then inserts the filter card as the previous sibling of the toggle row. Firing a custom event (<code>ncop-crop-selection-changed</code> / <code>pmd-warnings-filter-changed</code>) on <code>window</code> lets any future consumer react. The crop filter&rsquo;s subcategory-lookup walker scans every top-level key in <code>ncop_menu_items</code> so it stays working across the earlier reshuffle from <code>gis_layers &rarr; agriculture_monitoring</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="flash-flood-early-warning">
+                <h2 class="section-title">Flash-Flood Early Warning &mdash; HAND / AHP / Riverine <span class="section-anchor">#</span></h2>
+                <p>A self-contained analysis panel (right-rail button, warning-triangle icon &mdash; <code>frontend/src/modules/flood-model-control.js</code>) that runs a real, DEM-derived flood model on demand for any area in Pakistan, not just a fixed set of pre-baked layers. Full technical account, every literature citation, and every real-world test result live in <code>FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md</code> at the repo root &mdash; this section is the operator-facing summary.</p>
+
+                <h3 class="subsection-title">Two flood types, four modes</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Flood type</th><th>Mode</th><th>What it computes</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td rowspan="3"><strong>Flash flood</strong><br>(small basin, local runoff)</td><td>Fixed HAND threshold</td><td>A single elevation-above-nearest-drainage cutoff &mdash; a susceptibility zone, not a predicted extent.</td></tr>
+                            <tr><td>Rainfall scenario (discharge-driven)</td><td>SCS-CN &rarr; Kirpich &rarr; SCS unit hydrograph &rarr; Manning&rsquo;s equation, producing a spatially-varying flood stage per stream reach instead of one uniform cutoff.</td></tr>
+                            <tr><td>AHP susceptibility</td><td>Literature-weighted overlay of terrain/land-cover/soil/rainfall/NDVI/connectivity factors into one continuous score, reclassified into low/medium/high zones.</td></tr>
+                            <tr><td><strong>Riverine</strong><br>(major river reach)</td><td>Live gauge-driven flood zone</td><td>A real water-surface elevation &mdash; from a named FFD barrage/dam gauge, or (for a custom area) derived from a GeoGLOWS discharge forecast via a synthetic rating curve &mdash; flooded outward via a connected flood-fill seeded from the real stream network.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>AHP susceptibility runs identically for either flood type &mdash; every factor feeding it is terrain-static, so it needs no rainfall/gauge input at all.</p>
+
+                <h3 class="subsection-title">Choosing an area &mdash; four ways</h3>
+                <ul>
+                    <li><strong>Curated catchments</strong> &mdash; <strong>6 flash-flood pilots</strong> (Nullah Lai and Bhudni Nullah Basin, plus Karachi Urban, Swat&ndash;Mingora, Lasbela&ndash;Uthal, and Hunza&ndash;Karimabad &mdash; one real, documented small-basin flash-flood case each for Sindh, KP, Balochistan, and Gilgit-Baltistan) plus <strong>31 real riverine gauge/barrage stations</strong> spanning the Indus (upper &amp; lower), Jhelum, Chenab, Ravi, Sutlej, and Kabul rivers across KP, Punjab, Sindh, Gilgit-Baltistan, and Azad Kashmir &mdash; every station's name/coordinates read live from PMD/FFD&rsquo;s own gauge feed, and every flash-flood pilot's own runoff/channel parameters (composite curve number, basin flow-path length, terrain class) verified live against its real DEM/land-cover/soil data before being catalogued, not hand-typed or guessed.</li>
+                    <li><strong>Draw a custom area</strong> &mdash; a themed lasso/trash icon control in the panel&rsquo;s own Area section (not a map-corner widget); works for either flood type.</li>
+                    <li><strong>Upload a shapefile / GeoJSON / KML&ndash;KMZ</strong> &mdash; reuses this app&rsquo;s existing GIS Import upload endpoints (<code>/upload-shapefile/</code>, <code>/upload-kmz/</code>) as-is; multiple polygon parts in one file are combined into a single area.</li>
+                    <li>A custom area (drawn or uploaded) is clipped to the REAL shape the operator specified, not just its bounding rectangle &mdash; every result (zone geometry, exposure counts) respects the actual boundary.</li>
+                </ul>
+
+                <h3 class="subsection-title">Exposure &amp; accuracy</h3>
+                <p>Every run reports real, computed exposure &mdash; buildings (Overture Maps), population by age/sex band (WorldPop), roads and drainage length inside the zone (OpenStreetMap), schools/settlements/airports/bridges/hospitals, and per-district administrative context &mdash; not just the hazard shape on its own. Accuracy is reported honestly, never fabricated: the 4 curated flash-flood/riverine pilots carry a design-time AUC figure calibrated against real historical satellite-observed floods (Global Flood Database); a custom area gets a genuine <strong>live</strong> AHP&ndash;Frequency-Ratio ensemble cross-check when real flood observations exist nearby, or an honest &ldquo;no ground truth found&rdquo; note when they don&rsquo;t &mdash; never a number invented to fill the gap.</p>
+
+                <h3 class="subsection-title">Downloading results</h3>
+                <p>A finished run can be downloaded as a self-contained GeoJSON file (<code>GET /api/flood-model/export/&lt;job_id&gt;/</code>) &mdash; the flood-zone or AHP-zone geometry with every exposure number already attached as real feature <code>properties</code>, directly openable in QGIS/ArcGIS/geopandas with no separate lookup needed. Available for 1 hour after a run completes.</p>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Endpoint</th><th>Purpose</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>POST /api/flood-model/run/</code></td><td>Submits a run (catchment/area, flood type, mode, scenario) &mdash; returns a <code>job_id</code> immediately (a full run can take 1&ndash;5+ minutes; never a blocking request).</td></tr>
+                            <tr><td><code>GET /api/flood-model/status/&lt;job_id&gt;/</code></td><td>Poll target &mdash; status, current stage, elapsed time, and the full result once done.</td></tr>
+                            <tr><td><code>GET /api/flood-model/export/&lt;job_id&gt;/</code></td><td>Downloads a finished job&rsquo;s own result as GeoJSON (geometry + every attribute).</td></tr>
+                            <tr><td><code>GET /api/flood-model/ahp-buildings-in-view/</code></td><td>Viewport-bounded individual buildings, colored by AHP zone, once zoomed in past the aggregate-count level.</td></tr>
+                            <tr><td><code>POST /api/flood-model/prewarm-custom-aoi/</code></td><td>Fire-and-forget: starts the slow Overture buildings fetch as soon as a custom area is drawn/uploaded, well before &ldquo;Run&rdquo; is clicked.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- ============================================================ -->
