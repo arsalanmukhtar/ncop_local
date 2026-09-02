@@ -47,6 +47,12 @@ const FLOOD_MODEL_PREWARM_ENDPOINT = "/api/flood-model/prewarm-custom-aoi/";
 // §0.47 — download the currently-shown result (zone/AHP-zone geometry +
 // every already-computed exposure attribute) as a real GeoJSON file.
 const FLOOD_MODEL_EXPORT_ENDPOINT = "/api/flood-model/export/";
+// Export Report button — a detailed .docx (map snapshot + legend,
+// scenario/accuracy summary, exposure/infrastructure-damage tables,
+// data-driven mitigation measures) built server-side from the SAME
+// finished job result the GeoJSON export above reads, plus a map
+// snapshot captured client-side (see #captureMapSnapshot).
+const FLOOD_MODEL_REPORT_EXPORT_ENDPOINT = "/api/flood-model/export-report/";
 const POLL_INTERVAL_MS = 3000;
 const RESULT_RASTER_SOURCE_ID = "flood-model-result-raster";
 const RESULT_RASTER_LAYER_ID = "flood-model-result-raster-layer";
@@ -543,6 +549,11 @@ export class FloodModelControl {
   // has a real job_id to export against after the run completes.
   #lastJobId = null;
   #lastDischargeScenario = null;
+  // Export Report button's own in-flight guard — separate from #busy
+  // (which tracks the Run job) so exporting a report never disables the
+  // Run button, and re-running a model never disables an in-flight
+  // report export either.
+  #exportingReport = false;
   #completedStages = [];
   #currentStage = null;
   #elapsedSeconds = null;
@@ -656,6 +667,7 @@ export class FloodModelControl {
     content?.addEventListener("click", (event) => {
       if (event.target.closest("#floodModelRun")) { this.#runModel(); return; }
       if (event.target.closest("#floodModelClear")) { this.#clearMap(); return; }
+      if (event.target.closest("#floodModelExportReportBtn")) { this.#exportReport(); return; }
       // §0.39 — the real, themed draw/trash control (Lucide `lasso` /
       // `trash-2`, icon-only squares) that IS how a custom draw starts
       // now — "Draw custom area…" is no longer a pickable dropdown
@@ -1265,6 +1277,18 @@ export class FloodModelControl {
             class="flood-model-clear-btn flood-model-download-btn" title="Download this result as GeoJSON (geometry + all attributes)">
             <i data-lucide="download"></i>
           </a>
+          <!-- A detailed .docx report (map snapshot + legend, scenario/
+               accuracy summary, exposure/infrastructure-damage tables,
+               data-driven mitigation measures) — a real POST + blob
+               download rather than a plain <a href download> like the
+               GeoJSON link above, since the map snapshot has to be
+               captured client-side and sent in the request body first
+               (see #exportReport/#captureMapSnapshot). -->
+          <button type="button" id="floodModelExportReportBtn"
+            class="flood-model-clear-btn flood-model-download-btn" ${this.#exportingReport ? "disabled" : ""}
+            title="Export a detailed report (map snapshot, exposure, mitigation measures) as a Word document">
+            <i data-lucide="${this.#exportingReport ? "loader-circle" : "file-text"}"></i>
+          </button>
           ` : ""}
         </div>
         <div id="floodModelStatus" class="flood-model-status" aria-live="polite"></div>
@@ -1791,6 +1815,120 @@ export class FloodModelControl {
     if (!el) return;
     el.textContent = text;
     el.className = `flood-model-status flood-model-status-${tone}`;
+  }
+
+  // ---- Export Report (.docx) ------------------------------------------------------
+  // The shared dashboard map (dashboard.js) is initialized with
+  // preserveDrawingBuffer: true specifically for this — without it, an
+  // earlier version of this capture (force a repaint via triggerRepaint()
+  // and read the canvas from inside that repaint's own "render" event)
+  // was confirmed LIVE to still silently drop the flood-prone-zone raster
+  // overlay from the captured image, even though it was clearly visible
+  // on screen and the base style layers underneath captured fine — the
+  // browser had already started clearing that layer's part of the WebGL
+  // buffer before the synchronous toDataURL() read it. With
+  // preserveDrawingBuffer: true the buffer reliably holds the full last-
+  // rendered frame, so a direct read is enough; no repaint dance needed.
+  // Still resolves to null (never throws) on any failure — the report
+  // itself already degrades gracefully with no image
+  // (flood_report_export.py's own _decode_map_image), matching that same
+  // "an optional visual extra never blocks the actual deliverable"
+  // posture on this side too.
+  // Downscaled to a max width before encoding — the report only ever
+  // embeds this at 2.75in (flood_report_export.py's own
+  // _add_map_and_scenario_row), so sending the map canvas at its full,
+  // possibly-high-devicePixelRatio resolution (confirmed live: routinely
+  // several MB as a base64 PNG on a real desktop browser) is pure waste
+  // — it was the actual root cause of a real, confirmed live bug: the
+  // export request coming back as a bare 400 because the encoded payload
+  // exceeded Django's own request-body size guard before this view's own
+  // json.loads ever ran (see settings/base.py's DATA_UPLOAD_MAX_MEMORY_
+  // SIZE comment — that limit was also raised as defense in depth, but
+  // this downscale is the real fix: keep typical payloads small in the
+  // first place). 1400px wide is comfortably above anything a 2.75in
+  // embed could ever need, even at high print DPI.
+  #captureMapSnapshot() {
+    const map = this.#map;
+    if (!map || typeof map.getCanvas !== "function") return null;
+    const MAX_WIDTH_PX = 1400;
+    try {
+      const sourceCanvas = map.getCanvas();
+      const { width, height } = sourceCanvas;
+      if (!width || !height) return null;
+      if (width <= MAX_WIDTH_PX) {
+        return sourceCanvas.toDataURL("image/png");
+      }
+      const scale = MAX_WIDTH_PX / width;
+      const scaledCanvas = document.createElement("canvas");
+      scaledCanvas.width = MAX_WIDTH_PX;
+      scaledCanvas.height = Math.round(height * scale);
+      const ctx = scaledCanvas.getContext("2d");
+      if (!ctx) return sourceCanvas.toDataURL("image/png"); // fall back to full-res rather than nothing
+      ctx.drawImage(sourceCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+      return scaledCanvas.toDataURL("image/png");
+    } catch (err) {
+      console.warn("flood-model-control: map snapshot capture failed", err);
+      return null;
+    }
+  }
+
+  async #exportReport() {
+    if (this.#exportingReport || !this.#lastJobId) return;
+    this.#exportingReport = true;
+    this.#setStatus("Generating report…", "info");
+    this.#renderContent();
+
+    const mapImage = this.#captureMapSnapshot();
+
+    let res;
+    try {
+      res = await fetch(`${FLOOD_MODEL_REPORT_EXPORT_ENDPOINT}${encodeURIComponent(this.#lastJobId)}/`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mapImage ? { map_image: mapImage } : {}),
+      });
+    } catch (err) {
+      this.#exportingReport = false;
+      this.#setStatus(`Could not reach the server: ${err?.message || "network error"}`, "error");
+      this.#renderContent();
+      return;
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      this.#exportingReport = false;
+      this.#setStatus(data?.error || `Report export failed (HTTP ${res.status}).`, "error");
+      this.#renderContent();
+      return;
+    }
+
+    let blob;
+    try {
+      blob = await res.blob();
+    } catch (err) {
+      this.#exportingReport = false;
+      this.#setStatus(`Could not read the report file: ${err?.message || "unknown error"}`, "error");
+      this.#renderContent();
+      return;
+    }
+
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const filename = match ? match[1] : "flood_model_report.docx";
+
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+
+    this.#exportingReport = false;
+    this.#setStatus("Report downloaded.", "success");
+    this.#renderContent();
   }
 
   // ---- Run + poll ---------------------------------------------------------------

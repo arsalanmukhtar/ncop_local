@@ -230,6 +230,12 @@ REST_FRAMEWORK = {
         # for a user re-downloading a few times, tight enough to still
         # be a real cap against abuse.
         "flood_model_export": "20/min",
+        # Export Report button (FloodModelReportExportView) — builds a
+        # .docx server-side (map decode/embed, several tables), a real
+        # if modest CPU cost per request unlike the plain-JSON export
+        # above, so a bit tighter — still generous for genuine repeated
+        # downloads of the same finished result.
+        "flood_model_report_export": "10/min",
     },
 }
 
@@ -253,6 +259,19 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Compresses response bodies (gzip) when the client sends
+    # Accept-Encoding: gzip — purely an encoding change, never touches
+    # content. Placed right after SecurityMiddleware per Django's own
+    # docs (high in the list, before anything that might read/transform
+    # the body). Closes a real gap found auditing the flood-model
+    # feature's own JSON/GeoJSON responses (up to ~1.5MB for a
+    # vectorized AHP zone payload): neither this app nor the production
+    # nginx reverse proxy's `location /` block compresses proxied API
+    # responses (only static assets under /assets/, /static/ have their
+    # own gzip_types) — this fixes it at the Django layer so it applies
+    # regardless of which reverse proxy sits in front, in dev/staging/
+    # prod alike.
+    "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -347,6 +366,26 @@ PMD_MONITOR_PASS = env("PMD_MONITOR_PASS", default="Ab123456")
 # CORS
 # ---------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)
+
+# ---------------------------------------------------------------------------
+# Request body size
+# ---------------------------------------------------------------------------
+# Django's own default (2.5MB) is too tight for FloodModelReportExportView
+# (flood_model_views.py) — confirmed live: a base64-encoded PNG map
+# snapshot captured off a real desktop browser canvas (flood-model-
+# control.js's own #captureMapSnapshot) routinely exceeds it, and
+# HttpRequest.body's own size guard raises RequestDataTooBig BEFORE that
+# view's json.loads() ever runs, surfacing to the client as a bare,
+# message-less Django 400 — not the clean JSON error every other
+# malformed-input path in this app already returns. Raised generously
+# (the view's own client side also downscales the capture to keep typical
+# payloads well under even the old 2.5MB limit — see #captureMapSnapshot's
+# own comment — this headroom is for the cases that don't hit that
+# downscale path, not a expectation of routinely needing it) — and
+# FloodModelReportExportView.post() ALSO now catches RequestDataTooBig
+# explicitly as defense in depth, in case some future caller's payload
+# still exceeds even this.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
 
 # ---------------------------------------------------------------------------
 # Django-Vite

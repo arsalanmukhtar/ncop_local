@@ -149,6 +149,39 @@ function _cleanCorruptedDataUrl(url) {
 // risk a chrome-wide styling regression.  Muting this ONE warning
 // message keeps the console clean without touching anything else.
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// Suppress one specific, confirmed-harmless uncaught TypeError that
+// this file's OWN XHR/fetch patches above cause as a side effect:
+// Mapbox GL v3's bundled telemetry reporting (a vendored web-vitals-
+// style module, minified — surfaces as `et.reportAllChanges` in the
+// console stack) expects a REAL PerformanceResourceTiming entry to
+// exist for its own telemetry beacon once that "request" completes, so
+// it can read `.startTime` off it. Since installXhrPatch/
+// installFetchPatch above fake a successful response WITHOUT the
+// request ever touching the network, no such Performance entry is ever
+// created — Mapbox's own reporting code then throws "Cannot read
+// properties of undefined (reading 'startTime')" from inside a timer
+// callback deep in its own bundle. Confirmed live: happens only for
+// the telemetry beacon we're intentionally blocking, never for a real
+// app request — narrowly matched on both the message AND the stack
+// mentioning reportAllChanges (same "match specific, not broad"
+// discipline _isTelemetryUrl/the Tailwind-warning suppressor above
+// already use) so this can never accidentally hide an unrelated bug.
+// -------------------------------------------------------------------
+(function suppressMapboxTelemetryStartTimeCrash() {
+  if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  if (window.__mapboxTelemetryStartTimeCrashMuted) return;
+  window.__mapboxTelemetryStartTimeCrashMuted = true;
+
+  window.addEventListener("error", (event) => {
+    const message = event?.message || event?.error?.message || "";
+    const stack = event?.error?.stack || "";
+    if (message.indexOf("reading 'startTime'") !== -1 && stack.indexOf("reportAllChanges") !== -1) {
+      event.preventDefault();
+    }
+  }, true);
+})();
+
 (function suppressTailwindCdnWarning() {
   if (typeof console === "undefined" || !console.warn) return;
   if (console.__mapboxSuppressorInstalled) return;

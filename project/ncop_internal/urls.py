@@ -1,7 +1,7 @@
 from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
-from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView
+from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView, FloodModelReportExportView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -221,5 +221,14 @@ urlpatterns = [
         "api/flood-model/export/<str:job_id>/",
         FloodModelExportView.as_view(),
         name="flood-model-export",
+    ),
+    # Export Report button — a detailed .docx (map snapshot + legend,
+    # scenario/accuracy summary, exposure/infrastructure-damage tables,
+    # data-driven mitigation measures). See flood_model_views.py's own
+    # FloodModelReportExportView / flood_report_export.py docstrings.
+    path(
+        "api/flood-model/export-report/<str:job_id>/",
+        FloodModelReportExportView.as_view(),
+        name="flood-model-export-report",
     ),
 ]

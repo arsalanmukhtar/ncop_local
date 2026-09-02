@@ -1,0 +1,134 @@
+# Reference nginx site config for the NCOP production VM (172.18.7.36).
+#
+# NOT auto-applied. This file is documentation only — it lives in the repo
+# so the two nginx-level adjustments from the production hardening review
+# are captured and reviewable, but nothing on the actual VM's
+# /etc/nginx/sites-enabled/ncop-prod changes until someone deliberately
+# copies the relevant lines over and reloads nginx there themselves.
+#
+# Diff against the live conf, summarized:
+#   1. proxy_connect_timeout/proxy_send_timeout/proxy_read_timeout bumped
+#      from 60s to 120s on the app proxy location. NOT required for
+#      correctness any more (see note below) — pure headroom.
+#   2. The three security headers (X-Frame-Options, X-Content-Type-Options,
+#      X-XSS-Protection), repeated inside each static/media location block.
+#      nginx's add_header does not inherit into a location that declares
+#      its own add_header (Cache-Control, in this case) — so those three
+#      headers were silently dropping for every static asset response.
+#      Not present here before; adding them is purely additive.
+#
+# Everything else (upstream, client_max_body_size, per-location gzip on
+# static assets, proxy_set_header forwarding, access/error log paths) is
+# unchanged from the working live conf.
+
+upstream waitress_app {
+    server 127.0.0.1:8000 fail_timeout=0;
+}
+
+server {
+    listen 80;
+    server_name 172.18.7.36;
+
+    access_log /var/log/nginx/ncop_access.log combined;
+    error_log  /var/log/nginx/ncop_error.log warn;
+
+    client_max_body_size 100M;
+
+    # -----------------------------
+    # VITE built assets (correct path)
+    # -----------------------------
+    location /assets/ {
+        alias /home/cladmin/ncop_local/ncop_local_prod/frontend/dist/assets/;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        gzip on;
+        gzip_types text/css application/javascript application/json image/svg+xml;
+        try_files $uri =404;
+    }
+
+    # -----------------------------
+    # LEGACY/BROKEN path -> same Vite assets
+    # Fixes requests like /static/assets/*.js|css coming from templates
+    # -----------------------------
+    location /static/assets/ {
+        alias /home/cladmin/ncop_local/ncop_local_prod/frontend/dist/assets/;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        gzip on;
+        gzip_types text/css application/javascript application/json image/svg+xml;
+        try_files $uri =404;
+    }
+
+    # -----------------------------
+    # Django collectstatic output
+    # -----------------------------
+    location /static/ {
+        alias /home/cladmin/ncop_local/ncop_local_prod/project/static/dist/;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        gzip on;
+        gzip_types text/css application/javascript image/svg+xml;
+        try_files $uri =404;
+    }
+
+    # -----------------------------
+    # Media uploads
+    # -----------------------------
+    location /media/ {
+        alias /home/cladmin/ncop_local/ncop_local_prod/project/media/;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        try_files $uri =404;
+    }
+
+    # -----------------------------
+    # App (Waitress) proxy
+    # -----------------------------
+    location / {
+        proxy_pass http://waitress_app;
+
+        proxy_set_header Host                $http_host;
+        proxy_set_header X-Real-IP           $remote_addr;
+        proxy_set_header X-Forwarded-For     $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto   $scheme;
+        proxy_set_header X-Forwarded-Host    $server_name;
+        proxy_set_header X-Forwarded-Port    $server_port;
+
+        # Bumped from 60s -> 120s. The one call that genuinely NEEDED this
+        # (the non-manual rainfall fetch in the flood-model "Run" endpoint)
+        # has since been moved off the request thread entirely (see
+        # ncop_internal/flood_model_views.py — resolve_rainfall_scenario
+        # now runs inside the background job, not here), so this proxy no
+        # longer has to hold a request open for an external API call.
+        # 120s is kept anyway as headroom for one other real, still-
+        # synchronous endpoint: FloodModelAhpBuildingsInViewView (buildings-
+        # on-zoom) has its own internal cold-cache build timeout of exactly
+        # 60s (flood_exposure._BUILDINGS_INDEX_BUILD_TIMEOUT_SECONDS) — at
+        # 60s here too, a worst-case cold build and this proxy timeout can
+        # race each other. 120s removes that coincidence without changing
+        # anything in the app itself. Confirmed workable at both 60s and
+        # 120s post-fix; 120s is the safer of the two, not a requirement.
+        proxy_connect_timeout 120s;
+        proxy_send_timeout    120s;
+        proxy_read_timeout    120s;
+    }
+
+    # -----------------------------
+    # Security headers (basic)
+    # -----------------------------
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+}

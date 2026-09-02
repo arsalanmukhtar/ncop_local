@@ -251,6 +251,21 @@ class DashboardManager {
       zoom: 6,
       projection: "mercator",
       hash: true,
+      // Required for flood-model-control.js's own Export Report feature
+      // (#captureMapSnapshot -> map.getCanvas().toDataURL()). Without
+      // this, the browser is free to clear the WebGL drawing buffer
+      // right after compositing each frame to the screen — confirmed
+      // live: a raster overlay layer (the flood-prone-zone PNG) was
+      // silently missing from the exported snapshot even with a forced
+      // triggerRepaint()+render-event capture, while the base style
+      // layers underneath still came through — the known, documented
+      // failure mode of trying to work around this flag with timing
+      // instead of just setting it. Mapbox's own docs recommend this
+      // exact flag for any "export the map as an image" feature; the
+      // cost is the browser retaining the buffer an extra frame instead
+      // of an early clear — negligible for a desktop dashboard, no
+      // effect on any interaction/rendering behavior otherwise.
+      preserveDrawingBuffer: true,
     });
 
     // CRITICAL: Expose map globally so slider can access it

@@ -62,13 +62,14 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from django.http import JsonResponse
+from django.core.exceptions import RequestDataTooBig
+from django.http import HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
-from . import flood_exposure, flood_forecast, flood_model, flood_validation
+from . import flood_exposure, flood_forecast, flood_model, flood_report_export, flood_validation
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ def _mark_stage(job_id, stage_name):
         _JOBS[job_id]["completed_stages"].append(stage_name)
 
 
-def _run_flood_model_job(job_id, catchment_key, threshold_m, discharge_scenario=None):
+def _run_flood_model_job(job_id, catchment_key, threshold_m, discharge_scenario=None, rainfall_fetch_spec=None):
     """Runs entirely inside _JOB_EXECUTOR's worker thread — never called
     directly from a request-handling thread. Calls flood_model.py/
     flood_exposure.py exactly as they already exist (build_exposure_
@@ -142,13 +143,80 @@ def _run_flood_model_job(job_id, catchment_key, threshold_m, discharge_scenario=
     pipeline the fixed-threshold mode already uses, unmodified. A
     discharge-driven run's response now has a real, non-null exposure
     breakdown, same shape as the fixed-threshold one (plus its own
-    "scenario" field instead of "threshold_m")."""
+    "scenario" field instead of "threshold_m").
+
+    `rainfall_fetch_spec`, if given INSTEAD of `discharge_scenario`, is a
+    {"rainfall_source", "chirps_days", "pmd_element"} dict for a non-manual
+    rainfall source — a real external network call (CHIRPS/GEE, PMD
+    Monitor, or NWFC's daily report, via flood_forecast.
+    resolve_rainfall_scenario) whose fetch is deliberately performed HERE,
+    inside this worker thread, instead of on the request thread that
+    submitted the job. This closes a real gap: FloodModelRunView.post()
+    used to call resolve_rainfall_scenario synchronously before returning
+    a response, which meant a slow or briefly-unavailable external source
+    could hold the request open past a reverse-proxy's read timeout (e.g.
+    nginx's `proxy_read_timeout`) with no clean failure — just a bare
+    gateway timeout and a burned throttle slot. Now the request returns
+    its 202 + job_id immediately regardless of how long the fetch takes;
+    a genuine fetch failure (ValueError from resolve_rainfall_scenario)
+    is caught by this function's own try/except below exactly like any
+    other mid-job failure, surfacing as a clean job "error" status instead
+    of a request-thread 502. Resolves into the SAME {"rainfall_mm",
+    "duration_hr", "rainfall_source", "source_meta"} shape
+    `discharge_scenario` already had, so every line below this point
+    (unchanged) behaves identically regardless of which of the two
+    parameters actually supplied it."""
     with _JOB_LOCK:
         if job_id not in _JOBS:
             return  # purged before it got a chance to run — nothing to update
         _JOBS[job_id]["status"] = "running"
         _JOBS[job_id]["started_at"] = time.time()
     try:
+        if rainfall_fetch_spec is not None:
+            _mark_stage(job_id, f"Fetching {rainfall_fetch_spec['rainfall_source']} rainfall data")
+            fetched = flood_forecast.resolve_rainfall_scenario(
+                catchment_key, rainfall_fetch_spec["rainfall_source"],
+                chirps_days=rainfall_fetch_spec["chirps_days"],
+                pmd_element=rainfall_fetch_spec["pmd_element"],
+            )
+            discharge_scenario = {
+                "rainfall_mm": fetched["rainfall_mm"],
+                "duration_hr": fetched["duration_hr"],
+                "rainfall_source": rainfall_fetch_spec["rainfall_source"],
+                "source_meta": fetched,
+            }
+            with _JOB_LOCK:
+                if job_id in _JOBS:
+                    _JOBS[job_id]["discharge_scenario"] = discharge_scenario
+
+            # Same "already known dry" short-circuit that used to run
+            # synchronously in FloodModelRunView.post() right after this
+            # exact fetch — a fetched rainfall value can genuinely be 0mm
+            # (a real dry-spell result, not an error; PMD Forecast and
+            # NWFC's observed report both routinely return it). Resolve
+            # honestly here rather than let build_discharge_driven_flood_
+            # zone's own rainfall_mm > 0 requirement surface as a
+            # confusing pipeline error for an outcome that's already known.
+            if discharge_scenario["rainfall_mm"] < _MIN_RAINFALL_MM:
+                no_flood_result = {
+                    "flood_zone": None,
+                    "exposure": None,
+                    "mode": "discharge_driven",
+                    "no_flood_expected": True,
+                    "message": (
+                        f"Fetched rainfall ({discharge_scenario['rainfall_mm']}mm over "
+                        f"{discharge_scenario['duration_hr']}h from "
+                        f"{rainfall_fetch_spec['rainfall_source']}) is too low to drive the "
+                        "discharge model — no flood risk currently indicated by this source."
+                    ),
+                }
+                with _JOB_LOCK:
+                    if job_id in _JOBS:
+                        _JOBS[job_id]["status"] = "done"
+                        _JOBS[job_id]["result"] = no_flood_result
+                        _JOBS[job_id]["finished_at"] = time.time()
+                return
+
         if discharge_scenario is not None:
             _mark_stage(job_id, "Fetching elevation & computing terrain hydrology (HAND)")
 
@@ -362,6 +430,10 @@ class FloodModelPrewarmThrottle(AnonRateThrottle):
 
 class FloodModelExportThrottle(AnonRateThrottle):
     scope = "flood_model_export"
+
+
+class FloodModelReportExportThrottle(AnonRateThrottle):
+    scope = "flood_model_report_export"
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -630,20 +702,23 @@ class FloodModelRunView(APIView):
         # behavior, just correctly scoped to real job submissions only.
         self.check_throttles(request)
 
+        # The actual fetch (a real external network call to GEE/PMD
+        # Monitor/NWFC) is deliberately deferred to the background job
+        # runner instead of running here on the request thread — see
+        # _run_flood_model_job's own rainfall_fetch_spec docstring for why
+        # (this endpoint sits behind a reverse-proxy read timeout; nothing
+        # that can be slow or briefly unavailable should ever block the
+        # request/response cycle, matching this file's own existing
+        # convention for every other potentially-slow step). discharge_
+        # scenario stays None here for a non-manual source — the job
+        # runner resolves it and writes the final value back into
+        # _JOBS[job_id]["discharge_scenario"] once the fetch completes.
+        rainfall_fetch_spec = None
         if rainfall_source != "manual":
-            try:
-                fetched = flood_forecast.resolve_rainfall_scenario(
-                    catchment_key, rainfall_source,
-                    chirps_days=chirps_days,
-                    pmd_element=pmd_element,
-                )
-            except ValueError as e:
-                return JsonResponse({"error": str(e)}, status=502)
-            discharge_scenario = {
-                "rainfall_mm": fetched["rainfall_mm"],
-                "duration_hr": fetched["duration_hr"],
+            rainfall_fetch_spec = {
                 "rainfall_source": rainfall_source,
-                "source_meta": fetched,
+                "chirps_days": chirps_days,
+                "pmd_element": pmd_element,
             }
 
         _purge_old_jobs()
@@ -662,43 +737,20 @@ class FloodModelRunView(APIView):
                 "completed_stages": [],
             }
 
-        # A fetched (non-manual) rainfall value can genuinely be a "dry"
-        # reading — confirmed live (§0.26): PMD Forecast and the NWFC
-        # observed report both routinely return 0mm for a catchment during
-        # a real dry spell. build_discharge_driven_flood_zone itself hard-
-        # requires rainfall_mm > 0 (a genuine, confirmed-live requirement
-        # of its SCS-CN math, not merely a manual-input sanity gate) — so
-        # rather than let that surface as a confusing "must be positive"
-        # job error for what is actually a perfectly normal real-world
-        # result, short-circuit here: resolve the job immediately as
-        # "done" with an honest no-flood-expected result, without ever
-        # spinning up the expensive HAND/discharge pipeline for an outcome
-        # that's already known. Manual-mode requests still go through
-        # FloodModelRunView's own _MIN_RAINFALL_MM validation above and so
-        # can never reach this branch with a sub-floor value.
-        if (
-            discharge_scenario is not None
-            and discharge_scenario.get("rainfall_source") != "manual"
-            and discharge_scenario["rainfall_mm"] < _MIN_RAINFALL_MM
-        ):
-            no_flood_result = {
-                "flood_zone": None,
-                "exposure": None,
-                "mode": "discharge_driven",
-                "no_flood_expected": True,
-                "message": (
-                    f"Fetched rainfall ({discharge_scenario['rainfall_mm']}mm over "
-                    f"{discharge_scenario['duration_hr']}h from {rainfall_source}) is too low to "
-                    "drive the discharge model — no flood risk currently indicated by this source."
-                ),
-            }
-            with _JOB_LOCK:
-                _JOBS[job_id]["status"] = "done"
-                _JOBS[job_id]["result"] = no_flood_result
-                _JOBS[job_id]["finished_at"] = time.time()
-            return JsonResponse({"job_id": job_id, "status": "pending"}, status=202)
-
-        _JOB_EXECUTOR.submit(_run_flood_model_job, job_id, catchment_key, threshold_m, discharge_scenario)
+        # The "fetched rainfall came back too low to drive the discharge
+        # model" short-circuit used to live here, checked synchronously
+        # right after resolve_rainfall_scenario returned. Now that the
+        # fetch itself runs inside _run_flood_model_job (see
+        # rainfall_fetch_spec above), that check moved with it — this
+        # request thread never sees the fetched value, so it can't be
+        # checked here any more. discharge_scenario at this point is
+        # either None (fixed-threshold, or a non-manual source still to
+        # be fetched) or an already-resolved manual-mode dict (which can
+        # never be sub-floor — see _MIN_RAINFALL_MM validation above).
+        _JOB_EXECUTOR.submit(
+            _run_flood_model_job, job_id, catchment_key, threshold_m,
+            discharge_scenario=discharge_scenario, rainfall_fetch_spec=rainfall_fetch_spec,
+        )
 
         return JsonResponse({"job_id": job_id, "status": "pending"}, status=202)
 
@@ -933,6 +985,97 @@ class FloodModelExportView(APIView):
         filename = re.sub(r"[^a-zA-Z0-9_\-]+", "_", f"flood_model_{catchment_key}_{mode}") or "flood_model_export"
         response = JsonResponse(feature_collection)
         response["Content-Disposition"] = f'attachment; filename="{filename}.geojson"'
+        return response
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class FloodModelReportExportView(APIView):
+    """POST /api/flood-model/export-report/<job_id>/
+    body (optional): {"map_image": "data:image/png;base64,..."}
+
+    Downloads a FINISHED job's own result as a detailed .docx report —
+    map snapshot + legend (from the client-supplied map_image, captured
+    off the live Mapbox canvas at the moment the user clicked Export —
+    this view never renders a map itself), scenario/accuracy summary,
+    the SAME buildings/population/roads/drainage/infrastructure exposure
+    numbers already shown in the results panel, and a data-driven
+    mitigation-measures section (flood_report_export.py — see its own
+    module docstring for the full "why", mirrors FloodModelExportView's
+    own "read _JOBS[job_id]['result'] directly, export exactly what the
+    user already saw" posture above).
+
+    POST rather than GET (unlike FloodModelExportView) because the
+    optional map_image payload is a base64 PNG data URL that can run to
+    several hundred KB — too large to reliably pass as a query string,
+    and this is a real, deliberate user-initiated download, not
+    something to cache/bookmark by URL.
+
+    Same CSRF-safety posture as every other flood-model endpoint
+    (authentication_classes/permission_classes both emptied — see module
+    docstring)."""
+    authentication_classes = []
+    permission_classes = []
+    throttle_classes = [FloodModelReportExportThrottle]
+
+    def post(self, request, job_id):
+        # RequestDataTooBig (raised by HttpRequest.body's own size guard,
+        # a SuspiciousOperation subclass — see settings/base.py's own
+        # DATA_UPLOAD_MAX_MEMORY_SIZE comment for the full "why") happens
+        # on the .body ACCESS below, before json.loads even runs, and
+        # would otherwise propagate past this view entirely — Django's
+        # own default SuspiciousOperation handling turns it into a bare,
+        # message-less 400, unlike every other malformed-input path in
+        # this view, which returns a clean JSON error. Caught explicitly
+        # here so a still-oversized map_image (the base setting above is
+        # generous, but not unbounded) degrades the same way every other
+        # bad input already does, not as an opaque failure.
+        try:
+            raw_body = request.body
+        except RequestDataTooBig:
+            return JsonResponse(
+                {"error": "Request body too large (the map snapshot image may be oversized) — "
+                          "try exporting again, or without a map snapshot."},
+                status=400,
+            )
+        try:
+            body = json.loads(raw_body or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({"error": "Malformed JSON body."}, status=400)
+
+        with _JOB_LOCK:
+            job = _JOBS.get(job_id)
+        if job is None:
+            return JsonResponse(
+                {"error": "Unknown job_id (it may have expired — results are only kept for 1 hour)."},
+                status=404,
+            )
+        if job["status"] != "done":
+            return JsonResponse(
+                {"error": f"This job isn't finished yet (status={job['status']!r}) — nothing to export."},
+                status=400,
+            )
+
+        map_image = body.get("map_image")
+        if map_image is not None and not isinstance(map_image, str):
+            return JsonResponse({"error": "'map_image' must be a data URL string if provided."}, status=400)
+
+        catchment_key = job.get("catchment")
+        mode = (job.get("result") or {}).get("mode")
+        try:
+            docx_bytes = flood_report_export.build_flood_model_docx_report(job, map_image_data_url=map_image)
+        except Exception:
+            logger.exception(
+                "flood_model_views: report export failed for job %s (catchment=%r, mode=%r)",
+                job_id, catchment_key, mode,
+            )
+            return JsonResponse({"error": "Could not build the report for this result."}, status=502)
+
+        filename = re.sub(r"[^a-zA-Z0-9_\-]+", "_", f"flood_model_report_{catchment_key}_{mode}") or "flood_model_report"
+        response = HttpResponse(
+            docx_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}.docx"'
         return response
 
 
