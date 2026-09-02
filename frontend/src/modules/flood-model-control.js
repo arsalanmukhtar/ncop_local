@@ -591,6 +591,13 @@ export class FloodModelControl {
   #ahpBuildingsAbortController = null;
   #boundOnAhpBuildingsMapMove = null;
 
+  // Multi-hazard tab shell (frontend-only reorganization — see
+  // #switchHazardTab's own docstring). This panel now hosts 3 hazard
+  // tabs; only "flood" is functional today. Persists across panel
+  // show/hide (not reset to "flood" on reopen) since the flood tab's
+  // own DOM/state is never destroyed on a tab switch — see #render.
+  #activeHazardTab = "flood";
+
   constructor(map) {
     this.#map = map;
     this.#render();
@@ -606,22 +613,102 @@ export class FloodModelControl {
     const wrap = document.createElement("div");
     wrap.className = "custom-flood-model-control";
     wrap.innerHTML = `
-      <button id="floodModelToggle" class="custom-flood-model-btn" type="button" title="Flash-Flood Early Warning">
+      <button id="floodModelToggle" class="custom-flood-model-btn" type="button" title="Multi-Hazard Early Warning">
         <i data-lucide="triangle-alert"></i>
       </button>
       <div id="floodModelPanel" class="flood-model-panel">
         <div class="flood-model-header">
           <div class="flood-model-title-group">
-            <span class="flood-model-title">Flash-Flood Early Warning</span>
-            <span class="flood-model-subtitle">HAND-based hazard + exposure, per catchment.</span>
+            <span class="flood-model-title" id="hazardPanelTitle">Flash-Flood Early Warning</span>
+            <span class="flood-model-subtitle" id="hazardPanelSubtitle">HAND-based hazard + exposure, per catchment.</span>
           </div>
           <button id="floodModelClose" class="flood-model-close" type="button" aria-label="Close">&times;</button>
         </div>
+        <!-- Multi-hazard tab bar — Flood is the only functional tab
+             today (unchanged below, same IDs/content/behavior as
+             before this reorganization); Landslide and Wildfire/Other
+             are placeholders reserving the same panel shell for their
+             own future modules. Switching tabs only toggles which of
+             the 3 sibling content containers below is [hidden] — the
+             Flood tab's own DOM is never removed/recreated on a
+             switch, so a running job/results/checklist stay exactly
+             as they were when the user switches back to it. -->
+        <div class="hazard-tab-bar" role="tablist">
+          <button type="button" class="hazard-tab-btn active" data-hazard-tab="flood" role="tab" aria-selected="true">
+            <i data-lucide="waves"></i><span>Flood</span>
+          </button>
+          <button type="button" class="hazard-tab-btn" data-hazard-tab="landslide" role="tab" aria-selected="false">
+            <i data-lucide="mountain"></i><span>Landslide</span>
+          </button>
+          <button type="button" class="hazard-tab-btn" data-hazard-tab="wildfire" role="tab" aria-selected="false">
+            <i data-lucide="flame"></i><span>Wildfire / Other</span>
+          </button>
+        </div>
         <div id="floodModelContent" class="flood-model-content"></div>
+        <div id="landslideHazardContent" class="hazard-placeholder-content" hidden>
+          ${this.#renderHazardPlaceholderHTML(
+            "mountain",
+            "Landslide Early Warning",
+            "Slope-stability and rainfall-triggered landslide susceptibility for this catchment is not yet available.",
+          )}
+        </div>
+        <div id="wildfireHazardContent" class="hazard-placeholder-content" hidden>
+          ${this.#renderHazardPlaceholderHTML(
+            "flame",
+            "Wildfire / Other Hazards",
+            "Wildfire risk and other hazard modules will be added here as they come online.",
+          )}
+        </div>
       </div>
     `;
     mapEl.appendChild(wrap);
     try { window.lucide?.createIcons(); } catch (_) {}
+  }
+
+  #renderHazardPlaceholderHTML(icon, title, description) {
+    return `
+      <div class="hazard-placeholder-icon"><i data-lucide="${icon}"></i></div>
+      <div class="hazard-placeholder-title">${this.#esc(title)}</div>
+      <div class="hazard-placeholder-badge">Coming soon</div>
+      <div class="hazard-placeholder-desc">${this.#esc(description)}</div>
+    `;
+  }
+
+  // Frontend-only tab switch — no backend call, no change to any flood-
+  // specific state (#lastResult/#activeJobId/#busy/etc. are all
+  // untouched, and #floodModelContent's own DOM is only ever hidden,
+  // never destroyed, so a running job keeps polling and updating its
+  // own now-hidden DOM exactly as before; switching back to "flood"
+  // shows it already caught up, not reset).
+  #switchHazardTab(tabKey) {
+    if (this.#activeHazardTab === tabKey) return;
+    this.#activeHazardTab = tabKey;
+
+    const panels = {
+      flood: document.getElementById("floodModelContent"),
+      landslide: document.getElementById("landslideHazardContent"),
+      wildfire: document.getElementById("wildfireHazardContent"),
+    };
+    for (const [key, el] of Object.entries(panels)) {
+      if (el) el.hidden = key !== tabKey;
+    }
+
+    document.querySelectorAll(".hazard-tab-btn").forEach((btn) => {
+      const isActive = btn.dataset.hazardTab === tabKey;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+
+    const titles = {
+      flood: ["Flash-Flood Early Warning", "HAND-based hazard + exposure, per catchment."],
+      landslide: ["Landslide Early Warning", "Not yet available."],
+      wildfire: ["Wildfire / Other Hazards", "Not yet available."],
+    };
+    const [title, subtitle] = titles[tabKey] || titles.flood;
+    const titleEl = document.getElementById("hazardPanelTitle");
+    const subtitleEl = document.getElementById("hazardPanelSubtitle");
+    if (titleEl) titleEl.textContent = title;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
   }
 
   #esc(s) {
@@ -658,6 +745,14 @@ export class FloodModelControl {
     closeBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
       this.hidePanel();
+    });
+
+    // Delegated on the panel (not #floodModelContent, which the tab bar
+    // sits OUTSIDE of, as a sibling — it's part of the one-time shell
+    // built in #render(), not re-rendered by #renderContent()).
+    panel?.addEventListener("click", (event) => {
+      const tabBtn = event.target.closest(".hazard-tab-btn");
+      if (tabBtn) { this.#switchHazardTab(tabBtn.dataset.hazardTab); return; }
     });
 
     // One delegated listener — the content container is re-rendered on
