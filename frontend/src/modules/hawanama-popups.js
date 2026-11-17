@@ -7,12 +7,10 @@
 // and FFD special cases there. Data via NCOP's /api/hawanama/ proxy;
 // every popup carries the CC BY 4.0 attribution.
 
-import Chart from "chart.js/auto";
+import { showHawanamaFireStatsModal, showHawanamaStatsModal } from "./hawanama-stats-modal.js";
 
 export const HAWANAMA_ATTRIBUTION = "Pakistan Air Quality Initiative (Hawanama), CC BY 4.0";
 const API = `${window.location.origin}/api/hawanama`;
-const MAX_CHARTS = 40;
-const _charts = new Map();
 
 function esc(v) {
   return String(v ?? "")
@@ -80,8 +78,12 @@ function uid(prefix) {
 // Live stations
 // ---------------------------------------------------------------------------
 
+const _stationCtx = new Map(); // button id -> station properties (bounded)
+
 export function buildHawanamaStationPopup(p) {
-  const popupId = uid("hwn");
+  const btnId = uid("hwn-stats-btn");
+  _stationCtx.set(btnId, { ...p });
+  if (_stationCtx.size > 50) _stationCtx.delete(_stationCtx.keys().next().value);
   const stale = p.reading_stale === true || p.reading_stale === "true";
   const primary = `
     <div class="ncop-popup__header">
@@ -101,89 +103,12 @@ export function buildHawanamaStationPopup(p) {
       <p class="ncop-popup__info-row"><strong>Last reading:</strong> ${esc(fmtTime(p.last_reading))}${stale ? " <em>(stale)</em>" : ""}</p>
       <p class="ncop-popup__info-row"><strong>Network:</strong> ${esc(p.network || "—")} · <strong>QC:</strong> ${esc(p.qc_state || "—")}</p>
     </div>
-    <div class="ncop-popup__actions" style="border-top:none;padding:6px 0;background:transparent;">
-      <button class="ncop-popup__button ncop-popup__button--primary hawanama-history-btn"
-              data-station-id="${esc(p.id)}" data-popup-id="${popupId}" data-loaded="false">Show PM2.5 history</button>
-    </div>
-    <div id="hwn-chart-wrap-${popupId}" class="ncop-popup__chart" style="display:none;">
-      <div class="ncop-popup__pills">
-        <button class="ncop-popup__pill hawanama-history-range" data-range="hourly" data-popup-id="${popupId}">48 hours</button>
-        <button class="ncop-popup__pill hawanama-history-range" data-range="daily" data-popup-id="${popupId}">30 days</button>
-      </div>
-      <canvas id="hwn-chart-${popupId}" style="width:230px;height:140px;max-width:100%;"></canvas>
-      <div id="hwn-chart-note-${popupId}" class="ncop-popup__status-note" style="display:block;"></div>
-    </div>
+    <button type="button" id="${btnId}" class="hawanama-open-stats">
+      Open Stats Panel
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+    </button>
     ${attributionNote()}`;
   return { primary, drawer, drawerTitle: "Hawanama Station" };
-}
-
-const _history = new Map(); // popupId -> payload
-
-function drawHistory(popupId, range) {
-  const payload = _history.get(popupId);
-  const canvas = document.getElementById(`hwn-chart-${popupId}`);
-  const note = document.getElementById(`hwn-chart-note-${popupId}`);
-  if (!payload || !canvas) return;
-  const rows = range === "daily" ? payload.daily : payload.hourly;
-  const labels = rows.map((r) =>
-    range === "daily" ? r.date.slice(5) : fmtTime(r.t).replace(" PKT", "").slice(7));
-  const values = rows.map((r) => (r.pm25 === null || r.pm25 === undefined ? null : Number(r.pm25)));
-  if (note) {
-    const valid = values.filter((v) => v !== null).length;
-    note.textContent = valid ? (range === "daily" ? "Daily mean PM2.5 (µg/m³), PKT days" : "Hourly PM2.5 (µg/m³)")
-                             : "No readings in this period.";
-  }
-  if (_charts.size >= MAX_CHARTS) {
-    const [oldKey, oldChart] = _charts.entries().next().value;
-    oldChart.destroy();
-    _charts.delete(oldKey);
-  }
-  const existing = _charts.get(popupId);
-  if (existing) existing.destroy();
-  _charts.set(popupId, new Chart(canvas.getContext("2d"), {
-    type: range === "daily" ? "bar" : "line",
-    data: { labels, datasets: [{ label: "PM2.5 (µg/m³)", data: values, borderWidth: 2, pointRadius: 1.5,
-                                tension: 0.2, spanGaps: false, backgroundColor: "rgba(239,68,68,0.55)",
-                                borderColor: "rgb(239,68,68)" }] },
-    options: {
-      responsive: false,
-      scales: {
-        x: { ticks: { color: "#ccc", maxRotation: 45, minRotation: 45, font: { size: 9 }, autoSkip: true, maxTicksLimit: 8 },
-             grid: { color: "rgba(255,255,255,0.07)" } },
-        y: { beginAtZero: true, ticks: { color: "#ccc", font: { size: 9 } }, grid: { color: "rgba(255,255,255,0.1)" } },
-      },
-      plugins: { legend: { display: false } },
-    },
-  }));
-}
-
-async function onHistoryButton(btn) {
-  const popupId = btn.getAttribute("data-popup-id");
-  const sid = btn.getAttribute("data-station-id");
-  const wrap = document.getElementById(`hwn-chart-wrap-${popupId}`);
-  if (!wrap) return;
-  const open = wrap.style.display !== "none";
-  if (open) {
-    wrap.style.display = "none";
-    btn.textContent = "Show PM2.5 history";
-    return;
-  }
-  wrap.style.display = "block";
-  btn.textContent = "Hide PM2.5 history";
-  if (btn.getAttribute("data-loaded") === "true") return;
-  const note = document.getElementById(`hwn-chart-note-${popupId}`);
-  if (note) note.textContent = "Loading…";
-  try {
-    const r = await fetch(`${API}/stations/${encodeURIComponent(sid)}/history/?hours=48&days=30`, { credentials: "same-origin" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    _history.set(popupId, await r.json());
-    if (_history.size > MAX_CHARTS) _history.delete(_history.keys().next().value);
-    btn.setAttribute("data-loaded", "true");
-    drawHistory(popupId, "hourly");
-  } catch (err) {
-    console.warn("[hawanama] station history failed", err);
-    if (note) note.textContent = "History unavailable right now.";
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -248,12 +173,16 @@ export function buildHawanamaDailyStationPopup(p) {
 // Fire smoke-source outlook
 // ---------------------------------------------------------------------------
 
+const _fireCtx = new Map(); // button id -> fire-outlook city properties (bounded)
+
 const FIRE_BAND_VARIANT = {
   none: "aqi-good", low: "aqi-moderate", elevated: "aqi-usg", high: "aqi-unhealthy", very_high: "aqi-very-unhealthy",
 };
 
 export function buildHawanamaFirePopup(p) {
-  const popupId = uid("hwnfire");
+  const btnId = uid("hwnfire-stats-btn");
+  _fireCtx.set(btnId, { ...p });
+  if (_fireCtx.size > 50) _fireCtx.delete(_fireCtx.keys().next().value);
   let byCountry = {};
   try { byCountry = typeof p.by_country === "string" ? JSON.parse(p.by_country) : (p.by_country || {}); } catch (_) {}
   const countries = Object.entries(byCountry).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(", ") || "—";
@@ -275,17 +204,10 @@ export function buildHawanamaFirePopup(p) {
     <div class="ncop-popup__info">
       <p class="ncop-popup__info-row"><strong>Fires by country:</strong> ${countries}</p>
     </div>
-    <div class="ncop-popup__actions" style="border-top:none;padding:6px 0;background:transparent;">
-      <button class="ncop-popup__button ncop-popup__button--primary hawanama-season-btn" data-popup-id="${popupId}">Rice-season fire counts</button>
-    </div>
-    <div id="hwn-season-wrap-${popupId}" class="ncop-popup__chart" style="display:none;">
-      <div class="ncop-popup__pills">
-        <button class="ncop-popup__pill hawanama-season-region" data-region="punjab" data-popup-id="${popupId}">Punjab (PK)</button>
-        <button class="ncop-popup__pill hawanama-season-region" data-region="indian-punjab" data-popup-id="${popupId}">Indian Punjab</button>
-      </div>
-      <canvas id="hwn-season-chart-${popupId}" style="width:230px;height:150px;max-width:100%;"></canvas>
-      <div id="hwn-season-note-${popupId}" class="ncop-popup__status-note" style="display:block;"></div>
-    </div>
+    <button type="button" id="${btnId}" class="hawanama-open-stats hawanama-open-stats--fire">
+      Open Stats Panel
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+    </button>
     ${attributionNote("A smoke-source outlook, not a PM2.5 forecast: fire load upwind is consistent with smoke transport, not proof that it causes local PM2.5. Bands are unvalidated screening categories.")}`;
   return { primary, drawer, drawerTitle: "Fire Smoke Outlook" };
 }
@@ -307,79 +229,16 @@ export function buildHawanamaPopup(layerId, sourceId, props) {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Rice-season fire statistics (cumulative VIIRS detections, this season vs
-// last season) — opened from the fire-outlook popup.
-// ---------------------------------------------------------------------------
-
-const _seasonCache = new Map();
-
-async function drawSeason(popupId, region) {
-  const canvas = document.getElementById(`hwn-season-chart-${popupId}`);
-  const note = document.getElementById(`hwn-season-note-${popupId}`);
-  if (!canvas) return;
-  if (note) note.textContent = "Loading…";
-  let data = _seasonCache.get(region);
-  if (!data) {
-    try {
-      const r = await fetch(`${API}/fires/season/?region=${encodeURIComponent(region)}`, { credentials: "same-origin" });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      data = await r.json();
-      _seasonCache.set(region, data);
-    } catch (err) {
-      console.warn("[hawanama] fire season failed", err);
-      if (note) note.textContent = "Fire statistics unavailable right now.";
-      return;
-    }
-  }
-  const current = data.years.find((y) => y.role === "current");
-  const last = data.years.find((y) => y.role === "last");
-  const key = `season-${popupId}`;
-  const existing = _charts.get(key);
-  if (existing) existing.destroy();
-  const datasets = [];
-  if (current) datasets.push({ label: `${current.year}`, data: current.cum, borderColor: "rgb(239,68,68)", borderWidth: 2, pointRadius: 0, spanGaps: false });
-  if (last) datasets.push({ label: `${last.year}`, data: last.cum, borderColor: "rgb(148,163,184)", borderWidth: 1.5, pointRadius: 0, borderDash: [4, 3] });
-  _charts.set(key, new Chart(canvas.getContext("2d"), {
-    type: "line",
-    data: { labels: data.days, datasets },
-    options: {
-      responsive: false,
-      scales: {
-        x: { ticks: { color: "#ccc", font: { size: 9 }, maxTicksLimit: 6 }, grid: { color: "rgba(255,255,255,0.07)" } },
-        y: { beginAtZero: true, ticks: { color: "#ccc", font: { size: 9 } }, grid: { color: "rgba(255,255,255,0.1)" } },
-      },
-      plugins: { legend: { labels: { color: "#fff", font: { size: 10 } } } },
-    },
-  }));
-  const h = data.headline || {};
-  const n20 = h.comparison_n20?.last_year?.pct_change;
-  if (note) {
-    note.textContent = `${data.region?.label || region}: cumulative fire detections, ${data.season?.label || "rice season"}. `
-      + (n20 !== undefined && n20 !== null ? `NOAA-20-only year-on-year change to date: ${n20 > 0 ? "+" : ""}${n20}%.` : "");
-  }
-}
-
 let _handlerInstalled = false;
 export function setupHawanamaPopupEventHandlers() {
   if (_handlerInstalled) return;
   _handlerInstalled = true;
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest?.(".hawanama-history-btn");
-    if (btn) { onHistoryButton(btn); return; }
-    const range = e.target.closest?.(".hawanama-history-range");
-    if (range) { drawHistory(range.getAttribute("data-popup-id"), range.getAttribute("data-range")); return; }
-    const seasonBtn = e.target.closest?.(".hawanama-season-btn");
-    if (seasonBtn) {
-      const pid = seasonBtn.getAttribute("data-popup-id");
-      const wrap = document.getElementById(`hwn-season-wrap-${pid}`);
-      if (!wrap) return;
-      const open = wrap.style.display !== "none";
-      wrap.style.display = open ? "none" : "block";
-      if (!open) drawSeason(pid, "punjab");
-      return;
-    }
-    const region = e.target.closest?.(".hawanama-season-region");
-    if (region) drawSeason(region.getAttribute("data-popup-id"), region.getAttribute("data-region"));
+    const statsBtn = e.target.closest?.(".hawanama-open-stats");
+    if (!statsBtn) return;
+    const station = _stationCtx.get(statsBtn.id);
+    if (station) { showHawanamaStatsModal({ props: station }); return; }
+    const city = _fireCtx.get(statsBtn.id);
+    if (city) showHawanamaFireStatsModal({ props: city });
   });
 }

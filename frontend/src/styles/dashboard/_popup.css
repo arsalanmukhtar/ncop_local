@@ -3171,7 +3171,8 @@
 .iwmi-modal .heatwave-modal__loader span:nth-child(2) { background: #38bdf8; }
 .iwmi-modal .heatwave-modal__loader span:nth-child(3) { background: #1d4ed8; }
 
-.iwmi-modal__legend {
+.iwmi-modal__legend,
+.stats-panel__legend {
     display: flex;
     flex-wrap: wrap;
     gap: 4px 12px;
@@ -3179,8 +3180,8 @@
     color: var(--popup-text);
     flex: 0 0 auto;
 }
-.iwmi-modal__legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.iwmi-modal__legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.iwmi-modal__legend-item, .stats-panel__legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.iwmi-modal__legend-dot, .stats-panel__legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
 .iwmi-modal__warning,
 .iwmi-popup-warning {
@@ -3194,3 +3195,154 @@
     line-height: 1.35;
 }
 .iwmi-popup-warning { margin-bottom: 8px; }
+
+/* =========================================================================
+   HAWANAMA STATION STATS PANEL (#hawanama-stats-modal, hawanama-stats-modal.js)
+   Same heatwave-style shell (stats-panel.js); violet air-quality accent.
+   ========================================================================= */
+.hawanama-open-stats {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 0;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 6px 16px rgba(109, 40, 217, 0.35);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.hawanama-open-stats:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 22px rgba(109, 40, 217, 0.45);
+}
+.hawanama-open-stats svg { display: block; }
+
+.hawanama-modal .heatwave-modal__head {
+    background: linear-gradient(135deg, rgba(109, 40, 217, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+}
+.hawanama-modal .heatwave-modal__kicker { color: #a78bfa; }
+.hawanama-modal .heatwave-modal__tab.is-active {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);
+}
+.hawanama-modal .heatwave-stat--temp .heatwave-stat__value { color: #a78bfa; }
+.hawanama-modal .heatwave-stat--feels .heatwave-stat__value { color: #fbbf24; }
+.hawanama-modal .heatwave-modal__loader span:nth-child(2) { background: #a78bfa; }
+.hawanama-modal .heatwave-modal__loader span:nth-child(3) { background: #6d28d9; }
+
+/* Crop-fire season panel (#hawanama-fire-stats-modal) — fire-orange accent. */
+.hawanama-open-stats--fire {
+    background: linear-gradient(135deg, #f97316, #c2410c);
+    box-shadow: 0 6px 16px rgba(194, 65, 12, 0.35);
+}
+.hawanama-open-stats--fire:hover { box-shadow: 0 10px 22px rgba(194, 65, 12, 0.45); }
+.hawanama-fire-modal .heatwave-modal__head {
+    background: linear-gradient(135deg, rgba(194, 65, 12, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+}
+.hawanama-fire-modal .heatwave-modal__kicker { color: #fb923c; }
+.hawanama-fire-modal .heatwave-modal__tab.is-active {
+    background: linear-gradient(135deg, #f97316, #c2410c);
+    box-shadow: 0 4px 12px rgba(194, 65, 12, 0.35);
+}
+.hawanama-fire-modal .heatwave-stat--temp .heatwave-stat__value { color: #fb923c; }
+.hawanama-fire-modal .heatwave-stat--feels .heatwave-stat__value { color: #fbbf24; }
+
+/* =========================================================================
+   WAQI STATION STATS PANEL (#waqi-stats-modal, waqi-stats-modal.js)
+   Same heatwave-style shell (stats-panel.js); teal accent.
+   ========================================================================= */
+.waqi-popup-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 2px 0 8px;
+}
+.waqi-open-stats {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 0;
+    background: linear-gradient(135deg, #14b8a6, #0f766e);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.waqi-open-stats:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.45);
+}
+.waqi-open-stats svg { display: block; }
+.waqi-modal .heatwave-modal__head {
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+}
+.waqi-modal .heatwave-modal__kicker { color: #2dd4bf; }
+.waqi-modal .heatwave-modal__tab.is-active {
+    background: linear-gradient(135deg, #14b8a6, #0f766e);
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+}
+.waqi-modal .heatwave-stat--temp .heatwave-stat__value { color: #2dd4bf; }
+.waqi-modal .heatwave-stat--feels .heatwave-stat__value { color: #fbbf24; }
+.waqi-modal .heatwave-modal__loader span:nth-child(2) { background: #2dd4bf; }
+.waqi-modal .heatwave-modal__loader span:nth-child(3) { background: #0f766e; }
+
+/* WAQI panel: all-parameters table (Now / Min / Max) fills the left column. */
+.waqi-modal .heatwave-modal__stats { display: block; }
+.waqi-param-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+.waqi-param-table th {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    text-align: right;
+    padding: 0 6px 5px;
+    border-bottom: 1px solid var(--popup-divider);
+}
+.waqi-param-table th:first-child,
+.waqi-param-table td:first-child { text-align: left; }
+.waqi-param-table td {
+    padding: 4px 6px;
+    text-align: right;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+    white-space: nowrap;
+}
+.waqi-param-table tbody tr { transition: background 0.15s ease; }
+.waqi-param-table tbody tr:hover { background: rgba(45, 212, 191, 0.08); }
+.waqi-param__now { font-weight: 800; color: var(--popup-text); }
+.waqi-param__now small { font-weight: 600; font-size: 9.5px; color: var(--popup-text-muted); margin-left: 3px; }
+.waqi-param__dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.waqi-param-table tr.is-empty td { color: var(--popup-text-muted); opacity: 0.6; }
+.waqi-param-table tr.is-empty .waqi-param__now { font-weight: 500; font-style: italic; }
+.waqi-param__fc { font-size: 8px; font-weight: 700; color: #fbbf24; margin-left: 2px; }

@@ -4,15 +4,15 @@
 // popup's "Open Stats Panel" button. Same look and behaviour as the heatwave
 // stats panel (#heatwave-stats-modal): it reuses that panel's CSS classes
 // (stats grid on the left, tabbed chart on the right) and its drag/resize
-// handler, with a flood-blue header (.iwmi-modal in _popup.css).
+// handler, with a flood-blue header (.iwmi-modal in _popup.css). The shell
+// itself is shared with the other stats panels (stats-panel.js).
 
 import Chart from "chart.js/auto";
+import { createStatsPanel, statsPanelLegend } from "./stats-panel.js";
 import {
   ATTRIBUTION_FLOODHUB, ATTRIBUTION_GLOFAS, FLOODHUB_LEGEND, GLOFAS_LEGEND,
 } from "./iwmi-flood-popups.js";
 
-const MODAL_ID = "iwmi-stats-modal";
-const CANVAS_ID = "iwmi-stats-modal-canvas";
 const API = `${window.location.origin}/api/iwmi`;
 const STATUS_LABEL = { normal: "Normal", warning: "Warning", danger: "Severe", extreme: "Extreme" };
 const STATUS_VARIANT = { normal: "aqi-good", warning: "aqi-moderate", danger: "aqi-unhealthy", extreme: "aqi-hazardous" };
@@ -20,8 +20,14 @@ const SEVERITY_VARIANT = { NO_FLOODING: "aqi-good", ABOVE_NORMAL: "aqi-moderate"
 const TREND_ARROW = { RISE: "▲ Rising", FALL: "▼ Falling", NO_CHANGE: "▬ Steady" };
 const THEME = { text: "#e2e8f0", grid: "rgba(148,163,184,0.18)", flow: "#38bdf8", past: "#94a3b8" };
 
-let _chart = null;
 const _cache = new Map(); // url -> payload
+const panel = createStatsPanel({
+  id: "iwmi-stats-modal",
+  accentClass: "iwmi-modal",
+  ariaLabel: "River flood stats",
+  kicker: "River Flood Forecast",
+  onTab: (ctx, mode) => renderTab(ctx, mode),
+});
 
 function esc(v) {
   return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -45,105 +51,8 @@ function stat(label, value, extraClass = "") {
   return `<div class="heatwave-stat ${extraClass}"><div class="heatwave-stat__label">${esc(label)}</div><div class="heatwave-stat__value" title="${esc(String(value).replace(/<[^>]+>/g, ""))}">${value}</div></div>`;
 }
 
-function legendRow(entries) {
-  return entries.map((e) =>
-    `<span class="iwmi-modal__legend-item"><span class="iwmi-modal__legend-dot" style="background:${e.color};"></span>${esc(e.label)}</span>`).join("");
-}
-
-// ---------------------------------------------------------------------------
-// Modal shell (built once; same markup/classes as the heatwave panel)
-// ---------------------------------------------------------------------------
-
-async function ensureModal() {
-  let modal = document.getElementById(MODAL_ID);
-  if (modal) return modal;
-  modal = document.createElement("div");
-  modal.id = MODAL_ID;
-  modal.className = "heatwave-modal iwmi-modal hidden";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-label", "River flood stats");
-  modal.innerHTML = `
-    <div class="heatwave-modal__head" data-heatwave-drag>
-      <div class="heatwave-modal__drag-grip" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="heatwave-modal__title-block">
-        <div class="heatwave-modal__kicker" id="iwmi-modal-kicker">River Flood Forecast</div>
-        <div class="heatwave-modal__title" id="iwmi-modal-name">—</div>
-        <div class="heatwave-modal__subtitle" id="iwmi-modal-meta"></div>
-      </div>
-      <span class="heatwave-modal__badge ncop-popup__badge ncop-popup__badge--neutral" id="iwmi-modal-badge">—</span>
-      <button type="button" class="heatwave-modal__close" aria-label="Close" data-heatwave-close data-iwmi-close>×</button>
-    </div>
-    <div class="heatwave-modal__body">
-      <aside class="heatwave-modal__left">
-        <div class="heatwave-modal__stats" id="iwmi-modal-stats"></div>
-      </aside>
-      <section class="heatwave-modal__right">
-        <div class="heatwave-modal__tabs" role="tablist" id="iwmi-modal-tabs"></div>
-        <div class="heatwave-modal__chart-wrap">
-          <div class="heatwave-modal__chart-head">
-            <div class="heatwave-modal__chart-title" id="iwmi-modal-title">—</div>
-            <div class="heatwave-modal__chart-sub" id="iwmi-modal-sub">Loading…</div>
-          </div>
-          <div class="iwmi-modal__legend" id="iwmi-modal-legend"></div>
-          <div class="heatwave-modal__canvas-host">
-            <canvas id="${CANVAS_ID}"></canvas>
-            <div class="heatwave-modal__loader" id="iwmi-modal-loader"><span></span><span></span><span></span></div>
-          </div>
-          <div class="heatwave-modal__footnote" id="iwmi-modal-footnote"></div>
-        </div>
-      </section>
-    </div>
-    <div class="heatwave-modal__resize" data-heatwave-resize aria-label="Resize">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 6 L6 14 M14 10 L10 14" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-    </div>`;
-  document.body.appendChild(modal);
-
-  modal.addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-iwmi-close]")) {
-      hideIwmiStatsModal();
-      return;
-    }
-    const tab = ev.target.closest(".heatwave-modal__tab");
-    if (tab && modal._ctx) {
-      modal.querySelectorAll(".heatwave-modal__tab").forEach((t) => t.classList.toggle("is-active", t === tab));
-      renderTab(modal._ctx, tab.getAttribute("data-mode"));
-    }
-  });
-  // Same drag/resize behaviour as the heatwave panel. Loaded lazily: a
-  // static import would form a cycle (layer-attribute-popup.js imports the
-  // IWMI popups, which open this panel).
-  try {
-    const { attachHeatwaveDragAndResize } = await import("./layer-attribute-popup.js");
-    attachHeatwaveDragAndResize(modal);
-  } catch (err) {
-    console.warn("[iwmi] stats panel drag/resize unavailable", err);
-  }
-  return modal;
-}
-
-function setText(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-
-function setLoader(on) {
-  const el = document.getElementById("iwmi-modal-loader");
-  if (el) el.style.display = on ? "flex" : "none";
-}
-
-function destroyChart() {
-  if (_chart) {
-    try { _chart.destroy(); } catch (_) {}
-    _chart = null;
-  }
-}
-
 export function hideIwmiStatsModal() {
-  const modal = document.getElementById(MODAL_ID);
-  if (!modal) return;
-  modal.classList.add("hidden");
-  modal.classList.remove("is-open");
-  destroyChart();
+  panel.hide();
 }
 
 async function getJson(url) {
@@ -162,28 +71,21 @@ async function getJson(url) {
 
 /** ctx = {kind: "glofas"|"floodhub", props, dayLead?} */
 export async function showIwmiStatsModal(ctx) {
-  const modal = await ensureModal();
-  modal._ctx = ctx;
-  modal.classList.remove("hidden");
-  modal.classList.add("is-open");
+  await panel.ensure();
+  panel.ctx = ctx;
+  panel.open();
   const p = ctx.props || {};
-  const tabs = document.getElementById("iwmi-modal-tabs");
-  const badge = document.getElementById("iwmi-modal-badge");
-  const statsEl = document.getElementById("iwmi-modal-stats");
+  const statsEl = panel.$("stats");
 
   if (ctx.kind === "glofas") {
     const status = ctx.dayLead ? (p[`s_${ctx.dayLead}`] || "normal") : (p.status || "normal");
     const unreliable = p.quality === "unreliable";
-    setText("iwmi-modal-kicker", "GloFAS River Discharge");
-    setText("iwmi-modal-name", p.river ? `${p.river} — point ${p.id}` : `GloFAS point ${p.id}`);
-    setText("iwmi-modal-meta", `${p.iso3 || ""} · forecast run ${p.forecast_date || "—"}${ctx.dayLead ? ` · viewing day +${ctx.dayLead}` : ""}`);
-    if (badge) {
-      badge.textContent = unreliable ? "Unreliable" : (STATUS_LABEL[status] || status);
-      badge.className = `heatwave-modal__badge ncop-popup__badge ncop-popup__badge--${unreliable ? "neutral" : (STATUS_VARIANT[status] || "neutral")}`;
-    }
-    if (tabs) tabs.innerHTML = `
-      <button class="heatwave-modal__tab is-active" data-mode="discharge" type="button">Discharge (45 days)</button>
-      <button class="heatwave-modal__tab" data-mode="probability" type="button">Exceedance Probability</button>`;
+    panel.setText("kicker", "GloFAS River Discharge");
+    panel.setText("name", p.river ? `${p.river} — point ${p.id}` : `GloFAS point ${p.id}`);
+    panel.setText("meta", `${p.iso3 || ""} · forecast run ${p.forecast_date || "—"}${ctx.dayLead ? ` · viewing day +${ctx.dayLead}` : ""}`);
+    panel.setBadge(unreliable ? "Unreliable" : (STATUS_LABEL[status] || status),
+                   unreliable ? "neutral" : (STATUS_VARIANT[status] || "neutral"));
+    panel.setTabs([{ mode: "discharge", label: "Discharge (45 days)" }, { mode: "probability", label: "Exceedance Probability" }]);
     const peak = Number(p.peak_prob) > 0 ? `${num(Number(p.peak_prob) * 100, 0, "%")} · day +${esc(p.peak_lead)}` : "None ≥ 30%";
     if (statsEl) statsEl.innerHTML = [
       stat("Status", unreliable ? "Unreliable point" : esc(STATUS_LABEL[status] || status), "heatwave-stat--temp"),
@@ -195,19 +97,16 @@ export async function showIwmiStatsModal(ctx) {
       `<div class="heatwave-stat" id="iwmi-modal-flow-now"><div class="heatwave-stat__label">Day +1 flow</div><div class="heatwave-stat__value">…</div></div>`,
       `<div class="heatwave-stat" id="iwmi-modal-flow-peak"><div class="heatwave-stat__label">15-day max flow</div><div class="heatwave-stat__value">…</div></div>`,
     ].join("") + (unreliable ? `<div class="iwmi-modal__warning">Forecast flow never reaches 3% of this point's warning level — it is most likely matched to a dry or wrong model cell and cannot signal a flood. Do not read "Normal" here as an all-clear.</div>` : "");
-    setText("iwmi-modal-footnote", `Data: ${ATTRIBUTION_GLOFAS}. Status = worst threshold whose estimated exceedance probability reaches 30% (GloFAS reporting-point rule).`);
+    panel.setText("footnote", `Data: ${ATTRIBUTION_GLOFAS}. Status = worst threshold whose estimated exceedance probability reaches 30% (GloFAS reporting-point rule).`);
     renderTab(ctx, "discharge");
   } else {
     const sev = p.severity || "NO_FLOODING";
     const sevLabel = (FLOODHUB_LEGEND.find((e) => e.severity === sev) || {}).label || sev;
-    setText("iwmi-modal-kicker", "Google Flood Hub");
-    setText("iwmi-modal-name", p.river ? `${p.river} — gauge` : "River gauge");
-    setText("iwmi-modal-meta", `${p.iso3 || ""} · ${p.gauge_id || ""} · issued ${pkt(p.issued_time)}`);
-    if (badge) {
-      badge.textContent = sevLabel;
-      badge.className = `heatwave-modal__badge ncop-popup__badge ncop-popup__badge--${SEVERITY_VARIANT[sev] || "neutral"}`;
-    }
-    if (tabs) tabs.innerHTML = `<button class="heatwave-modal__tab is-active" data-mode="discharge" type="button">Discharge (history + forecast)</button>`;
+    panel.setText("kicker", "Google Flood Hub");
+    panel.setText("name", p.river ? `${p.river} — gauge` : "River gauge");
+    panel.setText("meta", `${p.iso3 || ""} · ${p.gauge_id || ""} · issued ${pkt(p.issued_time)}`);
+    panel.setBadge(sevLabel, SEVERITY_VARIANT[sev] || "neutral");
+    panel.setTabs([{ mode: "discharge", label: "Discharge (history + forecast)" }]);
     if (statsEl) statsEl.innerHTML = [
       stat("Severity", esc(sevLabel), "heatwave-stat--temp"),
       stat("Trend", esc(TREND_ARROW[p.trend] || p.trend || "—"), "heatwave-stat--feels"),
@@ -218,7 +117,7 @@ export async function showIwmiStatsModal(ctx) {
       `<div class="heatwave-stat" id="iwmi-modal-flow-now"><div class="heatwave-stat__label">Latest flow</div><div class="heatwave-stat__value">…</div></div>`,
       `<div class="heatwave-stat" id="iwmi-modal-flow-peak"><div class="heatwave-stat__label">Forecast max</div><div class="heatwave-stat__value">…</div></div>`,
     ].join("");
-    setText("iwmi-modal-footnote", `Data: ${ATTRIBUTION_FLOODHUB}. AI-modelled flow on a HydroBASINS river reach (virtual gauge).`);
+    panel.setText("footnote", `Data: ${ATTRIBUTION_FLOODHUB}. AI-modelled flow on a HydroBASINS river reach (virtual gauge).`);
     renderTab(ctx, "discharge");
   }
 }
@@ -249,36 +148,36 @@ function baseOptions(yTitle, yMax) {
 }
 
 async function renderTab(ctx, mode) {
-  destroyChart();
-  setLoader(true);
-  const canvas = document.getElementById(CANVAS_ID);
-  const legend = document.getElementById("iwmi-modal-legend");
+  panel.destroyChart();
+  panel.setLoader(true);
+  const canvas = panel.$("canvas");
+  const legend = panel.$("legend");
   try {
     if (ctx.kind === "glofas") {
       const d = await getJson(`${API}/glofas/points/${encodeURIComponent(ctx.props.id)}/discharge/`);
-      if (document.getElementById(MODAL_ID)?._ctx !== ctx) return; // a newer feature was opened meanwhile
+      if (!panel.isCurrent(ctx)) return; // a newer feature was opened meanwhile
       const fut = (d.series || []).filter((r) => r.lead_day >= 1);
       setFlowStats(num(fut[0]?.median, 0, " m³/s"), num(Math.max(...fut.map((r) => r.median ?? 0)), 0, " m³/s"));
-      if (legend) legend.innerHTML = legendRow(GLOFAS_LEGEND);
+      if (legend) legend.innerHTML = statsPanelLegend(GLOFAS_LEGEND);
       if (mode === "probability") renderGlofasProbability(canvas, d);
       else renderGlofasDischarge(canvas, d);
     } else {
       const d = await getJson(`${API}/floodhub/gauges/${encodeURIComponent(ctx.props.gauge_id)}/discharge/`);
-      if (document.getElementById(MODAL_ID)?._ctx !== ctx) return;
+      if (!panel.isCurrent(ctx)) return;
       const hist = d.history || [];
       const fc = d.forecast || [];
       setFlowStats(num(hist.at(-1)?.v, 1, " m³/s"), num(Math.max(0, ...fc.map((r) => r.v ?? 0)), 1, " m³/s"));
-      if (legend) legend.innerHTML = legendRow(FLOODHUB_LEGEND.map((e) => ({ ...e, label: e.label === "Above normal" ? "Warning" : e.label === "Severe" ? "Danger" : e.label }))
+      if (legend) legend.innerHTML = statsPanelLegend(FLOODHUB_LEGEND.map((e) => ({ ...e, label: e.label === "Above normal" ? "Warning" : e.label === "Severe" ? "Danger" : e.label }))
         .filter((e) => e.label !== "No flooding"));
       renderFloodhubDischarge(canvas, d);
     }
   } catch (err) {
     console.warn("[iwmi] stats panel data unavailable", err);
-    setText("iwmi-modal-title", "Data unavailable");
-    setText("iwmi-modal-sub", "The forecast series could not be loaded right now. Try again shortly.");
+    panel.setText("title", "Data unavailable");
+    panel.setText("sub", "The forecast series could not be loaded right now. Try again shortly.");
     setFlowStats("—", "—");
   } finally {
-    setLoader(false);
+    panel.setLoader(false);
   }
 }
 
@@ -291,9 +190,9 @@ function renderGlofasDischarge(canvas, d) {
   });
   const flat = (v) => s.map(() => (v === null || v === undefined ? null : Number(v)));
   const flowMax = Math.max(0, ...s.flatMap((r) => [r.median, r.hi]).filter((v) => v !== null && v !== undefined));
-  setText("iwmi-modal-title", "Discharge — 30 days back, 15 days forward");
-  setText("iwmi-modal-sub", `Run ${d.forecast_date}. Grey dashed: each past run's day-1 forecast (not observed flow). Blue: forecast ensemble mean, shaded ±1 SD.`);
-  _chart = new Chart(canvas.getContext("2d"), {
+  panel.setText("title", "Discharge — 30 days back, 15 days forward");
+  panel.setText("sub", `Run ${d.forecast_date}. Grey dashed: each past run's day-1 forecast (not observed flow). Blue: forecast ensemble mean, shaded ±1 SD.`);
+  panel.chart = new Chart(canvas.getContext("2d"), {
     type: "line",
     data: {
       labels,
@@ -332,9 +231,9 @@ function renderGlofasProbability(canvas, d) {
   const s = (d.series || []).filter((r) => r.lead_day >= 1);
   const labels = s.map((r) => `+${r.lead_day}d`);
   const pct = (v) => (v === null || v === undefined ? null : Math.round(v * 1000) / 10);
-  setText("iwmi-modal-title", "Exceedance probability by forecast day");
-  setText("iwmi-modal-sub", "Estimated chance the flow exceeds each threshold. A day reaches a status when its probability is ≥ 30% (dashed line).");
-  _chart = new Chart(canvas.getContext("2d"), {
+  panel.setText("title", "Exceedance probability by forecast day");
+  panel.setText("sub", "Estimated chance the flow exceeds each threshold. A day reaches a status when its probability is ≥ 30% (dashed line).");
+  panel.chart = new Chart(canvas.getContext("2d"), {
     type: "bar",
     data: {
       labels,
@@ -363,9 +262,9 @@ function renderFloodhubDischarge(canvas, d) {
   });
   const flat = (v) => rows.map(() => (v === null || v === undefined ? null : Number(v)));
   const yMax = Math.max(0, ...rows.map((r) => r.v || 0), Number(thr.warning) || 0) * 1.25 || undefined;
-  setText("iwmi-modal-title", "Discharge — recent and forecast");
-  setText("iwmi-modal-sub", `Issued ${pkt(d.issued_time)}. Grey: recent modelled flow. Blue: forecast. Dashed: gauge warning / danger / extreme levels.`);
-  _chart = new Chart(canvas.getContext("2d"), {
+  panel.setText("title", "Discharge — recent and forecast");
+  panel.setText("sub", `Issued ${pkt(d.issued_time)}. Grey: recent modelled flow. Blue: forecast. Dashed: gauge warning / danger / extreme levels.`);
+  panel.chart = new Chart(canvas.getContext("2d"), {
     type: "line",
     data: {
       labels,

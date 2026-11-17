@@ -12,6 +12,7 @@ import Chart from "chart.js/auto";
 import { setupFfdStatsPopupEventHandlers } from "./ffd-stats-modal.js";
 import { buildHawanamaPopup, setupHawanamaPopupEventHandlers } from "./hawanama-popups.js";
 import { buildIwmiPopup, setupIwmiPopupEventHandlers } from "./iwmi-flood-popups.js";
+import { showWaqiStatsModal } from "./waqi-stats-modal.js";
 
 const ndmaLogoSrc = new URL(
   "../assets/images/bg_images/ndma-logo.png",
@@ -289,6 +290,20 @@ function setupWaqiPopupEventHandlers() {
 }
 
 function handleWaqiPopupClick(e) {
+  const statsBtn = e.target.closest(".waqi-open-stats");
+  if (statsBtn) {
+    const uid = statsBtn.getAttribute("data-waqi-uid");
+    if (uid) {
+      showWaqiStatsModal({
+        uid,
+        name: statsBtn.getAttribute("data-name") || "",
+        aqi: statsBtn.getAttribute("data-aqi") || "",
+        time: statsBtn.getAttribute("data-time") || "",
+        continent: statsBtn.getAttribute("data-continent") || "",
+      });
+    }
+    return;
+  }
   const toggleBtn = e.target.closest(".aqi-infograph-inline-btn");
   if (toggleBtn) {
     const uid = toggleBtn.getAttribute("data-waqi-uid");
@@ -401,29 +416,19 @@ function buildWaqiPopupContent(props) {
     </div>
   `;
 
+  // Charts live in the WAQI stats panel (waqi-stats-modal.js), opened from
+  // this button — same pattern as the heatwave / Hawanama / IWMI popups.
+  const attr = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   const drawer = `
     <div id="popup-airquality-${popupUID}">
-      <div class="ncop-popup__actions" style="border-top:none;padding:0 0 10px;background:transparent;">
-        <button class="ncop-popup__button ncop-popup__button--primary aqi-infograph-inline-btn"
-                data-waqi-uid="${props.uid}"
-                data-popup-id="${popupUID}"
-                data-expanded="false"
-                data-loaded="false">Show Station Infograph</button>
+      <div class="waqi-popup-actions">
+        <button type="button" class="waqi-open-stats"
+                data-waqi-uid="${attr(props.uid)}" data-name="${attr(props.name)}" data-aqi="${attr(props.aqi)}"
+                data-time="${attr(props.time)}" data-continent="${attr(props.continent)}">
+          Open Stats Panel
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </button>
         ${stationDetailsHtml}
-      </div>
-      <div id="aqi-inline-metrics-${popupUID}" class="ncop-popup__pills" style="display:none;">
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="pm25" data-popup-id="${popupUID}">PM2.5</button>
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="pm10" data-popup-id="${popupUID}">PM10</button>
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="co2" data-popup-id="${popupUID}">CO₂</button>
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="tvoc" data-popup-id="${popupUID}">TVOC</button>
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="met.t" data-popup-id="${popupUID}">Temp</button>
-        <button class="ncop-popup__pill aqi-inline-metric-btn" data-metric="met.h" data-popup-id="${popupUID}">RH</button>
-      </div>
-      <div id="aqi-inline-chart-wrapper-${popupUID}" class="ncop-popup__chart" style="display:none;">
-        <div id="aqi-inline-station-name-${popupUID}" class="ncop-popup__chart-title"></div>
-        <div id="aqi-inline-updated-time-${popupUID}" class="ncop-popup__status-note" style="display:block;margin-bottom:4px;"></div>
-        <canvas id="aqiInlineChart-${popupUID}" style="width:220px;height:140px;max-width:100%;"></canvas>
-        <div id="aqi-inline-attrib-${popupUID}" class="ncop-popup__status-note" style="display:block;margin-top:4px;line-height:1.3;"></div>
       </div>
     </div>
   `;
@@ -3401,6 +3406,8 @@ function handleHeatwavePopupClick(e) {
 // by a prior real popup click. No existing behavior changes — these were
 // already fully self-contained functions, just not exported before.
 export { showHeatwaveModalForCity, hideHeatwaveModal };
+// The WAQI station fetcher, reused by the WAQI stats panel (waqi-stats-modal.js).
+export { fetchStationDetail };
 // Shared drag/resize for other stats panels built on the heatwave panel's
 // markup (iwmi-stats-modal.js). Additive export only.
 export { attachHeatwaveDragAndResize };
