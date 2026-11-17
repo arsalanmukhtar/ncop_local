@@ -247,3 +247,12 @@ misc/pip_cache/
 # per-catchment rasters + a small JSON sidecar, rebuilt on demand. Same
 # narrow scoping as landslide_model/ above.
 project/media/debris_flow_model/
+
+# Hawanama air-quality runtime caches (hawanama_client.py): cached JSON,
+# permanent daily-estimate tile cache, rendered forecast frames.
+project/media/hawanama_cache/
+project/media/hawanama_tiles/
+project/media/hawanama_forecast/
+
+# IWMI flood-forecasting runtime cache (iwmi_flood_client.py / cached_fetch.py).
+project/media/iwmi_flood_cache/

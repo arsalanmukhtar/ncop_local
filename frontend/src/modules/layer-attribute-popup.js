@@ -10,6 +10,8 @@
 import { ncop_menu_items } from "./map-layers.js";
 import Chart from "chart.js/auto";
 import { setupFfdStatsPopupEventHandlers } from "./ffd-stats-modal.js";
+import { buildHawanamaPopup, setupHawanamaPopupEventHandlers } from "./hawanama-popups.js";
+import { buildIwmiPopup, setupIwmiPopupEventHandlers } from "./iwmi-flood-popups.js";
 
 const ndmaLogoSrc = new URL(
   "../assets/images/bg_images/ndma-logo.png",
@@ -3399,6 +3401,9 @@ function handleHeatwavePopupClick(e) {
 // by a prior real popup click. No existing behavior changes — these were
 // already fully self-contained functions, just not exported before.
 export { showHeatwaveModalForCity, hideHeatwaveModal };
+// Shared drag/resize for other stats panels built on the heatwave panel's
+// markup (iwmi-stats-modal.js). Additive export only.
+export { attachHeatwaveDragAndResize };
 
 // Same additive-export reasoning as the heatwave pair above, for the FFD
 // popup's content builder + its delegated "Show Graph" click handler.
@@ -4053,6 +4058,59 @@ export default class LayerAttributePopup {
       const sourceId = eligible.source;
 
       this.anchorLngLat = e.lngLat;
+
+      // SPECIAL HANDLING FOR IWMI FLOOD LAYERS (GloFAS points, forecast-day
+      // frames, Flood Hub gauges). Forecast-day frames are faded, not
+      // hidden — pick the frame the slider is showing.
+      if (`${layerId || ""} ${sourceId || ""}`.includes("iwmi_")) {
+        let feature = eligible;
+        try {
+          if (/iwmi_glofas_day_/.test(layerId || "")) {
+            const visible = this.map
+              .queryRenderedFeatures(e.point)
+              .find((f) => /iwmi_glofas_day_/.test(f.layer?.id || "")
+                && Number(this.map.getPaintProperty(f.layer.id, "circle-opacity")) > 0.01);
+            if (visible) feature = visible;
+            else return this.hide();
+          }
+        } catch (_) {}
+        const built = buildIwmiPopup(feature.layer?.id, feature.source, { ...(feature.properties || {}) });
+        if (built) {
+          this.#renderSplit(built.primary, built.drawer, built.drawerTitle);
+          this.#show();
+          this.#updatePosition();
+          this.#attachMoveListeners();
+          setupIwmiPopupEventHandlers();
+          return;
+        }
+      }
+
+      // SPECIAL HANDLING FOR HAWANAMA LAYERS (stations, nowcast, daily
+      // archive, fire outlook). Temporal frames are faded, not hidden, so a
+      // click can hit every frame's circle at once — prefer the frame the
+      // slider is actually showing (non-zero circle-opacity).
+      if (`${layerId || ""} ${sourceId || ""}`.includes("hawanama_")) {
+        let feature = eligible;
+        try {
+          if (/hawanama_(nowcast|daily_stations)_/.test(layerId || "")) {
+            const visible = this.map
+              .queryRenderedFeatures(e.point)
+              .find((f) => /hawanama_(nowcast|daily_stations)_/.test(f.layer?.id || "")
+                && Number(this.map.getPaintProperty(f.layer.id, "circle-opacity")) > 0.01);
+            if (visible) feature = visible;
+            else return this.hide();
+          }
+        } catch (_) {}
+        const built = buildHawanamaPopup(feature.layer?.id, feature.source, { ...(feature.properties || {}) });
+        if (built) {
+          this.#renderSplit(built.primary, built.drawer, built.drawerTitle);
+          this.#show();
+          this.#updatePosition();
+          this.#attachMoveListeners();
+          setupHawanamaPopupEventHandlers();
+          return;
+        }
+      }
 
       // SPECIAL HANDLING FOR WAQI_STATIONS LAYER
       if (

@@ -827,6 +827,18 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   if (sliderEl) {
     sliderEl.max = layers.length - 1;
     sliderEl.value = 0;
+    // Optional: a frame array may carry `initialIndex` (e.g. a daily
+    // archive that should open on its newest day while keeping the
+    // timeline chronological). Jump there through the normal input path
+    // once the frames are registered.
+    const start = layers.initialIndex;
+    if (Number.isInteger(start) && start > 0 && start < layers.length) {
+      setTimeout(() => {
+        if (sliderEl.max !== String(layers.length - 1)) return; // slider was replaced meanwhile
+        sliderEl.value = String(start);
+        sliderEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }, 350);
+    }
   }
 
   const titleElement = document.querySelector("#temp-slider1 p");

@@ -3126,3 +3126,71 @@
     .crop-modal__pickers { flex-wrap: wrap; }
     .crop-modal__picker  { flex: 1 1 45%; }
 }
+
+/* =========================================================================
+   IWMI FLOOD STATS PANEL (#iwmi-stats-modal, iwmi-stats-modal.js)
+   Reuses the heatwave stats panel's classes for layout, stats grid, tabs,
+   loader and drag/resize; only the accent colour (flood blue) and a few
+   flood-specific bits are defined here.
+   ========================================================================= */
+.iwmi-open-stats {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 0;
+    background: linear-gradient(135deg, #0ea5e9, #1d4ed8);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 6px 16px rgba(29, 78, 216, 0.35);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.iwmi-open-stats:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 22px rgba(29, 78, 216, 0.45);
+}
+.iwmi-open-stats svg { display: block; }
+
+.iwmi-modal .heatwave-modal__head {
+    background: linear-gradient(135deg, rgba(29, 78, 216, 0.45), rgba(15, 23, 42, 0.0)),
+                var(--popup-header-bg);
+}
+.iwmi-modal .heatwave-modal__kicker { color: #38bdf8; }
+.iwmi-modal .heatwave-modal__tab.is-active {
+    background: linear-gradient(135deg, #0ea5e9, #1d4ed8);
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35);
+}
+.iwmi-modal .heatwave-stat--temp .heatwave-stat__value { color: #38bdf8; }
+.iwmi-modal .heatwave-stat--feels .heatwave-stat__value { color: #fbbf24; }
+.iwmi-modal .heatwave-modal__loader span:nth-child(2) { background: #38bdf8; }
+.iwmi-modal .heatwave-modal__loader span:nth-child(3) { background: #1d4ed8; }
+
+.iwmi-modal__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 11px;
+    color: var(--popup-text);
+    flex: 0 0 auto;
+}
+.iwmi-modal__legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.iwmi-modal__legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+.iwmi-modal__warning,
+.iwmi-popup-warning {
+    grid-column: 1 / -1;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: var(--popup-text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+.iwmi-popup-warning { margin-bottom: 8px; }

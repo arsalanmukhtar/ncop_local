@@ -1,0 +1,325 @@
+/* =========================================================================
+   IWMI RIVER FLOOD STATUS CARD (.iwmi-status-card, iwmi-flood-layers.js)
+   Compact monitoring card shown while an IWMI flood layer is on: live
+   header, KPI tiles, per-country table with stacked status bars, top
+   alerts and data freshness. Uses the popup design tokens so day/night
+   themes follow automatically. All motion is disabled under
+   prefers-reduced-motion.
+   ========================================================================= */
+
+.iwmi-status-card {
+    position: absolute;
+    left: 10px;
+    bottom: 34px;
+    z-index: 5;
+    width: 300px;
+    max-height: min(440px, calc(100% - 120px));
+    display: flex;
+    flex-direction: column;
+    color: var(--popup-text);
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(16px) saturate(115%);
+    -webkit-backdrop-filter: blur(16px) saturate(115%);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    overflow: hidden;
+    animation: iwmi-card-in 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.iwmi-status-card[hidden] { display: none; }
+
+@keyframes iwmi-card-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Header ---------------------------------------------------------- */
+.iwmi-sc__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px 8px 12px;
+    background: linear-gradient(135deg, rgba(29, 78, 216, 0.38), rgba(15, 23, 42, 0)),
+                var(--popup-header-bg, transparent);
+    border-bottom: 1px solid var(--popup-divider, rgba(148, 163, 184, 0.18));
+    cursor: pointer;
+    user-select: none;
+}
+.iwmi-sc__live {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--iwmi-sc-accent, #3FA34D);
+}
+.iwmi-sc__live::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--iwmi-sc-accent, #3FA34D);
+    animation: iwmi-pulse 1.8s ease-out infinite;
+}
+@keyframes iwmi-pulse {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(1.9); opacity: 0; }
+}
+.iwmi-sc__title-block { flex: 1 1 auto; min-width: 0; }
+.iwmi-sc__kicker {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #38bdf8;
+}
+.iwmi-sc__title { font-size: 13px; font-weight: 800; line-height: 1.15; }
+.iwmi-sc__toggle {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--popup-text);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: transform 0.25s ease, background 0.2s ease;
+}
+.iwmi-sc__toggle:hover { background: rgba(56, 189, 248, 0.28); }
+.iwmi-status-card.is-collapsed .iwmi-sc__toggle { transform: rotate(180deg); }
+
+/* ---- Body (collapsible) --------------------------------------------- */
+.iwmi-sc__body {
+    overflow: auto;
+    padding: 8px 10px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.3s ease;
+    max-height: 400px;
+}
+.iwmi-status-card.is-collapsed .iwmi-sc__body {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* ---- KPI tiles -------------------------------------------------------- */
+.iwmi-sc__kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+.iwmi-sc__kpi {
+    background: var(--popup-card-bg, rgba(148, 163, 184, 0.08));
+    border: 1px solid var(--popup-card-border, rgba(148, 163, 184, 0.18));
+    border-radius: 9px;
+    padding: 6px 7px;
+    min-width: 0;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.iwmi-sc__kpi:hover { transform: translateY(-1px); border-color: rgba(56, 189, 248, 0.5); }
+.iwmi-sc__kpi-label {
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.iwmi-sc__kpi-value {
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+.iwmi-sc__kpi-value small { font-size: 10px; font-weight: 600; color: var(--popup-text-muted); }
+.iwmi-sc__kpi-sub { font-size: 9px; color: var(--popup-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iwmi-sc__kpi.is-alert .iwmi-sc__kpi-value { color: #E2683C; }
+.iwmi-sc__kpi.is-ok .iwmi-sc__kpi-value { color: #4ade80; }
+.iwmi-sc__kpi.is-stale .iwmi-sc__kpi-value { color: #fbbf24; }
+
+/* ---- Country table ---------------------------------------------------- */
+.iwmi-sc__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.iwmi-sc__table th {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    text-align: left;
+    padding: 0 4px 4px;
+    border-bottom: 1px solid var(--popup-divider, rgba(148, 163, 184, 0.18));
+}
+.iwmi-sc__table th:nth-child(1) { width: 34%; }
+.iwmi-sc__table th:nth-child(4) { width: 18%; text-align: right; }
+.iwmi-sc__table td { padding: 4px; vertical-align: middle; }
+.iwmi-sc__row {
+    opacity: 0;
+    animation: iwmi-row-in 0.35s ease forwards;
+    animation-delay: calc(var(--i, 0) * 45ms);
+    transition: background 0.15s ease;
+}
+.iwmi-sc__row:hover { background: rgba(56, 189, 248, 0.08); }
+.iwmi-sc__row.is-home td:first-child { font-weight: 800; }
+@keyframes iwmi-row-in {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+.iwmi-sc__country { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.iwmi-sc__country span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iwmi-sc__dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.iwmi-sc__dot.is-alert { box-shadow: 0 0 0 0 currentColor; animation: iwmi-dot-glow 1.6s ease-out infinite; }
+@keyframes iwmi-dot-glow {
+    0%   { box-shadow: 0 0 0 0 rgba(226, 104, 60, 0.7); }
+    100% { box-shadow: 0 0 0 6px rgba(226, 104, 60, 0); }
+}
+
+/* Stacked bar: one segment per status class, widths animate in */
+.iwmi-sc__cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.iwmi-sc__bar {
+    display: flex;
+    height: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(148, 163, 184, 0.16);
+}
+.iwmi-sc__seg {
+    height: 100%;
+    width: 0;
+    transition: width 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.iwmi-sc__count { font-size: 9.5px; color: var(--popup-text-muted); font-variant-numeric: tabular-nums; }
+.iwmi-sc__count b { color: var(--popup-text); }
+
+.iwmi-sc__pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+}
+
+/* ---- Top alerts ------------------------------------------------------- */
+.iwmi-sc__section-title {
+    font-size: 8.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--popup-text-muted);
+    margin-bottom: 3px;
+}
+.iwmi-sc__alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.iwmi-sc__alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    background: var(--popup-card-bg, rgba(148, 163, 184, 0.08));
+    border-left: 3px solid var(--lvl, #E7B416);
+}
+.iwmi-sc__alert-main { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iwmi-sc__alert-meta { font-size: 9px; color: var(--popup-text-muted); white-space: nowrap; }
+.iwmi-sc__allclear {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 7px;
+    border-radius: 7px;
+    background: rgba(63, 163, 77, 0.12);
+    border: 1px solid rgba(63, 163, 77, 0.3);
+    color: #4ade80;
+    font-weight: 600;
+}
+
+/* ---- Footer ----------------------------------------------------------- */
+.iwmi-sc__foot {
+    font-size: 9px;
+    color: var(--popup-text-muted);
+    line-height: 1.35;
+    border-top: 1px solid var(--popup-divider, rgba(148, 163, 184, 0.18));
+    padding-top: 5px;
+}
+.iwmi-sc__stale {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, 0.18);
+    color: #fbbf24;
+    font-weight: 700;
+    margin-left: 3px;
+}
+
+.iwmi-sc__loading { display: flex; gap: 4px; padding: 10px 2px; }
+.iwmi-sc__loading span {
+    width: 6px; height: 6px; border-radius: 50%; background: #38bdf8;
+    animation: iwmi-load 0.9s ease-in-out infinite;
+}
+.iwmi-sc__loading span:nth-child(2) { animation-delay: 0.15s; }
+.iwmi-sc__loading span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes iwmi-load { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .iwmi-status-card, .iwmi-sc__row { animation: none; opacity: 1; }
+    .iwmi-sc__live::after, .iwmi-sc__dot.is-alert, .iwmi-sc__loading span { animation: none; }
+    .iwmi-sc__seg, .iwmi-sc__body, .iwmi-sc__toggle { transition: none; }
+}
+
+/* ---- Inundation layer notice (installIwmiInundationNotice) ------------ */
+.iwmi-inundation-notice {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    max-width: min(560px, calc(100% - 140px));
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    color: var(--popup-text);
+    font-family: 'Cabin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    line-height: 1.35;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    animation: iwmi-notice-in 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.iwmi-inundation-notice[hidden] { display: none; }
+.iwmi-inundation-notice i { color: var(--popup-text-muted); font-style: normal; white-space: nowrap; }
+.iwmi-in__icon {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 11px;
+    color: #fff;
+}
+.iwmi-inundation-notice.is-empty  { border-color: rgba(63, 163, 77, 0.45); }
+.iwmi-inundation-notice.is-empty .iwmi-in__icon  { background: #3FA34D; }
+.iwmi-inundation-notice.is-active { border-color: rgba(37, 99, 235, 0.6); }
+.iwmi-inundation-notice.is-active .iwmi-in__icon { background: #2563eb; animation: iwmi-dot-glow 1.6s ease-out infinite; }
+.iwmi-inundation-notice.is-error  { border-color: rgba(251, 191, 36, 0.5); }
+.iwmi-inundation-notice.is-error .iwmi-in__icon  { background: #d97706; }
+@keyframes iwmi-notice-in {
+    from { opacity: 0; transform: translate(-50%, -8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .iwmi-inundation-notice, .iwmi-inundation-notice.is-active .iwmi-in__icon { animation: none; }
+}

@@ -1,0 +1,19 @@
+# /etc/systemd/system/iwmi-flood-warm.service
+# Pre-warms NCOP's IWMI flood-forecasting caches (see
+# project/ncop_internal/management/commands/warm_iwmi_flood_cache.py).
+# Paths match deploy/nginx-ncop-prod.conf.reference; adjust the venv path.
+# nginx: no special location needed — every /api/iwmi/ response is cached
+# JSON served by Django; the existing 120s proxy_read_timeout on "location /"
+# already covers the one slow cold call (regional Flood Hub gauges, ~20s),
+# which this timer keeps warm anyway.
+[Unit]
+Description=NCOP IWMI flood-forecasting cache warm-up
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py warm_iwmi_flood_cache
+TimeoutStartSec=900
+Nice=10

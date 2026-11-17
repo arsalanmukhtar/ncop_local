@@ -1,0 +1,15 @@
+# /etc/systemd/system/hawanama-warm.service
+# Pre-warms NCOP's Hawanama air-quality caches (see
+# project/ncop_internal/management/commands/warm_hawanama_cache.py).
+# Paths match deploy/nginx-ncop-prod.conf.reference; adjust the venv path.
+[Unit]
+Description=NCOP Hawanama air-quality cache warm-up
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py warm_hawanama_cache --days 2
+TimeoutStartSec=900
+Nice=10

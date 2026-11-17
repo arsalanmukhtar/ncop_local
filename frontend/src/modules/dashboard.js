@@ -33,6 +33,8 @@ import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
+import { installHawanamaEstimateClick } from "./hawanama-layers.js";
+import { installIwmiStatusCard, installIwmiInundationNotice } from "./iwmi-flood-layers.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
@@ -270,6 +272,15 @@ class DashboardManager {
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
+
+    // Click-for-value on the Hawanama daily PM2.5 estimate (raster frames
+    // are not vector features, so the attribute popup cannot see them).
+    installHawanamaEstimateClick(this.#map, window.mapboxgl);
+
+    // Regional river-flood status card, shown while an IWMI flood layer is on.
+    installIwmiStatusCard(this.#map);
+    // Empty-state notice + 15-min refresh for the Flood Hub inundation layer.
+    installIwmiInundationNotice(this.#map);
 
     // Bottom-right scale bar — minimalist black tick + label.  The
     // styling lives in _map-panels.css (`.mapboxgl-ctrl-scale`).

@@ -2,6 +2,15 @@ from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
 from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView, FloodModelReportExportView
+from .iwmi_flood_views import (
+    IwmiGlofasPointsView, IwmiGlofasPointDischargeView, IwmiGlofasForecastDaysView, IwmiFloodhubGaugesView,
+    IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView,
+)
+from .hawanama_views import (
+    HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
+    HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
+    HawanamaFireSeasonView, HawanamaHealthView,
+)
 from .landslide_model_views import LandslideModelRunView, LandslideModelStatusView, LandslideModelExportView, LandslideModelReportExportView
 from .views import (
     dashboard_view,
@@ -62,6 +71,29 @@ from .views import (
 
 
 urlpatterns = [
+    # IWMI ENSO Outlook flood forecasting proxy (GloFAS reference points +
+    # Google Flood Hub) — see iwmi_flood_views.py.
+    path("api/iwmi/glofas/points/", IwmiGlofasPointsView.as_view(), name="iwmi-glofas-points"),
+    path("api/iwmi/glofas/points/<int:point_id>/discharge/", IwmiGlofasPointDischargeView.as_view(), name="iwmi-glofas-point-discharge"),
+    path("api/iwmi/glofas/forecast-days/", IwmiGlofasForecastDaysView.as_view(), name="iwmi-glofas-forecast-days"),
+    path("api/iwmi/floodhub/gauges/", IwmiFloodhubGaugesView.as_view(), name="iwmi-floodhub-gauges"),
+    path("api/iwmi/floodhub/gauges/<str:gauge_id>/discharge/", IwmiFloodhubGaugeDischargeView.as_view(), name="iwmi-floodhub-gauge-discharge"),
+    path("api/iwmi/floodhub/inundation/", IwmiFloodhubInundationView.as_view(), name="iwmi-floodhub-inundation"),
+    path("api/iwmi/status/", IwmiStatusView.as_view(), name="iwmi-status"),
+    path("api/iwmi/health/", IwmiHealthView.as_view(), name="iwmi-health"),
+    # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see
+    # hawanama_views.py. CC BY 4.0, attribution carried in every response.
+    path("api/hawanama/stations/", HawanamaStationsView.as_view(), name="hawanama-stations"),
+    path("api/hawanama/stations/daily/<str:date>/", HawanamaStationsDailyView.as_view(), name="hawanama-stations-daily"),
+    path("api/hawanama/stations/<str:station_id>/history/", HawanamaStationHistoryView.as_view(), name="hawanama-station-history"),
+    path("api/hawanama/tiles/dates/", HawanamaTileDatesView.as_view(), name="hawanama-tile-dates"),
+    path("api/hawanama/tiles/<str:date>/<int:z>/<int:x>/<int:y>.png", HawanamaTileView.as_view(), name="hawanama-tile"),
+    path("api/hawanama/point/", HawanamaPointView.as_view(), name="hawanama-point"),
+    path("api/hawanama/forecast/", HawanamaForecastView.as_view(), name="hawanama-forecast"),
+    path("api/hawanama/nowcast/", HawanamaNowcastView.as_view(), name="hawanama-nowcast"),
+    path("api/hawanama/fires/outlook/", HawanamaFiresOutlookView.as_view(), name="hawanama-fires-outlook"),
+    path("api/hawanama/fires/season/", HawanamaFireSeasonView.as_view(), name="hawanama-fire-season"),
+    path("api/hawanama/health/", HawanamaHealthView.as_view(), name="hawanama-health"),
     path("", dashboard_view, name="dashboard"),
     path("docs/", documentation_view, name="documentation"),
 

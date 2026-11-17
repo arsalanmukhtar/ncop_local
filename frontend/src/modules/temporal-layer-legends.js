@@ -282,6 +282,29 @@ export const legends = {
     ],
     ["5", "10", "20", "30", "40", "50", "60", "70", "80", "90"]
   ),
+  // IWMI GloFAS flood-alert status per forecast day (classified).
+  iwmi_glofas_forecast_days: gradientLegendBar(
+    ["#3FA34D", "#E7B416", "#E2683C", "#640000"],
+    ["Normal", "Warning", "Severe", "Extreme"]
+  ),
+  // Hawanama: turbo scale 20-180 ug/m3 (from the tiles' own tilejson),
+  // and US EPA PM2.5 bands for the station-point layers.
+  hawanama_pm25_estimate: gradientLegendBar(
+    ["#30123b", "#4662d7", "#36aaf9", "#1ae4b6", "#72fe5e", "#c8ef34", "#faba39", "#f66b19", "#ca2a04", "#7a0403"],
+    ["20", "40", "60", "80", "100", "120", "140", "160", "180 µg/m³"]
+  ),
+  hawanama_pm25_estimate_stations: gradientLegendBar(
+    ["#30123b", "#4662d7", "#36aaf9", "#1ae4b6", "#72fe5e", "#c8ef34", "#faba39", "#f66b19", "#ca2a04", "#7a0403"],
+    ["20", "40", "60", "80", "100", "120", "140", "160", "180 µg/m³"]
+  ),
+  hawanama_pm25_forecast: gradientLegendBar(
+    ["#30123b", "#4662d7", "#36aaf9", "#1ae4b6", "#72fe5e", "#c8ef34", "#faba39", "#f66b19", "#ca2a04", "#7a0403"],
+    ["20", "40", "60", "80", "100", "120", "140", "160", "180 µg/m³ (beta)"]
+  ),
+  hawanama_pm25_nowcast: gradientLegendBar(
+    ["#00e400", "#ffff00", "#ff7e00", "#ff0000", "#8f3f97", "#7e0023"],
+    ["0", "9", "35", "55", "125", "225+ µg/m³"]
+  ),
   particulate_matter_25: gradientLegendBar(
     [
       "#ffffff",

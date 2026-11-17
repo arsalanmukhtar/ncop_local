@@ -164,6 +164,17 @@ WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
 # rasters - accuracy_assessment.py / landslide_regional_comparison.py).
 # Moved from 172.18.1.100:8080 to 172.18.1.113:8080 on 2026-11-17.
 NCOP_LANDSLIDE_GEOSERVER_HOST = env("NCOP_LANDSLIDE_GEOSERVER_HOST", default="172.18.1.113:8080")
+# Hawanama (Pakistan Air Quality Initiative) — air-quality layers via
+# hawanama_client.py. CC BY 4.0, attribution "Pakistan Air Quality
+# Initiative (Hawanama)".
+HAWANAMA_BASE_URL = env("HAWANAMA_BASE_URL", default="https://hawanama.org")
+# IWMI ENSO Outlook flood forecasting (GloFAS reference points + Google
+# Flood Hub) — iwmi_flood_client.py. Countries are ISO3, comma-separated.
+IWMI_ENSO_API_BASE_URL = env("IWMI_ENSO_API_BASE_URL", default="https://enso.iwmi.org/ENSO_api/api/v1")
+IWMI_FLOOD_COUNTRIES = env.list(
+    "IWMI_FLOOD_COUNTRIES",
+    default=["PAK", "IND", "BGD", "LKA", "AFG", "MMR", "THA", "VNM", "KHM", "LAO", "IDN", "PHL", "MYS"],
+)
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
 GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
 # Second Groq account's key — used ONLY as an automatic fallback when the
@@ -260,6 +271,17 @@ REST_FRAMEWORK = {
         # independently re-derived.
         "landslide_model_export": "20/min",
         "landslide_model_report_export": "10/min",
+        # Hawanama air-quality proxy (hawanama_views.py). JSON endpoints are
+        # served from hawanama_client's cache (one upstream call per TTL for
+        # all users), so this only bounds per-client abuse. Tiles are far
+        # more numerous per map view (a pan/zoom across the slider's dates
+        # can request hundreds), and mostly served from the permanent disk
+        # cache, so their cap is much higher.
+        "hawanama_api": "120/min",
+        "hawanama_tiles": "3000/min",
+        # IWMI flood-forecasting proxy (iwmi_flood_views.py) — cached JSON, same
+        # per-client-abuse bound as the Hawanama JSON endpoints.
+        "iwmi_flood_api": "120/min",
     },
 }
 

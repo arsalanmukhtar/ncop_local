@@ -1,0 +1,14 @@
+# /etc/systemd/system/iwmi-flood-warm.timer
+# Every 30 min keeps the Flood Hub and GloFAS caches inside their TTLs; a
+# GloFAS run's discharge series are fetched once and kept. Enable with:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now iwmi-flood-warm.timer
+[Unit]
+Description=Run NCOP IWMI flood cache warm-up every 30 minutes
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=30min
+RandomizedDelaySec=90
+
+[Install]
+WantedBy=timers.target

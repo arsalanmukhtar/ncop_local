@@ -7,6 +7,8 @@ import {
   USGS_ICON_IDS,
 } from "./map-icons.js";
 import { NWFC_WEATHER_ICON_URLS } from "./nwfc-weather-icons.js";
+import { hawanamaToggleItems, hawanamaTemporalItems, registerHawanamaTemporalLoaders } from "./hawanama-layers.js";
+import { iwmiToggleItems, iwmiTemporalItems, registerIwmiTemporalLoaders } from "./iwmi-flood-layers.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -532,6 +534,11 @@ window.pmd_pred_hourtpe       = generatePmdPredictionsLoader("hourtpe",       "p
 window.pmd_pred_sixtpe        = generatePmdPredictionsLoader("sixtpe",        "pmd_pred_sixtpe");
 window.pmd_pred_twelvetpe     = generatePmdPredictionsLoader("twelvetpe",     "pmd_pred_twelvetpe");
 window.pmd_pred_daytpe        = generatePmdPredictionsLoader("daytpe",        "pmd_pred_daytpe");
+// Hawanama (Pakistan Air Quality Initiative) temporal layers — lazy
+// builders on window[itemKey], same convention as the PMD loaders above.
+registerHawanamaTemporalLoaders();
+// IWMI flood forecasting (GloFAS forecast-day slider) — same lazy-builder convention.
+registerIwmiTemporalLoaders();
 // State-quantity layers — temperature, cloud cover, humidity.  Same loader,
 // different registry entries on the backend (element_keys map to the vendor's
 // TEM / TCC / RHU codes across WRFPRS + GDFS models).
@@ -2937,6 +2944,15 @@ export const ncop_menu_items = {
         },
       },
     },
+    // IWMI ENSO Outlook flood forecasting — GloFAS flood-alert points and
+    // Google Flood Hub gauges/inundation for Pakistan, the subcontinent and
+    // Southeast Asia. Configs in iwmi-flood-layers.js; data via /api/iwmi/.
+    "IWMI Flood Forecasting": {
+      temporal: Object.fromEntries(
+        Object.entries(iwmiTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail || "glofas-flood-sum-1-30d.webp") }])
+      ),
+      toggle: iwmiToggleItems,
+    },
     "Global Flood Awareness System (GloFAS)": {
       static: {
         precipitation_probability_50mm_10days: {
@@ -3543,6 +3559,14 @@ export const ncop_menu_items = {
             "The WAQI-Stations Air Quality layer displays real-time air quality data from the World Air Quality Index (WAQI) project. This layer is essential for monitoring pollution levels and assessing health risks associated with air quality in various locations worldwide.",
         },
       },
+    },
+    // Hawanama — Pakistan Air Quality Initiative (CC BY 4.0). Layer configs
+    // and loaders live in hawanama-layers.js; data via /api/hawanama/.
+    "Hawanama — Pakistan Air Quality Initiative": {
+      temporal: Object.fromEntries(
+        Object.entries(hawanamaTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail || "pm_2.5.webp") }])
+      ),
+      toggle: hawanamaToggleItems,
     },
     "Meteoblue Air-Quality Forecast": {
       temporal: {
