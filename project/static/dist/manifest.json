@@ -13,15 +13,15 @@
       "assets/background-CT5iv2qp.gif"
     ]
   },
-  "_chunk-cm8GkQdX.js": {
-    "file": "assets/chunk-cm8GkQdX.js",
+  "_chunk-WvZ1LgUL.js": {
+    "file": "assets/chunk-WvZ1LgUL.js",
     "name": "chunk"
   },
-  "_set-assets-U9Y94Vij.js": {
-    "file": "assets/set-assets-U9Y94Vij.js",
+  "_set-assets-WxvbCpLf.js": {
+    "file": "assets/set-assets-WxvbCpLf.js",
     "name": "set-assets",
     "imports": [
-      "_chunk-cm8GkQdX.js"
+      "_chunk-WvZ1LgUL.js"
     ],
     "assets": [
       "assets/ndma-logo-BZdnuktw.png"
@@ -58,6 +58,10 @@
   "src/assets/images/bg_images/ndma-logo.png": {
     "file": "assets/ndma-logo-BZdnuktw.png",
     "src": "src/assets/images/bg_images/ndma-logo.png"
+  },
+  "src/assets/images/ffd_flood_routing/flood_routing_map.png": {
+    "file": "assets/flood_routing_map-J0ZElEgU.png",
+    "src": "src/assets/images/ffd_flood_routing/flood_routing_map.png"
   },
   "src/assets/images/layer_legends/EGE_probRgt300.webp": {
     "file": "assets/EGE_probRgt300-OiKsaomf.webp",
@@ -188,39 +192,39 @@
     "src": "src/assets/images/layer_legends/hdx_foodsequrity.webp"
   },
   "src/assets/images/layer_legends/ipc_afghanistan.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_bangladesh.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_drc.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_lebanon.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_myanmar.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_pakistan.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_palestine.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_sudan.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/ipc_yemen.webp": {
-    "file": "assets/ipc_bangladesh-BtPkVgkq.webp",
+    "file": "assets/ipc_afghanistan-BtPkVgkq.webp",
     "src": "src/assets/images/layer_legends/ipc_afghanistan.webp"
   },
   "src/assets/images/layer_legends/lancover.webp": {
@@ -307,13 +311,57 @@
     "file": "assets/weather-station-BZHC0Ug4.webp",
     "src": "src/assets/images/map_icons/weather-station.webp"
   },
+  "src/assets/images/nwfc_icons/cloudy.gif": {
+    "file": "assets/cloudy-CDyRigI6.gif",
+    "src": "src/assets/images/nwfc_icons/cloudy.gif"
+  },
+  "src/assets/images/nwfc_icons/cold.gif": {
+    "file": "assets/cold-C3OjgHhI.gif",
+    "src": "src/assets/images/nwfc_icons/cold.gif"
+  },
+  "src/assets/images/nwfc_icons/drizzle.gif": {
+    "file": "assets/drizzle-D4nxUFNZ.gif",
+    "src": "src/assets/images/nwfc_icons/drizzle.gif"
+  },
+  "src/assets/images/nwfc_icons/dust.gif": {
+    "file": "assets/dust-uboztQ3O.gif",
+    "src": "src/assets/images/nwfc_icons/dust.gif"
+  },
+  "src/assets/images/nwfc_icons/hot.gif": {
+    "file": "assets/hot-BmRbxWQV.gif",
+    "src": "src/assets/images/nwfc_icons/hot.gif"
+  },
+  "src/assets/images/nwfc_icons/partly_cloudy.gif": {
+    "file": "assets/partly_cloudy-CRkWdFHe.gif",
+    "src": "src/assets/images/nwfc_icons/partly_cloudy.gif"
+  },
+  "src/assets/images/nwfc_icons/rain.gif": {
+    "file": "assets/rain-BdHV8ItO.gif",
+    "src": "src/assets/images/nwfc_icons/rain.gif"
+  },
+  "src/assets/images/nwfc_icons/snow.gif": {
+    "file": "assets/snow-CIvKli0E.gif",
+    "src": "src/assets/images/nwfc_icons/snow.gif"
+  },
+  "src/assets/images/nwfc_icons/sunny.gif": {
+    "file": "assets/sunny-ejuUbOfp.gif",
+    "src": "src/assets/images/nwfc_icons/sunny.gif"
+  },
+  "src/assets/images/nwfc_icons/thunderstorm.gif": {
+    "file": "assets/thunderstorm-C_lmdELb.gif",
+    "src": "src/assets/images/nwfc_icons/thunderstorm.gif"
+  },
+  "src/assets/images/nwfc_icons/windy.gif": {
+    "file": "assets/windy-Bmn4rF5Y.gif",
+    "src": "src/assets/images/nwfc_icons/windy.gif"
+  },
   "src/entries/auth_login.js": {
-    "file": "assets/auth_login-pY2cjYGp.js",
+    "file": "assets/auth_login-CzjmA2e7.js",
     "name": "auth_login",
     "src": "src/entries/auth_login.js",
     "isEntry": true,
     "imports": [
-      "_set-assets-U9Y94Vij.js",
+      "_set-assets-WxvbCpLf.js",
       "_auth-forms-CCBaCsj-.js"
     ],
     "css": [
@@ -321,12 +369,12 @@
     ]
   },
   "src/entries/auth_reset.js": {
-    "file": "assets/auth_reset-DcfQKV4u.js",
+    "file": "assets/auth_reset-DU3BtVwG.js",
     "name": "auth_reset",
     "src": "src/entries/auth_reset.js",
     "isEntry": true,
     "imports": [
-      "_set-assets-U9Y94Vij.js",
+      "_set-assets-WxvbCpLf.js",
       "_auth-forms-CCBaCsj-.js"
     ],
     "css": [
@@ -334,21 +382,21 @@
     ]
   },
   "src/entries/auth_reset_confirm.js": {
-    "file": "assets/auth_reset_confirm-6CSA7C1O.js",
+    "file": "assets/auth_reset_confirm-C2EeON3K.js",
     "name": "auth_reset_confirm",
     "src": "src/entries/auth_reset_confirm.js",
     "isEntry": true,
     "imports": [
-      "_set-assets-U9Y94Vij.js"
+      "_set-assets-WxvbCpLf.js"
     ]
   },
   "src/entries/auth_signup.js": {
-    "file": "assets/auth_signup-D4DKvCBu.js",
+    "file": "assets/auth_signup-Px9Q1GDJ.js",
     "name": "auth_signup",
     "src": "src/entries/auth_signup.js",
     "isEntry": true,
     "imports": [
-      "_set-assets-U9Y94Vij.js",
+      "_set-assets-WxvbCpLf.js",
       "_auth-forms-CCBaCsj-.js"
     ],
     "css": [
@@ -356,21 +404,32 @@
     ]
   },
   "src/entries/dashboard_main.js": {
-    "file": "assets/dashboard_main-CWJ1DLNX.js",
+    "file": "assets/dashboard_main-UAFQ7or9.js",
     "name": "dashboard_main",
     "src": "src/entries/dashboard_main.js",
     "isEntry": true,
     "imports": [
-      "_set-assets-U9Y94Vij.js",
-      "_chunk-cm8GkQdX.js"
+      "_set-assets-WxvbCpLf.js",
+      "_chunk-WvZ1LgUL.js"
     ],
     "dynamicImports": [
       "src/entries/dashboard_main.js"
     ],
     "css": [
-      "assets/dashboard_main-idh1y4DO.css"
+      "assets/dashboard_main-BAyUV1I_.css"
     ],
     "assets": [
+      "assets/cloudy-CDyRigI6.gif",
+      "assets/cold-C3OjgHhI.gif",
+      "assets/drizzle-D4nxUFNZ.gif",
+      "assets/dust-uboztQ3O.gif",
+      "assets/hot-BmRbxWQV.gif",
+      "assets/partly_cloudy-CRkWdFHe.gif",
+      "assets/rain-BdHV8ItO.gif",
+      "assets/snow-CIvKli0E.gif",
+      "assets/sunny-ejuUbOfp.gif",
+      "assets/thunderstorm-C_lmdELb.gif",
+      "assets/windy-Bmn4rF5Y.gif",
       "assets/weather-station-BZHC0Ug4.webp",
       "assets/Rate_of_Spread_MARK_5_ROS-CkNPspuo.webp",
       "assets/ndma_logo-vtOpuKj1.webp",
@@ -406,7 +465,7 @@
       "assets/gfas_c-Dc8Z92se.webp",
       "assets/ggop-C18gZOPx.webp",
       "assets/hdx_foodsequrity-Bql6h9Hz.webp",
-      "assets/ipc_bangladesh-BtPkVgkq.webp",
+      "assets/ipc_afghanistan-BtPkVgkq.webp",
       "assets/lancover--SEjWdBt.webp",
       "assets/macc_gfas.bc-klcfiOvX.webp",
       "assets/openweatherAQI-BxPoigrJ.webp",
@@ -429,11 +488,12 @@
       "assets/flood-CCUs4WOl.webp",
       "assets/air-quality-DSUdIwRj.webp",
       "assets/ocean-coastal-BTR8gS0E.webp",
-      "assets/early-warning-C1egSu3_.webp"
+      "assets/early-warning-C1egSu3_.webp",
+      "assets/flood_routing_map-J0ZElEgU.png"
     ]
   },
   "src/modules/map-layers.js": {
-    "file": "assets/map-layers-2e-F5JNc.js",
+    "file": "assets/map-layers-DM5Lbaey.js",
     "name": "map-layers",
     "src": "src/modules/map-layers.js",
     "isDynamicEntry": true,

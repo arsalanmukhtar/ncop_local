@@ -4003,8 +4003,11 @@ export default class LayerAttributePopup {
       // the next vertex was meant to go. Guarded the same way this app
       // already signals cross-module state (window.ncopFloodModelControl,
       // set in that module's own constructor) — skip entirely while a
-      // polygon is actively being drawn.
+      // polygon is actively being drawn. window.ncopLandslideModelControl
+      // (landslide-model-control.js) mirrors the same convention for its
+      // own, separate MapboxDraw instance.
       if (window.ncopFloodModelControl?.isDrawModeActive?.()) return;
+      if (window.ncopLandslideModelControl?.isDrawModeActive?.()) return;
 
       this.#refreshDynamicExposureLookups();
 

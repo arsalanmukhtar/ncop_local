@@ -160,6 +160,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
 METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
+# Landslide GeoServer (inventory, 2025 events, regional susceptibility
+# rasters - accuracy_assessment.py / landslide_regional_comparison.py).
+# Moved from 172.18.1.100:8080 to 172.18.1.113:8080 on 2026-11-17.
+NCOP_LANDSLIDE_GEOSERVER_HOST = env("NCOP_LANDSLIDE_GEOSERVER_HOST", default="172.18.1.113:8080")
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
 GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
 # Second Groq account's key — used ONLY as an automatic fallback when the
@@ -236,6 +240,26 @@ REST_FRAMEWORK = {
         # above, so a bit tighter — still generous for genuine repeated
         # downloads of the same finished result.
         "flood_model_report_export": "10/min",
+        # Landslide early-warning job submission (ncop_internal.
+        # landslide_model_views, L5) — same tight-cap reasoning as
+        # flood_model_run above, own executor/registry (§9/§12's explicit
+        # decision not to share flood's — see landslide_model_views.py's
+        # own module docstring). Live-confirmed cold-run costs through
+        # L0-L4: the susceptibility mode's own DEM/HAND pipeline +
+        # Overture buildings exposure alone is 250-270s; a burst of run
+        # requests would queue behind each other the same way flood's
+        # own single-worker executor already does. 3/min matches flood's
+        # own figure exactly, not independently re-derived.
+        "landslide_model_run": "3/min",
+        # Status polling — cheap in-memory dict lookup, same generous-by-
+        # design reasoning as flood_model_status above.
+        "landslide_model_status": "120/min",
+        # GeoJSON/report export — real, deliberate user actions (a
+        # download click), never polled. Same figures as flood's own
+        # flood_model_export/flood_model_report_export, not
+        # independently re-derived.
+        "landslide_model_export": "20/min",
+        "landslide_model_report_export": "10/min",
     },
 }
 

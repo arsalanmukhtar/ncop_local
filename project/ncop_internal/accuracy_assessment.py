@@ -30,10 +30,13 @@
 #     rather than spinning forever.
 # ---------------------------------------------------------------------------
 
+import json
 import logging
+import math
 import random
 
 import numpy as np
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +155,593 @@ def list_gfd_events(bbox, max_events=20):
             "system_time_end_ms": p.get("system:time_end"),
         })
     return events
+
+
+# NASA's Cooperative Open Online Landslide Repository (COOLR) — the L3
+# ground-truth source for landslide validation, mirroring list_gfd_events's
+# own shape per LANDSLIDE_EARLY_WARNING_METHODOLOGY.md §7/§13-L3. A plain
+# ArcGIS REST FeatureServer, not a GEE asset — no `ee`/Earth Engine
+# dependency here, unlike list_gfd_events above.
+#
+# **Live-reconfirmed this session, correcting an earlier "confirmed live"
+# claim**: the exact endpoint below was verified reachable when the
+# methodology doc's §7 was first written, but a live re-check this pass
+# found it returning HTTP 404 across every path tried (the bare
+# FeatureServer root, the /0 layer, and the sibling COOLR_Events_Polygons/
+# LHASA ImageServer endpoints under the same /gis05//gis01/ prefixes) —
+# while the SAME host's Portal API (/portal/sharing/rest/...) responds
+# normally, and the official "Landslide Viewer" web map
+# (https://landslides.nasa.gov/viewer, portal item a7b17eff...) still
+# lists this exact URL as one of its own operational layers. This is
+# most consistent with a genuine, real service change on NASA's own
+# infrastructure since the earlier check (the direct ArcGIS Server
+# instances retired/relocated behind the Portal, with the web map's own
+# stale layer-URL list not yet updated to match) — not a mistake in how
+# this project queries it. Kept exactly as documented (not silently
+# swapped for a guess) so this starts working the moment NASA's endpoint
+# is reachable again; degrades to an honest empty result today, the same
+# convention every other external fetch in this module already follows.
+_COOLR_EVENTS_POINTS_URL = (
+    "https://gis.earthdata.nasa.gov/gis05/rest/services/Landslides/"
+    "COOLR_Events_Points/FeatureServer/0/query"
+)
+_COOLR_TIMEOUT_SECONDS = 30
+
+# This project's own reasoned choice, not a COOLR-specified or
+# literature-mandated value: COOLR points carry zero area, but
+# _sample_and_score's own rejection-sampling scheme (used by
+# assess_raster_auc/assess_raster_auc_stable, reused unmodified for
+# landslide validation) needs presence_geoms with real area to sample
+# "inside" — the exact same reason GFD's own ~250m MODIS-pixel-scale
+# ground-truth polygons already work with this sampling scheme (see
+# list_gfd_events's own module comment above), so this buffer matches
+# that established order of magnitude, not a fabricated new precision.
+# (A literature search this session for landslide-point buffering found
+# a real but DIFFERENT technique — a much larger ~2km exclusion buffer
+# used to keep NEGATIVE/absence training points away from known
+# landslides, a different role than this buffer's own "give a presence
+# point real sampling area" job — noted for context, not applied here.)
+_COOLR_PRESENCE_BUFFER_M = 250.0
+_DEG_TO_M_APPROX = 111_320  # same order-of-magnitude deg->m convention already used elsewhere in this codebase
+
+
+def list_coolr_events(bbox, max_events=50):
+    """Lists real COOLR landslide events within `bbox` — mirrors
+    list_gfd_events's own shape (§13/L3): a real fetch against a public
+    ArcGIS REST FeatureServer, returning event metadata, never raising.
+    `outFields=*` is used deliberately rather than naming specific
+    fields: this session could not live-confirm COOLR's exact current
+    schema (see this module's own _COOLR_EVENTS_POINTS_URL comment) so
+    every attribute the service actually returns is passed through
+    as-is under "attributes", rather than this code silently dropping
+    fields it guessed wrong names for.
+
+    Returns a list of dicts: {"attributes": {...raw...}, "lon", "lat"} —
+    empty list on any network/parsing failure or if the service has zero
+    matching features, matching this module's own established
+    convention (never raises)."""
+    import requests
+
+    minx, miny, maxx, maxy = bbox
+    params = {
+        "where": "1=1",
+        "geometry": f"{minx},{miny},{maxx},{maxy}",
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "*",
+        "outSR": "4326",
+        "resultRecordCount": max_events,
+        "f": "geojson",
+    }
+    try:
+        resp = requests.get(_COOLR_EVENTS_POINTS_URL, params=params, timeout=_COOLR_TIMEOUT_SECONDS)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        logger.warning(
+            "accuracy_assessment: COOLR events fetch failed for bbox %r (degraded — "
+            "treated as empty; see _COOLR_EVENTS_POINTS_URL's own comment for the "
+            "live-reconfirmed access issue found this session)", bbox, exc_info=True,
+        )
+        return []
+
+    events = []
+    for feat in data.get("features", []) or []:
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates")
+        if not coords or len(coords) < 2:
+            continue
+        events.append({"attributes": feat.get("properties", {}), "lon": coords[0], "lat": coords[1]})
+    return events
+
+
+def fetch_coolr_presence_geoms(bbox, max_events=200, buffer_m=_COOLR_PRESENCE_BUFFER_M):
+    """The geometry-fetching counterpart to list_coolr_events, matching
+    fetch_flood_extent_presence's own role for GFD/WFS ground truth:
+    returns a list of shapely Polygons ready for assess_raster_auc_stable's
+    own `presence_geoms` parameter — each COOLR point buffered by
+    `buffer_m` (see _COOLR_PRESENCE_BUFFER_M's own comment for why a
+    buffer is required at all, not optional convenience).
+
+    Empty list under the exact same conditions list_coolr_events already
+    degrades on — never raises."""
+    events = list_coolr_events(bbox, max_events=max_events)
+    if not events:
+        return []
+
+    from shapely.geometry import Point
+
+    # Degree-buffer approximation, same "not survey-grade, fine for a
+    # real-but-approximate figure" convention flood_model.py's own
+    # _DEG_TO_KM already establishes — a COOLR pilot's own latitude band
+    # (Pakistan, ~30-37N) does not change this by enough to matter for a
+    # ~250m target buffer.
+    buffer_deg = buffer_m / _DEG_TO_M_APPROX
+    return [Point(ev["lon"], ev["lat"]).buffer(buffer_deg) for ev in events]
+
+
+# ---------------------------------------------------------------------------
+# Two more real, INDEPENDENTLY-hosted ground-truth sources — added because
+# COOLR alone (above) is currently unreachable (its own endpoint returns a
+# live-confirmed 404, see _COOLR_EVENTS_POINTS_URL's own comment) and this
+# project's own explicit instruction was "do not only rely on COOLR." Both
+# were found and LIVE-VERIFIED this session (real HTTP requests, real
+# feature counts, real Pakistan coverage — not assumed from a description
+# page):
+#
+#   - Global Fatal Landslide Database (GFLD) v2 (Froude & Petley, University
+#     of Sheffield) — a live ArcGIS FeatureServer on a COMPLETELY SEPARATE
+#     ArcGIS Online organization (services2.arcgis.com/Dn40vzt2R38VJsSS),
+#     not NASA infrastructure at all — confirmed reachable even while every
+#     gis.earthdata.nasa.gov path is down. 5,490 features globally, 257
+#     confirmed live within a Pakistan bbox query. UK Open Government
+#     Licence v2 (permissive, attribution-required — a real, checked
+#     license, not assumed). Fatality-focused (only landslides with a
+#     reported death), which is real, if narrower, presence evidence — a
+#     confirmed-fatal event is unambiguous ground truth, not a possible
+#     false positive from a media-report miscategorization.
+#   - NASA's own Global Landslide Catalog (GLC), served as a stable, STATIC
+#     CSV export on data.nasa.gov — NOT the broken gis.earthdata.nasa.gov
+#     ArcGIS Server path COOLR's own REST endpoint uses, a different real
+#     access point onto materially the same underlying catalog. Confirmed
+#     live: HTTP 302->200, 11,060 rows, 142 confirmed Pakistan rows.
+#     Requires citing Kirschbaum et al.'s own published papers when used
+#     (a real, stated academic-citation condition, not a legal restriction
+#     — noted here, not silently dropped).
+# ---------------------------------------------------------------------------
+
+_GFLD_POINTS_URL = (
+    "https://services2.arcgis.com/Dn40vzt2R38VJsSS/arcgis/rest/services/"
+    "Fatal_landslide_points_2004_to_2017/FeatureServer/0/query"
+)
+_GFLD_TIMEOUT_SECONDS = 30
+
+
+def list_gfld_events(bbox, max_events=500):
+    """Lists real GFLD (Global Fatal Landslide Database) events within
+    `bbox` — mirrors list_gfd_events/list_coolr_events' own shape,
+    against a live-confirmed, independent ArcGIS FeatureServer (see this
+    module's own section comment above for the live-verification
+    details). `outFields=*` deliberately, same "don't guess field names,
+    pass through everything real" posture list_coolr_events already
+    uses.
+
+    Returns a list of dicts: {"attributes": {...raw...}, "lon", "lat"} —
+    empty on any network/parsing failure or zero matching features,
+    never raises."""
+    import requests
+
+    minx, miny, maxx, maxy = bbox
+    params = {
+        "where": "1=1",
+        "geometry": f"{minx},{miny},{maxx},{maxy}",
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "*",
+        "outSR": "4326",
+        "resultRecordCount": max_events,
+        "f": "geojson",
+    }
+    try:
+        resp = requests.get(_GFLD_POINTS_URL, params=params, timeout=_GFLD_TIMEOUT_SECONDS)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        logger.warning(
+            "accuracy_assessment: GFLD events fetch failed for bbox %r (degraded — treated as empty)",
+            bbox, exc_info=True,
+        )
+        return []
+
+    events = []
+    for feat in data.get("features", []) or []:
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates")
+        if not coords or len(coords) < 2:
+            continue
+        events.append({"attributes": feat.get("properties", {}), "lon": coords[0], "lat": coords[1]})
+    return events
+
+
+# §L7 — location precision of the point catalogs. Both GFLD and GLC
+# geocode each report to the smallest place it names, and say how precise
+# that is: GFLD's `Precision_` is the AREA (m^2) of that place (e.g.
+# Shogran 0.8 km^2, Chitral district 14,248 km^2); GLC's
+# `location_accuracy` is a radius class ("exact", "1km", "5km" ... "100km",
+# "unknown"). Confirmed live 2026-11-17: of Pakistan's 257 GFLD points
+# only 21 are within ~1 km, and of its 142 GLC rows only 7 are "exact"/
+# "1km" — every other point sits on a town or district centroid, i.e. on
+# a valley road, not on the failed slope. Buffering those at a flat 250m
+# (the pre-§L7 behavior) made a 30m susceptibility map look worse the
+# better it identified steep, unstable terrain. Points are now kept only
+# when their stated uncertainty is <= max_location_uncertainty_m, and
+# each kept point is buffered by its OWN uncertainty radius (never less
+# than buffer_m). Pass max_location_uncertainty_m=None to get the old,
+# unfiltered behavior back (e.g. for district-level counts).
+_POINT_MAX_LOCATION_UNCERTAINTY_M = 1000.0
+
+
+def _gfld_uncertainty_m(attributes):
+    try:
+        area_m2 = float(attributes.get("Precision_"))
+    except (TypeError, ValueError):
+        return None
+    if not area_m2 > 0:
+        return None
+    return math.sqrt(area_m2 / math.pi)
+
+
+_GLC_ACCURACY_M = {"exact": 0.0, "1km": 1000.0, "5km": 5000.0, "10km": 10000.0, "25km": 25000.0,
+                   "50km": 50000.0, "100km": 100000.0, "250km": 250000.0}
+
+
+def _glc_uncertainty_m(row):
+    return _GLC_ACCURACY_M.get(str(row.get("location_accuracy") or "").strip().lower())
+
+
+def _keep_point(uncertainty_m, max_location_uncertainty_m):
+    if max_location_uncertainty_m is None:
+        return True
+    return uncertainty_m is not None and uncertainty_m <= max_location_uncertainty_m
+
+
+def _point_buffer_deg(uncertainty_m, buffer_m, max_location_uncertainty_m):
+    radius = buffer_m
+    if max_location_uncertainty_m is not None and uncertainty_m is not None:
+        radius = max(buffer_m, uncertainty_m)
+    return radius / _DEG_TO_M_APPROX
+
+
+def fetch_gfld_presence_geoms(bbox, max_events=500, buffer_m=_COOLR_PRESENCE_BUFFER_M,
+                              max_location_uncertainty_m=_POINT_MAX_LOCATION_UNCERTAINTY_M):
+    """The geometry-fetching counterpart to list_gfld_events. Only events
+    whose own location precision is within max_location_uncertainty_m
+    are kept, each buffered by that uncertainty radius (see the §L7
+    comment above). Returns a list of shapely Polygons, empty under the
+    same conditions list_gfld_events already degrades on."""
+    events = list_gfld_events(bbox, max_events=max_events)
+    if not events:
+        return []
+    from shapely.geometry import Point
+    geoms = []
+    for ev in events:
+        unc = _gfld_uncertainty_m(ev["attributes"])
+        if _keep_point(unc, max_location_uncertainty_m):
+            geoms.append(Point(ev["lon"], ev["lat"]).buffer(_point_buffer_deg(unc, buffer_m, max_location_uncertainty_m)))
+    return geoms
+
+
+_GLC_CSV_URL = "https://data.nasa.gov/docs/legacy/Global_Landslide_Catalog_Export/Global_Landslide_Catalog_Export_rows.csv"
+_GLC_TIMEOUT_SECONDS = 60  # a real ~8.5MB file, not a small API response — generous but bounded
+_GLC_CACHE_TTL_SECONDS = 30 * 24 * 3600  # 30 days — a slow-changing historical catalog, not a live feed
+_glc_last_failure = 0.0  # time.time() of the last failed refresh (backoff uses _NCOP_LANDSLIDE_RETRY_BACKOFF_SECONDS)
+
+
+def _glc_cache_path():
+    import os
+    from django.conf import settings
+    cache_dir = os.path.join(settings.MEDIA_ROOT, "accuracy_assessment_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, "glc_export.csv")
+
+
+def _fetch_glc_csv_cached(force=False):
+    """Downloads NASA's own static GLC CSV export ONCE (a real ~8.5MB
+    file — confirmed live this session, 11,060 rows) and caches it to
+    disk under a real TTL (30 days — this is a slow-changing historical
+    catalog, not a live feed, so re-downloading it on every validation
+    run would be real, avoidable network cost for zero real benefit).
+
+    Returns a list of dicts (csv.DictReader rows) — empty list on any
+    network/parsing failure, matching this module's own established
+    degrade-to-empty convention."""
+    import csv
+    import os
+    import time
+
+    import requests
+
+    global _glc_last_failure
+    path = _glc_cache_path()
+    if not force and os.path.exists(path) and (time.time() - os.path.getmtime(path)) < _GLC_CACHE_TTL_SECONDS:
+        pass  # cache hit, fall through to the read below
+    elif not force and os.path.exists(path) and (time.time() - _glc_last_failure) < _NCOP_LANDSLIDE_RETRY_BACKOFF_SECONDS:
+        pass  # a refresh just failed — serve the stale copy without another 60s timeout
+    else:
+        try:
+            resp = requests.get(_GLC_CSV_URL, timeout=_GLC_TIMEOUT_SECONDS)
+            resp.raise_for_status()
+        except Exception:
+            logger.warning("accuracy_assessment: GLC CSV fetch failed (degraded — treated as empty)", exc_info=True)
+            _glc_last_failure = time.time()
+            if not os.path.exists(path):
+                return []
+            # A fresh fetch failed but a real, previously-cached copy
+            # exists (even if past its own TTL) — serve the stale copy
+            # rather than degrading to nothing; a slow-changing historical
+            # catalog being a few weeks stale is a real, acceptable
+            # tradeoff against losing real ground truth entirely.
+        else:
+            tmp_path = f"{path}.tmp{os.getpid()}"
+            with open(tmp_path, "wb") as f:
+                f.write(resp.content)
+            os.replace(tmp_path, path)
+
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as f:
+            return list(csv.DictReader(f))
+    except Exception:
+        logger.warning("accuracy_assessment: GLC CSV read failed (degraded — treated as empty)", exc_info=True)
+        return []
+
+
+def fetch_glc_presence_geoms(bbox, buffer_m=_COOLR_PRESENCE_BUFFER_M,
+                             max_location_uncertainty_m=_POINT_MAX_LOCATION_UNCERTAINTY_M):
+    """Filters NASA's own cached GLC CSV rows (_fetch_glc_csv_cached) to
+    those whose real lon/lat fall inside `bbox`, buffers each into a
+    real (non-zero-area) polygon — same rationale/magnitude as
+    fetch_coolr_presence_geoms's own. A row with a missing/malformed
+    coordinate is skipped, not treated as a crash — this is real,
+    historical, human-entered data with real gaps.
+
+    Only rows whose `location_accuracy` is within
+    max_location_uncertainty_m are kept, each buffered by that radius
+    (§L7 — see the comment above _POINT_MAX_LOCATION_UNCERTAINTY_M).
+
+    Returns a list of shapely Polygons — empty list if the CSV itself
+    couldn't be fetched/read, or if none of its rows fall in `bbox`."""
+    rows = _fetch_glc_csv_cached()
+    if not rows:
+        return []
+
+    from shapely.geometry import Point
+
+    minx, miny, maxx, maxy = bbox
+    geoms = []
+    for row in rows:
+        try:
+            lon = float(row.get("longitude"))
+            lat = float(row.get("latitude"))
+        except (TypeError, ValueError):
+            continue
+        if not (minx <= lon <= maxx and miny <= lat <= maxy):
+            continue
+        unc = _glc_uncertainty_m(row)
+        if _keep_point(unc, max_location_uncertainty_m):
+            geoms.append(Point(lon, lat).buffer(_point_buffer_deg(unc, buffer_m, max_location_uncertainty_m)))
+    return geoms
+
+
+# ---------------------------------------------------------------------------
+# A THIRD, and by far the richest, real ground-truth source — found by
+# direct investigation (WMS/WFS/WCS GetCapabilities, live queries, not
+# assumed) of a GeoServer the user pointed at for a different purpose (4
+# regional AHP susceptibility rasters — see landslide_regional_
+# comparison.py). That same GeoServer's "landslide" workspace also serves
+# two real, LIVE-VERIFIED WFS vector layers, dwarfing COOLR/GFLD/GLC put
+# together for Pakistan specifically:
+#
+#   - `Landslide_inventory_overall` — 2,289 real, dated, digitized
+#     landslide MultiPolygon extents (Year/LS_Name/Area_Sqkm/LS_Type
+#     attributes, plus Pre_EQ/2005/2010/2014/2016 temporal flags — a real
+#     multi-period geological inventory, likely post-2005-earthquake
+#     landslide mapping). Confirmed live: 529 features over
+#     ajk_muzaffarabad's own bbox, 40 over astore's.
+#   - `2025_Landslide_Events` — 31 real, recent (2025) point incidents
+#     (District/Name_of_Ev/Date_of_Ev/Damages__L/Response/Intensity) — an
+#     actively-maintained incident log (real KKH road-closure references).
+#
+# These are REAL POLYGONS (the inventory layer), not points needing a
+# synthetic buffer like COOLR/GFLD/GLC/the recent-events layer — a genuine
+# methodological upgrade: an actual digitized extent is real presence
+# evidence over its own real footprint, not an assumed circular buffer
+# around a single coordinate.
+# ---------------------------------------------------------------------------
+
+_NCOP_LANDSLIDE_GEOSERVER_HOST = getattr(settings, "NCOP_LANDSLIDE_GEOSERVER_HOST", "172.18.1.113:8080")
+_NCOP_LANDSLIDE_WORKSPACE = "landslide"
+_NCOP_LANDSLIDE_WFS_TIMEOUT_SECONDS = 30
+
+
+# §L7 — national-layer disk cache. Both layers are small nationally
+# (2,289 + 31 features), so each is fetched ONCE for all of Pakistan,
+# cached to disk, and filtered by bbox locally — instead of one live WFS
+# call per catchment per validation run. Two real problems this fixes:
+# (1) the old per-bbox call capped at count=500, and ajk_muzaffarabad
+# alone has 529 inventory features, so 29 were silently dropped; (2) when
+# this GeoServer is unreachable (confirmed 2026-11-17: host answers ping,
+# every HTTP port times out), every caller lost the richest ground truth
+# this project has. A stale cached copy is served when a refresh fails,
+# and a failed refresh is not retried for _NCOP_LANDSLIDE_RETRY_BACKOFF_
+# SECONDS, so a down server costs one timeout, not one per catchment.
+_NCOP_LANDSLIDE_NATIONAL_BBOX = (60.5, 23.5, 79.6, 37.2)
+_NCOP_LANDSLIDE_NATIONAL_MAX_FEATURES = 20000
+_NCOP_LANDSLIDE_CACHE_TTL_SECONDS = 7 * 24 * 3600
+_NCOP_LANDSLIDE_RETRY_BACKOFF_SECONDS = 600
+_ncop_landslide_last_failure = {}  # {type_name: time.time() of last failed refresh}
+_ncop_landslide_memory_cache = {}  # {type_name: (mtime, features)}
+
+
+def _ncop_landslide_cache_path(type_name):
+    import os
+    from django.conf import settings
+    cache_dir = os.path.join(settings.MEDIA_ROOT, "accuracy_assessment_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f"ncop_landslide_{type_name}.geojson")
+
+
+def _ncop_landslide_fetch_national(type_name):
+    """Live national fetch — returns the feature list, or None on failure."""
+    import requests
+
+    minx, miny, maxx, maxy = _NCOP_LANDSLIDE_NATIONAL_BBOX
+    url = (
+        f"http://{_NCOP_LANDSLIDE_GEOSERVER_HOST}/geoserver/{_NCOP_LANDSLIDE_WORKSPACE}/ows"
+        f"?service=WFS&version=2.0.0&request=GetFeature"
+        f"&typeName={_NCOP_LANDSLIDE_WORKSPACE}:{type_name}"
+        f"&bbox={minx},{miny},{maxx},{maxy},EPSG:4326"
+        f"&outputFormat=application/json&count={_NCOP_LANDSLIDE_NATIONAL_MAX_FEATURES}"
+    )
+    try:
+        resp = requests.get(url, timeout=_NCOP_LANDSLIDE_WFS_TIMEOUT_SECONDS)
+        resp.raise_for_status()
+        return resp.json().get("features", []) or []
+    except Exception:
+        logger.warning(
+            "accuracy_assessment: NCOP landslide GeoServer national fetch failed for layer %r",
+            type_name, exc_info=True,
+        )
+        return None
+
+
+def _ncop_landslide_national_features(type_name, force=False):
+    """Cached national feature list for one layer (see section comment).
+    Never raises; returns [] only when there is neither a live response
+    nor any cached copy."""
+    import os
+    import time
+
+    path = _ncop_landslide_cache_path(type_name)
+    cache_exists = os.path.exists(path) and os.path.getsize(path) > 0
+    cache_fresh = cache_exists and (time.time() - os.path.getmtime(path)) < _NCOP_LANDSLIDE_CACHE_TTL_SECONDS
+    recently_failed = (time.time() - _ncop_landslide_last_failure.get(type_name, 0)) < _NCOP_LANDSLIDE_RETRY_BACKOFF_SECONDS
+
+    if force or not (cache_fresh or (cache_exists and recently_failed)):
+        if not recently_failed or force:
+            features = _ncop_landslide_fetch_national(type_name)
+            if features is None:
+                _ncop_landslide_last_failure[type_name] = time.time()
+            else:
+                _ncop_landslide_last_failure.pop(type_name, None)
+                tmp = f"{path}.tmp{os.getpid()}"
+                with open(tmp, "w") as f:
+                    json.dump({"type": "FeatureCollection", "features": features}, f)
+                os.replace(tmp, path)
+                cache_exists = True
+                _ncop_landslide_memory_cache.pop(type_name, None)
+
+    if not cache_exists:
+        return []
+    mtime = os.path.getmtime(path)
+    cached = _ncop_landslide_memory_cache.get(type_name)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        with open(path) as f:
+            features = json.load(f).get("features", []) or []
+    except Exception:
+        logger.warning("accuracy_assessment: NCOP landslide cache read failed for %r", type_name, exc_info=True)
+        return []
+    _ncop_landslide_memory_cache[type_name] = (mtime, features)
+    return features
+
+
+def _ncop_landslide_wfs_get_geojson(type_name, bbox, max_events):
+    """Features of `type_name` intersecting `bbox` (from the cached
+    national copy — see _ncop_landslide_national_features), at most
+    `max_events`. Degrades to [] on any failure — never raises, matching
+    every other fetcher in this module."""
+    from shapely.geometry import box as shapely_box
+    from shapely.geometry import shape as shapely_shape
+
+    query = shapely_box(*bbox)
+    out = []
+    for feat in _ncop_landslide_national_features(type_name):
+        geom = feat.get("geometry")
+        if not geom:
+            continue
+        try:
+            if not shapely_shape(geom).intersects(query):
+                continue
+        except Exception:
+            continue
+        out.append(feat)
+        if len(out) >= max_events:
+            break
+    return out
+
+
+def list_ncop_landslide_inventory_events(bbox, max_events=5000):
+    """Real, dated landslide polygon extents from `Landslide_inventory_
+    overall` (see this section's own header comment) within `bbox`.
+    Returns the raw GeoJSON feature list (real MultiPolygon geometry +
+    Year/LS_Name/Area_Sqkm/LS_Type properties) — empty on any failure."""
+    return _ncop_landslide_wfs_get_geojson("Landslide_inventory_overall", bbox, max_events)
+
+
+def fetch_ncop_landslide_inventory_presence_geoms(bbox, max_events=5000):
+    """The geometry-fetching counterpart to list_ncop_landslide_inventory_
+    events — returns the REAL polygon geometries directly (no synthetic
+    buffering, unlike every point-based source above: these are actual
+    digitized landslide extents already). Returns a list of shapely
+    (Multi)Polygons, empty under the same conditions the list function
+    already degrades on."""
+    from shapely.geometry import shape as shapely_shape
+
+    features = list_ncop_landslide_inventory_events(bbox, max_events=max_events)
+    geoms = []
+    for feat in features:
+        geom = feat.get("geometry")
+        if not geom:
+            continue
+        try:
+            shp = shapely_shape(geom)
+        except Exception:
+            continue
+        if not shp.is_empty:
+            geoms.append(shp if shp.is_valid else shp.buffer(0))
+    return geoms
+
+
+def list_ncop_recent_landslide_events(bbox, max_events=200):
+    """Real, recent (2025) landslide/mudflow point incidents from
+    `2025_Landslide_Events` (see this section's own header comment)
+    within `bbox`. Returns a list of dicts: {"attributes": {...raw...},
+    "lon", "lat"} — same shape list_gfld_events already returns — empty
+    on any failure."""
+    features = _ncop_landslide_wfs_get_geojson("2025_Landslide_Events", bbox, max_events)
+    events = []
+    for feat in features:
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates")
+        if not coords or len(coords) < 2:
+            continue
+        events.append({"attributes": feat.get("properties", {}), "lon": coords[0], "lat": coords[1]})
+    return events
+
+
+def fetch_ncop_recent_events_presence_geoms(bbox, max_events=200, buffer_m=_COOLR_PRESENCE_BUFFER_M):
+    """Point+buffer counterpart for the recent-events layer — same
+    rationale/magnitude as fetch_coolr_presence_geoms's own (this layer
+    is points, unlike the inventory layer above)."""
+    events = list_ncop_recent_landslide_events(bbox, max_events=max_events)
+    if not events:
+        return []
+    from shapely.geometry import Point
+    buffer_deg = buffer_m / _DEG_TO_M_APPROX
+    return [Point(ev["lon"], ev["lat"]).buffer(buffer_deg) for ev in events]
 
 
 _CHIRPS_GEE_COLLECTION = "UCSB-CHG/CHIRPS/DAILY"

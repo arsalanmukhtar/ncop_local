@@ -213,9 +213,37 @@ graphify-out/cache/
 # Same narrow-scoping reasoning too — NOT project/media/ as a whole.
 project/media/flood_model/
 
+# Landslide early-warning model runtime cache (see
+# LANDSLIDE_EARLY_WARNING_METHODOLOGY.md, ncop_internal/landslide_model.py
+# + landslide_lhasa2_scan.py + landslide_regional_comparison.py). Same
+# "safe to never commit" reasoning as flood_model/ above: per-catchment
+# AHP/infinite-slope/rockfall/avalanche rasters, LOCO Frequency-Ratio
+# calibration scratch files, LHASA2 nowcast mosaics, and regional-
+# comparison WCS fetches — all regenerate on demand (confirmed live:
+# 742MB total across the 6 pilot catchments + scratch subdirs). Same
+# narrow-scoping reasoning too — NOT project/media/ as a whole.
+project/media/landslide_model/
+
+# Snow-avalanche susceptibility runtime cache (see avalanche_model.py) —
+# same reasoning as landslide_model/ above, its own small per-catchment
+# raster cache.
+project/media/avalanche_model/
+
+# accuracy_assessment.py's own external ground-truth cache — currently
+# just NASA's static Global Landslide Catalog CSV export (~8.5MB,
+# 30-day TTL, re-downloads automatically on expiry/cache-miss — see
+# _fetch_glc_csv_cached's own docstring). Same "safe to never commit"
+# reasoning as every other cache above.
+project/media/accuracy_assessment_cache/
+
 # pip's own local HTTP cache (misc/pip_cache/ — used during dependency
 # testing this session, e.g. verifying pyarrow/shapely resolve cleanly
 # together). Pure binary cache, ~46MB, regenerates automatically on next
 # pip install; the rest of misc/ (docs, setup scripts, the pinned GDAL
 # wheel) stays tracked as before — only this one cache subdirectory is new.
 misc/pip_cache/
+
+# Debris-flow watershed screening runtime cache (see debris_flow_model.py) -
+# per-catchment rasters + a small JSON sidecar, rebuilt on demand. Same
+# narrow scoping as landslide_model/ above.
+project/media/debris_flow_model/

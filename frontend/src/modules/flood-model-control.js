@@ -4,6 +4,7 @@ import Chart from "chart.js/auto";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { bbox as turfBbox } from "@turf/turf";
+import { LandslideModelControl } from "./landslide-model-control.js";
 // ---------------------------------------------------------------------------
 // A self-contained rail button + panel for the flash-flood early-warning
 // system's first frontend slice (see FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md
@@ -597,6 +598,11 @@ export class FloodModelControl {
   // show/hide (not reset to "flood" on reopen) since the flood tab's
   // own DOM/state is never destroyed on a tab switch — see #render.
   #activeHazardTab = "flood";
+  // Lazily instantiated the first time the "landslide" tab is actually
+  // switched to (see #switchHazardTab) — real backend/frontend wiring
+  // (landslide-model-control.js), not the placeholder markup this
+  // container used to always render.
+  #landslideControl = null;
 
   constructor(map) {
     this.#map = map;
@@ -693,6 +699,18 @@ export class FloodModelControl {
       if (el) el.hidden = key !== tabKey;
     }
 
+    // Lazy-init: the first switch to "landslide" replaces its own
+    // container's static "Coming soon" placeholder with the real,
+    // backend-wired control. Every LATER switch just shows/hides the
+    // already-built DOM (setVisible pauses/resumes its own status
+    // polling for a hidden panel), matching the flood tab's own
+    // persist-across-switches behavior — never rebuilt from scratch.
+    if (tabKey === "landslide" && !this.#landslideControl) {
+      const container = panels.landslide;
+      if (container) this.#landslideControl = new LandslideModelControl(this.#map, container);
+    }
+    if (this.#landslideControl) this.#landslideControl.setVisible(tabKey === "landslide");
+
     document.querySelectorAll(".hazard-tab-btn").forEach((btn) => {
       const isActive = btn.dataset.hazardTab === tabKey;
       btn.classList.toggle("active", isActive);
@@ -701,7 +719,7 @@ export class FloodModelControl {
 
     const titles = {
       flood: ["Flash-Flood Early Warning", "HAND-based hazard + exposure, per catchment."],
-      landslide: ["Landslide Early Warning", "Not yet available."],
+      landslide: ["Landslide Early Warning", "AHP + infinite-slope susceptibility, rockfall/avalanche screening, per catchment."],
       wildfire: ["Wildfire / Other Hazards", "Not yet available."],
     };
     const [title, subtitle] = titles[tabKey] || titles.flood;

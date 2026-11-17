@@ -122,13 +122,10 @@ def _submit_coalesced(executor, key, fn, *args, **kwargs):
     genuinely new call for the same key starts fresh rather than being
     stuck joining a stale/finished entry.
 
-    NOTE: this is a currently a targeted fix for fetch_overture_
-    buildings_exposure specifically (the dominant real cost, confirmed
-    live this session) — build_hand_pipeline's WhiteboxTools calls and
-    _get_cached_buildings_index have the SAME class of race (confirmed
-    during this same investigation) but are NOT yet wired through this
-    primitive — a real, known, deliberately out-of-scope gap for this
-    pass, not an oversight."""
+    Used by fetch_overture_buildings_exposure and
+    _get_cached_buildings_index. build_hand_pipeline has the same class
+    of race and is coalesced separately with a per-catchment lock in
+    flood_model.py (it runs on the caller's thread, not an executor)."""
     with _INFLIGHT_LOCK:
         existing = _INFLIGHT_FUTURES.get(key)
         if existing is not None and not existing.done():
@@ -2444,7 +2441,12 @@ def _get_cached_buildings_index(catchment_key):
             entry["touched_at"] = time.time()
             return entry
 
-    future = _BUILDINGS_INDEX_EXECUTOR.submit(_build_buildings_index_raw, catchment_key)
+    # Coalesced (§0.37): two concurrent viewport requests for the same
+    # not-yet-indexed catchment now share one parse+STRtree build instead
+    # of queueing a second, identical one behind it on this single-worker
+    # executor.
+    future = _submit_coalesced(_BUILDINGS_INDEX_EXECUTOR, ("buildings_index", catchment_key),
+                               _build_buildings_index_raw, catchment_key)
     try:
         built = future.result(timeout=_BUILDINGS_INDEX_BUILD_TIMEOUT_SECONDS)
     except _FutureTimeoutError:

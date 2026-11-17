@@ -1145,7 +1145,45 @@ def _raster_stats(path):
             "width": ds.RasterXSize, "height": ds.RasterYSize}
 
 
+# Per-catchment in-flight coalescing for build_hand_pipeline — closes the
+# gap flood_exposure._submit_coalesced's own docstring named (§0.37) and
+# LANDSLIDE_EARLY_WARNING_METHODOLOGY.md §0.1 deferred: two near-
+# simultaneous callers for the SAME catchment (e.g. a landslide job and a
+# flood job, or two landslide sub-builds) each ran the full DEM fetch +
+# WhiteboxTools chain independently. A second caller now waits on the
+# first's per-key lock and then re-enters with force=False, so every step
+# is already cached by the time it gets in — it never repeats the work.
+_HAND_PIPELINE_KEY_LOCKS = {}
+_HAND_PIPELINE_KEY_LOCKS_GUARD = threading.Lock()
+
+
+def _hand_pipeline_key_lock(catchment_key):
+    with _HAND_PIPELINE_KEY_LOCKS_GUARD:
+        lock = _HAND_PIPELINE_KEY_LOCKS.get(catchment_key)
+        if lock is None:
+            lock = threading.Lock()
+            _HAND_PIPELINE_KEY_LOCKS[catchment_key] = lock
+        return lock
+
+
 def build_hand_pipeline(catchment_key, force=False):
+    """Coalescing wrapper around _build_hand_pipeline_impl — see
+    _HAND_PIPELINE_KEY_LOCKS's own comment above. A caller that had to
+    wait behind another in-flight build of the same catchment drops its
+    own force=True: the build it waited on just produced fresh outputs,
+    and repeating it would be exactly the duplicated work this exists to
+    prevent."""
+    lock = _hand_pipeline_key_lock(catchment_key)
+    waited = not lock.acquire(blocking=False)
+    if waited:
+        lock.acquire()
+    try:
+        return _build_hand_pipeline_impl(catchment_key, force=force and not waited)
+    finally:
+        lock.release()
+
+
+def _build_hand_pipeline_impl(catchment_key, force=False):
     """Runs the full Phase-1 pipeline for one pilot catchment and returns
     a dict of every intermediate + final raster path, plus basic stats
     for each — so a caller (a management command, a diagnostic script)

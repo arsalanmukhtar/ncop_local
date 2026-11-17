@@ -2,6 +2,7 @@ from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
 from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView, FloodModelReportExportView
+from .landslide_model_views import LandslideModelRunView, LandslideModelStatusView, LandslideModelExportView, LandslideModelReportExportView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -230,5 +231,28 @@ urlpatterns = [
         "api/flood-model/export-report/<str:job_id>/",
         FloodModelReportExportView.as_view(),
         name="flood-model-export-report",
+    ),
+    # Landslide early warning — L5's first real HTTP endpoints. Same
+    # async job-id polling pattern as flood-model above, own executor/
+    # registry (see landslide_model_views.py's own module docstring).
+    path(
+        "api/landslide-model/run/",
+        LandslideModelRunView.as_view(),
+        name="landslide-model-run",
+    ),
+    path(
+        "api/landslide-model/status/<str:job_id>/",
+        LandslideModelStatusView.as_view(),
+        name="landslide-model-status",
+    ),
+    path(
+        "api/landslide-model/export/<str:job_id>/",
+        LandslideModelExportView.as_view(),
+        name="landslide-model-export",
+    ),
+    path(
+        "api/landslide-model/export-report/<str:job_id>/",
+        LandslideModelReportExportView.as_view(),
+        name="landslide-model-export-report",
     ),
 ]

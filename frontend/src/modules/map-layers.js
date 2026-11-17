@@ -437,7 +437,16 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
-const mbx_lhasa2_latest     = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
+// Exported (not just a local const) so landslide-model-control.js can
+// toggle this SAME, already-resolved layer definition as an in-panel
+// cross-check (methodology doc §3.2: "show the Meteoblue LHASA2 tile
+// alongside the result... real value for an operator's own judgment,
+// just not yet a term in the matrix itself") without a second,
+// redundant call to generateMBX_MeteoblueLHASA2LatestLayer — that
+// function does a SYNCHRONOUS network request internally
+// (getLatestMeteoblueTimeSync) to resolve the latest available time;
+// calling it twice would mean two blocking XHRs for the same layer.
+export const mbx_lhasa2_latest = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
 const cams_aqi_hourly_layers = generateMeteoblueCAMSAirQualityHourlyLayers(metbluT);
 const cams_aqi_daily_layers = generateMeteoblueCAMSAirQualityDailyLayers(metbluT);
 const cams_desert_dust_hourly_layers = generateMeteoblueCAMSDesertDustHourlyLayers(metbluT);
