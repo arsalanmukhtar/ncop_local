@@ -17,6 +17,8 @@
 // Re-renders are keyed on (variable, run, day, filter, sort, search) so
 // slider drags and map pans never rebuild an unchanged table.
 
+import { exportGefsOutlook } from "./gefs-outlook-export.js";
+
 const API = `${window.location.origin}/api/gefs/districts/`;
 const LAYER_VARS = { gefs_precip_35d: "precip", gefs_t2m_35d: "t2m" };
 const MAX_WAIT_MS = 150000;
@@ -199,7 +201,7 @@ function renderTable(root, doc, d) {
       : `cells ${fmt(r.lo)}…${fmt(r.hi)} °C`;
     const bb = Array.isArray(r.bbox) ? r.bbox.join(",") : "";
     return `<tr class="wrp-gefs-row" data-fly-bbox="${esc(bb)}" tabindex="0" title="${esc(r.name)} — click to zoom to the district">
-      <td class="wrp-gefs-name"><span>${esc(r.name)}</span><small>${esc(r.province)}</small></td>
+      <td class="wrp-gefs-name"><span>${esc(r.name)}</span><small>${esc(r.province.replace(/_/g, " "))}</small></td>
       <td class="wrp-gefs-val"><span class="wrp-gefs-chip" style="background:${chip.bg};color:${chip.fg}" title="${esc(detail)}">${val}</span></td>
       <td class="wrp-gefs-trend">${sparkline(r.series, d, variable, scale, range)}</td>
       <td class="wrp-gefs-total">${extra}</td></tr>`;
@@ -216,10 +218,16 @@ function shell(doc) {
   const isP = doc.var === "precip";
   const opt = (v, l) => `<option value="${esc(v)}"${_ui.sort === v ? " selected" : ""}>${esc(l)}</option>`;
   return `<div class="wrp-gefs" data-gefs-var="${doc.var}" data-gefs-run="${esc(doc.run)}">
+    <div class="wrp-gefs-export" role="group" aria-label="Export the 35-day outlook">
+      <span class="wrp-gefs-export__label"><b>35-day outlook report</b> · rain + temperature · all districts</span>
+      <button type="button" data-gefs-export="word" title="Word document: key messages, weekly national / provincial / district tables, daily annexes">Word</button>
+      <button type="button" data-gefs-export="pdf" title="Printable report (save as PDF from the print dialog)">PDF</button>
+      <button type="button" data-gefs-export="csv" title="Every district x every day, both variables (spreadsheet)">CSV</button>
+    </div>
     <div class="wrp-gefs-summary"></div>
     <div class="wrp-gefs-daynote"></div>
     <div class="wrp-gefs-controls">
-      <select data-gefs-ui="province" aria-label="Province"><option value="">All provinces</option>${provinces.map((p) => `<option value="${esc(p)}"${_ui.province === p ? " selected" : ""}>${esc(p)}</option>`).join("")}</select>
+      <select data-gefs-ui="province" aria-label="Province"><option value="">All provinces</option>${provinces.map((p) => `<option value="${esc(p)}"${_ui.province === p ? " selected" : ""}>${esc(p.replace(/_/g, " "))}</option>`).join("")}</select>
       <select data-gefs-ui="sort" aria-label="Sort">${opt("day", isP ? "Wettest on this day" : "Warmest on this day")}${isP ? opt("week", "Wettest next 7 days") : ""}${opt("total", isP ? "Wettest over 35 days" : "Warmest over 35 days")}${opt("name", "A–Z")}</select>
       <input type="search" data-gefs-ui="q" placeholder="Find district…" value="${esc(_ui.q)}" aria-label="Find district">
       <span class="wrp-gefs-count"></span>
@@ -240,6 +248,26 @@ function wire(root, rerender) {
     _ui.q = e.target.value;
     clearTimeout(t);
     t = setTimeout(rerender, 120);
+  });
+  // Export buttons (detailed 35-day report, both variables).
+  root.addEventListener("click", async (e) => {
+    const btn = e.target.closest?.("[data-gefs-export]");
+    if (!btn || btn.disabled) return;
+    e.stopPropagation();
+    const all = root.querySelectorAll("[data-gefs-export]");
+    const label = btn.textContent;
+    all.forEach((b) => { b.disabled = true; });
+    btn.textContent = "Preparing…";
+    try {
+      await exportGefsOutlook(btn.dataset.gefsExport);
+    } catch (err) {
+      console.warn("[gefs-districts] export failed", err);
+      btn.textContent = "Failed";
+      await wait(2500);
+    } finally {
+      btn.textContent = label;
+      all.forEach((b) => { b.disabled = false; });
+    }
   });
   // Click on a sparkline day → move the slider (and don't fly the map).
   root.addEventListener("click", (e) => {
