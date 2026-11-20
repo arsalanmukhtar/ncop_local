@@ -9,6 +9,7 @@ import {
   getNwfcPressReleaseText,
 } from "./gcop-api-cache.js";
 import { pmdWarningsFilter } from "./pmd-warnings-filter.js";
+import { isGefsDistrictLayer, renderGefsDistrictReport } from "./gefs-district-report.js";
 
 // =========================================================================
 // District-level Weather Report
@@ -1029,6 +1030,28 @@ export class WeatherReportControl {
       : { layerKey: null, currentEntry: null, date: "", currentIndex: 0 };
 
     const layerKey = state.layerKey;
+
+    // NOAA GEFS 35-day outlook: values are pre-aggregated per district
+    // server-side, so this mode bypasses map sampling entirely (and the
+    // fingerprint below — pans don't change it). gefs-district-report.js
+    // keys its own re-renders on the slider day and filters.
+    if (isGefsDistrictLayer(layerKey)) {
+      this.#titleEl.textContent = "Weather Report";
+      this.#clearThreshold();
+      this.#setExportEnabled(false);
+      this.#lastReport = null;
+      this.#lastFingerprint = "";
+      renderGefsDistrictReport({
+        container: this.#contentEl,
+        footerEl: this.#footerEl,
+        subtitleEl: this.#subtitleEl,
+        state,
+        districtVisible: this.#anyLayerVisible(DISTRICT_LAYER_IDS),
+        rerender: () => this.#scheduleRender(),
+      });
+      return;
+    }
+
     const tempMeta = layerKey ? LAYER_KIND_MAP[layerKey] : null;
     const activeStations = this.#activeStationKeys();
     const fallbackStationKey = activeStations[0] || null;

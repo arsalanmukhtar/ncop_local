@@ -9,6 +9,7 @@ import {
 import { NWFC_WEATHER_ICON_URLS } from "./nwfc-weather-icons.js";
 import { hawanamaToggleItems, hawanamaTemporalItems, registerHawanamaTemporalLoaders } from "./hawanama-layers.js";
 import { iwmiToggleItems, iwmiTemporalItems, registerIwmiTemporalLoaders } from "./iwmi-flood-layers.js";
+import { gefsTemporalItems, registerGefsTemporalLoaders } from "./gefs-layers.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -539,6 +540,8 @@ window.pmd_pred_daytpe        = generatePmdPredictionsLoader("daytpe",        "p
 registerHawanamaTemporalLoaders();
 // IWMI flood forecasting (GloFAS forecast-day slider) — same lazy-builder convention.
 registerIwmiTemporalLoaders();
+// NOAA GEFS 35-day outlook (precipitation + 2 m temperature) — same lazy-builder convention.
+registerGefsTemporalLoaders();
 // State-quantity layers — temperature, cloud cover, humidity.  Same loader,
 // different registry entries on the backend (element_keys map to the vendor's
 // TEM / TCC / RHU codes across WRFPRS + GDFS models).
@@ -2281,6 +2284,13 @@ export const ncop_menu_items = {
           information:"The Temperature (2m Above Ground) layer displays the forecast daily maximum temperature at 2 meters above ground level. This layer is useful for tracking expected daytime heat patterns and temperature extremes.",
         },
       },
+    },
+    // NOAA GEFS v12 35-day outlook — daily precipitation and 2 m temperature
+    // frames rendered once per 00Z run by the backend (gefs_client.py).
+    "NOAA GEFS — 35-Day Outlook": {
+      temporal: Object.fromEntries(
+        Object.entries(gefsTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail) }])
+      ),
     },
     "Live Meteorological Operations": {
       toggle: {

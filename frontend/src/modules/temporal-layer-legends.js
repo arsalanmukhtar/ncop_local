@@ -20,6 +20,25 @@ function gradientLegendBar(colors, values) {
   return html;
 }
 
+// Stepped (class) legend: one solid block per class, labels at the class
+// boundaries. `colors` has one entry per class; `bounds[i]` is the boundary
+// between colors[i] and colors[i+1]. `labelEvery` thins crowded labels.
+function steppedLegendBar(colors, bounds, unit, labelEvery = 1) {
+  const n = colors.length;
+  const stops = colors.map((c, i) => `${c} ${((i / n) * 100).toFixed(3)}% ${(((i + 1) / n) * 100).toFixed(3)}%`);
+  let html = `<div class="ts-legend-stack">`;
+  html += `<div class="ts-legend-bar" style="background: linear-gradient(to right, ${stops.join(", ")});"></div>`;
+  html += `<div class="ts-legend-values">`;
+  bounds.forEach((b, i) => {
+    const last = i === bounds.length - 1;
+    if (i % labelEvery && !last) return;
+    const left = ((i + 1) / n) * 100;
+    html += `<span style="left: ${left}%; transform: translateX(${last && unit ? "-100%" : "-50%"});">${b}${last && unit ? ` ${unit}` : ""}</span>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
 export const legends = {
   dwd_satellite_infrared: gradientLegendBar(
     [
@@ -296,6 +315,19 @@ export const legends = {
   hawanama_pm25_estimate_stations: gradientLegendBar(
     ["#30123b", "#4662d7", "#36aaf9", "#1ae4b6", "#72fe5e", "#c8ef34", "#faba39", "#f66b19", "#ca2a04", "#7a0403"],
     ["20", "40", "60", "80", "100", "120", "140", "160", "180 µg/m³"]
+  ),
+  // NOAA GEFS 35-day outlook — same classes as gefs_client.COLORSCALES
+  // (precipitation below 0.5 mm/day is transparent, so the bar starts there).
+  gefs_precip_35d: steppedLegendBar(
+    ["#c6ecff", "#8ad4ff", "#46a6ff", "#1f66e0", "#16a34a", "#7bd84b", "#f1e40c", "#ffb000", "#ff7300", "#e6261f", "#a8002f", "#d22cc8", "#8a1fb0", "#ffd6ff"],
+    [1, 2, 3, 5, 7.5, 10, 15, 20, 30, 40, 50, 75, 100],
+    "" // unit is in the layer title (mm/day); keeps the last labels apart
+  ),
+  gefs_t2m_35d: steppedLegendBar(
+    ["#471083", "#421c9c", "#3d29b4", "#383ac6", "#334fd3", "#2e64e0", "#2b7ce8", "#2896ea", "#25b1ee", "#42cce0", "#5ee2c9", "#56d996", "#58d467", "#8ce150", "#bdea3c", "#e1e63b", "#ffde39", "#ffc231", "#fea62a", "#f9802a", "#f25c2a", "#e23b2a", "#ce1e2a", "#ac132a", "#880a29", "#610621"],
+    [-27, -24, -21, -18, -15, -12, -9, -6, -3, 0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45],
+    "°C",
+    3
   ),
   hawanama_pm25_forecast: gradientLegendBar(
     ["#30123b", "#4662d7", "#36aaf9", "#1ae4b6", "#72fe5e", "#c8ef34", "#faba39", "#f66b19", "#ca2a04", "#7a0403"],

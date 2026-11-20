@@ -6,6 +6,7 @@ from .iwmi_flood_views import (
     IwmiGlofasPointsView, IwmiGlofasPointDischargeView, IwmiGlofasForecastDaysView, IwmiFloodhubGaugesView,
     IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView, IwmiWatchView,
 )
+from .gefs_views import GefsFramesView, GefsPointView, GefsHealthView, GefsDistrictsView
 from .hawanama_views import (
     HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
     HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
@@ -82,6 +83,11 @@ urlpatterns = [
     path("api/iwmi/status/", IwmiStatusView.as_view(), name="iwmi-status"),
     path("api/iwmi/health/", IwmiHealthView.as_view(), name="iwmi-health"),
     path("api/iwmi/watch/", IwmiWatchView.as_view(), name="iwmi-watch"),
+    # NOAA GEFS 35-day outlook (gefs_views.py)
+    path("api/gefs/frames/", GefsFramesView.as_view(), name="gefs-frames"),
+    path("api/gefs/point/", GefsPointView.as_view(), name="gefs-point"),
+    path("api/gefs/health/", GefsHealthView.as_view(), name="gefs-health"),
+    path("api/gefs/districts/", GefsDistrictsView.as_view(), name="gefs-districts"),
     # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see
     # hawanama_views.py. CC BY 4.0, attribution carried in every response.
     path("api/hawanama/stations/", HawanamaStationsView.as_view(), name="hawanama-stations"),

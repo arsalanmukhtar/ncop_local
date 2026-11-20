@@ -34,6 +34,7 @@ import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
 import { installHawanamaEstimateClick } from "./hawanama-layers.js";
+import { installGefsClick } from "./gefs-layers.js";
 import { installIwmiStatusCard, installIwmiInundationNotice } from "./iwmi-flood-layers.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
@@ -289,6 +290,7 @@ class DashboardManager {
     // Click-for-value on the Hawanama daily PM2.5 estimate (raster frames
     // are not vector features, so the attribute popup cannot see them).
     installHawanamaEstimateClick(this.#map, window.mapboxgl);
+    installGefsClick(this.#map, window.mapboxgl);
 
     // Regional river-flood status card, shown while an IWMI flood layer is on.
     installIwmiStatusCard(this.#map);

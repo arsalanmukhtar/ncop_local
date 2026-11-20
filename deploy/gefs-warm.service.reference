@@ -1,0 +1,14 @@
+# /etc/systemd/system/gefs-warm.service
+# Builds the newest complete NOAA GEFS 35-day outlook run (see
+# project/ncop_internal/management/commands/warm_gefs.py). Adjust the venv path.
+[Unit]
+Description=NCOP NOAA GEFS 35-day outlook build
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py warm_gefs
+TimeoutStartSec=900
+Nice=10

@@ -171,6 +171,8 @@ HAWANAMA_BASE_URL = env("HAWANAMA_BASE_URL", default="https://hawanama.org")
 # IWMI ENSO Outlook flood forecasting (GloFAS reference points + Google
 # Flood Hub) — iwmi_flood_client.py. Countries are ISO3, comma-separated.
 IWMI_ENSO_API_BASE_URL = env("IWMI_ENSO_API_BASE_URL", default="https://enso.iwmi.org/ENSO_api/api/v1")
+# NOAA GEFS 35-day outlook (gefs_client.py): NOAA Open Data on Azure / Planetary Computer.
+GEFS_BLOB_BASE_URL = env("GEFS_BLOB_BASE_URL", default="https://noaagefs.blob.core.windows.net/gefs")
 IWMI_FLOOD_COUNTRIES = env.list(
     "IWMI_FLOOD_COUNTRIES",
     default=["PAK", "IND", "BGD", "LKA", "AFG", "MMR", "THA", "VNM", "KHM", "LAO", "IDN", "PHL", "MYS"],
@@ -282,6 +284,7 @@ REST_FRAMEWORK = {
         # IWMI flood-forecasting proxy (iwmi_flood_views.py) — cached JSON, same
         # per-client-abuse bound as the Hawanama JSON endpoints.
         "iwmi_flood_api": "120/min",
+        "gefs_api": "240/min",
     },
 }
 

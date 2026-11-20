@@ -2352,3 +2352,48 @@
 [data-theme="night"] .weather-report-panel .wrp-card.is-alert {
     background: rgba(255, 0, 0, 0.1);
 }
+
+/* ---------- NOAA GEFS 35-day outlook — district view (gefs-district-report.js) ---------- */
+.weather-report-panel .wrp-gefs { display: flex; flex-direction: column; gap: 8px; }
+.weather-report-panel .wrp-gefs-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.weather-report-panel .wrp-gefs-card__label { font-size: 11px; color: var(--text-secondary); line-height: 1.25; }
+.weather-report-panel .wrp-gefs-card__value { font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.weather-report-panel .wrp-gefs-card__value small { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+.weather-report-panel .wrp-gefs-card__sub { font-size: 11.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-report-panel .wrp-gefs-daynote { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.weather-report-panel .wrp-gefs-daynote b { color: var(--text-primary); }
+.weather-report-panel .wrp-gefs-ext { color: #f59e0b; }
+.weather-report-panel .wrp-gefs-hint { margin-top: 3px; font-size: 11.5px; }
+.weather-report-panel .wrp-gefs-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.weather-report-panel .wrp-gefs-controls select,
+.weather-report-panel .wrp-gefs-controls input {
+    font: inherit; font-size: 12px; padding: 4px 6px; min-width: 0; flex: 1 1 110px;
+    background: var(--overlay-bg); color: var(--text-primary);
+    border: 1px solid var(--border-dark); border-radius: 6px;
+}
+.weather-report-panel .wrp-gefs-count { font-size: 11px; color: var(--text-secondary); flex: 1 0 100%; }
+.weather-report-panel .wrp-gefs-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.weather-report-panel .wrp-gefs-table th {
+    position: sticky; top: 0; z-index: 1; text-align: left; font-weight: 600; font-size: 11px;
+    color: var(--text-secondary); background: var(--secondary-bg); padding: 4px 4px; border-bottom: 1px solid var(--border-dark);
+}
+.weather-report-panel .wrp-gefs-table th small { font-weight: 400; }
+.weather-report-panel .wrp-gefs-table th:nth-child(1) { width: 34%; }
+.weather-report-panel .wrp-gefs-table th:nth-child(2) { width: 17%; }
+.weather-report-panel .wrp-gefs-table th:nth-child(4) { width: 19%; text-align: right; }
+.weather-report-panel .wrp-gefs-row { cursor: pointer; border-bottom: 1px solid var(--border-dark); }
+.weather-report-panel .wrp-gefs-row:hover,
+.weather-report-panel .wrp-gefs-row:focus-visible { background: var(--overlay-bg); outline: none; }
+.weather-report-panel .wrp-gefs-row td { padding: 4px 4px; vertical-align: middle; color: var(--text-primary); }
+.weather-report-panel .wrp-gefs-name span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.weather-report-panel .wrp-gefs-name small { display: block; font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-report-panel .wrp-gefs-chip {
+    display: inline-block; min-width: 40px; text-align: center; padding: 2px 5px; border-radius: 4px;
+    font-weight: 700; font-variant-numeric: tabular-nums; border: 1px solid var(--border-dark);
+}
+.weather-report-panel .wrp-gefs-trend { color: var(--text-secondary); }
+.weather-report-panel .wrp-gefs-spark { display: block; width: 100%; height: 26px; cursor: crosshair; }
+.weather-report-panel .wrp-gefs-spark__cur { fill: currentColor; opacity: 0.22; }
+.weather-report-panel .wrp-gefs-total { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.weather-report-panel .wrp-gefs-total small { color: var(--text-secondary); }
+.weather-report-panel .wrp-gefs-method { margin: 0; font-size: 11px; line-height: 1.4; color: var(--text-secondary); }

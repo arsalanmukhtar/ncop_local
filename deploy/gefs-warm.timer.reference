@@ -1,0 +1,14 @@
+# /etc/systemd/system/gefs-warm.timer
+# Every 3 h: a new 00Z run is built within hours of its day-35 extension
+# being uploaded; runs already built are skipped in one listing request.
+#   sudo systemctl daemon-reload && sudo systemctl enable --now gefs-warm.timer
+[Unit]
+Description=Build the NCOP NOAA GEFS outlook every 3 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=3h
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

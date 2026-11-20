@@ -571,6 +571,19 @@ function cleanupSliderLayers() {
   _lastStepIndex = null;
 }
 
+// Opacity a frame is shown at. A layer may opt into its own value via
+// Mapbox layer metadata {"ncop:opacity": 0.9} (e.g. the GEFS outlook frames,
+// which are banded and need to read strongly); every other layer keeps the
+// long-standing 0.75. The user's opacity control still scales it.
+const _shownOpacityCache = new Map();
+function _shownOpacity(map, id) {
+  if (_shownOpacityCache.has(id)) return _shownOpacityCache.get(id);
+  const v = Number(map.getLayer(id)?.metadata?.["ncop:opacity"]);
+  const out = Number.isFinite(v) && v > 0 && v <= 1 ? v : 0.75;
+  _shownOpacityCache.set(id, out);
+  return out;
+}
+
 // Optimized show: only flip previous vs current
 function showTimeStepLayers(stepIndex) {
   const map = getMap();
@@ -584,7 +597,7 @@ function showTimeStepLayers(stepIndex) {
   }
   if (sliderLayers[stepIndex]) {
     sliderLayers[stepIndex].forEach((id) => {
-      if (map.getLayer(id)) setLayerOpacity(id, 0.75);
+      if (map.getLayer(id)) setLayerOpacity(id, _shownOpacity(map, id));
     });
   }
   _lastStepIndex = stepIndex;
