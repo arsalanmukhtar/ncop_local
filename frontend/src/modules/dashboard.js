@@ -63,6 +63,19 @@ import "./story-provincial-forecast.js";
 // DOMContentLoaded; does nothing until picked from the dropdown.
 import "./story-dynamic-weather.js";
 
+// Side-effect import: adds "National Air Quality Watch" to #storySelect
+// (Hawanama PM2.5 estimate/stations for the past week, then the 72-hour
+// forecast with WAQI stations). Must stay AFTER the Dynamic Weather import:
+// its capture-phase select listener has to run last (see that file).
+import "./story-air-quality-watch.js";
+
+// Side-effect import: adds "National Flood Watch" to #storySelect (FFD
+// barrage/dam tour moved out of the Dynamic Weather Report, GloFAS 15-day
+// outlook, Google Flood Hub gauges + inundation, research context). Kept
+// LAST among the story imports so its capture-phase select listener runs
+// after the others' (see that file's _hide()).
+import "./story-flood-watch.js";
+
 
 // ---- Mapbox token handling ----
 // The entry (dashboard_main.js) already set mapboxgl.accessToken when possible.

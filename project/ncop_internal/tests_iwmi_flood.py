@@ -169,3 +169,98 @@ class ViewTests(_Base):
     def test_bad_gauge_id_gives_400(self):
         res = self._get(iv.IwmiFloodhubGaugeDischargeView, gauge_id="a b")
         self.assertEqual(res.status_code, 400)
+
+
+class FloodWatchDigestTests(SimpleTestCase):
+    """National Flood Watch story digest (iwmi_flood_client.flood_watch)."""
+
+    def setUp(self):
+        ic._watch_memo.clear()
+        self.addCleanup(ic._watch_memo.clear)
+
+    def _fc(self, feats, **meta):
+        return {"type": "FeatureCollection", "features": feats, "metadata": meta}
+
+    def _patches(self, **over):
+        pts = self._fc([
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [71.0, 31.0]},
+             "properties": {"id": 1, "iso3": "PAK", "river": "Indus", "site_name": "a", "status": "warning",
+                            "peak_prob": 0.4, "peak_lead": 3, "quality": "ok", "warning": 1000.0, "danger": 2000.0, "extreme": 3000.0}},
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [72.0, 32.0]},
+             "properties": {"id": 2, "iso3": "PAK", "river": "Chenab", "site_name": "b", "status": "normal",
+                            "peak_prob": 0.0, "peak_lead": 1, "quality": "unreliable", "warning": 500.0, "danger": None, "extreme": None}},
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [80.0, 20.0]},
+             "properties": {"id": 3, "iso3": "IND", "river": None, "site_name": "c", "status": "danger",
+                            "peak_prob": 0.9, "peak_lead": 2, "quality": "ok", "warning": 10.0, "danger": 20.0, "extreme": 30.0}},
+        ])
+        days = self._fc([
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [71.0, 31.0]},
+             "properties": {"id": 1, "s_1": "normal", "q_1": 400.0, "s_2": "warning", "q_2": 1200.0}},
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [72.0, 32.0]},
+             "properties": {"id": 2, "s_1": "normal", "q_1": 1.0, "s_2": "normal", "q_2": 2.0}},
+        ], leads=[1, 2], lead_dates={"1": "2026-11-17", "2": "2026-11-18"}, forecast_date="2026-11-16",
+            run_age_days=4, run_stale=True, missing=0)
+        gauges = self._fc([
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [71.5, 33.0]},
+             "properties": {"gauge_id": "g1", "iso3": "PAK", "river": "Indus", "severity": "NO_FLOODING", "trend": "NO_CHANGE",
+                            "quality_verified": True, "warning": 6000.0, "danger": 7000.0, "extreme": 9000.0}},
+            {"type": "Feature", "geometry": {"type": "Point", "coordinates": [72.5, 33.5]},
+             "properties": {"gauge_id": "g2", "iso3": "PAK", "river": "Kabul", "severity": "SEVERE", "trend": "RISE",
+                            "quality_verified": True, "warning": 600.0, "danger": 700.0, "extreme": 900.0}},
+        ], issued_time="2026-11-20T03:53:19Z")
+        inund = self._fc([{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[70, 25], [71, 25], [71, 26], [70, 25]]]},
+                           "properties": {"iso3": "PAK"}}], note="n")
+        region = {"countries": {"PAK": {"glofas": {"alerts": 1}}, "IND": {"glofas": {"alerts": 1}}, "LKA": {}},
+                  "totals": {"glofas_points": 3}, "top_alerts": []}
+        cfg = {"glofas_points_geojson": pts, "glofas_forecast_days_geojson": days, "floodhub_gauges_geojson": gauges,
+               "floodhub_inundation_geojson": inund, "regional_status": region, **over}
+        return [mock.patch.object(ic, k, side_effect=v) if isinstance(v, Exception) else mock.patch.object(ic, k, return_value=v)
+                for k, v in cfg.items()]
+
+    def _run(self, **over):
+        ps = self._patches(**over)
+        for p in ps:
+            p.start()
+        try:
+            return ic.flood_watch("PAK")
+        finally:
+            for p in ps:
+                p.stop()
+
+    def test_digest_filters_country_and_computes_headroom(self):
+        d = self._run()
+        self.assertEqual(d["errors"], {})
+        g = d["glofas"]
+        self.assertEqual([p["id"] for p in g["points"]], [1, 2])          # IND point excluded; unreliable last
+        p1 = g["points"][0]
+        self.assertEqual((p1["max_q"], p1["max_lead"], p1["headroom_ratio"]), (1200.0, 2, 1.2))
+        self.assertEqual(g["counts"], {"normal": 0, "warning": 1, "danger": 0, "extreme": 0})  # reliable only
+        self.assertEqual(g["unreliable"], 1)
+        self.assertEqual(g["day_counts"][1]["warning"], 1)
+        self.assertTrue(g["run_stale"])
+        h = d["floodhub"]
+        self.assertEqual(h["gauges"][0]["id"], "g2")                       # severe + rising first
+        self.assertEqual(h["counts"]["SEVERE"], 1)
+        self.assertEqual(h["trends"], {"NO_CHANGE": 1, "RISE": 1})
+        self.assertEqual(d["inundation"]["count"], 1)
+        self.assertEqual(d["inundation"]["bbox"], [70, 25, 71, 26])
+        self.assertEqual(d["region"]["countries_alerting"], ["IND", "PAK"])
+
+    def test_parts_degrade_independently(self):
+        d = self._run(floodhub_gauges_geojson=Unavailable("down"), regional_status=RuntimeError("shape"))
+        self.assertIsNone(d["floodhub"])
+        self.assertIsNone(d["region"])
+        self.assertIsNotNone(d["glofas"])
+        self.assertEqual(set(d["errors"]), {"floodhub", "region"})
+        ic._watch_memo.clear()
+        with self.assertRaises(Unavailable):
+            self._run(glofas_forecast_days_geojson=Unavailable("x"), floodhub_gauges_geojson=Unavailable("x"),
+                      floodhub_inundation_geojson=Unavailable("x"))
+
+    def test_iso3_validated_and_view_wired(self):
+        with self.assertRaises(ValueError):
+            ic.flood_watch("pk1")
+        req = RequestFactory().get("/api/iwmi/watch/?iso3=bad!")
+        with mock.patch.object(iv.IwmiWatchView, "check_throttles"):
+            res = iv.IwmiWatchView.as_view()(req)
+        self.assertEqual(res.status_code, 400)

@@ -18,12 +18,14 @@
 #   GET /api/hawanama/fires/outlook/                smoke-source outlook (GeoJSON)
 #   GET /api/hawanama/fires/season/?region=         rice-season fire statistics
 #   GET /api/hawanama/health/                       upstream + cache freshness
+#   GET /api/hawanama/watch/?days=7                 National Air Quality Watch story digest
 # ---------------------------------------------------------------------------
 
 import logging
 
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
+from rest_framework.exceptions import Throttled
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
@@ -108,6 +110,16 @@ class HawanamaTileView(APIView):
     permission_classes = []
     throttle_classes = [HawanamaTileThrottle]
 
+    def handle_exception(self, exc):
+        # Rate-limited: answer with an uncached transparent tile instead of
+        # a 429, so the map shows a brief gap (re-requested on the next
+        # pan/zoom) rather than a burst of tile-load errors.
+        if isinstance(exc, Throttled):
+            resp = HttpResponse(hc.empty_tile_png(), content_type="image/png")
+            resp["Cache-Control"] = "no-store"
+            return resp
+        return super().handle_exception(exc)
+
     def get(self, request, date, z, x, y):
         try:
             png, immutable = hc.tile_png(date, int(z), int(x), int(y))
@@ -173,3 +185,10 @@ class HawanamaHealthView(_HawanamaView):
 
     def get(self, request):
         return self.handle_data(hc.health)
+
+
+class HawanamaWatchView(_HawanamaView):
+    max_age = 300
+
+    def get(self, request):
+        return self.handle_data(hc.air_quality_watch, request.GET.get("days", "7"))

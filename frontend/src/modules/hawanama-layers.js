@@ -14,6 +14,7 @@ import { HAWANAMA_ATTRIBUTION } from "./hawanama-popups.js";
 const API = `${window.location.origin}/api/hawanama`;
 const ESTIMATE_DAYS_DEFAULT = 30;
 const LABEL_TARGET = 8;
+const ESTIMATE_TILE_MAX_ZOOM = 9;
 
 // US EPA PM2.5 breakpoints (2024) → colours, for PM2.5-only point layers.
 const PM25_COLOR = [
@@ -75,7 +76,11 @@ function buildEstimateFrame(date, index, n, dateMeta, showLabel, withStations) {
     tiles: [`${API}/tiles/${date}/{z}/{x}/{y}.png`],
     tileSize: 256,
     minzoom: dateMeta.minzoom ?? 0,
-    maxzoom: dateMeta.maxzoom ?? 12,
+    // Capped at z9: the estimate is a ~1 km grid and a z9 pixel is already
+    // ~260 m over Pakistan, so Mapbox over-zooms z9 tiles beyond that
+    // instead of requesting z10-12 for every slider frame (which flooded
+    // the tile endpoint with requests and errors on deep zoom).
+    maxzoom: Math.min(dateMeta.maxzoom ?? 12, ESTIMATE_TILE_MAX_ZOOM),
     bounds: dateMeta.bounds,
     attribution: HAWANAMA_ATTRIBUTION,
   };
@@ -359,6 +364,9 @@ export const hawanamaTemporalItems = {
 export function registerHawanamaTemporalLoaders() {
   window.hawanama_pm25_estimate = generateHawanamaEstimateLoader();
   window.hawanama_pm25_estimate_stations = generateHawanamaEstimateLoader({ withStations: true });
+  // Same daily estimate, newest 7 days only — used by the National Air
+  // Quality Watch story so it loads 7 frames instead of 30.
+  window.hawanama_pm25_estimate_week = generateHawanamaEstimateLoader({ days: 7 });
   window.hawanama_pm25_forecast = generateHawanamaForecastLoader();
   window.hawanama_pm25_nowcast = generateHawanamaNowcastLoader();
 }

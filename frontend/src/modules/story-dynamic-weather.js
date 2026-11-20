@@ -68,10 +68,9 @@
 //      a code change).
 // ==========================================================================
 
-import { getNwfcObservations, getNwfcMaxTemperatures, getFfdWaterlevels, getFfdRivers, getFfdHistoryAll } from "./gcop-api-cache.js";
+import { getNwfcObservations, getNwfcMaxTemperatures } from "./gcop-api-cache.js";
 import { handleTemporalInteraction } from "./mapbox-functions.js";
-import { showHeatwaveModalForCity, hideHeatwaveModal, buildFfdPopupContent, setupFfdPopupEventHandlers } from "./layer-attribute-popup.js";
-import { showFfdModalForStation, hideFfdModal } from "./ffd-stats-modal.js";
+import { showHeatwaveModalForCity, hideHeatwaveModal } from "./layer-attribute-popup.js";
 import {
   wait,
   cinematicFlyTo,
@@ -82,7 +81,6 @@ import {
   disableCinematicAtmosphere,
   pulseElement,
   orbitAroundPoint,
-  flyAlongPath,
   enableRainEffect,
   disableRainEffect,
 } from "./story-cinematic-engine.js";
@@ -114,18 +112,14 @@ const TEMP_ITEM_KEY = "pmd_pred_temp2m";
 // alongside/on top of the temperature raster during the station tour.
 const HEATWAVE_ITEM_KEY = "heatwave_monitoring";
 
-// CHAPTER 3 — Forecasted Precipitation Outlook. Two independent halves:
-// (a) Meteoblue's own weekly precipitation layer (the REAL layer, shown
-// visually via the normal single-active-temporal mechanism this time —
-// see METEOBLUE_WEEKLY_ITEM_KEY), turned off again once the FFD tour
-// begins; its district-level mm figures come from the cached step-sample
-// pass (_sampleMeteoblueAllSteps/_fetchPrecipSamples), independent of
-// whatever the visual layer happens to be showing at any moment — and
-// (b) a north-to-south cinematic tour of FFD barrages/dams (TOGGLE item,
-// same activation pattern as HEATWAVE_ITEM_KEY) using their live inflow/
-// outflow readings plus a best-effort discharge history (see
-// _fetchFfdHistory).
-const FFD_ITEM_KEY = "ffd_data";
+// CHAPTER 3 — Forecasted Precipitation Outlook: Meteoblue's own weekly
+// precipitation layer (the REAL layer, shown visually via the normal
+// single-active-temporal mechanism — see METEOBLUE_WEEKLY_ITEM_KEY); its
+// district-level mm figures come from the cached step-sample pass
+// (_sampleMeteoblueAllSteps/_fetchPrecipSamples), independent of whatever
+// the visual layer happens to be showing at any moment. (The FFD
+// barrage/dam tour that used to follow it now lives in its own story,
+// "National Flood Watch" — story-flood-watch.js.)
 // Below this, a district's forecast reads as a trace amount, not worth a
 // dedicated camera flyover — see _buildChapter3Scenes.
 const PRECIP_DISTRICT_ZOOM_THRESHOLD_MM = 5;
@@ -162,7 +156,7 @@ const _state = {
                          // camera work from running concurrently.
   scenes:      [],
   index:       0,
-  baseDataLoadedOnce: false, // true once _loadAndPlay's upfront Promise.all (report/observations/news/heatwave/maxTemp/ffdStations/ffdRivers) has resolved at least once THIS SESSION — later _show() calls (re-selecting the story, or it auto-restarting) reuse the already-cached _state.report/etc. below instead of re-fetching everything; only the new Refresh button (_handleRefreshClick) resets this to force a real re-fetch
+  baseDataLoadedOnce: false, // true once _loadAndPlay's upfront Promise.all (report/observations/news/heatwave/maxTemp) has resolved at least once THIS SESSION — later _show() calls (re-selecting the story, or it auto-restarting) reuse the already-cached _state.report/etc. below instead of re-fetching everything; only the new Refresh button (_handleRefreshClick) resets this to force a real re-fetch
   report:      null,     // parsed rainfall report ({ total_mm, provinces, ... })
   observations: null,    // live NWFC FeatureCollection
   newsArticles: [],       // recent GDELT articles for the opening scene's context section
@@ -173,8 +167,6 @@ const _state = {
   heatwaveStations: null, // Heatwave Monitoring FeatureCollection — chapter 2's primary station source
   maxTempRecords: [],     // historical on-record max temperatures, best-effort (see _fetchMaxTempRecords)
   hottestStations: [],   // top temperature stations (>=5, all provinces) chapter 2 is covering
-  ffdStations: null,       // live FFD waterlevels FeatureCollection — chapter 3's barrage-tour source
-  ffdRivers: null,         // FFD catchment-polygon FeatureCollection (NOT river channels — see _curvedStationPath) — kept only for the on-map visual layer, never used for camera pathing
   meteoblueWeekly: null,   // Map<districtName, {name,province,coords,mm,unit,date,series}> — weekly (daily-sum) Meteoblue samples, ALL 8 steps queried once and cached; series[0] ("today") is the 24h total used as the primary precip value
   meteoblueHourly: null,   // Map<districtName, {name,province,coords,series}> — hourly Meteoblue samples, ALL ~11 steps queried once and cached; supporting/peak-hour context only, never the headline number
   meteoblueSampledOnce: false, // true once _sampleMeteoblueAllSteps has run for this story session — never re-samples (never re-hits Meteoblue's tiles) on repeat Chapter 3 entries, per "preserve calls for meteoblue" constraint
@@ -183,18 +175,12 @@ const _state = {
   meteoblueTempSampledOnce: false, // true once _sampleMeteoblueTemperatureAllSteps has run for this story session — same "never re-hit Meteoblue's tiles twice" rule as meteoblueSampledOnce
   weeklyTempSamples: [],   // districts with the highest sampled 8-day temperature outlook (see _buildTempWeeklySamples)
   chapter2WeeklyScenesBuilt: false, // guards the temp-weekly scene splice from running again if the operator navigates back to ch2-intro a second time
-  ffdHistoryAll: null,       // raw getFfdHistoryAll() payload — {days, stations:{NAME:{inflow:[],outflow:[]}}} for all ~31 FFD stations, 30-day 4-6h series
-  ffdHistoryAllFetchedOnce: false, // true once _runFfdIntro has KICKED OFF the fetch for this story session — never re-fetches the ~700KB payload on repeat FFD-tour entries
-  ffdHistoryAllPromise: null, // the in-flight (or resolved) fetch itself, so _showFfdBarragePopup can await readiness instead of polling
   districtBoundaryCandidates: [], // {name,province,coords}[] for every district polygon in view — see _districtBoundaryCandidates; computed once (whichever of Chapter 2/3 reaches it first) and shared by both
   districtBoundaryCandidatesComputed: false, // guards the one-time district_boundary query above from re-running on repeat ch2-intro/ch3-intro entries
   topPrecipDistricts: [], // districts with the highest sampled 24h-precip forecast (see _fetchPrecipSamples)
-  ffdWaypoints: [],        // FFD barrages/dams sorted north-to-south, chapter 3's camera-path tour
   activeLayerKey: RADAR_ITEM_KEY, // whichever temporal item was last successfully activated
   blinkTimer:  null,     // district-boundary blink interval
   blinkPhase:  false,
-  ffdBlinkTimer: null,   // FFD station-point blink interval — separate handle from the district one, see _startFfdBlink
-  ffdBlinkPhase: false,
   speed:       1,        // playback speed multiplier — 1..5, set via fast-forward/rewind
   direction:   1,        // +1 forward, -1 reverse — which way auto-advance steps
   pendingMinDwellMs: 0,  // set by a layer scene once it knows its own frame count,
@@ -1028,42 +1014,6 @@ function _injectStyles() {
       font-size: 14px;
     }
     #${POPUP_ID} .dwrp-pdf-open:hover { color: #fff; }
-    #${POPUP_ID} .dwrp-routing-map-img {
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      margin-bottom: 8px;
-    }
-
-    /* FFD "30-Day History & 14-Day Outlook" — chart/stats/legend for
-       ffd-history-forecast.js's rendered output. Colors match that
-       module's _CHART_COLORS (dark-mode data-viz categorical slots
-       1/2/3 — blue/orange/aqua), kept as literal hex here so the two
-       stay in lockstep without importing CSS across module boundaries. */
-    #${POPUP_ID} .dwr-ffd-stats-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    #${POPUP_ID} .dwr-ffd-stat-pill {
-      font-size: 10px; font-weight: 600;
-      padding: 3px 8px; border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: rgba(234, 234, 234, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-    }
-    #${POPUP_ID} .dwr-ffd-stat-pill--rising  { color: #fdba74; border-color: rgba(217, 89, 38, 0.45); background: rgba(217, 89, 38, 0.14); }
-    #${POPUP_ID} .dwr-ffd-stat-pill--falling { color: #7fdfec; border-color: rgba(25, 158, 112, 0.45); background: rgba(25, 158, 112, 0.14); }
-    #${POPUP_ID} .dwr-ffd-chart-svg { width: 100%; height: auto; display: block; margin: 4px 0 2px; }
-    #${POPUP_ID} .dwr-ffd-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 2px 0 8px; }
-    #${POPUP_ID} .dwr-ffd-legend-item {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 9.5px; color: rgba(234, 234, 234, 0.65);
-    }
-    #${POPUP_ID} .dwr-ffd-legend-swatch {
-      width: 12px; height: 0; display: inline-block;
-      border-top: 2px solid currentColor;
-    }
-    #${POPUP_ID} .dwr-ffd-legend-swatch--dashed { border-top-style: dashed; }
-
     /* Station-marker pulse — targets whatever mapboxgl.Marker element(s)
        are currently in the map container when the class is toggled.
        nwfc-html-markers.js owns marker creation; this only reaches in via
@@ -1216,8 +1166,8 @@ function _bindCardEvents(card) {
     // cache-miss no-op). A currently open map popup keeps its already-
     // rendered text until the NEXT scene navigation — popups are rebuilt
     // fresh on every scene entry by the _run*() functions, and some of
-    // those (e.g. _showFfdBarragePopup) carry real side effects (auto-
-    // opening the FFD stats modal, kicking off fetches), so they're
+    // those (e.g. _showTempStationPopup) carry real side effects (auto-
+    // opening the heatwave stats modal), so they're
     // deliberately not re-invoked here just to swap displayed text.
     _reapplyCurrentSceneLanguage(card);
     if (next === "ur") {
@@ -1308,34 +1258,6 @@ function _extractMaxTempRows(raw) {
     rows.push({ name: String(name), temp, date: date != null ? String(date) : null });
   }
   return rows.sort((a, b) => b.temp - a.temp);
-}
-
-// Chapter 3's FFD tour source — live inflow/outflow per barrage/dam
-// (same GCOP-backed feed the ffd_data map layer itself uses). Best-
-// effort: returns null on any failure, never throws.
-async function _fetchFfdStations() {
-  try {
-    const fc = await getFfdWaterlevels();
-    return fc && Array.isArray(fc.features) ? fc : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-// Bulk 30-day discharge history for every FFD station (see getFfdHistoryAll
-// — a different host than the rest of the FFD/GCOP feeds, ~700KB). Feeds
-// the barrage popup's "30-Day History & 14-Day Outlook" chart/stats/
-// description (see ffd-history-forecast.js). Best-effort: resolves null on
-// any failure, same as every other FFD/precip fetch in this file — a
-// missing history payload just means that section of the popup shows "not
-// available", never breaks playback.
-async function _fetchFfdHistoryAll() {
-  try {
-    const data = await getFfdHistoryAll(30);
-    return data && typeof data.stations === "object" ? data : null;
-  } catch (_) {
-    return null;
-  }
 }
 
 // Meteoblue's weekly/hourly precipitation layers are published as plain,
@@ -1736,130 +1658,6 @@ async function _fetchPrecipSamples(report, liveFeatures, candidatesOverride) {
     };
   });
   return results.filter(Boolean).sort((a, b) => b.mm - a.mm);
-}
-
-// FFD stations ordered by REAL hydrological connectivity, not geometry.
-// /get-ffd-rivers/ was curled and inspected directly — it returns 27
-// catchment/basin POLYGONS (one per station, colored by status, up to
-// ~2.3° across), not river-channel LineStrings, so there is no line to
-// trace a tour along. /get-ffd-waterlevels/, however, publishes exactly
-// the connectivity a tour actually needs: each station's `from` (its
-// upstream source station name(s)) and `area_name` (river system). This
-// is a multi-source topological walk over that `from` graph — a station
-// only becomes eligible once every upstream source still in the dataset
-// has already been placed, so confluences (e.g. Guddu, fed by both
-// Taunsa and Panjnad) are visited only after both of their sources, and
-// a real chain like Besham → Tarbela Dam → Chashma → Taunsa → Guddu
-// falls out in that exact order because each one's `from` names the
-// last. Station names in `from` are matched whitespace/case-insensitive
-// (_normStationName) — the raw feed itself is inconsistent about this
-// ("Besham " vs "Besham", "Kalabagh" vs "Kala Bagh"), which would
-// otherwise silently break the graph. Stations that become eligible in
-// the same pass are grouped by river system then north-to-south, so a
-// tributary's own stations stay together instead of interleaving with an
-// unrelated river; any station with missing/unresolvable upstream data
-// just falls back into that same north-to-south ordering rather than
-// blocking the walk.
-function _normStationName(s) {
-  return String(s || "").toLowerCase().replace(/\s+/g, "");
-}
-function _buildFfdWaypoints(ffdFC) {
-  const feats = (ffdFC?.features || []).filter((f) => f?.geometry?.coordinates);
-  const byName = new Map();
-  for (const f of feats) {
-    const name = f.properties?.name || "Station";
-    byName.set(name, {
-      name,
-      province: f.properties?.province || "",
-      area: (f.properties?.area_name && f.properties.area_name !== "N/A") ? f.properties.area_name : "",
-      center: f.geometry.coordinates,
-      properties: f.properties || {},
-      from: Array.isArray(f.properties?.from) ? f.properties.from.map(_normStationName) : [],
-    });
-  }
-
-  const remaining = new Map(byName);
-  const remainingNorm = new Set([...byName.keys()].map(_normStationName));
-  const ordered = [];
-  const maxPasses = remaining.size + 1;
-  for (let pass = 0; pass < maxPasses && remaining.size; pass++) {
-    let ready = [...remaining.values()].filter((wp) => wp.from.every((up) => !remainingNorm.has(up)));
-    if (!ready.length) ready = [...remaining.values()]; // cycle/unresolved refs — flush rather than loop forever
-    ready.sort((a, b) => (a.area || "").localeCompare(b.area || "") || b.center[1] - a.center[1]);
-    for (const wp of ready) {
-      ordered.push(wp);
-      remaining.delete(wp.name);
-      remainingNorm.delete(_normStationName(wp.name));
-    }
-  }
-  return ordered;
-}
-
-// /get-ffd-rivers/ has no channel geometry to follow (see above), so the
-// travel leg between two consecutive barrages is a gently bowed arc
-// rather than a ruler-straight line — it reads as a followed corridor
-// instead of a straight teleport, without pretending to trace a real
-// river course the data doesn't provide. The bow is a gentle perpendicular
-// offset scaled to the leg's own length (short hops bow only slightly,
-// long hops are capped so it never looks like a detour) — one consistent
-// side rather than alternating, since there's no data to know which way
-// any given reach actually bends. Densely sampled (`samples` points) so
-// flyAlongPath's distance-paced camera turns gradually along the curve
-// instead of pivoting hard at just two endpoints.
-function _curvedStationPath(from, to, samples = 24, bowFrac = 0.12) {
-  const [lng1, lat1] = from;
-  const [lng2, lat2] = to;
-  const dx = lng2 - lng1;
-  const dy = lat2 - lat1;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 1e-6) return [from, to];
-  const px = -dy / dist;
-  const py = dx / dist;
-  const bow = Math.min(dist * bowFrac, 0.6); // capped in degrees (~65km at this latitude)
-  const midLng = (lng1 + lng2) / 2 + px * bow;
-  const midLat = (lat1 + lat2) / 2 + py * bow;
-  const pts = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    const omt = 1 - t;
-    pts.push([
-      omt * omt * lng1 + 2 * omt * t * midLng + t * t * lng2,
-      omt * omt * lat1 + 2 * omt * t * midLat + t * t * lat2,
-    ]);
-  }
-  return pts;
-}
-
-// Cheap path length in degrees — used only to scale flyAlongPath's
-// duration so a longer leg covers its (longer) real distance at roughly
-// the same visual pace as a shorter one, not faster.
-function _pathLengthDeg(coords) {
-  let total = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const dx = coords[i + 1][0] - coords[i][0];
-    const dy = coords[i + 1][1] - coords[i][1];
-    total += Math.sqrt(dx * dx + dy * dy);
-  }
-  return total;
-}
-
-// Nearest sampled precip district to a barrage — simple planar distance
-// (fine at this scale, same approximation _featureCenter-style helpers
-// elsewhere in the app already use), for the "would forecast
-// precipitation affect this barrage's inflow" cross-reference. Returns
-// null if there are no precip samples at all or none within a loose
-// catchment radius (~2.5° ≈ 275 km — generous, since a barrage's real
-// catchment can span a wide upstream area, not just its own pin).
-function _nearestPrecipSample(waypoint, precipSamples) {
-  if (!precipSamples?.length) return null;
-  let best = null, bestD = Infinity;
-  for (const p of precipSamples) {
-    const dx = p.coords[0] - waypoint.center[0];
-    const dy = p.coords[1] - waypoint.center[1];
-    const d = Math.sqrt(dx * dx + dy * dy);
-    if (d < bestD) { bestD = d; best = p; }
-  }
-  return bestD <= 2.5 ? best : null;
 }
 
 function _normName(name) {
@@ -2284,10 +2082,10 @@ function _assessmentNarrative(report) {
 
 // ---- CHAPTER 3 narrative generation — Forecasted Precipitation Outlook.
 // Every figure here comes from a real sampled value (PmdMonitorPrediction-
-// ValueAPIView) or a live FFD reading — same "never invent a number"
+// ValueAPIView) — same "never invent a number"
 // discipline as Chapters 1 and 2. ----------------------------------------
 function _chapter3IntroNarrative() {
-  return "Chapter 3: the Forecasted Precipitation Outlook, drawing district-level 24-hour precipitation values from Meteoblue's forecast layers, followed by a north-to-south tour of the FFD's monitored barrages and dams and how the outlook may affect their inflows.";
+  return "Chapter 3: the Forecasted Precipitation Outlook, drawing district-level 24-hour precipitation values from Meteoblue's forecast layers.";
 }
 
 function _joinPrecipList(list) {
@@ -2373,149 +2171,9 @@ function _precipAssessmentNarrative(precipSamples) {
     : "no significant forecast precipitation signal is present in currently sampled districts.");
   const heavy = precipSamples.find((d) => d.mm >= 25);
   bits.push(heavy
-    ? `${heavy.name} crosses PMD's heavy-rainfall threshold — the FFD barrage tour that follows checks whether this outlook reaches any monitored catchment.`
+    ? `${heavy.name} crosses PMD's heavy-rainfall threshold — low-lying areas and downstream river levels warrant monitoring (see the National Flood Watch briefing for river status).`
     : "No sampled district currently crosses the heavy-rainfall threshold.");
   bits.push("Values are sampled directly from Meteoblue's weekly and hourly precipitation forecasts, not estimated.");
-  return bits.join(" ");
-}
-
-function _ffdIntroNarrative(ffdWaypoints) {
-  if (!ffdWaypoints.length) {
-    return "FFD barrage and dam telemetry is not currently available — this tour will resume once the feed returns.";
-  }
-  return `A river-by-river tour of ${ffdWaypoints.length} FFD-monitored barrages and dams follows — any station currently reporting above-normal flow gets a full flythrough, and each river closes with a wide overview covering every one of its stations, so nothing is missed even where nothing is happening.`;
-}
-
-function _ffdBarrageNarrative(waypoint, precipSamples) {
-  const props = waypoint.properties || {};
-  const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
-  const inflow = props.inflow_discharge ?? "n/a";
-  const bits = [`${waypoint.name}${waypoint.province ? `, ${waypoint.province}` : ""}: outflow ${outflow} cusecs, inflow ${inflow} cusecs.`];
-  if (props.status) bits.push(`Current status: ${props.status}.`);
-  const near = _nearestPrecipSample(waypoint, precipSamples);
-  if (near && near.mm > 0) {
-    bits.push(`Forecast precipitation nearby at ${near.name} (${near.mm} ${near.unit}) ${near.mm >= 25 ? "may push inflows higher over the coming hours." : "is not expected to significantly affect inflows."}`);
-  } else {
-    bits.push("No significant forecast precipitation is expected in this barrage's nearby catchment.");
-  }
-  return bits.join(" ");
-}
-
-function _ffdAssessmentNarrative(ffdWaypoints) {
-  if (!ffdWaypoints.length) return "FFD tour assessment unavailable — no station telemetry was returned.";
-  const bits = ["FFD barrage tour assessment:"];
-  const highest = ffdWaypoints.slice().sort((a, b) => {
-    const av = Number(a.properties?.outflow_discharge ?? a.properties?.discharge ?? 0);
-    const bv = Number(b.properties?.outflow_discharge ?? b.properties?.discharge ?? 0);
-    return bv - av;
-  })[0];
-  if (highest) {
-    const v = highest.properties?.outflow_discharge ?? highest.properties?.discharge ?? "n/a";
-    bits.push(`${highest.name} currently reports the highest outflow among monitored barrages, at ${v} cusecs.`);
-  }
-  const alert = ffdWaypoints.find((w) => w.properties?.status && !/normal/i.test(String(w.properties.status)));
-  bits.push(alert
-    ? `${alert.name} is reporting a "${alert.properties.status}" status — continued monitoring is warranted.`
-    : "All monitored barrages currently report normal flow status.");
-  bits.push("Readings are live FFD telemetry; the preceding precipitation outlook determines whether inflows are likely to rise.");
-  return bits.join(" ");
-}
-
-// ---- FFD flood-status classification — same 6-tier scale + colors
-// map-layers.js's ffd_data-circle paint expression and its dynamicLegend
-// already use (confirmed against the real value strings that expression
-// matches: "Normal"/"NORMAL", "Low"/"LOW", "Medium"/"MEDIUM", "High"/
-// "HIGH", "Very High"/"VERY_HIGH", "Exceptionally High"/"EX_HIGH").
-// Duplicated here as a small local classifier (not imported — map-
-// layers.js's version lives inside a Mapbox paint expression, not a
-// reusable JS function) so the FFD tour can group stations by the exact
-// same tiers the on-map circle colors and legend already show.
-const FFD_STATUS_LABELS = {
-  normal: "Normal flow",
-  low: "Low flood",
-  medium: "Medium flood",
-  high: "High flood",
-  very_high: "Very high flood",
-  ex_high: "Exceptionally high flood",
-  unknown: "Unknown status",
-};
-function _ffdStatusKind(status) {
-  const s = String(status || "").trim().toLowerCase().replace(/_/g, " ");
-  if (!s) return "unknown";
-  if (s === "normal") return "normal";
-  if (s === "low") return "low";
-  if (s === "medium") return "medium";
-  if (s === "high") return "high";
-  if (s === "very high") return "very_high";
-  if (s === "exceptionally high" || s === "ex high") return "ex_high";
-  return "unknown";
-}
-function _ffdIsNormal(status) {
-  return _ffdStatusKind(status) === "normal";
-}
-
-// Groups FFD waypoints by their real river system (area_name — "Indus
-// River", "Jhelum River", "Chenab River", "Ravi River", "Sutlej River",
-// "Kabul River") in the same order the flood_routing_map.png reference
-// chart lays them out, tributaries first, confluence/mainstem trunk
-// (Trimmu → Punjnad → Guddu → Sukkur → Kotri — these carry no area_name
-// of their own, see _buildFfdWaypoints's own area:"" handling) last,
-// since that's literally downstream of everything else on the chart.
-// Membership order within each group is whatever _buildFfdWaypoints
-// already topologically resolved — untouched here.
-const FFD_RIVER_ORDER = ["Indus River", "Kabul River", "Jhelum River", "Chenab River", "Ravi River", "Sutlej River"];
-const FFD_MAINSTEM_LABEL = "Indus Mainstem (Confluence Trunk)";
-function _groupFfdByRiver(ffdWaypoints) {
-  const buckets = new Map();
-  for (const wp of ffdWaypoints) {
-    const river = wp.area || FFD_MAINSTEM_LABEL;
-    if (!buckets.has(river)) buckets.set(river, []);
-    buckets.get(river).push(wp);
-  }
-  const ordered = new Map();
-  for (const river of FFD_RIVER_ORDER) {
-    if (buckets.has(river)) { ordered.set(river, buckets.get(river)); buckets.delete(river); }
-  }
-  const mainstem = buckets.get(FFD_MAINSTEM_LABEL);
-  buckets.delete(FFD_MAINSTEM_LABEL);
-  for (const [river, members] of buckets) ordered.set(river, members); // any river name not in the fixed list — never silently dropped
-  if (mainstem) ordered.set(FFD_MAINSTEM_LABEL, mainstem);
-  return ordered;
-}
-
-// Picks `n` evenly-spaced items from `arr` (by index) — used to choose a
-// handful of REPRESENTATIVE normal-flow stations for a river where
-// nothing is currently in alert, so a quiet river still gets a little
-// individual camera time rather than none at all.
-function _pickEvenly(arr, n) {
-  if (n <= 0 || !arr.length) return [];
-  if (n >= arr.length) return arr.slice();
-  const out = [];
-  const step = arr.length / n;
-  for (let i = 0; i < n; i++) out.push(arr[Math.floor(i * step)]);
-  return out;
-}
-
-function _ffdRoutingMapNarrative() {
-  return "This is PMD/FFD's own flood-routing network — the real hydrological topology, with revised lag times in hours between every gauge, dam, and confluence point. The tour that follows walks this same network, river by river, from the mountains down to the Arabian Sea.";
-}
-
-// Overview narrative for one river group — names every non-normal
-// station explicitly (the operationally important part), and either
-// lists which representative stations got individual camera time (quiet
-// river) or simply confirms full normal-flow coverage.
-function _ffdRiverGroupNarrative(river, members, featured, skipped) {
-  const alerts = members.filter((wp) => !_ffdIsNormal(wp.properties?.status));
-  const bits = [`${river}: ${members.length} monitored station${members.length === 1 ? "" : "s"}.`];
-  if (alerts.length) {
-    const parts = alerts.map((wp) => `${wp.name} (${FFD_STATUS_LABELS[_ffdStatusKind(wp.properties?.status)]})`);
-    bits.push(`${parts.length > 1 ? "Stations" : "Station"} currently reporting above-normal flow: ${parts.join(", ")}.`);
-  } else {
-    bits.push("Every station on this river currently reports normal flow.");
-    if (featured.length && featured.length < members.length) {
-      bits.push(`${featured.map((wp) => wp.name).join(", ")} shown individually as representative readings; the remaining ${skipped.length} station${skipped.length === 1 ? "" : "s"} are summarized here.`);
-    }
-  }
   return bits.join(" ");
 }
 
@@ -2618,7 +2276,7 @@ async function _buildScenes(report, observationsFC, newsArticles) {
   // ---- CHAPTER 3 — Forecasted Precipitation Outlook ------------------
   // Only the intro stub is built here — unlike Chapters 1/2, Chapter 3's
   // actual content depends on its OWN layers being loaded first (Meteoblue
-  // weekly (visual), FFD + rivers, Meteoblue sampled for values), and per
+  // weekly (visual), Meteoblue sampled for values), and per
   // the operational brief those only load once Chapter 2 ends, not upfront
   // alongside everything else. _runChapter3Intro does that preload, then
   // calls _buildChapter3Scenes and splices the result in right after this
@@ -2629,15 +2287,12 @@ async function _buildScenes(report, observationsFC, newsArticles) {
 }
 
 // The rest of Chapter 3 — split out of _buildScenes because it can only
-// be built AFTER Chapter 3's own layers (Meteoblue weekly, FFD + rivers,
-// Meteoblue-for-values) have loaded, which now happens at Chapter 3's
-// own start (_runChapter3Intro), not upfront with everything else. Same
-// two halves as before: sampled 24h-precipitation values per district
-// (_fetchPrecipSamples reads _state.meteoblueWeekly/_state.meteoblueHourly,
-// populated by the preload that runs just before this is called) and the live FFD
-// barrage/dam tour (_state.ffdStations, fetched much earlier in
-// _loadAndPlay — that part never needed the layers, only the tour
-// SCENES built from it are deferred here for consistency).
+// be built AFTER Chapter 3's own layers (Meteoblue weekly, Meteoblue-for-
+// values) have loaded, which now happens at Chapter 3's
+// own start (_runChapter3Intro), not upfront with everything else:
+// sampled 24h-precipitation values per district (_fetchPrecipSamples reads
+// _state.meteoblueWeekly/_state.meteoblueHourly, populated by the preload
+// that runs just before this is called).
 async function _buildChapter3Scenes(report, liveFeatures, candidatesOverride) {
   const scenes = [];
   const precipSamples = await _fetchPrecipSamples(report, liveFeatures, candidatesOverride);
@@ -2662,77 +2317,6 @@ async function _buildChapter3Scenes(report, liveFeatures, candidatesOverride) {
     });
   }
   scenes.push({ kind: "precip-assessment", chapter: 3, precipSamples, caption: _precipAssessmentNarrative(precipSamples) });
-
-  // FFD barrage tour — only built when the live feed actually returned
-  // stations; an empty/unavailable feed just skips straight past this
-  // (Chapter 3 still has its full precipitation half either way) rather
-  // than pushing a tour with nothing to show.
-  const ffdWaypoints = _buildFfdWaypoints(_state.ffdStations);
-  _state.ffdWaypoints = ffdWaypoints;
-  if (ffdWaypoints.length) {
-    scenes.push({ kind: "ffd-intro", chapter: 3, caption: _ffdIntroNarrative(ffdWaypoints) });
-    scenes.push({ kind: "ffd-routing-map", chapter: 3, caption: _ffdRoutingMapNarrative() });
-
-    // River-by-river, not station-by-station: every station currently
-    // reporting anything other than normal flow gets its own full
-    // flythrough (unchanged "ffd-barrage" scene — camera path, orbit,
-    // popup, GeoGLOWS, stats modal, all exactly as before); a quiet river
-    // (every station normal) gets up to 4 REPRESENTATIVE stations
-    // individually instead of all of them. Every river closes with one
-    // "ffd-river-overview" scene — a single wide shot blinking every
-    // station on that river (featured and skipped alike) with a compact
-    // table of ALL of their current readings, so nothing is actually
-    // hidden, just not given its own dedicated flythrough. flyAlongPath's
-    // travel leg (prevWaypoint) is threaded across FEATURED stations
-    // only — skipped stations were never a physical stop, so the path
-    // between two featured stops is simply longer, not literally
-    // retraced through every skipped one.
-    const riverGroups = _groupFfdByRiver(ffdWaypoints);
-    let prevForPath = null;
-    for (const [river, members] of riverGroups) {
-      const nonNormal = members.filter((wp) => !_ffdIsNormal(wp.properties?.status));
-      const normal = members.filter((wp) => _ffdIsNormal(wp.properties?.status));
-      // Every non-normal station is always individually featured, uncapped
-      // — those are the operationally important ones and are never
-      // skipped. The "top 2" cap for representative normal-flow stations
-      // matches the same reduction convention Chapter 1's own province
-      // tour already established (top 2 districts, rest folded into an
-      // overview) — checked against the real live feed: with a cap of 4
-      // most rivers already have <=4 stations, so nothing was actually
-      // skipped and the tour barely shrank; 2 gives a real reduction
-      // while every station's reading still surfaces in the river
-      // overview's table either way.
-      const featuredCount = Math.max(nonNormal.length, Math.min(2, members.length));
-      const representativeNormal = _pickEvenly(normal, Math.max(0, featuredCount - nonNormal.length));
-      const featuredNames = new Set([...nonNormal, ...representativeNormal].map((wp) => wp.name));
-      const featured = members.filter((wp) => featuredNames.has(wp.name)); // preserves members' own topological order
-      const skipped = members.filter((wp) => !featuredNames.has(wp.name));
-
-      for (const wp of featured) {
-        scenes.push({
-          kind: "ffd-barrage",
-          chapter: 3,
-          waypoint: wp,
-          prevWaypoint: prevForPath,
-          precipSamples,
-          caption: _ffdBarrageNarrative(wp, precipSamples),
-        });
-        prevForPath = wp;
-      }
-
-      scenes.push({
-        kind: "ffd-river-overview",
-        chapter: 3,
-        river,
-        members,
-        featured,
-        skipped,
-        caption: _ffdRiverGroupNarrative(river, members, featured, skipped),
-      });
-    }
-
-    scenes.push({ kind: "ffd-assessment", chapter: 3, caption: _ffdAssessmentNarrative(ffdWaypoints) });
-  }
 
   return scenes;
 }
@@ -2771,11 +2355,6 @@ function _sceneTitle(scene) {
     case "precip-district": return `Forecast Focus — ${scene.entry.name} (${scene.entry.province})`;
     case "precip-province-overview": return "Province-Wise Precipitation Overview";
     case "precip-assessment": return "Precipitation Outlook Assessment";
-    case "ffd-intro":       return "FFD Barrage & Dam Tour";
-    case "ffd-routing-map": return "FFD Flood Routing Map";
-    case "ffd-barrage":     return `${scene.waypoint.name}${scene.waypoint.province ? ` (${scene.waypoint.province})` : ""}`;
-    case "ffd-river-overview": return `${scene.river} — Overview`;
-    case "ffd-assessment":  return "FFD Tour Assessment";
     default:                return "Dynamic Weather Report";
   }
 }
@@ -2835,17 +2414,6 @@ function _renderSceneBody(card, scene) {
   } else if (scene.kind === "precip-assessment") {
     const lead = (scene.precipSamples || _state.topPrecipDistricts)?.[0];
     factsHtml = lead ? `<div class="dwr-facts"><span class="dwr-fact-pill${lead.mm >= 25 ? " is-alert" : ""}">${_hlNum(`${lead.mm} ${lead.unit}`)} leading forecast</span></div>` : "";
-  } else if (scene.kind === "ffd-barrage") {
-    const props = scene.waypoint.properties || {};
-    const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
-    const inflow = props.inflow_discharge ?? "n/a";
-    factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill">${_hlNum(`${outflow} cusecs`)} outflow</span><span class="dwr-fact-pill">${_hlNum(`${inflow} cusecs`)} inflow</span></div>`;
-  } else if (scene.kind === "ffd-river-overview") {
-    const alertCount = (scene.members || []).filter((wp) => !_ffdIsNormal(wp.properties?.status)).length;
-    factsHtml = `<div class="dwr-facts"><span class="dwr-fact-pill${alertCount ? " is-alert" : ""}">${scene.members.length} stations</span>${alertCount ? `<span class="dwr-fact-pill is-alert">${alertCount} above normal</span>` : ""}</div>`;
-  } else if (scene.kind === "ffd-assessment") {
-    const wp = (_state.ffdWaypoints || [])[0];
-    factsHtml = wp ? `<div class="dwr-facts"><span class="dwr-fact-pill">${_state.ffdWaypoints.length} barrages monitored</span></div>` : "";
   }
   bodyEl.classList.toggle("dwr-lang-ur", _state.lang === "ur");
   bodyEl.innerHTML = `<div class="dwr-caption">${_highlightNumbers(_escapeHtml(_tr(scene.caption) || ""))}</div>${factsHtml}`;
@@ -2969,85 +2537,6 @@ function _clearDistrictOverlay() {
 }
 
 // ==========================================================================
-// FFD station-point highlight/blink overlay — same filter-driven pulse
-// technique as the district-boundary blink above, just built on the
-// ffd_data-source's own POINT geometry instead of district polygons, and
-// with its own separate timer/phase state (_state.ffdBlinkTimer/Phase, not
-// the district ones) so the two overlays can never fight over the same
-// handle. Used by "ffd-river-overview" scenes to highlight every station
-// on a river at once (featured and skipped alike) while its summary
-// popup is showing — its own layer id, never touches ffd_data-circle
-// itself.
-// ==========================================================================
-const FFD_HL_SOURCE_ID = "ffd_data-source"; // reuses the EXISTING source — no new source, no extra fetch
-const HL_FFD_CIRCLE_ID = "dwr-ffd-highlight-circle";
-
-function _matchFfdNamesExpr(names) {
-  const unique = Array.from(new Set((names || []).map((s) => String(s).toLowerCase().trim()))).filter(Boolean);
-  if (!unique.length) return ["has", "___ncop_never___"];
-  return ["match", ["downcase", ["to-string", ["coalesce", ["get", "name"], ""]]], unique, true, false];
-}
-
-function _ensureFfdHighlightLayer() {
-  const map = window.ncop_map;
-  if (!map || !map.getSource(FFD_HL_SOURCE_ID) || map.getLayer(HL_FFD_CIRCLE_ID)) return;
-  try {
-    map.addLayer({
-      id: HL_FFD_CIRCLE_ID,
-      type: "circle",
-      source: FFD_HL_SOURCE_ID,
-      filter: ["has", "___ncop_never___"],
-      paint: {
-        "circle-radius": 12,
-        "circle-color": "transparent",
-        "circle-stroke-color": "#46b2ff",
-        "circle-stroke-width": 3,
-        "circle-stroke-opacity": 0.9,
-      },
-    });
-  } catch (_) { /* best-effort — ffd_data-source may not be loaded yet */ }
-}
-
-function _setFfdHighlight(names) {
-  const map = window.ncop_map;
-  if (!map) return;
-  _ensureFfdHighlightLayer();
-  try {
-    if (map.getLayer(HL_FFD_CIRCLE_ID)) map.setFilter(HL_FFD_CIRCLE_ID, _matchFfdNamesExpr(names));
-  } catch (_) { /* best-effort */ }
-}
-
-function _startFfdBlink() {
-  _stopFfdBlink();
-  const map = window.ncop_map;
-  if (!map) return;
-  _state.ffdBlinkPhase = false;
-  _state.ffdBlinkTimer = setInterval(() => {
-    _state.ffdBlinkPhase = !_state.ffdBlinkPhase;
-    const wide = _state.ffdBlinkPhase;
-    try {
-      if (map.getLayer(HL_FFD_CIRCLE_ID)) {
-        map.setPaintProperty(HL_FFD_CIRCLE_ID, "circle-radius", wide ? 18 : 11);
-        map.setPaintProperty(HL_FFD_CIRCLE_ID, "circle-stroke-opacity", wide ? 1 : 0.4);
-      }
-    } catch (_) { /* best-effort */ }
-  }, 420);
-}
-
-function _stopFfdBlink() {
-  if (_state.ffdBlinkTimer) { clearInterval(_state.ffdBlinkTimer); _state.ffdBlinkTimer = null; }
-}
-
-function _clearFfdHighlight() {
-  _stopFfdBlink();
-  const map = window.ncop_map;
-  if (!map) return;
-  try {
-    if (map.getLayer(HL_FFD_CIRCLE_ID)) map.setFilter(HL_FFD_CIRCLE_ID, ["has", "___ncop_never___"]);
-  } catch (_) { /* best-effort */ }
-}
-
-// ==========================================================================
 // Camera + layer choreography per scene kind
 // ==========================================================================
 async function _runIntro(map, token, seq) {
@@ -3115,7 +2604,7 @@ function _showIntroPopup() {
       <span class="dwrp-badge">3 Chapters</span>
     </div>
     <div class="dwrp-body">
-      A cinematic, data-driven walkthrough of Pakistan's most recent weather picture — every figure traces back to a live PMD/NWFC/FFD source; nothing here is scripted or invented. Use the rewind/fast-forward buttons on the transport bar to change playback speed (1x-5x) in either direction.
+      A cinematic, data-driven walkthrough of Pakistan's most recent weather picture — every figure traces back to a live PMD/NWFC source; nothing here is scripted or invented. Use the rewind/fast-forward buttons on the transport bar to change playback speed (1x-5x) in either direction.
     </div>
     <div class="dwrp-table-label">Layers used in this briefing</div>
     <div class="dwrp-chips">
@@ -3124,7 +2613,6 @@ function _showIntroPopup() {
       <span class="dwrp-chip">24h Precipitation</span>
       <span class="dwrp-chip">NWFC Station Observations</span>
       <span class="dwrp-chip">Heatwave Monitoring</span>
-      <span class="dwrp-chip">FFD Data</span>
       <span class="dwrp-chip">District Boundaries</span>
     </div>
     <div class="dwrp-table-label">What happens next</div>
@@ -3132,7 +2620,7 @@ function _showIntroPopup() {
       1. Cinematic fly-in to Pakistan<br>
       2. Chapter 1 — satellite sweep + 24-hour rainfall stats, then a tour of the heaviest rainfall districts<br>
       3. Chapter 2 — 2m temperature outlook, then a tour of the hottest reporting stations<br>
-      4. Chapter 3 — 24h precipitation outlook, then a north-to-south flythrough of FFD-monitored barrages and dams<br>
+      4. Chapter 3 — 24h precipitation outlook, province by province<br>
       5. Closing operational assessment for each chapter
     </div>
     ${_newsSectionHtml()}
@@ -3393,14 +2881,9 @@ async function _ensureHeatwaveLayerOn() {
   try { await window.sourceLayerControl.addLayerByKey(HEATWAVE_ITEM_KEY); } catch (_) { /* best-effort */ }
 }
 
-// Chapter 3's equivalent of _ensureHeatwaveLayerOn — turns on the FFD
-// Data TOGGLE layer for the barrage tour. Chapter 2's Heatwave Monitoring
-// layer has no reason to stay on into Chapter 3, mirroring the same
-// hand-off _ensureObservationsOff already does between Chapters 1 and 2.
-async function _ensureFfdLayerOn() {
-  if (!window.sourceLayerControl || typeof window.sourceLayerControl.addLayerByKey !== "function") return;
-  try { await window.sourceLayerControl.addLayerByKey(FFD_ITEM_KEY); } catch (_) { /* best-effort */ }
-}
+// Chapter 2's Heatwave Monitoring layer has no reason to stay on into
+// Chapter 3, mirroring the same hand-off _ensureObservationsOff already
+// does between Chapters 1 and 2.
 async function _ensureHeatwaveLayerOff() {
   if (!window.sourceLayerControl || typeof window.sourceLayerControl.removeLayerByKey !== "function") return;
   try { window.sourceLayerControl.removeLayerByKey(HEATWAVE_ITEM_KEY); } catch (_) { /* best-effort */ }
@@ -3820,9 +3303,7 @@ async function _runTempAssessment(map) {
 // CHAPTER 3 — Forecasted Precipitation Outlook. First half mirrors
 // Chapters 1/2's "layer scene → district tour" structure exactly (same
 // _activateTemporalLayer/_playTemporalLoop/_frameDistrictCluster/
-// orbitAroundPoint choreography); second half is the FFD barrage tour,
-// which additionally uses flyAlongPath for the north-to-south travel
-// between consecutive stops.
+// orbitAroundPoint choreography).
 // ==========================================================================
 // Chapter 3's own layer/scene preload — mirrors what _runIntro does for
 // Chapter 1 and _runChapter2Intro does for Chapter 2: tear down the
@@ -3840,8 +3321,8 @@ async function _runTempAssessment(map) {
 // actual display (METEOBLUE_WEEKLY_ITEM_KEY), so the two never overlap on
 // the app's single "active temporal layer" slot. The visual layer is left
 // active once this returns, ready for Chapter 3's own scenes to fade in
-// later, and torn down again in _runPrecipAssessment before the FFD tour.
-// FFD has no such conflict either (a TOGGLE layer, not a temporal one).
+// later, and torn down again in _runPrecipAssessment, which closes the
+// briefing.
 async function _runChapter3Intro(map, token, seq) {
   // Chapter 2's layers/functionality go away entirely once Chapter 3
   // starts — same "previous chapter's layers don't linger" hand-off
@@ -3851,22 +3332,10 @@ async function _runChapter3Intro(map, token, seq) {
   if (_isStale(token, seq)) return;
 
   const card = document.getElementById(CARD_ID);
-  _setLayerLoadingNote(card, "Loading precipitation, river, and station layers for Chapter 3…");
+  _setLayerLoadingNote(card, "Loading precipitation layers for Chapter 3…");
 
   await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.8, pitch: 25, bearing: 6, duration: _dur(2000) });
   if (_isStale(token, seq)) return;
-
-  await _ensureFfdLayerOn();
-  if (_isStale(token, seq)) return;
-  // ensureRiversLayer (gcop-ffd-integration.js) runs fire-and-forget
-  // inside the addLayerByKey wrapping it uses, so the await above doesn't
-  // actually track when the rivers source finishes loading — poll for it
-  // briefly (same patient-wait convention _activateTemporalLayer itself
-  // uses) rather than assume it's ready the instant addLayerByKey returns.
-  for (let i = 0; i < 30 && !map.getSource("ffd_data-rivers-source"); i++) {
-    await wait(200);
-    if (_isStale(token, seq)) return;
-  }
 
   // Precipitation VALUES: query every step of both Meteoblue precip
   // layers directly (never through handleTemporalInteraction/#temp-
@@ -3901,8 +3370,8 @@ async function _runChapter3Intro(map, token, seq) {
   // it's now meant to be seen). Pre-activating it here means it's already
   // on by the time _runPrecipLayer's own scene fades it in — same
   // preload-then-reveal pattern _runIntro/_runChapter2Intro use for
-  // DWD/2m Temperature. Deactivated again in _runPrecipAssessment, right
-  // before the FFD station tour begins.
+  // DWD/2m Temperature. Deactivated again in _runPrecipAssessment, which
+  // closes the briefing.
   await _activateTemporalLayer(map, METEOBLUE_WEEKLY_ITEM_KEY, "Weekly Precipitation", token, seq).catch(() => false);
   if (_isStale(token, seq)) return;
   _setLayerLoadingNote(card, null);
@@ -4033,130 +3502,10 @@ async function _runPrecipAssessment(map) {
   _closePopup();
   _clearDistrictOverlay();
   disableRainEffect(map);
-  // Meteoblue's weekly layer was the precipitation half's visual — turned
-  // off here, before the FFD barrage/dam tour begins, same "previous
-  // chapter's layers don't linger" hand-off used between every other
-  // chapter transition. The cached step values (_state.meteoblueWeekly/
-  // Hourly) are untouched by this — narration keeps reading from those
-  // regardless of whether the layer itself is currently shown.
+  // Meteoblue's weekly layer was the chapter's visual — turned off here,
+  // since this scene closes the briefing. The cached step values
+  // (_state.meteoblueWeekly/Hourly) are untouched by this.
   await _deactivateTemporalLayer(map, METEOBLUE_WEEKLY_ITEM_KEY);
-  await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
-}
-
-// ---- FFD barrage/dam tour ----------------------------------------------
-async function _runFfdIntro(map, token, seq) {
-  await _ensureFfdLayerOn();
-
-  // Bulk 30-day discharge history for the whole barrage tour — fired once,
-  // fire-and-forget (not awaited): by the time the first barrage's own
-  // camera flythrough + popup finish (several more seconds), this has
-  // almost always already resolved, so nothing here waits on a fetch that
-  // isn't actually needed until a popup renders (see _showFfdBarragePopup).
-  if (!_state.ffdHistoryAllFetchedOnce) {
-    _state.ffdHistoryAllFetchedOnce = true;
-    _state.ffdHistoryAllPromise = _fetchFfdHistoryAll().then((data) => { _state.ffdHistoryAll = data; return data; });
-  }
-
-  const first = _state.ffdWaypoints?.[0];
-  if (!first) return;
-  await cinematicFlyTo(map, { center: first.center, zoom: 6.2, pitch: 45, bearing: 0, duration: _dur(3200) });
-}
-
-// Reference-chart scene — a brief national hold while the popup shows the
-// real PMD/FFD flood-routing network diagram (flood_routing_map.png),
-// oriented before the river-by-river tour walks that same real topology.
-async function _runFfdRoutingMap(map, token, seq) {
-  _closePopup();
-  await cinematicEaseTo(map, { center: PAKISTAN_CENTER, zoom: 4.6, pitch: 10, bearing: 0, duration: _dur(2000) });
-  if (_isStale(token, seq)) return;
-  _showFfdRoutingMapPopup();
-}
-
-async function _runFfdBarrage(map, scene, token, seq) {
-  _closePopup();
-  // A prior river's overview scene may still have its group blink
-  // active — individual station scenes always start from a clean slate.
-  _clearFfdHighlight();
-  const wp = scene.waypoint;
-  if (!wp?.center) return;
-
-  if (scene.prevWaypoint?.center) {
-    // The literal "animate camera along a path" technique the operational
-    // brief pointed at — https://docs.mapbox.com/mapbox-gl-js/example/free-camera-path/
-    // — flown for the TRAVEL leg between consecutive barrages. There is no
-    // river-channel geometry to trace (/get-ffd-rivers/ is catchment
-    // polygons, not lines — see _buildFfdWaypoints), so the leg follows a
-    // gently bowed arc (_curvedStationPath) instead of a dead-straight
-    // line — a slow, low, drone-like pass rather than a fast teleport.
-    const arc = _curvedStationPath(scene.prevWaypoint.center, wp.center);
-    const straightDeg = _pathLengthDeg([scene.prevWaypoint.center, wp.center]);
-    const arcDeg = _pathLengthDeg(arc);
-    const ratio = straightDeg > 0 ? arcDeg / straightDeg : 1;
-    // Slow baseline (a straight-line hop between two nearby barrages
-    // still takes a good ~7s) scaled gently for longer legs, capped so a
-    // very long leg doesn't drag on forever.
-    const durationMs = Math.min(16000, 7000 * Math.max(1, ratio));
-    const pathWaypoints = arc.map((c, i) => ({
-      center: c,
-      altitude: 12000 + (8000 - 12000) * (i / (arc.length - 1)),
-    }));
-    await flyAlongPath(map, pathWaypoints, { durationMs: _dur(durationMs), lookAheadFrac: 0.18 });
-  } else {
-    await cinematicFlyTo(map, { center: wp.center, zoom: 7.5, pitch: 45, bearing: 0, duration: _dur(2600) });
-  }
-  if (_isStale(token, seq)) return;
-
-  // Re-establishes a clean angled view after the flythrough (whose last
-  // frames look nearly straight down as the look-ahead point converges on
-  // the arrival point itself) — same orbit beat every other station scene
-  // in this file ends on.
-  await orbitAroundPoint(map, wp.center, {
-    durationMs: _dur(3000),
-    radiusMeters: 12000,
-    altitudeMeters: 7000,
-    revolutions: 0.2,
-  });
-  if (_isStale(token, seq)) return;
-
-  const mapEl = document.getElementById("map");
-  if (mapEl) {
-    mapEl.classList.add("ncop-dwr-pulse-target");
-    setTimeout(() => mapEl.classList.remove("ncop-dwr-pulse-target"), 2400);
-  }
-  await _showFfdBarragePopup(scene, token, seq);
-}
-
-// Wide, single-shot summary for one whole river — reuses
-// _frameDistrictCluster's own bbox+pad+fitBounds computation (already
-// proven for exactly this "camera over a cluster of points" job in
-// Chapter 1) rather than re-deriving bounding-box math here. Blinks
-// EVERY station on the river at once (featured individually-toured ones
-// AND skipped normal-flow ones alike) so the "which point is this
-// talking about" cue covers the whole group, not just whichever one
-// happened to get its own flythrough — see _showFfdRiverOverviewPopup
-// for the compact per-station table that keeps every reading visible
-// even for stations that didn't get individual camera time.
-async function _runFfdRiverOverview(map, scene, token, seq) {
-  _closePopup();
-  // The overview is a whole-river summary, not a single station — any
-  // per-station FFD Discharge Stats modal left open from a previous
-  // "ffd-barrage" scene no longer applies here.
-  try { hideFfdModal(); } catch (_) {}
-  const coords = (scene.members || []).map((wp) => wp.center).filter(Boolean);
-  if (!coords.length) return;
-  await _frameDistrictCluster(map, coords, { pitch: 30, bearing: 0, duration: 2800, zoom: 7.2, maxZoom: 8.2 });
-  if (_isStale(token, seq)) return;
-
-  _setFfdHighlight(scene.members.map((wp) => wp.name));
-  _startFfdBlink();
-
-  _showFfdRiverOverviewPopup(scene);
-}
-
-async function _runFfdAssessment(map) {
-  _closePopup();
-  try { hideFfdModal(); } catch (_) {}
-  _clearFfdHighlight();
   await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 20, bearing: 0, duration: _dur(2400) });
   disableCinematicAtmosphere(map);
 }
@@ -4596,150 +3945,6 @@ function _showTempWeeklyPopup(scene) {
   `);
 }
 
-// Vite-bundled static asset — same new URL(..., import.meta.url).href
-// pattern layer-attribute-popup.js's ndmaLogoSrc already uses for a
-// static image reference.
-const FLOOD_ROUTING_MAP_SRC = new URL("../assets/images/ffd_flood_routing/flood_routing_map.png", import.meta.url).href;
-
-function _showFfdRoutingMapPopup() {
-  _presentPopup(`
-    <div class="dwrp-head">
-      <span class="dwrp-dot" aria-hidden="true"></span>
-      <span class="dwrp-title">FFD Flood Routing Map</span>
-      <span class="dwrp-badge">Reference</span>
-    </div>
-    <div class="dwrp-body">
-      <img src="${FLOOD_ROUTING_MAP_SRC}" alt="FFD Flood Routing Map — revised lag times, 1990-2020" class="dwrp-routing-map-img" />
-      <div class="dwrp-summary-line dwrp-summary-secondary">Official PMD/FFD flood-routing network — lag times in hours between every gauge, dam, and confluence point (revised, 1990–2020, approved 23 Jul 2021). The barrage tour that follows walks this same real network, river by river.</div>
-    </div>
-  `);
-}
-
-// One compact table covering EVERY station on a river (not just the ones
-// that got an individual flythrough — see _buildChapter3Scenes' featured/
-// skipped split) so a quiet, all-normal river never actually loses a
-// reading, just the dedicated camera time for it. Status badges reuse
-// the same 6-tier classification (_ffdStatusKind/FFD_STATUS_LABELS) the
-// on-map circle color and its legend already use.
-function _showFfdRiverOverviewPopup(scene) {
-  const rows = (scene.members || []).map((wp) => {
-    const props = wp.properties || {};
-    const kind = _ffdStatusKind(props.status);
-    const outflow = props.outflow_discharge ?? props.discharge ?? "n/a";
-    const inflow = props.inflow_discharge ?? "n/a";
-    const badgeVariant = kind === "normal" ? "normal" : kind === "low" ? "elevated" : kind === "medium" ? "high" : kind === "high" ? "severe" : kind === "very_high" || kind === "ex_high" ? "extreme" : "";
-    return `
-      <tr>
-        <td>${_escapeHtml(wp.name)}${badgeVariant ? `<div class="dwrp-district-prov"><span class="dwrp-badge dwrp-badge--${badgeVariant}">${_escapeHtml(FFD_STATUS_LABELS[kind])}</span></div>` : ""}</td>
-        <td>${_hlNum(`${outflow} cusecs`)} / ${_hlNum(`${inflow} cusecs`)}</td>
-      </tr>
-    `;
-  }).join("");
-  _presentPopup(`
-    <div class="dwrp-head">
-      <span class="dwrp-dot" aria-hidden="true"></span>
-      <span class="dwrp-title">${_escapeHtml(scene.river)}</span>
-      <span class="dwrp-badge">${scene.members.length} station${scene.members.length === 1 ? "" : "s"}</span>
-    </div>
-    <div class="dwrp-body">
-      ${_captionHtml(scene.caption)}
-      <div class="dwrp-table-label">Every monitored station on this river — outflow / inflow</div>
-      <table class="dwrp-table">
-        <thead><tr><th>Station</th><th>Outflow / Inflow</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `);
-}
-
-// Bounds an awaited promise so a slow/never-resolving fetch (a hung
-// GeoGLOWS lookup, an unreachable history-all payload) can't stall scene
-// playback indefinitely — always resolves, never rejects, regardless of
-// how the wrapped promise settles.
-function _awaitBounded(promise, ms) {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(); } };
-    Promise.resolve(promise).then(finish, finish);
-    setTimeout(finish, ms);
-  });
-}
-const FFD_MODAL_LOAD_TIMEOUT_MS = 15000;
-
-// Shows the REAL FFD popup — buildFfdPopupContent/setupFfdPopupEventHandlers
-// (exported additively from layer-attribute-popup.js for exactly this) are
-// the SAME code a real map click on an ffd_data gauge uses, so this is the
-// actual popup shell, actual "Show Graph" button with the actual outflow/
-// inflow bar chart, not a lookalike. The graph is auto-opened (dispatching
-// a real click on the button it just rendered) rather than waiting for the
-// operator — same reasoning the heatwave stats panel auto-opens itself.
-// Discharge history, the GeoGLOWS river forecast table, and the 30-day
-// history/14-day outlook chart are DELIBERATELY not duplicated here — the
-// FFD Discharge Stats modal opened just below (showFfdModalForStation)
-// covers all three (including its own GeoGLOWS horizon table in its left
-// aside), so this popup stays focused on the station's live reading.
-async function _showFfdBarragePopup(scene, token, seq) {
-  const wp = scene.waypoint;
-  const props = wp.properties || {};
-
-  // Auto-open the REAL FFD Discharge Stats modal (30-day history + 14-day
-  // regression + GeoGLOWS overlay, incl. the GeoGLOWS horizon table) for
-  // THIS station — same "reuse the real modal, update it in place as the
-  // tour advances" pattern _showTempStationPopup already uses for the real
-  // heatwave stats modal in Chapter 2 (hopping station-to-station reads as
-  // one panel updating, not a stack of new ones). Kicked off here but only
-  // AWAITED further down (after the on-map popup below has already shown),
-  // so the popup itself never waits on the modal's own network fetches.
-  const modalReady = (async () => {
-    try {
-      await showFfdModalForStation({
-        name: wp.name,
-        province: wp.province || "",
-        status: props.status || "",
-        outflow: props.outflow_discharge ?? props.discharge ?? "n/a",
-        inflow: props.inflow_discharge ?? "n/a",
-        lat: wp.center?.[1],
-        lon: wp.center?.[0],
-      });
-    } catch (_) { /* best-effort — a modal hiccup must never crash playback */ }
-  })();
-
-  const { primary, drawer } = buildFfdPopupContent(props);
-  const near = _nearestPrecipSample(wp, scene.precipSamples || _state.topPrecipDistricts);
-  const precipNote = near
-    ? `<div class="dwrp-live-note">Nearby forecast: ${_hlNum(`${near.name} — ${near.mm} ${near.unit}`)}</div>`
-    : "";
-  _presentPopup(`
-    <div class="ncop-popup__primary">
-      <div class="ncop-popup__primary-content">${primary}</div>
-    </div>
-    <div class="ncop-popup__body-scroll">
-      ${drawer}
-      <div class="dwrp-body">
-        ${_captionHtml(scene.caption)}
-        ${precipNote}
-      </div>
-    </div>
-  `);
-
-  // Best-effort: never let a graph-rendering hiccup break scene playback.
-  try {
-    setupFfdPopupEventHandlers();
-    const graphBtn = _state.popupEl?.querySelector(".show-ffd-graph");
-    if (graphBtn) graphBtn.click();
-  } catch (_) {}
-
-  // AWAITED (bounded) — the caller (_runFfdBarrage) awaits this whole
-  // function, and _gotoScene's auto-advance timer only starts once scene
-  // entry fully resolves (see _gotoScene), so the barrage scene now holds
-  // on this station until its FFD Discharge Stats modal has actually
-  // finished loading and rendering its chart — capped at
-  // FFD_MODAL_LOAD_TIMEOUT_MS so an unreachable upstream can't stall the
-  // story indefinitely.
-  await _awaitBounded(modalReady, FFD_MODAL_LOAD_TIMEOUT_MS);
-  if (_isStale(token, seq)) return;
-}
-
 function _closePopup() {
   const el = _state.popupEl;
   if (!el) return;
@@ -4859,21 +4064,6 @@ async function _enterScene(card, scene, token, seq) {
     } else if (scene.kind === "precip-assessment") {
       if (_isStale(token, seq)) return;
       await _runPrecipAssessment(map);
-    } else if (scene.kind === "ffd-intro") {
-      if (_isStale(token, seq)) return;
-      await _runFfdIntro(map, token, seq);
-    } else if (scene.kind === "ffd-routing-map") {
-      if (_isStale(token, seq)) return;
-      await _runFfdRoutingMap(map, token, seq);
-    } else if (scene.kind === "ffd-barrage") {
-      if (_isStale(token, seq)) return;
-      await _runFfdBarrage(map, scene, token, seq);
-    } else if (scene.kind === "ffd-river-overview") {
-      if (_isStale(token, seq)) return;
-      await _runFfdRiverOverview(map, scene, token, seq);
-    } else if (scene.kind === "ffd-assessment") {
-      if (_isStale(token, seq)) return;
-      await _runFfdAssessment(map);
     }
   } catch (_) { /* best-effort — a camera/layer hiccup shouldn't stall the whole briefing */ }
 }
@@ -5044,7 +4234,7 @@ function _cycleSpeed(direction) {
 // fetched earlier THIS SESSION — see _state.baseDataLoadedOnce below —
 // instead of re-hitting every API. The various sampling passes further
 // downstream (Meteoblue weekly/hourly/temperature, the district-boundary
-// candidate query, the bulk FFD 30-day history) already had their own
+// candidate query) already had their own
 // "only once per session" guards from earlier work; forceRefresh now
 // also resets THOSE, so Refresh genuinely re-fetches everything, not
 // just this function's own upfront batch.
@@ -5057,9 +4247,6 @@ async function _loadAndPlay(card, forceRefresh = false) {
     _state.meteoblueTempSampledOnce = false;
     _state.districtBoundaryCandidatesComputed = false;
     _state.districtBoundaryCandidates = [];
-    _state.ffdHistoryAllFetchedOnce = false;
-    _state.ffdHistoryAllPromise = null;
-    _state.ffdHistoryAll = null;
   }
 
   // A prior load's data is only trusted if it actually succeeded — a
@@ -5089,15 +4276,13 @@ async function _loadAndPlay(card, forceRefresh = false) {
     report = _state.report;
     observations = _state.observations;
   } else {
-    let heatwaveStations, maxTempRecords, ffdStations, ffdRivers;
+    let heatwaveStations, maxTempRecords;
     try {
-      [report, observations, heatwaveStations, maxTempRecords, ffdStations, ffdRivers] = await Promise.all([
+      [report, observations, heatwaveStations, maxTempRecords] = await Promise.all([
         _fetchRainfallReport(),
         getNwfcObservations().catch(() => null),
         _fetchHeatwaveMonitoring(), // best-effort — resolves null on any failure
         _fetchMaxTempRecords(), // best-effort — resolves [] on any failure
-        _fetchFfdStations(), // best-effort — resolves null on any failure
-        getFfdRivers().catch(() => null), // best-effort — feeds the on-map catchment-polygon visual layer only, not the barrage-tour camera path (see _buildFfdWaypoints)
       ]);
     } catch (e) {
       if (token !== _state.runToken) return;
@@ -5115,8 +4300,6 @@ async function _loadAndPlay(card, forceRefresh = false) {
     _state.newsArticles = [];
     _state.heatwaveStations = heatwaveStations;
     _state.maxTempRecords = maxTempRecords || [];
-    _state.ffdStations = ffdStations;
-    _state.ffdRivers = ffdRivers;
     _state.baseDataLoadedOnce = true;
   }
 
@@ -5124,7 +4307,7 @@ async function _loadAndPlay(card, forceRefresh = false) {
   // own start, and tears down the previous chapter's — see _runIntro
   // (Chapter 1: DWD + NWFC observations), _runChapter2Intro (Chapter 2:
   // 2m Temperature + Heatwave Monitoring), and _runChapter3Intro
-  // (Chapter 3: Meteoblue weekly (visual) + FFD/rivers + Meteoblue-for-values, the
+  // (Chapter 3: Meteoblue weekly (visual) + Meteoblue-for-values, the
   // last of which is also where Chapter 3's own scenes get built — see
   // _buildChapter3Scenes — since their district values depend on that
   // Meteoblue sampling pass having already run).
@@ -5175,7 +4358,7 @@ async function _loadAndPlay(card, forceRefresh = false) {
 // Refresh button — the ONLY way to force a real re-fetch of every layer/
 // API this story uses once they're cached (see _loadAndPlay's
 // baseDataLoadedOnce check). Mirrors _hide()'s own teardown of whatever
-// is currently on-screen (popup, modals, district/FFD overlays, active
+// is currently on-screen (popup, modals, district overlay, active
 // temporal layer) — same reasoning: a scene can be mid-flythrough or
 // mid-orbit when this is clicked, and that must stop cleanly before
 // reloading — but keeps the card itself visible and showing the loading
@@ -5190,9 +4373,7 @@ async function _handleRefreshClick(card) {
   _stopSpeaking();
   _closePopup();
   try { hideHeatwaveModal(); } catch (_) {}
-  try { hideFfdModal(); } catch (_) {}
   _clearDistrictOverlay();
-  _clearFfdHighlight();
   const map = window.ncop_map;
   if (map) { disableCinematicAtmosphere(map); disableRainEffect(map); _deactivateTemporalLayer(map, _state.activeLayerKey); }
 

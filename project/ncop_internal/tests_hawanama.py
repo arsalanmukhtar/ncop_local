@@ -20,6 +20,8 @@ def _reset_client_state():
     hc._mem_cache.clear()
     hc._last_failure.clear()
     hc._boundary.update({"geom": None, "prepared": None, "loaded": False})
+    hc._watch_memo.update({"at": 0.0, "key": None, "payload": None})
+    hc._prefetched_dates.clear()
 
 
 class _TmpMediaTest(SimpleTestCase):
@@ -188,3 +190,139 @@ class ViewTests(_TmpMediaTest):
     def test_point_requires_params(self):
         res = self._get(hv.HawanamaPointView, "/api/hawanama/point/?date=2026-11-16")
         self.assertEqual(res.status_code, 400)
+
+
+def _pt(city, lon, lat, pm25, **extra):
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {"city": city, "pm25": pm25, **extra}}
+
+
+class WatchDigestTests(_TmpMediaTest):
+    """National Air Quality Watch story digest (hawanama_client.air_quality_watch)."""
+
+    GRID = {"pm25": [10, 20, 30, 40, 50, 60, 70, 80, 90], "grid": {
+        "shape": [3, 3], "bounds": {"south": 30.0, "north": 32.0, "west": 70.0, "east": 72.0},
+        "row_order": "south_to_north"}}
+
+    def test_epa_category_breakpoints(self):
+        self.assertEqual(hc.epa_category(9.0), "good")
+        self.assertEqual(hc.epa_category(9.1), "moderate")
+        self.assertEqual(hc.epa_category(55.5), "unhealthy")
+        self.assertEqual(hc.epa_category(225.5), "hazardous")
+        self.assertIsNone(hc.epa_category(None))
+
+    def test_sample_grid_rows_and_neighbourhood(self):
+        # Centre cell (71, 31) with its 3x3 neighbourhood = mean of all nine.
+        self.assertEqual(hc.sample_grid(self.GRID, 71.0, 31.0), 50.0)
+        # South-west corner, single cell: neighbours (10,20,40,50) -> 30.
+        self.assertEqual(hc.sample_grid(self.GRID, 70.0, 30.0), 30.0)
+        self.assertEqual(hc.sample_grid(self.GRID, 70.0, 30.0, radius_cells=0), 10.0)
+        self.assertEqual(hc.sample_grid(self.GRID, 70.0, 32.0, radius_cells=0), 70.0)  # north row
+        self.assertIsNone(hc.sample_grid(self.GRID, 80.0, 31.0))
+        north_first = {**self.GRID, "grid": {**self.GRID["grid"], "row_order": "north_to_south"}}
+        self.assertEqual(hc.sample_grid(north_first, 70.0, 32.0, radius_cells=0), 10.0)
+
+    def test_digest_aggregates_cities_live_and_forecast(self):
+        dates = ["2026-11-14", "2026-11-15", "2026-11-16"]
+        daily = {
+            "2026-11-14": [_pt("A", 71, 31, 100), _pt("A", 71.02, 31, 120), _pt("B", 70, 30, 10)],
+            "2026-11-15": [_pt("A", 71, 31, 200), _pt("B", 70, 30, 20)],
+            "2026-11-16": [_pt("A", 71, 31, 50), _pt("B", 70, 30, None), _pt("C", 72, 32, 40)],
+        }
+        live = {"type": "FeatureCollection", "metadata": {"data_time": "2026-11-17T10:00:00Z"}, "features": [
+            _pt("A", 71, 31, 60, reading_stale=False), _pt("A", 71, 31, 80, reading_stale=False),
+            _pt("B", 70, 30, 5, reading_stale=True)]}
+        index = {"init_time": "2026-11-17T09:00:00+00:00", "beta": True, "leads": [
+            {"lead_h": 3, "valid_time": "t3", "stats": {"mean": 50}}, {"lead_h": 24, "valid_time": "t24", "stats": {"mean": 40}}]}
+
+        def fake_cached(key, path, params=None, ttl_name=None, validate=None):
+            if key == "forecast_index":
+                return index, {"fetched_at": time.time(), "stale": False, "source": "memory"}
+            if key.endswith(":24"):
+                return {**self.GRID, "pm25": [v * 2 for v in self.GRID["pm25"]]}, {}
+            return self.GRID, {}
+
+        with mock.patch.object(hc, "tile_dates", return_value={"dates": dates}),              mock.patch.object(hc, "stations_daily_geojson", side_effect=lambda d: {"features": daily[d]}),              mock.patch.object(hc, "stations_geojson", return_value=live),              mock.patch.object(hc, "cached_json", side_effect=fake_cached), \
+             mock.patch.object(hc, "_drivers", return_value={"dates": dates}), \
+             mock.patch.object(hc, "prefetch_estimate_tiles", return_value=3) as prefetch:
+            d = hc.air_quality_watch(days=3)
+        prefetch.assert_called_once_with(dates)
+        self.assertEqual(d["errors"], {})
+        pw = d["past_week"]
+        self.assertEqual(pw["dates"], dates)
+        a = next(c for c in pw["cities"] if c["city"] == "A")
+        self.assertEqual(a["series"], [110.0, 200.0, 50.0])       # day 1 = mean of two stations
+        self.assertEqual((a["mean"], a["peak"], a["peak_date"]), (120.0, 200.0, "2026-11-15"))
+        self.assertEqual((a["days_above_neqs24"], a["n_stations"]), (3, 2))
+        self.assertNotIn("C", [c["city"] for c in pw["cities"]])   # 1 of 3 days: below the 2-day minimum
+        self.assertEqual(pw["cities"][0]["city"], "A")             # sorted worst first
+        self.assertEqual(d["live"]["n_fresh"], 2)
+        self.assertEqual(d["live"]["category_counts"]["unhealthy"], 2)
+        fa = next(c for c in d["forecast"]["cities"] if c["city"] == "A")
+        self.assertEqual(fa["peak_lead_h"], 24)
+        self.assertEqual(fa["series"][1], 2 * fa["series"][0])
+        self.assertEqual(d["standards"]["neqs_24h"], 35.0)
+
+    def test_prefetch_tiles_once_per_date(self):
+        tiles = hc.tiles_for_bounds(5)
+        self.assertTrue(tiles)
+        self.assertTrue(all(hc.tile_in_coverage(5, x, y) for x, y in tiles))
+        calls = []
+
+        with mock.patch.object(hc, "tile_png", side_effect=lambda *a: calls.append(a)):
+            self.assertEqual(hc.prefetch_estimate_tiles(["2026-11-15", "bad"], zooms=(5,)), 1)
+            self.assertEqual(hc.prefetch_estimate_tiles(["2026-11-15"], zooms=(5,)), 0)  # already queued
+            deadline = time.time() + 10
+            while len(calls) < len(tiles) and time.time() < deadline:
+                time.sleep(0.02)
+        self.assertEqual(len(calls), len(tiles))
+        self.assertTrue(all(c[0] == "2026-11-15" and c[1] == 5 for c in calls))
+
+    def test_fires_daily_from_cumulative_series(self):
+        season = {"days": ["11-14", "11-15", "11-16"], "years": [
+            {"role": "last", "cum": [1, 2, 3]}, {"role": "current", "cum": [100, 130, 190]}],
+            "headline": {"fires": 190, "window": {"start": "2026-09-15", "end": "2026-11-16"},
+                         "last_year": {"year": 2025, "fires": 150, "pct_change": 27}}}
+        with mock.patch.object(hc, "fire_season", return_value=season):
+            out = hc._fires_daily(["2026-11-15", "2026-11-16", "2026-11-20"])
+        self.assertEqual(out["regions"]["punjab"], [30, 60, None])
+        self.assertEqual(out["season"]["punjab"]["pct_change"], 27)
+
+    def test_met_daily_averages_points(self):
+        def loc(w, b):
+            return {"hourly": {"time": ["2026-11-15T00:00", "2026-11-15T12:00", "2026-11-16T00:00"],
+                               "wind_speed_10m": [w, w + 2, 9], "boundary_layer_height": [b, b * 10, 50],
+                               "precipitation": [0, 1, 0], "temperature_2m": [10, 20, 12]}}
+        resp = mock.Mock()
+        resp.json.return_value = [loc(2, 20), loc(4, 40)]
+        resp.raise_for_status.return_value = None
+        with mock.patch.object(hc, "_sess") as sess:
+            sess.return_value.get.return_value = resp
+            out = hc._met_daily(["2026-11-15"])
+        self.assertEqual(set(out), {"2026-11-15"})
+        day = out["2026-11-15"]
+        self.assertEqual(day["wind_kmh"], 4.0)        # mean of 3 and 5
+        self.assertEqual(day["blh_max_m"], 300.0)     # mean of 200 and 400
+        self.assertEqual(day["blh_min_m"], 30.0)
+        self.assertEqual(day["precip_mm"], 1.0)
+
+    def test_throttled_tile_is_transparent_png_not_429(self):
+        from rest_framework.exceptions import Throttled
+        req = RequestFactory().get("/x")
+        with mock.patch.object(hv.HawanamaTileView, "check_throttles", side_effect=Throttled()):
+            res = hv.HawanamaTileView.as_view()(req, date="2026-11-16", z="6", x="44", y="26")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "image/png")
+        self.assertEqual(res["Cache-Control"], "no-store")
+
+    def test_digest_degrades_per_part(self):
+        with mock.patch.object(hc, "tile_dates", side_effect=hc.HawanamaUnavailable("x")),              mock.patch.object(hc, "stations_geojson", return_value={"features": [], "metadata": {}}),              mock.patch.object(hc, "cached_json", side_effect=hc.HawanamaUnavailable("y")):
+            d = hc.air_quality_watch()
+        self.assertIsNone(d["past_week"])
+        self.assertIsNone(d["forecast"])
+        self.assertIsNotNone(d["live"])
+        self.assertEqual(set(d["errors"]), {"past_week", "drivers", "forecast"})
+        with mock.patch.object(hc, "tile_dates", side_effect=hc.HawanamaUnavailable("x")),              mock.patch.object(hc, "stations_geojson", side_effect=hc.HawanamaUnavailable("x")),              mock.patch.object(hc, "cached_json", side_effect=hc.HawanamaUnavailable("y")):
+            hc._watch_memo.update({"at": 0.0, "key": None, "payload": None})
+            with self.assertRaises(hc.HawanamaUnavailable):
+                hc.air_quality_watch()

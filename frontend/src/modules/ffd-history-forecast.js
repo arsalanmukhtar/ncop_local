@@ -33,6 +33,8 @@
 // common substring once punctuation is stripped — same "known real-world
 // naming inconsistency" pattern story-dynamic-weather.js's own
 // _buildFfdWaypoints already documents for the `from` graph.
+import { FFD_LIMIT_TIERS } from "./ffd-flood-limits.js";
+
 const FFD_HISTORY_NAME_ALIASES = {
   GANDASINGHWALA: "GSWALA",
 };
@@ -325,7 +327,7 @@ function _escapeHtmlLocal(s) {
  * axes never distorts text. Omitted (default 300/120 = 2.5), this renders
  * identically to the fixed original — Story Mode's own call never passes
  * it. Returns "" if there isn't enough data to plot anything. */
-export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily, inflowHistory = [], aspectRatio = 300 / 120 }) {
+export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglowsDaily, inflowHistory = [], aspectRatio = 300 / 120, limits = null }) {
   const width = 300;
   // Clamped so a pathological measurement (a near-zero-height or
   // extremely tall container) can't produce an unreadable or degenerate
@@ -351,6 +353,23 @@ export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglows
     const mag = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1))));
     return Math.ceil(raw / mag) * mag;
   })();
+
+  // FFD flood limits (ffd-flood-limits.js) — optional; omitted, nothing
+  // below changes. Thresholds inside the plotted range are drawn as dashed
+  // lines; the nearest one above it is flagged at the top edge, so the chart
+  // always says how far the river is from its next flood tier.
+  const limitLines = [];
+  let offscaleNext = null;
+  if (limits) {
+    const tiers = [
+      ...FFD_LIMIT_TIERS.map((t) => ({ label: t.label, color: t.color, value: limits.thresholds[t.key] })),
+      { label: "Design capacity", color: "#ef4444", value: limits.design, design: true },
+    ].filter((t) => Number.isFinite(t.value));
+    for (const t of tiers) {
+      if (t.value <= niceMax) limitLines.push(t);
+      else if (!offscaleNext || t.value < offscaleNext.value) offscaleNext = t;
+    }
+  }
 
   const xAt = (ms) => padL + ((ms - minX) / spanX) * plotW;
   const yAt = (v) => padT + plotH - (Math.max(0, v) / niceMax) * plotH;
@@ -413,12 +432,17 @@ export function renderFfdOutlookChartSVG({ history, regressionForecast, geoglows
 
   return `
     <svg viewBox="0 0 ${width} ${height}" class="dwr-ffd-chart-svg" role="img" aria-label="30-day discharge history and 14-day outlook"
-         data-points='${pointsAttr}' data-plot-left="${padL}" data-plot-right="${width - padR}" data-plot-top="${padT}" data-plot-bottom="${padT + plotH}">
+         data-points='${pointsAttr}'${limits ? ` data-limits='${_escapeHtmlLocal(JSON.stringify({ design: limits.design, thresholds: limits.thresholds }))}'` : ""} data-plot-left="${padL}" data-plot-right="${width - padR}" data-plot-top="${padT}" data-plot-bottom="${padT + plotH}">
       ${gridSteps.map((v) => `
         <line x1="${padL}" x2="${width - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="${_CHART_COLORS.grid}" stroke-width="1"/>
         <text x="${padL - 4}" y="${(yAt(v) + 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${_CHART_COLORS.text}">${v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v)}</text>
       `).join("")}
       ${nowX != null ? `<line x1="${nowX.toFixed(1)}" x2="${nowX.toFixed(1)}" y1="${padT}" y2="${padT + plotH}" stroke="${_CHART_COLORS.text}" stroke-width="1" stroke-dasharray="2 2"/>` : ""}
+      ${limitLines.map((t) => `
+        <line x1="${padL}" x2="${width - padR}" y1="${yAt(t.value).toFixed(1)}" y2="${yAt(t.value).toFixed(1)}" stroke="${t.color}" stroke-width="${t.design ? 1.4 : 1}" stroke-dasharray="${t.design ? "6 2" : "3 3"}" opacity="0.9"/>
+        <text x="${(padL + 3).toFixed(1)}" y="${(yAt(t.value) - 2).toFixed(1)}" font-size="7" font-weight="700" fill="${t.color}">${_escapeHtmlLocal(t.label)} ${_fmtCusecs(t.value)}</text>
+      `).join("")}
+      ${offscaleNext ? `<text class="dwr-ffd-next-limit" x="${(padL + 3).toFixed(1)}" y="${(padT + 7).toFixed(1)}" font-size="7.5" font-weight="700" fill="${offscaleNext.color}">↑ ${_escapeHtmlLocal(offscaleNext.label)} at ${_fmtCusecs(offscaleNext.value)} cusecs (${(offscaleNext.value / Math.max(rawMaxY, 1)).toFixed(1)}× the plotted peak)</text>` : ""}
       ${historyAreaPath ? `<path d="${historyAreaPath}" fill="${_CHART_COLORS.history}" fill-opacity="0.10" stroke="none"/>` : ""}
       ${inflowHistory.length ? `<path d="${pathFor(inflowHistory)}" fill="none" stroke="${_CHART_COLORS.inflow}" stroke-width="1.75" stroke-dasharray="3 2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
       ${history.length ? `<path d="${pathFor(history)}" fill="none" stroke="${_CHART_COLORS.history}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}

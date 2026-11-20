@@ -24,6 +24,11 @@
 import { getFfdHistoryAll } from "./gcop-api-cache.js";
 import { buildFfdStationOutlook, renderFfdOutlookChartSVG } from "./ffd-history-forecast.js";
 
+import {
+  ffdFloodLimitsFor, ffdLimitTier, ffdNextThreshold, ffdSpillState,
+  FFD_LIMIT_TIERS, FFD_NORMAL_TIER, FFD_FLOOD_LIMITS_SOURCE,
+} from "./ffd-flood-limits.js";
+
 const MODAL_ID = "ffd-stats-modal";
 const CMS_TO_CUSECS = 35.3147; // 1 m3/s = 35.3147 ft3/s — same conversion story-dynamic-weather.js already uses, kept in lockstep by hand since the two modules don't import from each other
 
@@ -153,6 +158,7 @@ function _attachFfdDragAndResize(modal) {
   const MIN_W = 480, MIN_H = 300;
 
   const pinToPixels = () => {
+    modal.dataset.userPlaced = "1"; // the operator's placement wins over automatic fitting
     const r = modal.getBoundingClientRect();
     modal.style.left = `${Math.round(r.left)}px`;
     modal.style.top = `${Math.round(r.top)}px`;
@@ -233,6 +239,105 @@ function _attachFfdDragAndResize(modal) {
   }
 }
 
+// ---- Capacity & flood limits card -----------------------------------------
+// FFD's published design capacity and flood thresholds for the station, with
+// today's flow placed on the ladder. Flow at or above design capacity means
+// the structure is passing more than it was built for: spill-over risk.
+function _num(v) {
+  const n = Number(String(v ?? "").replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+function _fmtLacs(cusecs) {
+  return cusecs == null ? "—" : `${(cusecs / 100000).toLocaleString(undefined, { maximumFractionDigits: 2 })} lacs`;
+}
+function _renderCapacityCardHTML(name, outflow, inflow) {
+  const limits = ffdFloodLimitsFor(name);
+  if (!limits) {
+    return `<div class="ffd-cap ffd-cap--none"><div class="ffd-cap__head">Capacity &amp; flood limits</div>
+      <div class="ffd-cap__note">FFD publishes no flood limits for ${_escapeHtml(name || "this station")}.</div></div>`;
+  }
+  // The structure passes the larger of the two readings.
+  const flow = Math.max(...[outflow, inflow].filter(Number.isFinite), -Infinity);
+  const has = Number.isFinite(flow);
+  const tier = has ? ffdLimitTier(flow, limits) : null;
+  const next = has ? ffdNextThreshold(flow, limits) : null;
+  const spill = ffdSpillState(flow, limits);
+  const scaleMax = limits.design || limits.thresholds.exceptional || limits.thresholds.very_high || 1;
+  const pos = (v) => Math.max(0, Math.min(100, (v / scaleMax) * 100));
+  const ticks = FFD_LIMIT_TIERS.filter((t) => limits.thresholds[t.key] != null)
+    .map((t) => `<i class="ffd-cap__tick" style="left:${pos(limits.thresholds[t.key]).toFixed(1)}%;background:${t.color}" title="${_escapeHtml(t.label)}"></i>`).join("");
+  const spillChip = {
+    over: `<span class="ffd-cap__chip is-over">Spill-over: flow exceeds design capacity</span>`,
+    near: `<span class="ffd-cap__chip is-near">Near design capacity (${Math.round(spill.share * 100)}%)</span>`,
+    ok: `<span class="ffd-cap__chip is-ok">Within design capacity (${spill.share < 0.01 ? "<1" : Math.round(spill.share * 100)}%)</span>`,
+    unknown: `<span class="ffd-cap__chip">Design capacity not published</span>`,
+  }[has ? spill.state : "unknown"];
+  const rows = [FFD_NORMAL_TIER, ...FFD_LIMIT_TIERS].map((t, i, all) => {
+    const from = t.key === "normal" ? 0 : limits.thresholds[t.key];
+    if (from == null) return "";
+    const nextFrom = all.slice(i + 1).map((x) => limits.thresholds[x.key]).find((v) => v != null);
+    const on = tier && tier.key === t.key;
+    return `<div class="ffd-cap__row${on ? " is-on" : ""}"><span class="ffd-cap__sw" style="background:${t.color}"></span>
+      <span>${_escapeHtml(t.label)}</span><span class="ffd-cap__rng">${t.key === "normal" ? `&lt; ${_fmtLacs(nextFrom)}` : `≥ ${_fmtLacs(from)}`}</span>${on ? `<span class="ffd-cap__now-tag">now</span>` : ""}</div>`;
+  }).join("");
+  return `<div class="ffd-cap${has && spill.state === "over" ? " is-over" : ""}">
+    <div class="ffd-cap__head">Capacity &amp; flood limits <span>${_escapeHtml(limits.river)}</span></div>
+    <div class="ffd-cap__design"><b>${_fmtLacs(limits.design)}</b> design capacity${limits.design ? ` <small>(${limits.design.toLocaleString()} cusecs)</small>` : ""}</div>
+    <div class="ffd-cap__bar" title="Flow as a share of ${limits.design ? "design capacity" : "the exceptional-flood level"}">
+      <i class="ffd-cap__fill" style="width:${has ? pos(flow).toFixed(1) : 0}%;background:${tier?.color || "#28a745"}"></i>${ticks}
+    </div>
+    <div class="ffd-cap__now">${has ? `Now <b>${Math.round(flow).toLocaleString()}</b> cusecs · <b style="color:${tier.color}">${_escapeHtml(tier.label)}</b>${next ? ` · next: ${_escapeHtml(next.label)} at ${_fmtLacs(next.value)}` : ""}` : "No current reading."}</div>
+    ${spillChip}
+    <div class="ffd-cap__ladder">${rows}</div>
+    <div class="ffd-cap__src">${_escapeHtml(FFD_FLOOD_LIMITS_SOURCE)}</div>
+  </div>`;
+}
+
+// ---- Keep clear of the Story panel ------------------------------------------
+// While Story Mode is open, the default placement (left 20%, width 75%) runs
+// under the story panel on the right. Fit the modal into the free strip
+// between the story's floating map popup (left) and the story panel (right).
+// A position the operator chose by dragging/resizing is always respected.
+const STORY_POPUP_IDS = ["ncop-flood-watch-popup", "ncop-dynamic-weather-popup", "ncop-air-quality-watch-popup"];
+function _visibleRect(el) {
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return null;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 ? r : null;
+}
+function _fitBesideStoryPanel(modal) {
+  if (!modal || modal.dataset.userPlaced === "1" || modal.classList.contains("hidden")) return;
+  const story = _visibleRect(document.getElementById("story-modal"));
+  if (!story) {
+    for (const p of ["left", "width", "right"]) modal.style[p] = "";
+    return;
+  }
+  const margin = 12;
+  let left = margin;
+  for (const id of STORY_POPUP_IDS) {
+    const r = _visibleRect(document.getElementById(id));
+    if (r && r.left < window.innerWidth / 2) left = Math.max(left, r.right + margin);
+  }
+  const right = story.left - margin;
+  const minW = 480;
+  if (right - left < minW) left = Math.max(margin, right - minW); // not enough room: overlap the popup, never the panel
+  modal.style.right = "auto";
+  modal.style.left = `${Math.round(left)}px`;
+  modal.style.width = `${Math.round(Math.max(minW, right - left))}px`;
+}
+/** Re-fit after the story's own popup appears (it may still be hidden when
+ *  the modal first opens). No-op when the operator has placed the modal. */
+export function refitFfdModal() {
+  _fitBesideStoryPanel(document.getElementById(MODAL_ID));
+}
+let _fitWired = false;
+function _wireStoryFit(modal) {
+  if (_fitWired) return;
+  _fitWired = true;
+  window.addEventListener("resize", () => _fitBesideStoryPanel(modal));
+}
+
 // ---- Open / close -------------------------------------------------------------
 /**
  * ctx: { name, province, status, outflow, inflow, lat, lon }
@@ -242,6 +347,9 @@ export async function showFfdModalForStation(ctx) {
   const modal = _ensureModal();
   modal.classList.remove("hidden");
   modal.classList.add("is-open");
+  _wireStoryFit(modal);
+  _fitBesideStoryPanel(modal);
+  modal._ffdName = ctx.name;
 
   const nameEl = document.getElementById("ffd-modal-name");
   const metaEl = document.getElementById("ffd-modal-meta");
@@ -268,6 +376,7 @@ export async function showFfdModalForStation(ctx) {
         <div class="ffd-stat__label">Inflow (now)</div>
         <div class="ffd-stat__value">${_escapeHtml(ctx.inflow ?? "n/a")}</div>
       </div>
+      ${_renderCapacityCardHTML(ctx.name, _num(ctx.outflow), _num(ctx.inflow))}
     `;
   }
   if (subEl) subEl.textContent = "Loading 30-day history…";
@@ -392,6 +501,7 @@ function _renderOutlook(outlook, name) {
         geoglowsDaily: outlook.geoglowsDaily,
         inflowHistory: outlook.inflowHistory,
         aspectRatio,
+        limits: ffdFloodLimitsFor(name) || ffdFloodLimitsFor(outlook.matchedKey),
       });
     }
     _attachChartTooltip(hostEl);
@@ -423,6 +533,8 @@ function _attachChartTooltip(hostEl) {
 
   let points;
   try { points = JSON.parse(svg.getAttribute("data-points") || "[]"); } catch (_) { points = []; }
+  let limits = null;
+  try { limits = JSON.parse(svg.getAttribute("data-limits") || "null"); } catch (_) { limits = null; }
   if (!points.length) return;
 
   // Mapped from the capture rect's OWN x/width (it now spans the entire
@@ -474,7 +586,14 @@ function _attachChartTooltip(hostEl) {
       .filter((s) => nearest[s.key] != null)
       .map((s) => `<span class="dwr-ffd-tt-row"><span class="dwr-ffd-tt-swatch" style="background:${s.color}"></span>${s.label} ${_fmtTooltipNum(nearest[s.key])}</span>`)
       .join("");
-    tooltip.innerHTML = `<div class="dwr-ffd-tt-date">${_escapeHtml(_fmtTooltipDate(nearest.d))}</div>${rows}`;
+    let capRow = "";
+    const flow = Math.max(...["o", "i"].map((k) => nearest[k]).filter(Number.isFinite), -Infinity);
+    if (limits && Number.isFinite(flow)) {
+      const tier = ffdLimitTier(flow, limits);
+      const share = limits.design ? flow / limits.design : null;
+      capRow = `<span class="dwr-ffd-tt-row dwr-ffd-tt-cap"><span class="dwr-ffd-tt-swatch" style="background:${tier.color}"></span>${_escapeHtml(tier.label)}${share != null ? ` · ${(share * 100).toFixed(share < 0.1 ? 1 : 0)}% of design capacity${share >= 1 ? " — spill-over" : ""}` : ""}</span>`;
+    }
+    tooltip.innerHTML = `<div class="dwr-ffd-tt-date">${_escapeHtml(_fmtTooltipDate(nearest.d))}</div>${rows}${capRow}`;
     tooltip.style.display = "block";
 
     const hostRect = hostEl.getBoundingClientRect();
@@ -503,6 +622,7 @@ export function hideFfdModal() {
   if (!modal) return;
   modal.classList.add("hidden");
   modal.classList.remove("is-open");
+  delete modal.dataset.userPlaced; // next open fits automatically again
   modal._ffdRequestToken = (modal._ffdRequestToken || 0) + 1; // invalidate any load still in flight
 }
 

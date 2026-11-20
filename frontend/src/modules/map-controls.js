@@ -212,6 +212,35 @@ export class StoryManager {
   // briefings (Dynamic Weather Report, 7-Day Weather Outlook — the
   // latter injected separately by story-provincial-forecast.js, same
   // pattern as Dynamic Weather Report's own injection).
+  // One-line summaries of the cinematic briefings (each injected into
+  // #storySelect by its own story-*.js module), shown when nothing is picked.
+  static BRIEFINGS = [
+    {
+      value: "__provincial_forecast__", icon: "🗓️", title: "7-Day Weather Outlook", theme: "Weather", color: "#46b2ff",
+      basis: "Province-by-province outlook for the coming week, with active PMD hazard warnings.",
+      data: "NWFC weekly outlook · PMD warnings (polygons).",
+      shows: "Each province's day-wise forecast and the warning areas affecting it.",
+    },
+    {
+      value: "__dynamic_weather__", icon: "🌦️", title: "Dynamic Weather Report", theme: "Weather", color: "#38bdf8",
+      basis: "What the weather did in the last 24 hours and what comes next.",
+      data: "NWFC daily rainfall report & station observations · DWD satellite IR · 2m temperature · Heatwave Monitoring · Meteoblue precipitation.",
+      shows: "Heaviest-rain districts, hottest stations, 8-day temperature and 24h precipitation outlook by province.",
+    },
+    {
+      value: "__air_quality_watch__", icon: "🌫️", title: "National Air Quality Watch", theme: "Air quality", color: "#a78bfa",
+      basis: "Fine-particle (PM2.5) pollution over the past week and the next 72 hours, judged against WHO and Pak-NEQS limits.",
+      data: "Hawanama (PAQI) PM2.5 estimate, stations & forecast · WAQI stations · Open-Meteo weather · VIIRS crop fires.",
+      shows: "Worst cities and days, why air is bad (weather, crop burning, emissions), forecast peaks and health advice.",
+    },
+    {
+      value: "__flood_watch__", icon: "🌊", title: "National Flood Watch", theme: "Floods", color: "#14b8a6",
+      basis: "River status now and the flood outlook, with the research on why Pakistan floods.",
+      data: "FFD barrages & dams · CEMS GloFAS 15-day outlook & Google Flood Hub gauges/inundation (via IWMI) · 33 peer-reviewed studies.",
+      shows: "River-by-river tour, how close each river is to its warning level, AI gauge forecasts and a national watch level.",
+    },
+  ];
+
   static HIDDEN_STORY_IDS = new Set(["demostory", "hydrological", "meteorological"]);
 
   _renderList() {
@@ -237,13 +266,36 @@ export class StoryManager {
 
     if (meta) meta.textContent = "";
     chapters.innerHTML = `
-        <div style="padding:16px 14px;border:1px dashed #444;border-radius:10px;opacity:.92;display:flex;flex-direction:column;gap:8px;">
+        <div style="padding:14px;border:1px dashed #444;border-radius:10px;display:flex;flex-direction:column;gap:10px;">
           <div style="font-weight:700;font-size:14px;color:#eaeaea;">Please pick a story</div>
-          <div style="font-size:12.5px;line-height:1.55;opacity:.85;">
-            Story Mode plays cinematic, data-driven briefings directly on the map — real PMD/NWFC/FFD figures narrated scene by scene, not scripted content. Use the selector above to start one; playback begins automatically as soon as you pick it.
+          <div style="font-size:12px;line-height:1.5;opacity:.8;">
+            Cinematic, data-driven briefings played on the map — live figures narrated scene by scene, nothing scripted. Pick one above, or click a card below; playback starts automatically.
           </div>
+          ${StoryManager.BRIEFINGS.map((b) => `
+            <button type="button" class="ncop-story-brief" data-story-value="${b.value}"
+              style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:5px;padding:10px 11px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ${b.color};">
+              <span style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <span style="font-weight:700;font-size:12.5px;color:#fff;">${b.icon} ${b.title}</span>
+                <span style="font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:${b.color}33;color:${b.color};white-space:nowrap;">${b.theme}</span>
+              </span>
+              <span style="font-size:11px;line-height:1.45;color:rgba(234,234,234,.85);">${b.basis}</span>
+              <span style="font-size:10.5px;line-height:1.45;color:rgba(234,234,234,.6);"><b style="color:rgba(234,234,234,.75);">Data:</b> ${b.data}</span>
+              <span style="font-size:10.5px;line-height:1.45;color:rgba(234,234,234,.6);"><b style="color:rgba(234,234,234,.75);">Shows:</b> ${b.shows}</span>
+            </button>`).join("")}
         </div>
       `;
+    // A card starts its briefing exactly as the selector does: set the
+    // value and fire the same "change" event the story modules listen for.
+    if (!chapters.dataset.briefsWired) {
+      chapters.dataset.briefsWired = "1";
+      chapters.addEventListener("click", (e) => {
+        const card = e.target.closest?.(".ncop-story-brief");
+        const select = document.getElementById("storySelect");
+        if (!card || !select) return;
+        select.value = card.dataset.storyValue;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
   }
   // ADD this helper inside StoryManager
   _renderMedia(ch) {

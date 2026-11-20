@@ -4,12 +4,12 @@ from .translate import NcopTranslateView
 from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView, FloodModelReportExportView
 from .iwmi_flood_views import (
     IwmiGlofasPointsView, IwmiGlofasPointDischargeView, IwmiGlofasForecastDaysView, IwmiFloodhubGaugesView,
-    IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView,
+    IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView, IwmiWatchView,
 )
 from .hawanama_views import (
     HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
     HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
-    HawanamaFireSeasonView, HawanamaHealthView,
+    HawanamaFireSeasonView, HawanamaHealthView, HawanamaWatchView,
 )
 from .landslide_model_views import LandslideModelRunView, LandslideModelStatusView, LandslideModelExportView, LandslideModelReportExportView
 from .views import (
@@ -81,6 +81,7 @@ urlpatterns = [
     path("api/iwmi/floodhub/inundation/", IwmiFloodhubInundationView.as_view(), name="iwmi-floodhub-inundation"),
     path("api/iwmi/status/", IwmiStatusView.as_view(), name="iwmi-status"),
     path("api/iwmi/health/", IwmiHealthView.as_view(), name="iwmi-health"),
+    path("api/iwmi/watch/", IwmiWatchView.as_view(), name="iwmi-watch"),
     # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see
     # hawanama_views.py. CC BY 4.0, attribution carried in every response.
     path("api/hawanama/stations/", HawanamaStationsView.as_view(), name="hawanama-stations"),
@@ -94,6 +95,7 @@ urlpatterns = [
     path("api/hawanama/fires/outlook/", HawanamaFiresOutlookView.as_view(), name="hawanama-fires-outlook"),
     path("api/hawanama/fires/season/", HawanamaFireSeasonView.as_view(), name="hawanama-fire-season"),
     path("api/hawanama/health/", HawanamaHealthView.as_view(), name="hawanama-health"),
+    path("api/hawanama/watch/", HawanamaWatchView.as_view(), name="hawanama-watch"),
     path("", dashboard_view, name="dashboard"),
     path("docs/", documentation_view, name="documentation"),
 

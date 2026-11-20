@@ -542,5 +542,155 @@ def regional_status():
     return out
 
 
+# ---------------------------------------------------------------------------
+# Story digest — "National Flood Watch" (story-flood-watch.js)
+# ---------------------------------------------------------------------------
+# One payload for one country, built only from the caches above (no new
+# upstream routes): GloFAS points with their 15-day median discharge and
+# daily status, per-day status counts, "headroom" (forecast peak as a share
+# of the warning threshold — informative even when nothing is alerting),
+# Flood Hub gauges, inundation extent and the regional context. Each part
+# degrades independently.
+
+_WATCH_TTL_SECONDS = 600
+_watch_memo = {}  # iso3 -> (built_at, payload)
+_watch_lock = threading.Lock()
+
+
+def _bbox(geoms):
+    xs, ys = [], []
+
+    def walk(c):
+        if isinstance(c, (list, tuple)) and c and isinstance(c[0], (int, float)):
+            xs.append(c[0])
+            ys.append(c[1])
+        elif isinstance(c, (list, tuple)):
+            for x in c:
+                walk(x)
+
+    for g in geoms:
+        walk((g or {}).get("coordinates"))
+    return [min(xs), min(ys), max(xs), max(ys)] if xs else None
+
+
+def _watch_glofas(iso3):
+    days = glofas_forecast_days_geojson()
+    meta = days["metadata"]
+    leads = meta.get("leads") or []
+    by_id = {f["properties"]["id"]: f for f in days["features"]}
+    points, counts, unreliable = [], {k: 0 for k in GLOFAS_STATUS_ORDER}, 0
+    day_counts = [{"lead": L, "date": meta.get("lead_dates", {}).get(str(L)), **{k: 0 for k in GLOFAS_STATUS_ORDER}}
+                  for L in leads]
+    for f in glofas_points_geojson()["features"]:
+        p = f["properties"]
+        if p["iso3"] != iso3:
+            continue
+        lon, lat = f["geometry"]["coordinates"]
+        dp = (by_id.get(p["id"]) or {}).get("properties") or {}
+        q = [dp.get(f"q_{L}") for L in leads]
+        s = [dp.get(f"s_{L}") for L in leads]
+        warn = p.get("warning")
+        finite = [(v, i) for i, v in enumerate(q) if isinstance(v, (int, float))]
+        max_q, max_i = max(finite) if finite else (None, None)
+        ratio = round(max_q / warn, 3) if max_q is not None and warn else None
+        reliable = p.get("quality") != "unreliable"
+        if reliable:
+            counts[p["status"]] = counts.get(p["status"], 0) + 1
+            for i, st in enumerate(s):
+                if st in GLOFAS_STATUS_ORDER:
+                    day_counts[i][st] += 1
+        else:
+            unreliable += 1
+        points.append({
+            "id": p["id"], "lon": lon, "lat": lat, "river": p.get("river"), "site": p.get("site_name"),
+            "status": p["status"], "peak_prob": p.get("peak_prob"), "peak_lead": p.get("peak_lead"),
+            "quality": p.get("quality"), "warning": warn, "danger": p.get("danger"), "extreme": p.get("extreme"),
+            "q": q, "s": s, "max_q": max_q, "max_lead": leads[max_i] if max_i is not None else None,
+            "headroom_ratio": ratio,
+        })
+    rank = {k: i for i, k in enumerate(GLOFAS_STATUS_ORDER)}
+    points.sort(key=lambda x: (x["quality"] == "unreliable", -rank.get(x["status"], 0), -(x["headroom_ratio"] or 0)))
+    return {"forecast_date": meta.get("forecast_date"), "run_age_days": meta.get("run_age_days"),
+            "run_stale": meta.get("run_stale"), "prob_cutoff": PROB_CUTOFF, "leads": leads,
+            "lead_dates": meta.get("lead_dates"), "points": points, "counts": counts, "unreliable": unreliable,
+            "day_counts": day_counts, "missing_series": meta.get("missing"), "attribution": ATTRIBUTION_GLOFAS}
+
+
+def _watch_floodhub(iso3):
+    h = floodhub_gauges_geojson()
+    gauges, counts, trends = [], {k: 0 for k in FLOODHUB_SEVERITY_ORDER}, {}
+    for f in h["features"]:
+        p = f["properties"]
+        if p["iso3"] != iso3:
+            continue
+        lon, lat = f["geometry"]["coordinates"]
+        sev = p.get("severity") or "NO_FLOODING"
+        counts[sev] = counts.get(sev, 0) + 1
+        trends[p.get("trend") or "UNKNOWN"] = trends.get(p.get("trend") or "UNKNOWN", 0) + 1
+        gauges.append({"id": p["gauge_id"], "lon": lon, "lat": lat, "river": p.get("river"), "site": p.get("site_name"),
+                       "severity": sev, "trend": p.get("trend"), "verified": p.get("quality_verified"),
+                       "warning": p.get("warning"), "danger": p.get("danger"), "extreme": p.get("extreme"),
+                       "unit": p.get("unit")})
+    rank = {k: i for i, k in enumerate(FLOODHUB_SEVERITY_ORDER)}
+    gauges.sort(key=lambda g: (-rank.get(g["severity"], 0), g["trend"] != "RISE", -(g["warning"] or 0)))
+    return {"issued_time": h["metadata"].get("issued_time"), "gauges": gauges, "counts": counts, "trends": trends,
+            "attribution": ATTRIBUTION_FLOODHUB}
+
+
+def _watch_inundation(iso3):
+    fc = floodhub_inundation_geojson()
+    mine = [f for f in fc["features"] if f["properties"].get("iso3") == iso3]
+    return {"count": len(mine), "count_region": len(fc["features"]), "bbox": _bbox(f["geometry"] for f in mine),
+            "note": fc["metadata"].get("note")}
+
+
+def _watch_region():
+    s = regional_status()
+    alerting = sorted(
+        (iso for iso, c in s["countries"].items()
+         if (c.get("glofas") or {}).get("alerts") or (c.get("floodhub") or {}).get("flooding")))
+    return {"totals": s["totals"], "countries_alerting": alerting, "top_alerts": s.get("top_alerts") or []}
+
+
+def flood_watch(iso3="PAK"):
+    """Digest for the National Flood Watch story (memoised 10 min)."""
+    iso3 = (iso3 or "PAK").upper()
+    if not _ISO3_RE.match(iso3):
+        raise ValueError("invalid iso3")
+    now = datetime.now(timezone.utc).timestamp()
+    with _watch_lock:
+        hit = _watch_memo.get(iso3)
+        if hit and now - hit[0] < _WATCH_TTL_SECONDS:
+            return hit[1]
+    errors = {}
+
+    def part(name, fn, *a):
+        try:
+            return fn(*a)
+        except Unavailable as e:
+            errors[name] = str(e)
+        except Exception as e:  # a shape change in one part must not sink the others
+            logger.warning("iwmi_flood_client: flood watch part %s failed", name, exc_info=True)
+            errors[name] = type(e).__name__
+        return None
+
+    payload = {
+        "iso3": iso3,
+        "glofas": part("glofas", _watch_glofas, iso3),
+        "floodhub": part("floodhub", _watch_floodhub, iso3),
+        "inundation": part("inundation", _watch_inundation, iso3),
+        "region": part("region", _watch_region),
+        "errors": errors, "generated_at": _iso_now(),
+        "attribution": f"{ATTRIBUTION_GLOFAS}; {ATTRIBUTION_FLOODHUB}",
+    }
+    if all(payload[k] is None for k in ("glofas", "floodhub", "inundation")):
+        raise Unavailable("flood watch: no IWMI part available")
+    # A partial digest is kept for 2 minutes only, so a recovered part shows up soon.
+    built = now - (_WATCH_TTL_SECONDS - 120 if errors else 0)
+    with _watch_lock:
+        _watch_memo[iso3] = (built, payload)
+    return payload
+
+
 def health():
     return {"countries": countries(), **client.cache_state(exclude_prefixes=("glofas_series:", "floodhub_discharge:"))}

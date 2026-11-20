@@ -689,6 +689,404 @@ def fire_season(region, season="rice"):
 
 
 # ---------------------------------------------------------------------------
+# Story digest — "National Air Quality Watch" (story-air-quality-watch.js)
+# ---------------------------------------------------------------------------
+# One payload the cinematic story narrates from, built only from the cached
+# endpoints above (no extra upstream routes): the last N complete days of
+# station daily means aggregated per city, the live station snapshot, and
+# the gridded forecast sampled at each city for every lead. Thresholds are
+# the published ones the narration cites:
+#   WHO Air Quality Guidelines 2021: PM2.5 24-h 15, annual 5 µg/m³;
+#     24-h interim targets IT-1..IT-4 = 75 / 50 / 37.5 / 25 µg/m³.
+#   Pakistan NEQS for ambient air (2010, in force 2012): PM2.5 24-h 35,
+#     annual 15 µg/m³.
+#   US EPA AQI breakpoints (2024 revision): 9.0 / 35.4 / 55.4 / 125.4 / 225.4.
+
+AQ_STANDARDS = {
+    "who_24h": 15.0, "who_annual": 5.0,
+    "who_interim_24h": {"IT-1": 75.0, "IT-2": 50.0, "IT-3": 37.5, "IT-4": 25.0},
+    "neqs_24h": 35.0, "neqs_annual": 15.0,
+    "epa_breakpoints": [9.0, 35.4, 55.4, 125.4, 225.4],
+}
+_EPA_CATEGORIES = ("good", "moderate", "usg", "unhealthy", "very_unhealthy", "hazardous")
+_WATCH_TTL_SECONDS = 900
+_watch_memo = {"at": 0.0, "key": None, "payload": None}
+_watch_lock = threading.Lock()
+
+
+def epa_category(pm25):
+    """US EPA 2024 PM2.5 AQI category for a concentration (µg/m³)."""
+    if pm25 is None:
+        return None
+    for bp, cat in zip(AQ_STANDARDS["epa_breakpoints"], _EPA_CATEGORIES):
+        if pm25 <= bp:
+            return cat
+    return _EPA_CATEGORIES[-1]
+
+
+def _num(v):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and 0 <= v < 1500 else None
+
+
+def _by_city(features):
+    """city -> {"vals": [...], "lon": mean, "lat": mean} for features with a
+    valid pm25 and a city name."""
+    groups = {}
+    for f in features:
+        p = f.get("properties") or {}
+        city, v = (p.get("city") or "").strip(), _num(p.get("pm25"))
+        if not city or v is None:
+            continue
+        lon, lat = (f.get("geometry") or {}).get("coordinates") or (None, None)
+        g = groups.setdefault(city, {"vals": [], "lons": [], "lats": []})
+        g["vals"].append(v)
+        if lon is not None and lat is not None:
+            g["lons"].append(lon)
+            g["lats"].append(lat)
+    for g in groups.values():
+        g["lon"] = sum(g["lons"]) / len(g["lons"]) if g["lons"] else None
+        g["lat"] = sum(g["lats"]) / len(g["lats"]) if g["lats"] else None
+    return groups
+
+
+def _summary(vals):
+    if not vals:
+        return None
+    a = np.asarray(vals, dtype=np.float64)
+    n = len(a)
+    return {
+        "n": n, "mean": round(float(a.mean()), 1), "median": round(float(np.median(a)), 1),
+        "p90": round(float(np.percentile(a, 90)), 1), "max": round(float(a.max()), 1),
+        "share_above_who24": round(float((a > AQ_STANDARDS["who_24h"]).mean()), 3),
+        "share_above_neqs24": round(float((a > AQ_STANDARDS["neqs_24h"]).mean()), 3),
+        "share_unhealthy": round(float((a > AQ_STANDARDS["epa_breakpoints"][2]).mean()), 3),
+    }
+
+
+def sample_grid(grid, lon, lat, radius_cells=1):
+    """Mean of the finite forecast cells within `radius_cells` of (lon, lat)
+    — a 3x3 block (~0.3°, roughly a city and its outskirts) by default.
+    None when the point is outside the grid or every cell is empty."""
+    shape, b = grid["grid"]["shape"], grid["grid"]["bounds"]
+    rows, cols = int(shape[0]), int(shape[1])
+    res_lat = (b["north"] - b["south"]) / max(rows - 1, 1)
+    res_lon = (b["east"] - b["west"]) / max(cols - 1, 1)
+    if not (b["south"] - res_lat <= lat <= b["north"] + res_lat and b["west"] - res_lon <= lon <= b["east"] + res_lon):
+        return None
+    r = int(round((lat - b["south"]) / res_lat))
+    if grid["grid"].get("row_order", "south_to_north") != "south_to_north":
+        r = rows - 1 - r
+    c = int(round((lon - b["west"]) / res_lon))
+    vals = grid["pm25"]
+    picked = []
+    for rr in range(max(r - radius_cells, 0), min(r + radius_cells, rows - 1) + 1):
+        for cc in range(max(c - radius_cells, 0), min(c + radius_cells, cols - 1) + 1):
+            v = _num(vals[rr * cols + cc])
+            if v is not None:
+                picked.append(v)
+    return round(sum(picked) / len(picked), 1) if picked else None
+
+
+def _past_week(days):
+    dates = tile_dates(limit=max(days + 2, 10))["dates"][-days:]
+    daily, city_days = [], {}
+    for d in dates:
+        try:
+            fc = stations_daily_geojson(d)
+        except HawanamaUnavailable:
+            continue
+        groups = _by_city(fc["features"])
+        all_vals = [v for g in groups.values() for v in g["vals"]]
+        s = _summary(all_vals)
+        if not s:
+            continue
+        city_means = {c: sum(g["vals"]) / len(g["vals"]) for c, g in groups.items()}
+        worst = max(city_means, key=city_means.get) if city_means else None
+        daily.append({"date": d, **s, "n_cities": len(groups), "worst_city": worst,
+                      "worst_city_pm25": round(city_means[worst], 1) if worst else None})
+        for c, g in groups.items():
+            city_days.setdefault(c, {})[d] = (city_means[c], len(g["vals"]), g["lon"], g["lat"])
+    used = [x["date"] for x in daily]
+    min_days = max(2, (len(used) + 1) // 2)
+    cities = []
+    for c, dd in city_days.items():
+        if len(dd) < min_days:
+            continue
+        series = [round(dd[d][0], 1) if d in dd else None for d in used]
+        vals = [v for v in series if v is not None]
+        peak_i = max(range(len(series)), key=lambda i: series[i] if series[i] is not None else -1)
+        lons = [x[2] for x in dd.values() if x[2] is not None]
+        lats = [x[3] for x in dd.values() if x[3] is not None]
+        if not lons:
+            continue
+        cities.append({
+            "city": c, "lon": round(sum(lons) / len(lons), 4), "lat": round(sum(lats) / len(lats), 4),
+            "n_stations": max(x[1] for x in dd.values()), "days": len(vals),
+            "mean": round(sum(vals) / len(vals), 1), "peak": series[peak_i], "peak_date": used[peak_i],
+            "days_above_who24": sum(v > AQ_STANDARDS["who_24h"] for v in vals),
+            "days_above_neqs24": sum(v > AQ_STANDARDS["neqs_24h"] for v in vals),
+            "times_who24": round((sum(vals) / len(vals)) / AQ_STANDARDS["who_24h"], 1),
+            "category": epa_category(sum(vals) / len(vals)), "series": series,
+        })
+    cities.sort(key=lambda x: -x["mean"])
+    return {"dates": used, "daily": daily, "cities": cities}
+
+
+def _live_now():
+    fc = stations_geojson()
+    fresh = [f for f in fc["features"] if not (f.get("properties") or {}).get("reading_stale")]
+    groups = _by_city(fresh)
+    cities = sorted(({"city": c, "pm25": round(sum(g["vals"]) / len(g["vals"]), 1), "n": len(g["vals"]),
+                      "lon": g["lon"], "lat": g["lat"]} for c, g in groups.items() if g["lon"] is not None),
+                    key=lambda x: -x["pm25"])
+    vals = [v for g in groups.values() for v in g["vals"]]
+    counts = {k: 0 for k in _EPA_CATEGORIES}
+    for v in vals:
+        counts[epa_category(v)] += 1
+    return {"summary": _summary(vals), "category_counts": counts, "cities": cities,
+            "n_total": len(fc["features"]), "n_fresh": len(fresh), "data_time": fc["metadata"].get("data_time")}
+
+
+def _forecast_outlook(points):
+    """Per-lead national stats (from the run index) and per-city samples."""
+    index, meta = cached_json("forecast_index", "api/v1/forecast-grid/latest",
+                              validate=lambda p: isinstance(p, dict) and isinstance(p.get("leads"), list))
+    init = index.get("init_time") or ""
+    run_tag = re.sub(r"[^0-9]", "", init)[:12] or "unknown"
+    leads, per_city = [], {p["city"]: [] for p in points}
+    for lead in index["leads"]:
+        lead_h = int(lead.get("lead_h"))
+        try:
+            grid, _ = cached_json(f"forecast_lead:{run_tag}:{lead_h}", f"api/v1/forecast-grid/latest/{lead_h}",
+                                  ttl_name="forecast_lead",
+                                  validate=lambda p: isinstance(p, dict) and isinstance(p.get("pm25"), list))
+        except HawanamaUnavailable:
+            continue
+        stats = lead.get("stats") or {}
+        leads.append({"lead_h": lead_h, "valid_time": lead.get("valid_time"),
+                      "mean": stats.get("mean"), "median": stats.get("median"), "p95": stats.get("p95"),
+                      "max": stats.get("max")})
+        for p in points:
+            try:
+                per_city[p["city"]].append(sample_grid(grid, p["lon"], p["lat"]))
+            except (KeyError, TypeError, ValueError, IndexError):
+                per_city[p["city"]].append(None)
+    cities = []
+    for p in points:
+        series = per_city[p["city"]]
+        vals = [v for v in series if v is not None]
+        if not vals:
+            continue
+        peak_i = max(range(len(series)), key=lambda i: series[i] if series[i] is not None else -1)
+        cities.append({"city": p["city"], "lon": p["lon"], "lat": p["lat"], "series": series,
+                       "peak": series[peak_i], "peak_lead_h": leads[peak_i]["lead_h"],
+                       "peak_valid_time": leads[peak_i]["valid_time"], "last": series[-1],
+                       "category_peak": epa_category(series[peak_i])})
+    cities.sort(key=lambda x: -x["peak"])
+    return {"init_time": init, "model_tag": index.get("model_tag"), "beta": bool(index.get("beta", True)),
+            "leads": leads, "cities": cities,
+            "metadata": _meta_out(meta, init, _DATA_STALE_HOURS["forecast"])}
+
+
+# Drivers behind the past week's levels, per day: weather that traps or
+# disperses pollution (Open-Meteo, averaged over the Punjab plain's main
+# cities) and crop-residue fire counts (Hawanama's VIIRS series).
+_MET_URL = "https://api.open-meteo.com/v1/forecast"
+_MET_POINTS = (("Lahore", 31.55, 74.34), ("Faisalabad", 31.42, 73.08), ("Multan", 30.20, 71.47),
+               ("Bahawalpur", 29.40, 71.68), ("Gujranwala", 32.16, 74.19))
+
+
+def _met_daily(dates):
+    """date -> {wind_kmh (mean 10 m wind), blh_max_m (afternoon mixing
+    height), blh_min_m (night-time), precip_mm, tmin_c}, each averaged over
+    _MET_POINTS. Times are PKT days, matching the station daily means."""
+    params = {
+        "latitude": ",".join(str(p[1]) for p in _MET_POINTS),
+        "longitude": ",".join(str(p[2]) for p in _MET_POINTS),
+        "hourly": "wind_speed_10m,boundary_layer_height,precipitation,temperature_2m",
+        "past_days": 14, "forecast_days": 1, "timezone": "Asia/Karachi",
+    }
+    r = _sess().get(_MET_URL, params=params, timeout=_TIMEOUT_SECONDS)
+    r.raise_for_status()
+    data = r.json()
+    data = data if isinstance(data, list) else [data]
+    wanted = set(dates)
+    per_day = {}  # date -> list of per-point dicts
+    for loc in data:
+        h = loc.get("hourly") or {}
+        rows = {}
+        for t, w, b, p, tc in zip(h.get("time", []), h.get("wind_speed_10m", []), h.get("boundary_layer_height", []),
+                                  h.get("precipitation", []), h.get("temperature_2m", [])):
+            d = (t or "")[:10]
+            if d in wanted:
+                rows.setdefault(d, []).append((w, b, p, tc))
+        for d, vals in rows.items():
+            ws = [v[0] for v in vals if v[0] is not None]
+            bs = [v[1] for v in vals if v[1] is not None]
+            ps = [v[2] for v in vals if v[2] is not None]
+            ts = [v[3] for v in vals if v[3] is not None]
+            if not ws or not bs:
+                continue
+            per_day.setdefault(d, []).append({"wind_kmh": sum(ws) / len(ws), "blh_max_m": max(bs), "blh_min_m": min(bs),
+                                              "precip_mm": sum(ps), "tmin_c": min(ts) if ts else None})
+    out = {}
+    for d, pts in per_day.items():
+        out[d] = {k: round(sum(p[k] for p in pts if p[k] is not None) / max(1, sum(p[k] is not None for p in pts)), 1)
+                  for k in ("wind_kmh", "blh_max_m", "blh_min_m", "precip_mm", "tmin_c")}
+    return out
+
+
+def _fires_daily(dates):
+    """Daily crop-fire counts (current season) for Pakistani and Indian
+    Punjab on `dates`, plus each region's season-to-date headline."""
+    out = {"regions": {}, "season": {}}
+    for region in FIRE_SEASON_REGIONS:
+        try:
+            s = fire_season(region)
+        except HawanamaUnavailable:
+            continue
+        days = s.get("days") or []
+        cur = next((y for y in s["years"] if y.get("role") == "current"), None)
+        if not cur or not cur.get("cum"):
+            continue
+        cum = cur["cum"]
+        counts = []
+        for d in dates:
+            md = d[5:]
+            i = days.index(md) if md in days else -1
+            if i < 0 or i >= len(cum) or cum[i] is None:
+                counts.append(None)
+            else:
+                prev = cum[i - 1] if i > 0 and cum[i - 1] is not None else 0
+                counts.append(max(0, int(round(cum[i] - prev))))
+        out["regions"][region] = counts
+        hl = s.get("headline") or {}
+        ly = hl.get("last_year") or {}
+        out["season"][region] = {"fires": hl.get("fires"), "since": (hl.get("window") or {}).get("start"),
+                                 "until": (hl.get("window") or {}).get("end"), "last_year": ly.get("year"),
+                                 "last_year_fires": ly.get("fires"), "pct_change": ly.get("pct_change")}
+    if not out["regions"]:
+        raise HawanamaUnavailable("fire season series unavailable")
+    return out
+
+
+def _drivers(dates):
+    if not dates:
+        raise HawanamaUnavailable("no dates")
+    met, fires, errors = None, None, {}
+    try:
+        m = _met_daily(dates)
+        met = [{"date": d, **m[d]} if d in m else {"date": d} for d in dates]
+    except Exception as e:
+        logger.warning("hawanama_client: weather drivers unavailable", exc_info=True)
+        errors["met"] = type(e).__name__
+    try:
+        fires = _fires_daily(dates)
+    except Exception as e:
+        errors["fires"] = type(e).__name__
+    if met is None and fires is None:
+        raise HawanamaUnavailable("drivers unavailable")
+    return {"dates": dates, "met": met, "met_points": [p[0] for p in _MET_POINTS], "fires": fires,
+            "errors": errors, "met_attribution": "Weather: Open-Meteo (CC BY 4.0)"}
+
+
+def tiles_for_bounds(z, bounds=TILE_BOUNDS):
+    """(x, y) of the z-level tiles covering `bounds` that are in coverage."""
+    w, s, e, n = bounds
+
+    def tx(lon):
+        return int((lon + 180.0) / 360.0 * 2 ** z)
+
+    def ty(lat):
+        return int((1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * 2 ** z)
+
+    return [(x, y) for x in range(tx(w), tx(e) + 1) for y in range(ty(n), ty(s) + 1) if tile_in_coverage(z, x, y)]
+
+
+_prefetched_dates = set()
+_prefetch_lock = threading.Lock()
+
+
+def prefetch_estimate_tiles(dates, zooms=(4, 5, 6), workers=4):
+    """Fetches the national-view estimate tiles for `dates` in a background
+    thread so the story's frames load from disk. Completed dates are cached
+    permanently, so each date is fetched at most once per process (~25
+    tiles per date at z4-6). Returns the number of dates queued."""
+    with _prefetch_lock:
+        todo = [d for d in dates if _DATE_RE.match(d or "") and d not in _prefetched_dates]
+        _prefetched_dates.update(todo)
+    if not todo:
+        return 0
+    jobs = [(d, z, x, y) for d in todo for z in zooms for x, y in tiles_for_bounds(z)]
+
+    def one(job):
+        try:
+            tile_png(*job)
+        except Exception:  # an upstream gap just stays a gap; the browser retries it
+            pass
+
+    def run():
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hawanama-prefetch") as ex:
+            list(ex.map(one, jobs))
+        logger.info("hawanama_client: prefetched %d estimate tiles for %s", len(jobs), ", ".join(todo))
+
+    threading.Thread(target=run, name="hawanama-tile-prefetch", daemon=True).start()
+    return len(todo)
+
+
+def air_quality_watch(days=7):
+    """Digest for the National Air Quality Watch story (memoised 15 min).
+    Each part degrades independently: a missing part is null, not a 503,
+    unless every part is unavailable."""
+    days = max(3, min(int(days), 14))
+    now = time.time()
+    with _watch_lock:
+        if _watch_memo["key"] == days and now - _watch_memo["at"] < _WATCH_TTL_SECONDS:
+            return _watch_memo["payload"]
+    errors = {}
+
+    def part(name, fn, *a):
+        try:
+            return fn(*a)
+        except HawanamaUnavailable as e:
+            errors[name] = str(e)
+        except Exception as e:  # a shape change in one part must not sink the others
+            logger.warning("hawanama_client: watch part %s failed", name, exc_info=True)
+            errors[name] = type(e).__name__
+        return None
+
+    past = part("past_week", _past_week, days)
+    if past:
+        # Warm the 7 frames' national-view tiles while the operator is still
+        # on the language prompt / intro fly-in.
+        part("tile_prefetch", prefetch_estimate_tiles, past["dates"])
+    drivers =part("drivers", _drivers, (past or {}).get("dates") or [])
+    live = part("live", _live_now)
+    # Forecast points: every city seen in the past week or reporting now.
+    pts = {c["city"]: c for c in (past or {}).get("cities", [])}
+    for c in (live or {}).get("cities", []):
+        if c["city"] not in pts and c["n"] >= 2:
+            pts[c["city"]] = c
+    forecast = part("forecast", _forecast_outlook,
+                    [{"city": k, "lon": v["lon"], "lat": v["lat"]} for k, v in pts.items()])
+    if past is None and live is None and forecast is None:
+        raise HawanamaUnavailable("air quality watch: no part available")
+    payload = {"standards": AQ_STANDARDS, "past_week": past, "drivers": drivers, "live": live, "forecast": forecast,
+               "errors": errors, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "attribution": ATTRIBUTION}
+    # A partial digest is only kept for 2 minutes so a recovered part shows up soon.
+    at = time.time() - (_WATCH_TTL_SECONDS - 120 if errors else 0)
+    with _watch_lock:
+        _watch_memo.update({"at": at, "key": days, "payload": payload})
+    return payload
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 

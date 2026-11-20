@@ -15,6 +15,7 @@
 #   GET /api/iwmi/floodhub/inundation/             inundation polygons (GeoJSON)
 #   GET /api/iwmi/status/                          per-country summary
 #   GET /api/iwmi/health/                          cache state
+#   GET /api/iwmi/watch/?iso3=PAK                  National Flood Watch story digest
 # ---------------------------------------------------------------------------
 
 import logging
@@ -109,3 +110,10 @@ class IwmiHealthView(_IwmiView):
 
     def get(self, request):
         return self.handle_data(ic.health)
+
+
+class IwmiWatchView(_IwmiView):
+    max_age = 300
+
+    def get(self, request):
+        return self.handle_data(ic.flood_watch, request.GET.get("iso3", "PAK"))

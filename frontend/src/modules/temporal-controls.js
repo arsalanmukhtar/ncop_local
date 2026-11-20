@@ -1061,7 +1061,11 @@ document.addEventListener("DOMContentLoaded", function () {
 async function updateTempSliderAsync(layersPromise, textContent, layerKey) {
   const map = getMap();
   if (!map) return;
-  if (!map.isStyleLoaded()) {
+  // isStyleLoaded() is also false while ANY tiles are still loading (e.g.
+  // mid-pan or during a camera flight), but "load" fires only once — so
+  // only wait for it when the style itself has not loaded yet; otherwise
+  // this awaited forever and the layer never appeared.
+  if (!map.isStyleLoaded() && !map.style?._loaded) {
     await new Promise((resolve) => {
       map.once("load", resolve);
     });
