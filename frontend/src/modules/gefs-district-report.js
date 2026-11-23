@@ -161,6 +161,27 @@ function summaryCards(rows, d, variable, unit, dl = `day ${d}`) {
     card(`Lowest cell (${dl})`, `${fmt(cold.lo)} <small>${esc(unit)}</small>`, esc(cold.name));
 }
 
+// Confidence: how accurate past forecasts were for this district, season and
+// lead week (backend: gefs_calibration.confidence_tables). Without a trained
+// model, fall back to the general lead-time rule (week 1 high, week 2
+// medium, later low).
+const CONF_LABEL = ["Low", "Medium", "High"];
+
+function confidenceOf(x, variable, i, d) {
+    const c = (x[`${variable}_conf`] || [])[i];
+    if (c == null) return { level: d <= 7 ? 2 : d <= 14 ? 1 : 0, err: null, skill: null, fallback: true };
+    return { level: c, err: (x[`${variable}_err`] || [])[i] ?? null, skill: (x[`${variable}_skill`] || [])[i] ?? null, fallback: false };
+}
+
+function confidenceTip(cf, variable, d, doc) {
+    const wk = Math.ceil(d / 7);
+    if (cf.fallback) return `${CONF_LABEL[cf.level]} confidence: general rule for week ${wk} of a 5-week outlook (no district verification available).`;
+    const unit = variable === "precip" ? "mm over the week" : "°C (weekly mean)";
+    const vs = cf.skill == null ? "" : cf.skill > 0 ? ` — ${cf.skill}% more accurate than the seasonal normal` : " — no better than the seasonal normal";
+    const season = doc.calibration?.season ? ` in ${doc.calibration.season}` : "";
+    return `${CONF_LABEL[cf.level]} confidence. Past forecasts for this district${season}, week ${wk}: typical error ±${cf.err} ${unit}${vs}. Based on ${doc.calibration?.n_cases ?? "past"} verified forecasts.`;
+}
+
 function buildRows(doc, d) {
   const variable = doc.var;
   const i = d - 1;
@@ -174,6 +195,7 @@ function buildRows(doc, d) {
       lo: variable === "precip" ? null : (x.t2m_min || [])[i] ?? null,
       hi: variable === "precip" ? (x.precip_max || [])[i] ?? null : (x.t2m_max || [])[i] ?? null,
       min35: finite.length ? Math.min(...finite) : null, max35: finite.length ? Math.max(...finite) : null,
+      conf: confidenceOf(x, variable, i, d),
     };
   });
 }
@@ -197,7 +219,7 @@ function renderTable(root, doc, d) {
   root.querySelector(".wrp-gefs-daynote").innerHTML =
     `<b>${esc(dateLabel(doc.dates?.[d - 1]))}</b> · day ${d} of ${doc.days}${d === 1 ? " (today)" : ""} · GEFS ${res} grid${extended
       ? ` · <span class="wrp-gefs-ext">extended range — read as a weekly tendency, not an exact daily amount</span>` : ""}`;
-  const totalHead = variable === "precip" ? (_ui.sort === "week" ? "7 days" : `${doc.days} days`) : `${doc.days}-day range`;
+  const totalHead = variable === "precip" ? (_ui.sort === "week" ? "Total, next 7 days" : `Total, ${doc.days} days`) : `Range, ${doc.days} days`;
   const body = rows.map((r) => {
     const chip = chipStyle(r.v, scale);
     const val = r.v == null ? "–" : variable === "precip" && r.v < 0.5 ? "dry" : fmt(r.v);
@@ -205,18 +227,19 @@ function renderTable(root, doc, d) {
       ? `${fmt(_ui.sort === "week" ? r.week : r.total, 0)}<small> mm</small>`
       : `${fmt(r.min35, 0)}…${fmt(r.max35, 0)}<small> °C</small>`;
     const detail = variable === "precip"
-      ? `wettest cell ${fmt(r.hi)} mm`
+      ? `${esc(shortLabel(doc.dates?.[d - 1]))}: ${r.v == null || r.v < 0.5 ? "dry (under 0.5 mm)" : `${fmt(r.v)} mm`} · wettest cell ${fmt(r.hi)} mm`
       : `cells ${fmt(r.lo)}…${fmt(r.hi)} °C`;
     const bb = Array.isArray(r.bbox) ? r.bbox.join(",") : "";
     return `<tr class="wrp-gefs-row" data-fly-bbox="${esc(bb)}" tabindex="0" title="${esc(r.name)} — click to zoom to the district">
       <td class="wrp-gefs-name"><span>${esc(r.name)}</span><small>${esc(r.province.replace(/_/g, " "))}</small></td>
       <td class="wrp-gefs-val"><span class="wrp-gefs-chip" style="background:${chip.bg};color:${chip.fg}" title="${esc(detail)}">${val}</span></td>
+      <td class="wrp-gefs-conf"><span class="wrp-gefs-conf__pill is-${r.conf.level}" title="${esc(confidenceTip(r.conf, variable, d, doc))}"><i aria-hidden="true"></i>${CONF_LABEL[r.conf.level]}</span></td>
       <td class="wrp-gefs-trend">${sparkline(r.series, d, variable, scale, range)}</td>
       <td class="wrp-gefs-total">${extra}</td></tr>`;
   }).join("");
   const unitHead = variable === "precip" ? "mm/day" : "°C";
   root.querySelector(".wrp-gefs-table-wrap").innerHTML = rows.length
-    ? `<table class="wrp-gefs-table"><thead><tr><th>District</th><th>${esc(shortLabel(doc.dates?.[d - 1]) || `Day ${d}`)}<small> ${unitHead}</small></th><th>${esc(shortLabel(doc.dates?.[0]))} → ${esc(shortLabel(doc.dates?.[doc.days - 1]))}</th><th>${totalHead}</th></tr></thead><tbody>${body}</tbody></table>`
+    ? `<table class="wrp-gefs-table"><thead><tr><th>District</th><th>${d === 1 ? "Today, " : ""}${esc(shortLabel(doc.dates?.[d - 1]) || `Day ${d}`)}<small> ${unitHead}</small></th><th title="How accurate past forecasts were for this district, season and lead week">Confidence</th><th>${esc(shortLabel(doc.dates?.[0]))} → ${esc(shortLabel(doc.dates?.[doc.days - 1]))}</th><th>${totalHead}</th></tr></thead><tbody>${body}</tbody></table>`
     : `<div class="wrp-empty"><p>No district matches the filter.</p></div>`;
   root.querySelector(".wrp-gefs-count").textContent = `${rows.length} of ${all.length} districts`;
 }
@@ -328,15 +351,15 @@ export function renderGefsDistrictReport(o) {
   if (key === _lastKey) return;
   _lastKey = key;
 
-  const scroll = o.container.scrollTop;
+  const scroll = root.scrollTop;          // .wrp-gefs is the scroll area
   renderTable(root, doc, d);
-  o.container.scrollTop = scroll;
+  root.scrollTop = scroll;
   if (!o.districtVisible) {
     root.querySelector(".wrp-gefs-daynote").insertAdjacentHTML("beforeend",
       `<div class="wrp-gefs-hint">Tip: turn on <b>District Boundary</b> to see the district outlines over the outlook.</div>`);
   }
   if (o.footerEl) {
-    o.footerEl.innerHTML = `NOAA GEFS v12 ensemble mean · run ${esc(String(doc.run).slice(0, 8))} 00Z · ${esc(doc.districts.length)} districts`;
+    o.footerEl.innerHTML = `NOAA GEFS v12 ensemble mean · run ${esc(String(doc.run).slice(0, 8))} 00Z · ${esc(doc.districts.length)} districts${doc.calibration ? ` · <span title="${esc(doc.method || "")}">bias-corrected</span>` : ""}`;
     o.footerEl.classList.add("is-visible");
   }
 }

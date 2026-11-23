@@ -139,9 +139,9 @@ class AggregationRenderTests(SimpleTestCase):
 
 class BuildTests(_Tmp):
     def test_build_publishes_atomically_and_prunes(self):
-        for run in ("2026111700", "2026111800", "2026111900"):
+        for run in ("2026111500", "2026111600", "2026111700", "2026111800", "2026111900"):
             self._build(run)
-        self.assertEqual(gc.built_runs(), ["2026111800", "2026111900"])     # keeps 2
+        self.assertEqual(gc.built_runs(), ["2026111600", "2026111700", "2026111800", "2026111900"])   # keeps 4 (lag)
         m = gc.manifest()
         self.assertEqual((m["run"], m["data_version"]), ("2026111900", gc.DATA_VERSION))
         fr = m["frames"]["precip"]
@@ -243,7 +243,7 @@ class ViewTests(_Tmp):
         self.assertEqual(res.status_code, 200)
         d = json.loads(res.content)
         self.assertEqual(len(d["frames"]), 35)
-        self.assertTrue(d["frames"][0]["url"].endswith(f"/gefs/2026111900/t2m_d01_r{gc.RENDER_VERSION}.png"))
+        self.assertTrue(d["frames"][0]["url"].endswith(f"/gefs/2026111900/t2m_d01_r{gc.RENDER_VERSION}_{gc._product_tag()}.png"))
         self.assertEqual(d["frames"][0]["resolution_deg"], 0.25)
 
     def test_bad_params_400(self):
@@ -328,3 +328,249 @@ class TodayWindowTests(_Tmp):
         # Far in the future: the last day is always kept
         self.now.return_value = datetime(2027, 1, 30, tzinfo=timezone.utc)
         self.assertEqual(len(gc.frames("precip", lambda n: n)["frames"]), 1)
+
+
+def _fake_step_offset(offset):
+    """Like _fake_step but every value is shifted, so runs are distinguishable."""
+    def step(run, lead):
+        shape = gc._grid_shape(gc._product(lead))
+        return lead, np.full(shape, 1.0 + offset, np.float32), np.full(shape, offset, np.float32)
+    return step
+
+
+class LagTests(_Tmp):
+    def test_lag_blend_alignment_weights_and_horizon(self):
+        ny, nx = 2, 3
+        newest = np.full((25, ny, nx), 10.0, np.float32)
+        older = np.stack([np.full((ny, nx), 100.0 + i, np.float32) for i in range(25)])   # value = 100 + local index
+        out = gc.lag_blend(newest, {1: older}, weights=(1.0, 1.0), from_day=11)
+        # newest local day i (day 11+i) pairs with older local index i+1
+        self.assertAlmostEqual(float(out[0, 0, 0]), (10.0 + 101.0) / 2, places=4)
+        self.assertAlmostEqual(float(out[23, 0, 0]), (10.0 + 124.0) / 2, places=4)
+        self.assertAlmostEqual(float(out[24, 0, 0]), 10.0, places=4)          # older run has no day 36
+        # from_day later than 11: first days untouched
+        out = gc.lag_blend(newest, {1: older}, weights=(1.0, 1.0), from_day=15)
+        self.assertAlmostEqual(float(out[3, 0, 0]), 10.0, places=4)
+        self.assertAlmostEqual(float(out[4, 0, 0]), (10.0 + 105.0) / 2, places=4)
+        # NaN cells and missing runs drop out; weights renormalise
+        older2 = older.copy()
+        older2[1, 0, 0] = np.nan
+        out = gc.lag_blend(newest, {1: older2, 2: None}, weights=(3.0, 1.0, 1.0), from_day=11)
+        self.assertAlmostEqual(float(out[0, 0, 0]), 10.0, places=4)
+        self.assertAlmostEqual(float(out[0, 0, 1]), (3 * 10.0 + 101.0) / 4, places=4)
+
+    def test_build_with_lag_uses_previous_runs_and_keeps_raw(self):
+        with mock.patch.object(gc, "fetch_step", side_effect=_fake_step_offset(0.0)):
+            self.assertTrue(gc.build_run("2026111800"))
+        with mock.patch.object(gc, "LAG_WEIGHTS", (1.0, 1.0)), \
+             mock.patch.object(gc, "fetch_step", side_effect=_fake_step_offset(2.0)):
+            self.assertTrue(gc.build_run("2026111900"))
+            m = gc.manifest()
+            self.assertEqual(m["product"]["runs"], ["2026111900", "2026111800"])
+            self.assertTrue(gc._product_current(m))
+            d = os.path.join(gc._root(), "2026111900")
+            raw, prod = gc._load_values(d), gc._load_product(d)
+            # days 1-10 untouched; day 11+ = mean of the two runs' temperatures (2 and 0)
+            self.assertAlmostEqual(float(gc.day_grid(prod["t2m"], 10)[5, 5]), float(gc.day_grid(raw["t2m"], 10)[5, 5]))
+            self.assertAlmostEqual(float(gc.day_grid(raw["t2m"], 20)[5, 5]), 2.0, places=2)
+            self.assertAlmostEqual(float(gc.day_grid(prod["t2m"], 20)[5, 5]), 1.0, places=2)
+            self.assertAlmostEqual(float(gc.day_grid(prod["t2m"], 35)[5, 5]), 2.0, places=2)   # older run ends at day 34
+            v = gc.point_value("t2m", 20, 30.0, 70.0)
+            self.assertAlmostEqual(v["value"], 1.0, places=1)
+
+    def test_served_run_upgraded_when_recipe_changes(self):
+        for i, run in enumerate(("2026111800", "2026111900")):
+            with mock.patch.object(gc, "fetch_step", side_effect=_fake_step_offset(2.0 * i)):
+                self.assertTrue(gc.build_run(run))
+        self.assertTrue(gc._product_current(gc.manifest()))
+        with mock.patch.object(gc, "LAG_WEIGHTS", (1.0, 1.0)):
+            self.assertFalse(gc._product_current(gc.manifest()))
+            gc._upgrade_served()
+            m = gc.manifest()
+            self.assertTrue(gc._product_current(m))
+            self.assertEqual(m["render_version"], gc.RENDER_VERSION)
+            prod = gc._load_product(os.path.join(gc._root(), "2026111900"))
+            self.assertAlmostEqual(float(gc.day_grid(prod["t2m"], 20)[5, 5]), 1.0, places=2)
+            for fr in m["frames"]["t2m"]:
+                self.assertTrue(os.path.exists(os.path.join(gc._root(), "2026111900", fr["file"])))
+        # switching lagging off again removes the lag files
+        gc._upgrade_served()
+        self.assertFalse(os.path.exists(os.path.join(gc._root(), "2026111900", "t2m_lr_lag.npy")))
+
+
+class VerifyTests(SimpleTestCase):
+    def test_lagged_series_and_scores(self):
+        from . import gefs_verify as gv
+        newest = np.zeros((2, 35), np.float32)
+        older = np.tile(np.arange(35, dtype=np.float32), (2, 1))
+        out = gv.lagged([newest, older], [1.0, 1.0], first_lag_day=11)
+        self.assertEqual(float(out[0, 9]), 0.0)                     # day 10: newest only
+        self.assertEqual(float(out[0, 10]), (0.0 + 11.0) / 2)       # day 11 <- older day 12
+        self.assertEqual(float(out[0, 34]), 0.0)                    # older has no day 36
+        rng = np.random.default_rng(0)
+        obs = rng.normal(size=(6, 2, 35)).astype(np.float32)
+        perfect = gv.score([(o, o, None) for o in obs], "t2m")
+        self.assertEqual(perfect["weekly"][0]["mae"], 0.0)
+        self.assertAlmostEqual(perfect["weekly"][0]["acc"], 1.0, places=5)
+        biased = gv.score([(o + 2, o, None) for o in obs], "t2m")
+        self.assertAlmostEqual(biased["daily"][0]["bias"], 2.0, places=5)
+
+
+class CalibrationTests(_Tmp):
+    def _synthetic(self, n_case=60, n_d=3, t_bias=1.5, p_ratio=0.5, seed=1):
+        from datetime import date, timedelta
+        rng = np.random.default_rng(seed)
+        inits = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(n_case)]
+        ob_t = rng.normal(15, 3, (n_case, n_d, 5))
+        ob_p = rng.gamma(4.0, 6.0, (n_case, n_d, 5))
+        fc_t = ob_t + t_bias + rng.normal(0, 0.3, ob_t.shape)
+        fc_p = ob_p * p_ratio * np.exp(rng.normal(0, 0.1, ob_p.shape))
+        return inits, {"t2m": fc_t, "precip": fc_p}, {"t2m": ob_t, "precip": ob_p}
+
+    def test_fit_recovers_known_bias_and_respects_limits(self):
+        from . import gefs_calibration as gcal
+        inits, fc, ob = self._synthetic()
+        doy = np.array([d.timetuple().tm_yday for d in inits])
+        b = gcal.fit_bias(fc["t2m"], ob["t2m"], doy, 100, "t2m")
+        self.assertTrue(np.allclose(b, 1.5, atol=0.25))
+        r = gcal.fit_bias(fc["precip"], ob["precip"], doy, 100, "precip")
+        self.assertTrue(np.all(r <= gcal.RATIO_MAX) and np.all(r > 1.5), r)       # ~2x, regularised
+        dry = gcal.fit_bias(fc["precip"] * 0.02, ob["precip"] * 0.04, doy, 100, "precip")
+        self.assertTrue(np.all(dry == 1.0))                                       # below DRY_MM: no scaling
+        huge = gcal.fit_bias(fc["t2m"] + 50, ob["t2m"], doy, 100, "t2m")
+        self.assertTrue(np.all(huge <= gcal.T_MAX_SHIFT))
+        wet = gcal.fit_bias(fc["precip"] * 0.01, ob["precip"], doy, 100, "precip")
+        self.assertTrue(np.all(wet <= gcal.RATIO_MAX))
+
+    def test_blocked_cv_never_trains_on_overlapping_cases(self):
+        from . import gefs_calibration as gcal
+        inits, fc, ob = self._synthetic(n_case=12)
+        seen = []
+        real = gcal.fit_bias
+
+        def spy(f, o, doy, target, var, train_mask=None, pool="district"):
+            seen.append(np.asarray(train_mask).copy())
+            return real(f, o, doy, target, var, train_mask, pool)
+
+        with mock.patch.object(gcal, "fit_bias", side_effect=spy):
+            gcal.cross_validate(fc["t2m"], ob["t2m"], inits, "t2m", "district")
+        ords = np.array([d.toordinal() for d in inits])
+        for c, mask in enumerate(seen):
+            self.assertFalse(mask[c])
+            self.assertTrue(np.all(np.abs(ords[mask] - ords[c]) > 35))
+
+    def test_train_enables_helpful_weeks_and_apply_corrects(self):
+        from datetime import date
+        from . import gefs_calibration as gcal
+        inits, fc, ob = self._synthetic()
+        meta = [{"name": f"D{i}", "province": "P"} for i in range(3)]
+        model, report = gcal.train(fc, ob, inits, meta)
+        for season, weeks in report["vars"]["t2m"]["enabled"].items():
+            self.assertEqual(weeks, [1, 2, 3, 4, 5], season)
+        for season, weeks in report["vars"]["precip"]["enabled"].items():
+            self.assertEqual(weeks, [1, 2, 3, 4, 5], season)
+        gcal.save(model, report)
+        st = {k: np.full((3, 35), 10.0, np.float32) for k in ("t2m_mean", "t2m_min", "t2m_max", "precip_mean", "precip_max")}
+        prov = gcal.apply(st, date(2025, 4, 10), meta)
+        self.assertIsNotNone(prov)
+        self.assertTrue(np.allclose(st["t2m_mean"], 8.5, atol=0.3))
+        self.assertTrue(np.all(st["precip_mean"] > 16))
+        # a different district set (index rebuilt) -> model not applied
+        st2 = {k: np.full((3, 35), 10.0, np.float32) for k in st}
+        self.assertIsNone(gcal.apply(st2, date(2025, 4, 10), [{"name": "X", "province": "Y"}] * 3))
+        self.assertTrue(np.all(st2["t2m_mean"] == 10.0))
+
+    def test_unhelpful_correction_stays_off(self):
+        from . import gefs_calibration as gcal
+        inits, fc, ob = self._synthetic(n_case=120, t_bias=0.0, p_ratio=1.0)
+        meta = [{"name": f"D{i}", "province": "P"} for i in range(3)]
+        _, report = gcal.train(fc, ob, inits, meta)
+        # 40 season x week decisions at 97.5 % confidence: at most a stray one or two
+        on = sum(len(w) for v in ("t2m", "precip") for w in report["vars"][v]["enabled"].values())
+        self.assertLessEqual(on, 2)
+
+    def test_district_table_rebuilt_when_model_changes(self):
+        from . import gefs_calibration as gcal
+        self._build()
+        raster = np.zeros(gd._window_shape(), np.int16)
+        _square_district(raster, int((70.0 - gc.REGION["west"]) / 0.5), int((gc.REGION["north"] - 30.0) / 0.5))
+        gd.save_index(gd.build_weights(raster, 1), DistrictTests.META)
+        raw = gd.district_stats("t2m")
+        self.assertIsNone(raw["calibration"])
+        inits, fc, ob = self._synthetic(n_d=1)
+        model, report = gcal.train(fc, ob, inits, DistrictTests.META)
+        gcal.save(model, report)
+        cal = gd.district_stats("t2m")
+        self.assertIsNotNone(cal["calibration"])
+        self.assertIn("bias-corrected", cal["method"])
+        self.assertLess(cal["districts"][0]["t2m"][5], raw["districts"][0]["t2m"][5] - 1.0)
+
+
+class DampingTests(_Tmp):
+    def test_damping_chosen_for_skill_less_forecast_and_applied(self):
+        from datetime import date, timedelta
+        from . import gefs_calibration as gcal
+        rng = np.random.default_rng(3)
+        n_case, n_d = 104, 3
+        inits = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(n_case)]
+        clim = np.tile(np.array([10, 12, 16, 21, 26, 29, 30, 29, 27, 22, 16, 11], np.float32), (n_d, 1))
+        normal = np.stack([gcal.weekly_normals(clim, d, "t2m") for d in inits])       # [case, district, week]
+        ob = normal + rng.normal(0, 1.0, normal.shape)
+        fc = ob.copy()
+        fc[:, :, 3:] = normal[:, :, 3:] + rng.normal(0, 3.0, fc[:, :, 3:].shape)    # weeks 4-5: no skill
+        meta = [{"name": f"D{i}", "province": "P"} for i in range(n_d)]
+        model, report = gcal.train({"t2m": fc, "precip": np.abs(fc)}, {"t2m": ob, "precip": np.abs(ob)}, inits, meta,
+                                   clim_monthly={"t2m": clim})
+        a = report["vars"]["t2m"]["damping"]["alpha_by_week"]
+        self.assertEqual(a[:3], [0.0, 0.0, 0.0])                     # skilful weeks: untouched
+        self.assertGreater(min(a[3:]), 0.0)                           # skill-less weeks: damped
+        gcal.save(model, report)
+        st = {k: np.full((n_d, 35), 40.0, np.float32) for k in ("t2m_mean", "t2m_min", "t2m_max", "precip_mean", "precip_max")}
+        init = date(2026, 1, 10)
+        prov = gcal.apply(st, init, meta)
+        self.assertEqual(prov["damped_toward_normal"].get("t2m"), [i + 1 for i in range(5) if a[i] > 0])
+        normal_d30 = gcal.daily_normal(clim, init + timedelta(days=29))[0]
+        bias30 = float(model["t2m_table"][int(np.argmin(gcal._circ(model["bins"], init.timetuple().tm_yday)))][0, 4]) \
+            if model["t2m_enabled"][gcal.season_of(init)][4] else 0.0
+        expect = (1 - a[4]) * (40.0 - bias30) + a[4] * normal_d30
+        self.assertAlmostEqual(float(st["t2m_mean"][0, 29]), expect, places=3)
+        self.assertAlmostEqual(float(st["t2m_max"][0, 29] - st["t2m_mean"][0, 29]), 0.0, places=3)   # extremes move with mean
+
+    def test_model_without_damping_still_loads(self):
+        from datetime import date
+        from . import gefs_calibration as gcal
+        inits = [date(2025, 1, 1)] * 0
+        meta = [{"name": "D0", "province": "P"}]
+        path = os.path.join(gc._root(), gcal.MODEL_FILE)
+        z = np.zeros((gcal.N_BINS, 1, 5), np.float32)
+        np.savez_compressed(path, bins=gcal.bin_centres(), t2m_table=z, precip_table=z + 1,
+                            t2m_enabled=np.zeros((4, 5), bool), precip_enabled=np.zeros((4, 5), bool),
+                            meta=np.array(json.dumps({"districts_hash": gcal.districts_hash(meta), "trained_from": "x",
+                                                      "trained_to": "y", "n_cases": 0})), report=np.array("{}"))
+        st = {k: np.full((1, 35), 5.0, np.float32) for k in ("t2m_mean", "t2m_min", "t2m_max", "precip_mean", "precip_max")}
+        prov = gcal.apply(st, date(2026, 1, 1), meta)
+        self.assertEqual(prov["damped_toward_normal"], {})
+        self.assertTrue(np.all(st["t2m_mean"] == 5.0))
+
+
+class ConfidenceTests(SimpleTestCase):
+    def test_levels_follow_skill_vs_normal(self):
+        from . import gefs_calibration as gcal
+        rng = np.random.default_rng(5)
+        n_case, n_d = 80, 2
+        seasons = np.array([i % 4 for i in range(n_case)])
+        ob = rng.normal(20, 4, (n_case, n_d, 5))
+        cl = np.full_like(ob, 20.0)                                        # normal = long-run mean
+        fc = ob.copy()
+        fc[:, :, 0] += rng.normal(0, 0.3, (n_case, n_d))                   # week 1: excellent
+        fc[:, :, 2] = 0.5 * ob[:, :, 2] + 0.5 * cl[:, :, 2]                # week 3: half-way skilful
+        fc[:, :, 4] = cl[:, :, 4] + rng.normal(0, 1.0, (n_case, n_d))      # week 5: no skill
+        err, skill = gcal.confidence_tables(fc, ob, cl, seasons)
+        lv = gcal.confidence_level(err, skill, "t2m")
+        self.assertTrue(np.all(lv[:, :, 0] == 2))
+        self.assertTrue(np.all(lv[:, :, 2] == 2))                          # skill ~0.5 >= CONF_HIGH
+        self.assertTrue(np.all(lv[:, :, 4] == 0))
+        self.assertTrue(np.all(err[:, :, 0] < 0.5))
+        # tiny absolute error is High even without skill (e.g. dry-season rain)
+        self.assertEqual(int(gcal.confidence_level(np.array([0.4]), np.array([-0.2]), "precip")[0]), 2)
+        self.assertEqual(int(gcal.confidence_level(np.array([3.0]), np.array([0.2]), "precip")[0]), 1)

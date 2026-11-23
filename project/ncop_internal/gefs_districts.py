@@ -21,6 +21,7 @@
 # ---------------------------------------------------------------------------
 
 import json
+from datetime import datetime
 import logging
 import os
 import threading
@@ -31,6 +32,7 @@ import numpy as np
 import requests
 from django.conf import settings
 
+from . import gefs_calibration as gcal
 from . import gefs_client as gc
 
 logger = logging.getLogger(__name__)
@@ -231,7 +233,7 @@ def _load_index():
 
 def compute_stats(run_dir, weights, meta):
     """Per district and day: precip mean + wettest cell; t2m mean, min, max."""
-    values = gc._load_values(run_dir)
+    values = gc._load_product(run_dir)
     n = len(meta)
     out = {"precip_mean": np.zeros((n, gc.DAYS), np.float32), "precip_max": np.zeros((n, gc.DAYS), np.float32),
            "t2m_mean": np.zeros((n, gc.DAYS), np.float32), "t2m_min": np.zeros((n, gc.DAYS), np.float32),
@@ -263,6 +265,60 @@ def _r(a):
     return [None if not np.isfinite(v) else round(float(v), 1) for v in a]
 
 
+_doc_cache = {"path": None, "mtime": None, "doc": None}
+
+
+def _cached_doc(path):
+    """Parsed districts.json, kept in memory until the file changes (one
+    ~250 KB parse per run instead of one per request)."""
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+    c = _doc_cache
+    if c["path"] == path and c["mtime"] == mtime:
+        return c["doc"]
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    c.update(path=path, mtime=mtime, doc=doc)
+    return doc
+
+
+def _confidence(st, i):
+    """Per-day confidence fields of district i (present only with a trained model)."""
+    out = {}
+    for var in ("t2m", "precip"):
+        if f"{var}_conf" in st:
+            out[f"{var}_conf"] = [int(x) for x in st[f"{var}_conf"][i]]
+            out[f"{var}_err"] = _r(st[f"{var}_err"][i])
+            out[f"{var}_skill"] = [int(round(100 * float(x))) for x in st[f"{var}_skill"][i]]
+    return out
+
+
+def _build_doc(run, run_dir, path):
+    weights, meta = _load_index()
+    st = compute_stats(run_dir, weights, meta)
+    m = gc._read_manifest(run) or {}
+    dates = [fr["valid_start"][:10] for fr in m.get("frames", {}).get("precip", [])]
+    init = datetime.fromisoformat(m["init_time"]).date() if m.get("init_time") else datetime.strptime(run, "%Y%m%d%H").date()
+    calibration = None
+    try:
+        calibration = gcal.apply(st, init, meta)          # district values only; map frames stay raw GEFS
+    except Exception:
+        logger.warning("gefs_districts: calibration failed, serving raw values", exc_info=True)
+    doc = {"run": run, "init_time": m.get("init_time"), "days": gc.DAYS, "dates": dates,
+           "daily_skill_days": gc._DAILY_SKILL_DAYS, "hr_days": gc._HR_DAYS,
+           "calibration_tag": gcal.tag(), "calibration": calibration,
+           "districts": [{**d, "precip": _r(st["precip_mean"][i]), "precip_max": _r(st["precip_max"][i]),
+                          "t2m": _r(st["t2m_mean"][i]), "t2m_min": _r(st["t2m_min"][i]),
+                          "t2m_max": _r(st["t2m_max"][i]), **_confidence(st, i)} for i, d in enumerate(meta)]}
+    tmp = path + f".tmp{uuid.uuid4().hex[:6]}"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, separators=(",", ":"))
+    os.replace(tmp, path)
+    return doc
+
+
 def district_stats(var):
     """Cached per-run district table for one variable (built on first use)."""
     if var not in ("precip", "t2m"):
@@ -273,29 +329,19 @@ def district_stats(var):
     run = runs[-1]
     run_dir = os.path.join(gc._root(), run)
     path = os.path.join(run_dir, _STATS_FILE)
-    if not os.path.exists(path):
+    cal_tag = gcal.tag()
+    doc = _cached_doc(path)
+    if doc is None or doc.get("calibration_tag") != cal_tag:
         if not ensure_index(block=False):
             ensure_index_async()
             raise DistrictsUnavailable("district index is being prepared" if index_building()
                                        else "district boundaries unavailable")
         with _lock:
-            if not os.path.exists(path):
-                weights, meta = _load_index()
-                st = compute_stats(run_dir, weights, meta)
-                m = gc._read_manifest(run) or {}
-                dates = [fr["valid_start"][:10] for fr in m.get("frames", {}).get("precip", [])]
-                doc = {"run": run, "init_time": m.get("init_time"), "days": gc.DAYS, "dates": dates,
-                       "daily_skill_days": gc._DAILY_SKILL_DAYS, "hr_days": gc._HR_DAYS,
-                       "districts": [{**d, "precip": _r(st["precip_mean"][i]), "precip_max": _r(st["precip_max"][i]),
-                                      "t2m": _r(st["t2m_mean"][i]), "t2m_min": _r(st["t2m_min"][i]),
-                                      "t2m_max": _r(st["t2m_max"][i])} for i, d in enumerate(meta)]}
-                tmp = path + f".tmp{uuid.uuid4().hex[:6]}"
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(doc, f, separators=(",", ":"))
-                os.replace(tmp, path)
-    with open(path, encoding="utf-8") as f:
-        doc = json.load(f)
+            doc = _cached_doc(path)
+            if doc is None or doc.get("calibration_tag") != cal_tag:
+                doc = _build_doc(run, run_dir, path)
     keep = ("precip", "precip_max") if var == "precip" else ("t2m", "t2m_min", "t2m_max")
+    keep += (f"{var}_conf", f"{var}_err", f"{var}_skill")
     # Served from today: drop days of the run that are already over. Day
     # numbers in the response are local (1 = today); run_day_offset maps
     # them back to the run's own day numbers (slider frames, point API).
@@ -306,6 +352,12 @@ def district_stats(var):
             "var": var, "unit": gc.COLORSCALES[var]["unit"],
             "colorscale": {k: gc.COLORSCALES[var][k] for k in ("bounds", "colors")},
             "districts": [{**{k: d[k] for k in ("name", "province", "division", "bbox", "centroid")},
-                           **{k: d[k][skip:] for k in keep}} for d in doc["districts"]],
-            "method": "Area-weighted mean over each district polygon (0.025° rasterisation of gcop:district_boundary)",
+                           **{k: d[k][skip:] for k in keep if k in d}} for d in doc["districts"]],
+            "calibration": doc.get("calibration"),
+            "method": "Area-weighted mean over each district polygon (0.025° rasterisation of gcop:district_boundary)"
+                      + (f"; bias-corrected against {doc['calibration']['reference']} using {doc['calibration']['n_cases']}"
+                         f" past GEFS forecasts ({doc['calibration']['trained_from']} to {doc['calibration']['trained_to']})"
+                         + ("; long-lead weeks blended toward the 2001-2025 seasonal normal where this was shown to help"
+                            if any((doc['calibration'].get('damped_toward_normal') or {}).values()) else "")
+                         if doc.get("calibration") else ""),
             "attribution": gc.ATTRIBUTION}

@@ -19,6 +19,7 @@ from django.http import JsonResponse
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
+from . import gefs_calibration as gcal
 from . import gefs_client as gc
 from . import gefs_districts as gd
 
@@ -81,7 +82,7 @@ class GefsHealthView(_GefsView):
     max_age = 30
 
     def get(self, request):
-        return self.respond(gc.health)
+        return self.respond(lambda: {**gc.health(), "district_calibration": gcal.status()})
 
 
 class GefsDistrictsView(_GefsView):

@@ -63,7 +63,16 @@ DAYS = 35
 _DAILY_SKILL_DAYS = 14                      # beyond this: extended-range guidance
 _LISTING_TTL = 1800                         # re-check for a newer run at most every 30 min
 _LOCK_STALE_SECONDS = 1800
-_KEEP_RUNS = 2
+# Lagged ensemble (accuracy phase 1). Days >= LAG_FROM_DAY blend the newest
+# run with the runs started 1..k days earlier (same valid day), weighted
+# LAG_WEIGHTS[k]. A lagged ensemble adds members at no model cost and is a
+# standard way to raise extended-range skill (DelSole et al. 2017); it hurts
+# short leads, so days 1-10 always use the newest run. The weights are
+# chosen by the backtest (gefs_verify.py / manage.py gefs_backtest).
+LAG_WEIGHTS = (1.0,)                        # (1.0,) = newest run only
+LAG_FROM_DAY = 11                           # must be > _HR_DAYS (0.5 deg days only)
+PRODUCT_VERSION = 1                         # bump when the served-product recipe changes
+_KEEP_RUNS = 4                              # >= len(LAG_WEIGHTS): older runs feed the lag
 DATA_VERSION = 2                            # bump when region/grids change: forces a rebuild
 
 # South & Southeast Asia: Iran (44 E) to the Philippines/Indonesia (141 E),
@@ -515,7 +524,95 @@ def _save_values(dirpath, acc):
 
 
 def _load_values(dirpath):
+    """Raw values of one run, exactly as GEFS issued them."""
     return {var: {k: np.load(os.path.join(dirpath, f"{var}_{k}.npy")) for k in ("hr", "lr")} for var in _RECORDS}
+
+
+def _load_product(dirpath):
+    """Served values: raw, with the lagged-ensemble 0.5 deg days if present."""
+    values = _load_values(dirpath)
+    for var in _RECORDS:
+        lag = os.path.join(dirpath, f"{var}_lr_lag.npy")
+        if os.path.exists(lag):
+            values[var]["lr"] = np.load(lag)
+    return values
+
+
+def _product_key():
+    return {"version": PRODUCT_VERSION, "lag_weights": list(LAG_WEIGHTS), "lag_from_day": LAG_FROM_DAY}
+
+
+def _product_tag():
+    """Short id of the product recipe, part of frame file names."""
+    import hashlib
+    return hashlib.sha1(json.dumps(_product_key(), sort_keys=True).encode()).hexdigest()[:6]
+
+
+def _product_current(m):
+    return (m or {}).get("product", {}).get("key") == _product_key()
+
+
+def _older_raw_lr(run, k):
+    """Raw 0.5 deg values of the run started k days before `run`, or None."""
+    older = (datetime.strptime(run, "%Y%m%d%H") - timedelta(days=k)).strftime("%Y%m%d%H")
+    m = _read_manifest(older)
+    if not m or m.get("data_version") != DATA_VERSION:
+        return None, older
+    d = os.path.join(_root(), older)
+    try:
+        return {var: np.load(os.path.join(d, f"{var}_lr.npy")).astype(np.float32) for var in _RECORDS}, older
+    except OSError:
+        return None, older
+
+
+def lag_blend(newest_lr, older_by_lag, weights=None, from_day=None):
+    """Blend 0.5 deg daily grids [25, ny, nx] of the newest run with older
+    runs: newest day d (11..35) <- older run k's day d+k. Missing runs, days
+    past an older run's horizon and NaN cells drop out; the remaining
+    weights renormalise. Pure function (unit-tested)."""
+    weights = LAG_WEIGHTS if weights is None else weights
+    from_day = LAG_FROM_DAY if from_day is None else from_day
+    base = np.asarray(newest_lr, np.float32)
+    n = base.shape[0]
+    w0 = float(weights[0])
+    num = np.where(np.isfinite(base), base * w0, 0.0).astype(np.float64)
+    den = np.where(np.isfinite(base), w0, 0.0)
+    for k, arr in older_by_lag.items():
+        if arr is None or k >= len(weights) or weights[k] <= 0:
+            continue
+        for i in range(n):
+            src = i + k
+            if _HR_DAYS + 1 + i < from_day or src >= arr.shape[0]:
+                continue
+            ok = np.isfinite(arr[src])
+            num[i] += np.where(ok, arr[src] * weights[k], 0.0)
+            den[i] += np.where(ok, weights[k], 0.0)
+    return np.where(den > 0, num / np.maximum(den, 1e-12), np.nan).astype(np.float32)
+
+
+def _write_lag(dirpath, run):
+    """Write {var}_lr_lag.npy for a run (or remove them when lagging is off).
+    Returns the provenance recorded in the manifest."""
+    if len(LAG_WEIGHTS) <= 1:
+        for var in _RECORDS:
+            try:
+                os.remove(os.path.join(dirpath, f"{var}_lr_lag.npy"))
+            except OSError:
+                pass
+        return {"key": _product_key(), "runs": [run]}
+    older, used = {}, [run]
+    for k in range(1, len(LAG_WEIGHTS)):
+        vals, rid = _older_raw_lr(run, k)
+        if vals is not None:
+            older[k] = vals
+            used.append(rid)
+    raw = _load_values(dirpath)
+    for var in _RECORDS:
+        blended = lag_blend(raw[var]["lr"].astype(np.float32), {k: v[var] for k, v in older.items()})
+        if var == "precip":
+            np.clip(blended, 0, None, out=blended)
+        np.save(os.path.join(dirpath, f"{var}_lr_lag.npy"), np.round(blended, 1).astype(np.float16))
+    return {"key": _product_key(), "runs": used}
 
 
 def _render_frames(dirpath, run, values):
@@ -527,7 +624,7 @@ def _render_frames(dirpath, run, values):
             prod = _day_product(d)
             grid = np.asarray(day_grid(values[var], d), np.float32)
             png, coords = render_png(grid, var, prod["res"], prod["upscale"])
-            name = f"{var}_d{d:02d}_r{RENDER_VERSION}.png"   # versioned: no stale browser cache
+            name = f"{var}_d{d:02d}_r{RENDER_VERSION}_{_product_tag()}.png"   # versioned: no stale browser cache
             with open(os.path.join(dirpath, name), "wb") as f:
                 f.write(png)
             start = init + timedelta(days=d - 1)
@@ -578,11 +675,12 @@ def build_run(run):
         os.makedirs(tmp)
         _save_values(tmp, acc)
         del acc
-        frames = _render_frames(tmp, run, _load_values(tmp))
+        product = _write_lag(tmp, run)
+        frames = _render_frames(tmp, run, _load_product(tmp))
         init = datetime.strptime(run, "%Y%m%d%H").replace(tzinfo=timezone.utc)
         manifest = {"run": run, "init_time": init.isoformat(), "days": DAYS, "daily_skill_days": _DAILY_SKILL_DAYS,
                     "hr_days": _HR_DAYS, "region": REGION, "frames": frames, "colorscales": _scales_out(),
-                    "data_version": DATA_VERSION, "render_version": RENDER_VERSION,
+                    "data_version": DATA_VERSION, "render_version": RENDER_VERSION, "product": product,
                     "built_at": datetime.now(timezone.utc).isoformat(),
                     "download_seconds": round(t_dl, 1), "build_seconds": round(time.time() - t0, 1),
                     "attribution": ATTRIBUTION}
@@ -597,16 +695,16 @@ def build_run(run):
         _release_lock()
 
 
-def rerender_run(run):
+def rerender_run(run, force=False):
     """Re-draw an already built run from its stored values (no download)
     when the rendering changed. Old frames are removed only after the new
     manifest is in place. Runs from an older DATA_VERSION are left alone
     (they are rebuilt instead)."""
     d = os.path.join(_root(), run)
     m = _read_manifest(run)
-    if not m or m.get("data_version") != DATA_VERSION or m.get("render_version") == RENDER_VERSION:
+    if not m or m.get("data_version") != DATA_VERSION or (m.get("render_version") == RENDER_VERSION and not force):
         return False
-    frames = _render_frames(d, run, _load_values(d))
+    frames = _render_frames(d, run, _load_product(d))
     old = {fr["file"] for v in m["frames"].values() for fr in v}
     m.update(frames=frames, colorscales=_scales_out(), render_version=RENDER_VERSION)
     tmp = os.path.join(d, f".manifest-{uuid.uuid4().hex[:6]}.json")
@@ -620,6 +718,44 @@ def rerender_run(run):
             pass
     logger.info("gefs_client: re-rendered run %s (render v%s)", run, RENDER_VERSION)
     return True
+
+
+def upgrade_product(run):
+    """Bring a built run to the current product recipe (lag files, frames,
+    district table) from local data only. Caller holds the build lock."""
+    m = _read_manifest(run)
+    if not m or m.get("data_version") != DATA_VERSION or _product_current(m):
+        return False
+    d = os.path.join(_root(), run)
+    m["product"] = _write_lag(d, run)
+    m["render_version"] = None                       # force the re-render below
+    tmp = os.path.join(d, f".manifest-{uuid.uuid4().hex[:6]}.json")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(m, f)
+    os.replace(tmp, os.path.join(d, "manifest.json"))
+    rerender_run(run, force=True)
+    try:
+        os.remove(os.path.join(d, "districts.json"))      # rebuilt from the new product on next request
+    except OSError:
+        pass
+    with _values_lock:
+        _values_cache.update(run=None, data=None)
+    logger.info("gefs_client: run %s upgraded to product %s (lag runs %s)", run, _product_key(), m["product"]["runs"])
+    return True
+
+
+def _upgrade_served():
+    runs = built_runs()
+    if not runs or _product_current(_read_manifest(runs[-1])):
+        return
+    if not _acquire_lock():
+        return
+    try:
+        upgrade_product(runs[-1])
+    except Exception:
+        logger.warning("gefs_client: product upgrade of %s failed", runs[-1], exc_info=True)
+    finally:
+        _release_lock()
 
 
 def _rerender_outdated():
@@ -638,7 +774,7 @@ def _rerender_outdated():
 def _prune():
     root = _root()
     current = built_runs()
-    keep = set(current[-_KEEP_RUNS:])
+    keep = set(current[-max(_KEEP_RUNS, len(LAG_WEIGHTS)):])
     for d in os.listdir(root):
         p = os.path.join(root, d)
         if _RUN_RE.match(d):
@@ -670,6 +806,7 @@ def refresh(force_check=False):
     latest = _state["latest"]
     if latest and latest not in built_runs():
         build_run(latest)
+    _upgrade_served()
     runs = built_runs()
     return runs[-1] if runs else None
 
@@ -734,7 +871,8 @@ def frames(var, build_url):
     # Keep the served run fresh without blocking: a newer run (or a
     # re-render / new-layout rebuild) is prepared in the background and
     # picked up by the next request.
-    stale_layout = m.get("data_version") != DATA_VERSION or m.get("render_version") != RENDER_VERSION
+    stale_layout = (m.get("data_version") != DATA_VERSION or m.get("render_version") != RENDER_VERSION
+                    or not _product_current(m))
     # Waiting for today's run (its day-35 extension lands hours after 00Z):
     # look for it twice as often.
     ttl = _LISTING_TTL if m["run"][:8] == _now().strftime("%Y%m%d") else _LISTING_TTL // 2
@@ -781,7 +919,7 @@ def point_value(var, day, lat, lon):
     run = runs[-1]
     with _values_lock:
         if _values_cache["run"] != run:
-            _values_cache.update(run=run, data=_load_values(os.path.join(_root(), run)))
+            _values_cache.update(run=run, data=_load_product(os.path.join(_root(), run)))
         data = _values_cache["data"]
     unit = COLORSCALES[var]["unit"]
     prod = _day_product(day)

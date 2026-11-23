@@ -282,6 +282,16 @@ const TOUR_STEPS = [
     targetResolver: "subcategoryHeaderByTitle",
     targetValue: "PMD Forecast",
   },
+  {
+    title: "NOAA GEFS — 35-Day Outlook — new",
+    content:
+      "Daily rain and temperature for the next 35 days across South & Southeast Asia, from NOAA's GEFS ensemble (free NOAA Open Data). Two layers, played on the time slider: the first day is always today and every slider label is a real date. Days 1–14 are forecasts; days 15–35 are longer-range guidance — read them as weekly tendencies. Click the map for the value at a point and its 7-day rain total. With either layer on, open the Weather Report to see every district of Pakistan: today's value, a confidence badge, the 35-day trend and a one-click Word / PDF / CSV outlook report.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "NOAA GEFS — 35-Day Outlook",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "NOAA GEFS — 35-Day Outlook",
+  },
 
   // ===============================================================
   //  FLOOD MONITORING accordion
@@ -326,6 +336,16 @@ const TOUR_STEPS = [
     targetResolver: "subcategoryHeaderByTitle",
     targetValue: "Global Flood Awareness System (GloFAS)",
   },
+  {
+    title: "IWMI Flood Forecasting — new",
+    content:
+      "River-flood forecasts for Pakistan through IWMI's service: GloFAS flood alerts by forecast day (on the time slider), GloFAS flood-alert points with a 15-day discharge chart and return-period thresholds, Google Flood Hub AI river gauges (rising / falling, severity) and Flood Hub inundation extent. Click any point or gauge for its hydrograph and a stats panel.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "IWMI Flood Forecasting",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "IWMI Flood Forecasting",
+  },
 
   // ===============================================================
   //  AIR QUALITY accordion
@@ -349,6 +369,16 @@ const TOUR_STEPS = [
     actionValue: "Real Time Air Quality Parameters",
     targetResolver: "subcategoryHeaderByTitle",
     targetValue: "Real Time Air Quality Parameters",
+  },
+  {
+    title: "Hawanama — Pakistan Air Quality — new",
+    content:
+      "Pakistan's own fine-particle (PM2.5) data from the Hawanama / Pakistan Air Quality Initiative: ground stations, a daily PM2.5 estimate map for the last 30 days (with or without the stations on top), a 72-hour PM2.5 forecast, a 24-hour station nowcast and a crop-fire smoke outlook. Click a station or the map for readings with units, health category and a 7-day chart.",
+    position: "right",
+    action: "openSidebarSubcategory",
+    actionValue: "Hawanama — Pakistan Air Quality Initiative",
+    targetResolver: "subcategoryHeaderByTitle",
+    targetValue: "Hawanama — Pakistan Air Quality Initiative",
   },
 
   // ===============================================================
@@ -445,7 +475,7 @@ const TOUR_STEPS = [
     target: "#weatherReportToggle",
     title: "Weather Report — new",
     content:
-      "Opens the Weather Report panel: a slide-out card that fetches the PMD/GCOP live weather brief for the map's current centre point. Move the map and the report updates.",
+      "Opens the Weather Report panel: a district-by-district summary of whatever weather layer is on the map, plus the PMD Overview tab. With a GEFS 35-day layer on, it lists all 163 districts of Pakistan: the value for the day on the slider, a High / Medium / Low confidence badge (how accurate past forecasts were for that district, season and week — hover for the typical error), a 35-day trend you can click to jump the slider, province filter and search, and Word / PDF / CSV export of a detailed 35-day outlook report. District values are bias-corrected against observations.",
     position: "left",
     action: "openWeatherReportPanel",
   },
@@ -453,7 +483,7 @@ const TOUR_STEPS = [
     target: "#floodModelToggle",
     title: "Flash-Flood Early Warning — new",
     content:
-      "Opens the Flash-Flood Early Warning panel: a real, DEM-derived flood model you can run on demand, not just a fixed set of pre-computed layers. Pick from 6 flash-flood pilots (Nullah Lai, Bhudni Nullah, Karachi Urban, Swat–Mingora, Lasbela–Uthal, Hunza–Karimabad — one per major region) or 31 real riverine gauge/barrage stations across every province, or define your own area by drawing a polygon, uploading a shapefile/GeoJSON/KML, or entering a bbox. Four modes — fixed HAND threshold, rainfall-scenario discharge-driven, AHP susceptibility, and live gauge-driven riverine — each returning a full exposure breakdown (buildings, population, roads, drainage, admin context), a live accuracy check where real ground truth exists, and a one-click GeoJSON download of the result.",
+      "Opens the Flash-Flood Early Warning panel: a real, DEM-derived flood model you can run on demand, not just a fixed set of pre-computed layers. Pick from 6 flash-flood pilots (Nullah Lai, Bhudni Nullah, Karachi Urban, Swat–Mingora, Lasbela–Uthal, Hunza–Karimabad — one per major region) or 31 real riverine gauge/barrage stations across every province, or define your own area by drawing a polygon, uploading a shapefile/GeoJSON/KML, or entering a bbox. Four modes — fixed HAND threshold, rainfall-scenario discharge-driven, AHP susceptibility, and live gauge-driven riverine — each returning a full exposure breakdown (buildings, population, roads, drainage, admin context), a live accuracy check where real ground truth exists, and a one-click GeoJSON download of the result. The Landslide tab in the same panel runs landslide susceptibility and rainfall-triggered early warning for the same areas.",
     position: "left",
   },
   {
@@ -560,7 +590,7 @@ const TOUR_STEPS = [
     target: "#storyBtn",
     title: "Story Panel",
     content:
-      "Opens two live, cinematic briefing cards built entirely from real PMD/NWFC data: the 7-Day Weather Outlook and the 3-chapter Dynamic Weather Report (precipitation → temperature → forecasted precipitation, with a province-wise overview and an FFD barrage/dam flythrough). Both support a full English ⇄ Urdu toggle with spoken narration — pick a language before playback starts, or switch mid-story.",
+      "Opens the Story panel: four live, cinematic briefings built from real data, each summarised on a card before you pick it — 7-Day Weather Outlook, Dynamic Weather Report (last 24 h and what comes next), National Air Quality Watch (PM2.5 over the past week and next 72 h, causes and health advice) and National Flood Watch (river-by-river tour of FFD barrages with their flood limits, GloFAS and Flood Hub outlooks, and a national watch level). Narration is available in English and Urdu.",
     position: "left",
   },
   {
@@ -606,7 +636,7 @@ const TOUR_STEPS = [
     target: "#ncopTourToggle",
     title: "That's the full tour",
     content:
-      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), the PMD Forecast subcategory with nine authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity, and 24h extreme highs/lows), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider, the NCOP Assistant — the animated bot that can answer questions, navigate you anywhere, and describe what's live on your map, and the Story panel's two cinematic briefing cards with full English ⇄ Urdu narration. Click this graduation-cap icon any time to restart the tour.",
+      "You now know every category, every rail button, and every new feature — including Split Compare View, Weather Report, dynamic legends, PMD Warnings hazard filter, NWFC HTML weather markers, the Geology + Seismology + expanded Hydrological Layers, the Agriculture Monitoring accordion (IPC/CH Food Security + PBS Crop Production choropleths with 121-crop filter and the 6-tab Crop Explorer modal), the PMD Forecast subcategory with nine authenticated WRFPRS/GDFS forecast rasters (precipitation, temperature, cloud cover, humidity, and 24h extreme highs/lows), each with its own colour ramp, unit-aware legend, and live current-timestep display in the slider, the NCOP Assistant — the animated bot that can answer questions, navigate you anywhere, and describe what's live on your map, the Story panel's four cinematic briefings with English ⇄ Urdu narration, the NOAA GEFS 35-day outlook with its district table, confidence badges and outlook report, IWMI flood forecasting, Hawanama air quality, and the Landslide tab of the early-warning panel. Click this graduation-cap icon any time to restart the tour.",
     position: "left",
   },
 ];

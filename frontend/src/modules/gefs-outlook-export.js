@@ -80,7 +80,8 @@ export async function loadBoth() {
   const rows = p.districts.map((d) => {
     const td = tByKey.get(`${d.province}|${d.name}`) || {};
     return { name: clean(d.name), province: clean(d.province) || "—", division: clean(d.division), precip: d.precip || [], precipMax: d.precip_max || [],
-             t2m: td.t2m || [], t2mMin: td.t2m_min || [], t2mMax: td.t2m_max || [] };
+             t2m: td.t2m || [], t2mMin: td.t2m_min || [], t2mMax: td.t2m_max || [],
+             precipConf: d.precip_conf || [], t2mConf: td.t2m_conf || [] };
   });
   rows.forEach(analyse);
   return { p, t, rows };
@@ -483,6 +484,7 @@ const GLOSSARY = [
   ["Rain day", `A day on which the district average is at least ${RAIN_DAY} mm.`],
   ["Average (daily mean) temperature", "The average of the day and night temperatures. Afternoons are warmer and nights colder than this number, often by 5 to 10 °C."],
   ["Coldest / warmest spot", "The lowest / highest daily average found anywhere inside the district. Mountain districts can differ a lot from their valleys."],
+  ["Bias-corrected", "Every forecast model has habits, for example running a little too warm or too dry in some places and seasons. These district values are adjusted using how GEFS forecasts compared with satellite and reanalysis observations (NASA POWER) for the same districts, season and forecast week over the past two years. Map colours show the raw model."],
   ["Ensemble mean", "The model is run 31 times with slightly different starting conditions; this report uses the average of all runs. Averages smooth out extremes, so a local downpour can be heavier than shown."],
   ["Confidence", "Weeks 1–2 are reliable for planning. Weeks 3–5 show whether it is likely to be wetter or drier, warmer or colder, not what happens on a specific day."],
 ];
@@ -555,7 +557,7 @@ export function buildGefsOutlookHtml({ p, t, rows }) {
   <body><div class="WordSection1">
   <div class="cover"><div class="kicker">National Common Operating Picture · Weather outlook</div>
     <h1>35-Day District Weather Outlook: Rain &amp; Temperature</h1>
-    <div class="meta">Pakistan · all ${rows.length} districts · <b>${esc(period)}</b> · issued ${esc(issued)} · model run ${esc(init ? init.toUTCString().slice(5, 16) : p.run)}, 00 UTC</div></div>
+    <div class="meta">Pakistan · all ${rows.length} districts · <b>${esc(period)}</b> · issued ${esc(issued)} · model run ${esc(init ? init.toUTCString().slice(5, 16) : p.run)}, 00 UTC${p.calibration ? " · bias-corrected district values" : ""}</div></div>
   <table class="stripe"><tr><td style="background:${C.rain}">&nbsp;</td><td style="background:${C.temp}">&nbsp;</td></tr></table>
   ${heroTiles(rows)}
 
@@ -606,7 +608,7 @@ export function buildGefsOutlookHtml({ p, t, rows }) {
 
   <div class="brk"></div>
   ${sec("C", "Words used in this report")}
-  <table class="t gl">${GLOSSARY.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
+  <table class="t gl">${GLOSSARY.filter(([k]) => k !== "Bias-corrected" || p.calibration).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>
   ${sec("D", "How this outlook is made")}
   <ul>
     <li><b>Source:</b> NOAA Global Ensemble Forecast System (GEFS v12), average of 31 runs, model run ${esc(p.run)} (00 UTC). Days 1–${p.hr_days} use the 0.25° (~27 km) grid, days ${p.hr_days + 1}–${p.days} the 0.5° (~55 km) grid.</li>
@@ -622,12 +624,13 @@ export function buildGefsOutlookHtml({ p, t, rows }) {
 
 export function buildGefsOutlookCsv({ p, rows }) {
   const q = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const lines = ["province,division,district,day,date,extended_range,precip_mm,precip_max_cell_mm,t2m_mean_c,t2m_min_cell_c,t2m_max_cell_c"];
+  const CONF = ["low", "medium", "high"];
+  const lines = ["province,division,district,day,date,extended_range,precip_mm,precip_max_cell_mm,precip_confidence,t2m_mean_c,t2m_min_cell_c,t2m_max_cell_c,t2m_confidence"];
   rows.slice().sort((a, b) => a.province.localeCompare(b.province) || a.name.localeCompare(b.name)).forEach((r) => {
     for (let d = 1; d <= p.days; d++) {
       const v = (a) => (a[d - 1] == null ? "" : a[d - 1]);
       lines.push([q(r.province), q(r.division), q(r.name), d, p.dates?.[d - 1] || "", d > p.daily_skill_days ? 1 : 0,
-        v(r.precip), v(r.precipMax), v(r.t2m), v(r.t2mMin), v(r.t2mMax)].join(","));
+        v(r.precip), v(r.precipMax), CONF[r.precipConf[d - 1]] ?? "", v(r.t2m), v(r.t2mMin), v(r.t2mMax), CONF[r.t2mConf[d - 1]] ?? ""].join(","));
     }
   });
   return lines.join("\r\n");

@@ -795,6 +795,10 @@
                 <a href="#agriculture-monitoring" class="sidebar-link">Agriculture Monitoring &mdash; IPC &amp; PBS Crops</a>
                 <a href="#flash-flood-early-warning" class="sidebar-link">Flash-Flood Early Warning &mdash; HAND / AHP / Riverine</a>
                 <a href="#pmd-predictions" class="sidebar-link">PMD Forecast &mdash; WRFPRS / GDFS Rasters</a>
+                <a href="#gefs-outlook" class="sidebar-link">NOAA GEFS &mdash; 35-Day Outlook</a>
+                <a href="#iwmi-flood" class="sidebar-link">IWMI Flood Forecasting &mdash; GloFAS &amp; Flood Hub</a>
+                <a href="#hawanama-air-quality" class="sidebar-link">Hawanama &mdash; Pakistan Air Quality</a>
+                <a href="#landslide-early-warning" class="sidebar-link">Landslide Early Warning</a>
                 <a href="#data-sources" class="sidebar-link">Data Sources</a>
                 <a href="#temporal-layers" class="sidebar-link">Temporal Layers</a>
                 <a href="#station-layers" class="sidebar-link">Station Layers</a>
@@ -1651,13 +1655,13 @@ sudo journalctl -u ncop-waitress.service -f
                         </thead>
                         <tbody>
                             <tr><td><strong>GIS Layers</strong></td><td>Administrative Boundaries, Infrastructure, Hydrological Layers <em>(expanded)</em>, Geology <em>(new)</em>, Seismology <em>(new)</em></td><td>National / provincial / district / tehsil boundaries; airports, schools, settlements; rivers, dams, watersheds AND 20 pre-computed flood-extent polygons across 6 major river basins &times; 3 severities; geological formations + PGA zones; fault lines, seismic source zones, seismic hazard map. See <a href="#new-gis-layers">New GIS Layers</a> for the full breakdown.</td></tr>
-                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, PMD Forecast <em>(new)</em>, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, nine PMD-Monitor forecast rasters (WRFPRS + GDFS &mdash; see <a href="#pmd-predictions">PMD Forecast</a>), Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
-                            <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities. See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
+                            <tr><td><strong>Weather Systems</strong></td><td>Radar Layers, PMD Forecast <em>(new)</em>, NOAA GEFS &mdash; 35-Day Outlook <em>(new)</em>, GDPS (14 layers), ECMWF, Meteoblue Forecast</td><td>DWD radar, IMERG precipitation, nine PMD-Monitor forecast rasters (WRFPRS + GDFS &mdash; see <a href="#pmd-predictions">PMD Forecast</a>), Meteoblue hourly/weekly precipitation, temperature, CAPE, helicity, snowfall. GDPS uses the current MSC GeoMet catalogue names (<code>GDPS_15km_*</code>, <code>CAPS-WEonG_3km_*</code>).</td></tr>
+                            <tr><td><strong>Flood Monitoring</strong></td><td>FFD Data, FFD Rivers, GloFAS, IWMI Flood Forecasting <em>(new)</em>, Live Meteorological Operations</td><td>PMD Flood-Forecasting Division waterlevels &amp; river polylines; GloFAS precip probabilities; GloFAS alerts by forecast day, GloFAS points and Google Flood Hub gauges / inundation via IWMI (see <a href="#iwmi-flood">IWMI Flood Forecasting</a>). See <a href="#pmd-integrations">PMD / FFD / NWFC Integrations</a> for the full picture.</td></tr>
                             <tr><td><strong>Live Meteorological Operations</strong></td><td>Consolidated subcategory (was &ldquo;MET Monitoring&rdquo; + &ldquo;PMD Monitor Live Feeds&rdquo;)</td><td>PMD Weather Stations, Heatwave Monitoring, PMD Weather Warnings, Monsoon Warnings, Lightning Strikes (last 1h), City 12-Step Forecast, NWFC Station Observations. Eight togglers now live under one accordion.</td></tr>
-                            <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast</td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO.</td></tr>
+                            <tr><td><strong>Air Quality</strong></td><td>Real-Time Parameters, Meteoblue Air-Quality Forecast, Hawanama &mdash; Pakistan Air Quality Initiative <em>(new)</em></td><td>WAQI live AQI, CAMS hourly/daily air-quality, dust, AOD, NO₂, SO₂, CO; Hawanama PM2.5 stations, daily estimate, forecast, nowcast and crop-fire outlook (see <a href="#hawanama-air-quality">Hawanama</a>).</td></tr>
                             <tr><td><strong>Agriculture Monitoring</strong> <em>(new)</em></td><td>Food Security (IPC/CH), Crop Production (PBS)</td><td>IPC/CH Acute Food Insecurity polygons for Pakistan/Afghanistan/Bangladesh with a 4-tab draggable Stats Modal (includes Historical Trend chart from the PTT scrape). Provincial + District crop-production choropleths driven by a single-select filter card with all 121 PBS crops; popup CTA launches the 6-tab Crop Explorer modal (Time Series, Province &amp; District Map/Table, About). See <a href="#agriculture-monitoring">Agriculture Monitoring</a> for the full breakdown.</td></tr>
                             <tr><td><strong>Ocean &amp; Coastal</strong></td><td>Wind/Ocean Particles, SkyTruth Slick+</td><td>Animated particle vectors; marine oil spill detections.</td></tr>
-                            <tr><td><strong>Early Warning (DEW)</strong></td><td>API Features, Hazard Alerts (GDACS, EONET, USGS, Meteoblue early warnings)</td><td>Global disaster events, earthquakes, tropical cyclones, drought etc.</td></tr>
+                            <tr><td><strong>Early Warning (DEW)</strong></td><td>API Features, Hazard Alerts (GDACS, EONET, USGS, Meteoblue early warnings)</td><td>Global disaster events, earthquakes, tropical cyclones, drought etc. DEW exposures are fetched through NCOP&rsquo;s own <code>/api/dew/exposures/</code> proxy, so an unreachable DEW host shows &ldquo;Service temporarily unavailable&rdquo; instead of a browser connection error.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1689,6 +1693,11 @@ sudo journalctl -u ncop-waitress.service -f
                             <tr><td>Google Earth Engine</td><td>XYZ tiles</td><td>Catalogued imagery, dynamic and temporal layers.</td></tr>
                             <tr><td>RainViewer</td><td>Tiles</td><td>Real-time radar &amp; satellite IR (currently hidden, pending tuning).</td></tr>
                             <tr><td>GDELT</td><td>JSON</td><td>Real-time news event extraction.</td></tr>
+                            <tr><td>NOAA GEFS v12 (NOAA Open Data on Azure / AWS)</td><td>GRIB2 (byte ranges)</td><td>35-day daily precipitation &amp; 2&nbsp;m temperature outlook (ensemble mean); archived runs for verification.</td></tr>
+                            <tr><td>NASA POWER</td><td>JSON</td><td>Daily observations (IMERG-based precipitation, MERRA-2 temperature) and 2001&ndash;2025 normals used to verify and bias-correct the GEFS district outlook. Offline training only.</td></tr>
+                            <tr><td>NOAA CFSv2 (AWS)</td><td>GRIB2</td><td>Evaluated as a free 45-day extension (offline backtest only; not shipped &mdash; see <a href="#gefs-outlook">GEFS</a>).</td></tr>
+                            <tr><td>IWMI (CEMS GloFAS &amp; Google Flood Hub)</td><td>JSON &middot; tiles</td><td>GloFAS flood alerts and points, Flood Hub AI gauges and inundation extent for Pakistan.</td></tr>
+                            <tr><td>Hawanama &mdash; Pakistan Air Quality Initiative (CC&nbsp;BY&nbsp;4.0)</td><td>JSON &middot; tiles</td><td>PM2.5 stations, daily estimate tiles, 72&nbsp;h forecast, station nowcast, crop-fire outlook.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2014,6 +2023,9 @@ seismological_global:seismic_hazard_map
                     <li>Render summary stats, hotspot card, threshold pill, and per-province cards with click-to-fly bbox attributes.</li>
                 </ol>
 
+                <h3 class="subsection-title">GEFS 35-day district view <em>(new)</em></h3>
+                <p>When a NOAA GEFS 35-day layer drives the slider, the Overview tab hands over to <code>gefs-district-report.js</code>: pre-aggregated, bias-corrected values for all 163 districts (no map sampling), a per-day <strong>Confidence</strong> badge, sparklines that move the slider, filters, and Word / PDF / CSV export of the 35-day outlook report. The header Word / PDF buttons export the same report. See <a href="#gefs-outlook">NOAA GEFS &mdash; 35-Day Outlook</a>.</p>
+
                 <h3 class="subsection-title">PMD Overview tab</h3>
                 <p>The PMD Overview tab tracks eight PMD/FFD/NWFC layers via <code>PMD_TAB_TRACKED_LAYERS</code>. Each active layer surfaces as an accent-coded card in the <em>Active Layers</em> block and unlocks its own drill-down. Colour keys:</p>
                 <ul>
@@ -2091,17 +2103,17 @@ seismological_global:seismic_hazard_map
 
             <!-- ============================================================ -->
             <section id="guided-tour">
-                <h2 class="section-title">Guided Tour (58 steps) <span class="section-anchor">#</span></h2>
-                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>58 workflow-ordered steps</strong> (grew from 53 with the addition of the Agriculture Monitoring section + the PMD Forecast step under Weather Systems) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
+                <h2 class="section-title">Guided Tour (62 steps) <span class="section-anchor">#</span></h2>
+                <p>The <strong>NCOP Guided Tour</strong> (graduation-cap icon, <code>#ncopTourToggle</code>) walks a first-time user through every category, every rail button, and every new feature in a single continuous flow. Currently <strong>62 workflow-ordered steps</strong> (latest additions: NOAA GEFS 35-Day Outlook, IWMI Flood Forecasting and Hawanama air quality; the Weather Report, Flash-Flood / Landslide and Story Panel steps describe the new district outlook, Landslide tab and four story briefings) that resolve real DOM targets and drive the sidebar / panels automatically as the user advances.</p>
 
                 <h3 class="subsection-title">Section flow</h3>
                 <ol>
                     <li><strong>Orientation</strong> (2 steps) &mdash; NCOP header + mini globe.</li>
                     <li><strong>Sidebar layer catalogue</strong> (3 steps) &mdash; hamburger menu, sidebar panel overview, search box.</li>
                     <li><strong>GIS Layers accordion</strong> (6 steps) &mdash; Administrative Boundaries &rarr; Infrastructure &rarr; Hydrological Layers &rarr; Geology <em>(new)</em> &rarr; Seismology <em>(new)</em>.</li>
-                    <li><strong>Weather Systems accordion</strong> (8 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations &rarr; <strong>PMD Forecast</strong> <em>(new)</em>.</li>
-                    <li><strong>Flood Monitoring accordion</strong> (4 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS.</li>
-                    <li><strong>Air Quality accordion</strong> (2 steps).</li>
+                    <li><strong>Weather Systems accordion</strong> (9 steps) &mdash; Radar Layers &rarr; GDPS &rarr; live temporal-layer demo (auto-activates Specific Humidity 2&nbsp;m) &rarr; temporal-slider anatomy &rarr; ECMWF &rarr; Meteoblue Forecast &rarr; Live Meteorological Operations &rarr; <strong>PMD Forecast</strong> &rarr; <strong>NOAA GEFS &mdash; 35-Day Outlook</strong> <em>(new)</em>.</li>
+                    <li><strong>Flood Monitoring accordion</strong> (5 steps) &mdash; PMD Glaciers &amp; GLOF &rarr; FFD-Data &rarr; GloFAS &rarr; <strong>IWMI Flood Forecasting</strong> <em>(new)</em>.</li>
+                    <li><strong>Air Quality accordion</strong> (3 steps) &mdash; overview &rarr; Real Time Air Quality Parameters &rarr; <strong>Hawanama</strong> <em>(new)</em>.</li>
                     <li><strong>Agriculture Monitoring accordion</strong> <em>(new)</em> (3 steps) &mdash; accordion overview &rarr; Food Security (IPC/CH, popup &amp; Stats Modal callout) &rarr; Crop Production (121-crop filter card &amp; Crop Explorer modal callout).</li>
                     <li><strong>Right rail</strong> (26 steps) &mdash; every button in stack order, from the chevron collapse down to zoom in / out / reset bearing. Includes the <strong>Weather Report</strong>, <strong>Split Compare View</strong>, and <strong>Layer Style</strong> steps, plus <strong>GEE Chat</strong> and, most recently, the <strong>NCOP Assistant</strong> floating mascot <em>(new)</em>.</li>
                     <li><strong>Miscellaneous + wrap-up</strong> (3 steps) &mdash; scale bar, theme toggle, tour-restart hint (mentions every new feature).</li>
@@ -2369,9 +2381,93 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
             </section>
 
             <!-- ============================================================ -->
+            <section id="gefs-outlook">
+                <h2 class="section-title">NOAA GEFS &mdash; 35-Day Outlook <span class="section-anchor">#</span></h2>
+                <p>Two temporal layers under <strong>Weather Systems &rarr; NOAA GEFS &mdash; 35-Day Outlook</strong>: <strong>GEFS Precipitation</strong> (mm/day) and <strong>GEFS 2m Temperature</strong> (&deg;C, daily mean) for the next 35 days over South &amp; Southeast Asia (44&ndash;141&deg;E, 11&deg;S&ndash;40&deg;N). Source: NOAA GEFS v12 ensemble mean, 00Z run, free NOAA Open Data. Days 1&ndash;10 come from the 0.25&deg; product, days 11&ndash;35 from the 0.5&deg; product; days 15&ndash;35 are extended-range guidance and are labelled as such.</p>
+
+                <h3 class="subsection-title">How it behaves</h3>
+                <ul>
+                    <li><strong>Always starts today.</strong> The API drops days of the served run that are already over (UTC), so slider label D1 is today and every label is a real date (e.g. &ldquo;23 Nov&rdquo;). Until today&rsquo;s run is fully published (its day-35 extension lands hours after 00Z) the outlook shows 34 days, then 35.</li>
+                    <li><strong>Built once per run, never per request.</strong> A background build downloads only the two fields via <code>.idx</code> byte ranges (~1 minute), aggregates daily totals/means, renders banded PNG frames with class outlines, and publishes atomically. While the first build runs the API answers <code>202</code> and the layer shows a loader. NOAA is re-checked every 30&nbsp;min (15&nbsp;min while waiting for today&rsquo;s run).</li>
+                    <li><strong>Click the map</strong> for the value at a point and, for rain, the 7-day total.</li>
+                </ul>
+
+                <h3 class="subsection-title">District outlook in the Weather Report</h3>
+                <p>With either GEFS layer active, the Weather Report panel switches to a district view of all 163 districts of Pakistan (area-weighted over each district polygon of <code>gcop:district_boundary</code>, rasterised once at 0.025&deg;):</p>
+                <ul>
+                    <li>Summary cards for the day on the slider; a value chip per district in the map&rsquo;s colours; a 35-day sparkline (click a day to move the slider); 35-day total (rain) or range (temperature).</li>
+                    <li><strong>Confidence</strong> badge (High / Medium / Low) per district and day &mdash; how accurate past forecasts were for that district, season and lead week, compared with simply using the seasonal normal. Hover for the typical error.</li>
+                    <li>Province filter, search, sort; click a row to zoom to the district. The view scrolls inside the panel with a pinned header.</li>
+                    <li><strong>Export</strong> (Word / PDF / CSV): a bulletin-style 35-day outlook &mdash; headline tiles, week-by-week cards with confidence, plain-language &ldquo;what to expect&rdquo;, charts, province summaries, district tables, daily annexes and a glossary. Word files embed the charts as pictures (single-file web archive).</li>
+                </ul>
+
+                <h3 class="subsection-title">Accuracy work (district values only)</h3>
+                <p>District values (panel, report, CSV) are <strong>bias-corrected</strong>; map colours and the click popup show raw GEFS. The correction was trained and checked against NASA POWER observations with blocked cross-validation (a case is never corrected using any case within 35 days of it), on 158 archived forecasts from Nov&nbsp;2024 to Oct&nbsp;2026:</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Error reduction vs raw GEFS (MAE)</th><th>Week 1</th><th>Week 2</th><th>Week 3</th><th>Week 4</th><th>Week 5</th></tr></thead>
+                        <tbody>
+                            <tr><td>Temperature</td><td>&minus;51%</td><td>&minus;36%</td><td>&minus;26%</td><td>&minus;21%</td><td>&minus;25%</td></tr>
+                            <tr><td>Rain</td><td>&minus;12%</td><td>&minus;12%</td><td>&minus;10%</td><td>&minus;12%</td><td>&minus;8%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <ul>
+                    <li>Season- and lead-dependent per district: additive for temperature, a capped ratio for rain (no scaling below 5&nbsp;mm/week), shrunk toward the national value.</li>
+                    <li>Each season &times; week is switched on only if it gains &ge;5% at 97.5% bootstrap confidence (autumn rain stays raw). Two long-lead weeks are blended 50% toward the 2001&ndash;2025 normal (temperature week&nbsp;5, rain week&nbsp;4), where that was proven to help.</li>
+                    <li>Tested and <em>not</em> shipped: a lagged ensemble of recent runs (no meaningful gain), and extending to 45 days with NOAA CFSv2 &mdash; no free source beat the seasonal normal for days 36&ndash;45, so the outlook stays at 35 days.</li>
+                </ul>
+
+                <h3 class="subsection-title">Operations</h3>
+                <ul>
+                    <li><code>python manage.py warm_gefs</code> &mdash; build the newest complete run and the district table (timer: <code>deploy/gefs-warm.timer.reference</code>, every 3&nbsp;h).</li>
+                    <li><code>python manage.py gefs_calibrate --update</code> &mdash; monthly rolling 2-year retrain of the bias correction, damping and confidence tables (timer: <code>deploy/gefs-calibrate.timer.reference</code>). Keeps only district averages (~50&nbsp;KB per archived run).</li>
+                    <li><code>python manage.py gefs_backtest</code> / <code>gefs_extension_backtest</code> &mdash; offline verification tools.</li>
+                    <li><code>/api/gefs/health/</code> reports built runs, build state and the calibration in use.</li>
+                </ul>
+
+                <h3 class="subsection-title">Files</h3>
+                <ul>
+                    <li><code>project/ncop_internal/gefs_client.py</code> (download, aggregation, rendering, run cache), <code>gefs_districts.py</code> (district index &amp; table), <code>gefs_calibration.py</code> (bias correction, damping, confidence), <code>gefs_verify.py</code> / <code>gefs_cfs.py</code> (offline verification), <code>gefs_views.py</code>.</li>
+                    <li><code>frontend/src/modules/gefs-layers.js</code> (layers, slider frames, click popup), <code>gefs-district-report.js</code> (Weather Report district view), <code>gefs-outlook-export.js</code> (Word / PDF / CSV report).</li>
+                </ul>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="iwmi-flood">
+                <h2 class="section-title">IWMI Flood Forecasting &mdash; GloFAS &amp; Google Flood Hub <span class="section-anchor">#</span></h2>
+                <p>Subcategory <strong>Flood Monitoring &rarr; IWMI Flood Forecasting</strong>: river-flood forecasts for Pakistan served through the International Water Management Institute&rsquo;s service and proxied by NCOP (<code>/api/iwmi/</code>).</p>
+                <ul>
+                    <li><strong>GloFAS Flood Alerts by Forecast Day</strong> &mdash; temporal layer on the slider.</li>
+                    <li><strong>GloFAS &mdash; River Discharge (Flood-Alert Points)</strong> &mdash; click a point for its discharge forecast with return-period thresholds; hollow grey rings mark unreliable points; dot size reflects river size &times; alert level.</li>
+                    <li><strong>Google Flood Hub &mdash; River Gauges</strong> &mdash; AI gauge forecasts with severity; red ring = rising, blue ring = falling.</li>
+                    <li><strong>Google Flood Hub &mdash; Inundation Extent</strong> &mdash; high / medium / low likelihood flood extent.</li>
+                </ul>
+                <p>Each point/gauge opens a popup and a stats panel; <code>/api/iwmi/watch/</code> aggregates a national watch summary used by the <a href="#story-mode">National Flood Watch</a> story. Files: <code>frontend/src/modules/iwmi-flood-layers.js</code>, <code>iwmi-flood-popups.js</code>, <code>iwmi-stats-modal.js</code>; <code>project/ncop_internal/iwmi_flood_client.py</code>, <code>iwmi_flood_views.py</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="hawanama-air-quality">
+                <h2 class="section-title">Hawanama &mdash; Pakistan Air Quality Initiative <span class="section-anchor">#</span></h2>
+                <p>Subcategory <strong>Air Quality &rarr; Hawanama &mdash; Pakistan Air Quality Initiative</strong> (data CC&nbsp;BY&nbsp;4.0, attribution on every source), all through NCOP&rsquo;s <code>/api/hawanama/</code> proxy:</p>
+                <ul>
+                    <li><strong>Hawanama Stations &mdash; PM2.5 (PAQI)</strong> and the <strong>Crop-Fire Smoke Outlook</strong> (point layers).</li>
+                    <li><strong>PM2.5 Estimate &mdash; daily</strong> (last 30 days) and <strong>PM2.5 Estimate + Ground Stations</strong> (temporal).</li>
+                    <li><strong>PM2.5 Forecast +3 to +72&nbsp;h</strong> (beta) and <strong>Station PM2.5 Nowcast +3 to +24&nbsp;h</strong> (temporal).</li>
+                </ul>
+                <p>PM2.5 values are coloured with US&nbsp;EPA (2024) breakpoints and always shown with units (&micro;g/m&sup3;). Station and map clicks open popups with health category and a 7-day chart. The <a href="#story-mode">National Air Quality Watch</a> story is built on the same feeds. Files: <code>frontend/src/modules/hawanama-layers.js</code>, <code>hawanama-popups.js</code>, <code>hawanama-stats-modal.js</code>; <code>project/ncop_internal/hawanama_client.py</code>, <code>hawanama_views.py</code>.</p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="landslide-early-warning">
+                <h2 class="section-title">Landslide Early Warning <span class="section-anchor">#</span></h2>
+                <p>The <strong>Landslide</strong> tab of the Flash-Flood Early Warning panel (<code>#floodModelToggle</code>) runs landslide susceptibility and rainfall-triggered early warning on the same pilot areas and custom areas as the flood model, reusing its terrain pipeline and gap-free zone vectorisation. An AHP susceptibility model is the default; a locally calibrated model is used only where it was validated (Hunza). The full method, literature and validation are in <code>Functionality_documentation/LANDSLIDE_EARLY_WARNING_METHODOLOGY.md</code>. Files: <code>frontend/src/modules/landslide-model-control.js</code>; <code>project/ncop_internal/landslide_model_views.py</code> and related modules.</p>
+            </section>
+
+            <!-- ============================================================ -->
             <section id="story-mode">
                 <h2 class="section-title">Story Mode &mdash; Cinematic Briefings <span class="section-anchor">#</span></h2>
-                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts two live, data-driven narrative cards &mdash; not scripted demos. Both are built entirely from real PMD/NWFC feeds at play time, and both now support a full <strong>English &harr; Urdu</strong> toggle with spoken narration.</p>
+                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts four live, data-driven briefings &mdash; not scripted demos &mdash; built from real feeds at play time, with <strong>English &harr; Urdu</strong> narration. Before a story is picked, the panel shows a short card for each (what it is based on, the data it uses and what it shows), defined in <code>StoryManager.BRIEFINGS</code> (<code>map-controls.js</code>).</p>
 
                 <h3 class="subsection-title">7-Day Weather Outlook (<code>story-provincial-forecast.js</code>)</h3>
                 <p>Pulls PMD&rsquo;s Provincial Daily Forecast (<code>api/pmd/monitor/daily-forecast-pro/</code>) and current PMD Weather Warnings, then auto-plays a province-by-province outlook segment followed by a warning-focus segment (10&nbsp;s / 14&nbsp;s per beat).</p>
@@ -2380,8 +2476,14 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                 <ol>
                     <li><strong>Chapter 1 &mdash; Precipitation Outlook.</strong> National radar sweep (DWD Satellite Infrared) plus the NWFC 24-hour rainfall report (<code>api/pmd/nwfc/rainfall-report/</code>), then a guided tour of the heaviest-rainfall districts across every province, closing on an operational assessment.</li>
                     <li><strong>Chapter 2 &mdash; Temperature Outlook.</strong> Built from PMD&rsquo;s Heatwave Monitoring network and historical max-temperature records, cross-checked against the PMD 2&nbsp;m temperature prediction layer, then a tour of the hottest reporting stations and a weekly outlook.</li>
-                    <li><strong>Chapter 3 &mdash; Forecasted Precipitation Outlook.</strong> District-level 24-hour precipitation values sampled from Meteoblue&rsquo;s forecast layers. Opens with a <strong>province-wise precipitation overview</strong> <em>(new)</em> &mdash; a national camera pass grouping the forecast by province, mirroring Chapter&nbsp;1&rsquo;s own province-overview pattern rather than the older per-district zoom loop &mdash; then a north-to-south flythrough of FFD-monitored barrages and dams and how the outlook may affect their inflows.</li>
+                    <li><strong>Chapter 3 &mdash; Forecasted Precipitation Outlook.</strong> District-level 24-hour precipitation values sampled from Meteoblue&rsquo;s forecast layers. Opens with a <strong>province-wise precipitation overview</strong> <em>(new)</em> &mdash; a national camera pass grouping the forecast by province, mirroring Chapter&nbsp;1&rsquo;s own province-overview pattern rather than the older per-district zoom loop &mdash; The FFD barrage and dam beats that used to close this chapter now live in the <strong>National Flood Watch</strong> story.</li>
                 </ol>
+
+                <h3 class="subsection-title">National Air Quality Watch (<code>story-air-quality-watch.js</code>)</h3>
+                <p>Fine-particle (PM2.5) pollution over the past week and the next 72 hours, judged against WHO and Pak-NEQS limits. Data: Hawanama PM2.5 estimate, stations and forecast, WAQI stations, Open-Meteo weather and VIIRS crop fires. Shows the worst cities and days, a weekly chart with units, why the air is bad (research-backed: weather, crop burning, emissions), forecast peaks and health advice.</p>
+
+                <h3 class="subsection-title">National Flood Watch (<code>story-flood-watch.js</code>)</h3>
+                <p>River status now and the flood outlook. Data: FFD barrages and dams, CEMS GloFAS 15-day outlook and Google Flood Hub gauges/inundation via IWMI (<code>/api/iwmi/watch/</code>), with context from 33 peer-reviewed studies on why Pakistan floods. A river-by-river tour shows each barrage&rsquo;s flow against its official <strong>flood limits</strong> (low / medium / high / very high / exceptionally high, from <a href="https://ffd.pmd.gov.pk/flood-limits" target="_blank" rel="noopener">ffd.pmd.gov.pk/flood-limits</a>, <code>ffd-flood-limits.js</code>): the FFD stats panel adds a capacity card and spill-over state, and the history/forecast chart draws the thresholds. The tour ends on AI gauge forecasts and a national watch level.</p>
 
                 <h3 class="subsection-title">English &harr; Urdu narration</h3>
                 <p>Each card has a language-toggle button (<code>.pf-lang</code> / <code>.dwr-lang</code>, labelled <span dir="rtl">&#1575;&#1585;&#1583;&#1608;</span>) plus an upfront language-choice prompt shown before playback starts. Unlike the one-time narration-preference prompt, this one re-asks on every genuinely fresh load &mdash; first open and manual Refresh &mdash; rather than only once ever. Narration itself speaks through the browser&rsquo;s native <code>window.speechSynthesis</code>, the same zero-dependency mechanism used everywhere else in NCOP.</p>
@@ -2401,7 +2503,8 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
 
                 <h3 class="subsection-title">Files</h3>
                 <ul>
-                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>frontend/src/modules/story-dynamic-weather.js</code> &mdash; the two cards: scene building, camera work, language toggle, narration.</li>
+                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>story-dynamic-weather.js</code>, <code>story-air-quality-watch.js</code>, <code>story-flood-watch.js</code> &mdash; the four stories: scene building, camera work, language toggle, narration.</li>
+                    <li><code>frontend/src/modules/ffd-flood-limits.js</code>, <code>ffd-stats-modal.js</code>, <code>ffd-history-forecast.js</code> &mdash; barrage flood limits, capacity card and threshold lines.</li>
                     <li><code>project/ncop_internal/translate.py</code> &mdash; local NLLB-200 translation, throttled, cached, production-hardened.</li>
                     <li><code>project/ncop_project/settings/base.py</code> &mdash; <code>HF_HOME</code> (redirects the HuggingFace model cache off the system drive) and <code>HF_HUB_OFFLINE=1</code> (never phones home once cached), set before any <code>transformers</code> import.</li>
                 </ul>
@@ -2818,6 +2921,29 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                         <p class="card-desc"><code>DJANGO_DEBUG=false</code>, WhiteNoise compressed manifest storage, explicit <code>DJANGO_ALLOWED_HOSTS</code>.</p>
                     </div>
                 </div>
+
+                <h3 class="subsection-title" style="margin-top: 32px;">Outlook, flood, air-quality &amp; DEW endpoints <em>(new)</em></h3>
+                <p>NCOP-native or proxied; all read pre-built/cached data and never block a request on an upstream download. A <code>202</code> means &ldquo;being prepared, retry shortly&rdquo;.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/gefs/frames/?var=precip|t2m</code></td><td>GEFS daily frames from today (image-source URLs + corners). 202 while the first run builds.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/gefs/point/?var=&amp;day=&amp;lat=&amp;lon=</code></td><td>Value at a point for one day (+ 7-day rain total).</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/gefs/districts/?var=precip|t2m</code></td><td>Bias-corrected daily values, confidence, typical error and skill for all 163 districts, from today.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/gefs/health/</code></td><td>Built runs, build state, calibration status (switched-on weeks, damping).</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/iwmi/glofas/points/</code>, <code>/api/iwmi/glofas/points/&lt;id&gt;/discharge/</code>, <code>/api/iwmi/glofas/forecast-days/</code></td><td>GloFAS flood-alert points, per-point discharge, alerts by forecast day.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/iwmi/floodhub/gauges/</code>, <code>/api/iwmi/floodhub/gauges/&lt;id&gt;/discharge/</code>, <code>/api/iwmi/floodhub/inundation/</code></td><td>Google Flood Hub gauges, gauge forecasts, inundation extent.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/iwmi/watch/</code>, <code>/api/iwmi/status/</code>, <code>/api/iwmi/health/</code></td><td>National flood watch summary (Flood Watch story), service status.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/hawanama/stations/</code>, <code>.../stations/daily/&lt;date&gt;/</code>, <code>.../stations/&lt;id&gt;/history/</code></td><td>PM2.5 stations, daily station means, station history.</td></tr>
+                            <tr><td><span class="pill pill--green">PNG</span></td><td><code>/api/hawanama/tiles/dates/</code>, <code>/api/hawanama/tiles/&lt;date&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.png</code></td><td>Daily PM2.5 estimate tile dates and tiles.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/hawanama/point/</code>, <code>/forecast/</code>, <code>/nowcast/</code>, <code>/fires/outlook/</code>, <code>/fires/season/</code>, <code>/watch/</code>, <code>/health/</code></td><td>Point values, forecast, nowcast, crop-fire products, Air Quality Watch summary, health.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/dew/exposures/</code>, <code>?exposure_id=&lt;id&gt;</code></td><td>Same-origin proxy of the DEW exposures service (<code>DEW_EXPOSURES_URL</code>). Unreachable host &rarr; <code>[]</code> with header <code>X-NCOP-Upstream: unavailable</code>.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- ============================================================ -->
@@ -2849,6 +2975,28 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                     <div class="callout-body">
                         <strong>Mapbox token errors</strong>
                         Confirm <code>MAPBOX_ACCESS_TOKEN</code> is set in <code>.env</code>; the dashboard view injects it into <code>window.MAPBOX_ACCESS_TOKEN</code> at template render. Restart the Django process after changing the env file.
+                    </div>
+                </div>
+
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>A new <code>/api/...</code> route returns 404</strong>
+                        The development server on :8000 does not auto-reload route or backend changes. Restart the Django process after pulling backend changes.
+                    </div>
+                </div>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>GEFS layer or district table says &ldquo;Preparing&hellip;&rdquo;</strong>
+                        The first GEFS run (or the one-time district index) is being built in the background; the API answers <code>202</code> and the frontend retries automatically (about a minute). Run <code>python manage.py warm_gefs</code> to prepare it ahead of time, and check <code>/api/gefs/health/</code>.
+                    </div>
+                </div>
+                <div class="callout callout--info">
+                    <div class="callout-icon">ℹ</div>
+                    <div class="callout-body">
+                        <strong>DEW Exposures shows &ldquo;Service temporarily unavailable&rdquo;</strong>
+                        The DEW exposures host (<code>DEW_EXPOSURES_URL</code>) is down or unreachable from the server. NCOP retries after 30&nbsp;s; nothing to fix on the NCOP side.
                     </div>
                 </div>
             </section>

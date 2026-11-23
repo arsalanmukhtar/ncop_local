@@ -1,0 +1,12 @@
+# /etc/systemd/system/gefs-calibrate.timer
+# Runs the retrain on the 3rd of every month at 02:30 (low-traffic hour).
+[Unit]
+Description=Monthly NCOP GEFS district bias-correction retrain
+
+[Timer]
+OnCalendar=*-*-03 02:30:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target
