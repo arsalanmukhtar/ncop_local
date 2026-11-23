@@ -76,6 +76,7 @@ import "./story-air-quality-watch.js";
 // LAST among the story imports so its capture-phase select listener runs
 // after the others' (see that file's _hide()).
 import "./story-flood-watch.js";
+import "./story-food-security-watch.js";
 
 
 // ---- Mapbox token handling ----

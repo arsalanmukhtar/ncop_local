@@ -298,7 +298,7 @@ function _renderCapacityCardHTML(name, outflow, inflow) {
 // under the story panel on the right. Fit the modal into the free strip
 // between the story's floating map popup (left) and the story panel (right).
 // A position the operator chose by dragging/resizing is always respected.
-const STORY_POPUP_IDS = ["ncop-flood-watch-popup", "ncop-dynamic-weather-popup", "ncop-air-quality-watch-popup"];
+const STORY_POPUP_IDS = ["ncop-flood-watch-popup", "ncop-dynamic-weather-popup", "ncop-air-quality-watch-popup", "ncop-food-security-watch-popup"];
 function _visibleRect(el) {
   if (!el) return null;
   const cs = getComputedStyle(el);

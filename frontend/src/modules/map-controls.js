@@ -239,6 +239,12 @@ export class StoryManager {
       data: "FFD barrages & dams · CEMS GloFAS 15-day outlook & Google Flood Hub gauges/inundation (via IWMI) · 33 peer-reviewed studies.",
       shows: "River-by-river tour, how close each river is to its warning level, AI gauge forecasts and a national watch level.",
     },
+    {
+      value: "__food_security_watch__", icon: "🌾", title: "National Food Security & Agriculture Watch", theme: "Food security", color: "#f59e0b",
+      basis: "Who is going hungry and where, how the harvests went, what food costs, and what the next one to two months hold.",
+      data: "IPC food-insecurity analysis · PBS crop production · WFP market prices (5 cities) · bias-corrected GEFS outlook · FAO, World Bank & IPC research.",
+      shows: "Hotspot districts, harvests vs average, prices & purchasing power, an indicative price path and an operational assessment with actions.",
+    },
   ];
 
   static HIDDEN_STORY_IDS = new Set(["demostory", "hydrological", "meteorological"]);

@@ -2182,7 +2182,7 @@ function _hide() {
   const card = root?.querySelector(`#${CARD_ID}`);
   if (card) card.style.display = "none";
   const sel = document.getElementById(SELECT_ID);
-  if (sel?.value === DWR_SENTINEL) return;
+  if ([DWR_SENTINEL, "__flood_watch__", "__food_security_watch__"].includes(sel?.value)) return;
   const chapters = root?.querySelector("#storyChapters");
   if (chapters) chapters.style.display = "grid";
   window.ncopProvincialForecast?.restore();

@@ -61,7 +61,7 @@ const SENTINEL  = "__flood_watch__";
 const LABEL     = "National Flood Watch";
 // Other cinematic stories: switching straight to one of them must not
 // resurrect the 7-Day Outlook (they hide it themselves).
-const OTHER_STORY_SENTINELS = ["__dynamic_weather__", "__air_quality_watch__"];
+const OTHER_STORY_SENTINELS = ["__dynamic_weather__", "__air_quality_watch__", "__food_security_watch__"];
 const CARD_ID   = "ncop-flood-watch";
 const POPUP_ID  = "ncop-flood-watch-popup";
 const STYLE_ID  = "ncop-flood-watch-style";

@@ -510,6 +510,7 @@ export class NavigationPanel {
       window.ncopDynamicWeather?.closeAll();
       window.ncopAirQualityWatch?.closeAll();
       window.ncopFloodWatch?.closeAll();
+      window.ncopFoodSecurityWatch?.closeAll();
       // Reset the picker back to its default "nothing selected" state so
       // reopening the panel shows the picker, not a stale selection.
       const sel = document.getElementById("storySelect");
