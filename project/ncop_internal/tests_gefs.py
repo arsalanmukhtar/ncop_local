@@ -38,6 +38,11 @@ class _Tmp(SimpleTestCase):
         self.addCleanup(ov.disable)
         gc._values_cache.update(run=None, data=None)
         gc._state.update(listing_at=0.0, latest=None)
+        # Clock pinned to 1 h after the test run's init (no past days).
+        from datetime import datetime, timezone
+        clock = mock.patch.object(gc, "_now", return_value=datetime(2026, 11, 19, 1, tzinfo=timezone.utc))
+        self.now = clock.start()
+        self.addCleanup(clock.stop)
         # Tiny frames keep the suite fast; geometry/logic are unchanged.
         for p in (mock.patch.dict(gc._HR, upscale=1), mock.patch.dict(gc._LR, upscale=1)):
             p.start()
@@ -302,3 +307,24 @@ class DistrictTests(_Tmp):
         self.assertEqual(r.status_code, 503)
         r = gv.GefsDistrictsView.as_view()(RequestFactory().get("/api/gefs/districts/", {"var": "wind"}))
         self.assertIn(r.status_code, (400, 503))
+
+
+class TodayWindowTests(_Tmp):
+    def test_past_days_dropped_from_frames_and_districts(self):
+        from datetime import datetime, timezone
+        self._build()
+        self.now.return_value = datetime(2026, 11, 22, 5, tzinfo=timezone.utc)   # 3 days later
+        f = gc.frames("precip", lambda n: n)
+        self.assertEqual((f["first_day"], f["days"], len(f["frames"])), (4, 32, 32))
+        self.assertEqual(f["frames"][0]["day"], 4)                               # run day kept for point lookups
+        self.assertTrue(f["frames"][0]["valid_start"].startswith("2026-11-22"))
+        raster = np.zeros(gd._window_shape(), np.int16)
+        _square_district(raster, int((70.0 - gc.REGION["west"]) / 0.5), int((gc.REGION["north"] - 30.0) / 0.5))
+        gd.save_index(gd.build_weights(raster, 1), DistrictTests.META)
+        d = gd.district_stats("t2m")
+        self.assertEqual((d["days"], d["run_day_offset"], d["dates"][0]), (32, 3, "2026-11-22"))
+        self.assertEqual(len(d["districts"][0]["t2m"]), 32)
+        self.assertEqual(d["daily_skill_days"], 11)
+        # Far in the future: the last day is always kept
+        self.now.return_value = datetime(2027, 1, 30, tzinfo=timezone.utc)
+        self.assertEqual(len(gc.frames("precip", lambda n: n)["frames"]), 1)

@@ -713,6 +713,20 @@ def manifest(run=None):
     return m
 
 
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def past_days(m, now=None):
+    """How many of the run's days are already over (UTC). The outlook is
+    served from today: D1 = today, past days of an older run are dropped.
+    Never drops the last day, so the layer cannot go empty."""
+    now = now or _now()
+    init = datetime.fromisoformat(m["init_time"])
+    over = int((now - init).total_seconds() // 86400)
+    return max(0, min(over, m["days"] - 1))
+
+
 def frames(var, build_url):
     if var not in _RECORDS:
         raise ValueError("var must be precip or t2m")
@@ -721,16 +735,20 @@ def frames(var, build_url):
     # re-render / new-layout rebuild) is prepared in the background and
     # picked up by the next request.
     stale_layout = m.get("data_version") != DATA_VERSION or m.get("render_version") != RENDER_VERSION
-    if stale_layout or time.time() - _state["listing_at"] > _LISTING_TTL:
+    # Waiting for today's run (its day-35 extension lands hours after 00Z):
+    # look for it twice as often.
+    ttl = _LISTING_TTL if m["run"][:8] == _now().strftime("%Y%m%d") else _LISTING_TTL // 2
+    if stale_layout or time.time() - _state["listing_at"] > ttl:
         refresh_async()
     run = m["run"]
     legacy = m.get("coordinates")
+    skip = past_days(m)
     return {
-        "run": run, "init_time": m["init_time"], "var": var, "days": m["days"],
+        "run": run, "init_time": m["init_time"], "var": var, "days": m["days"] - skip, "first_day": skip + 1,
         "daily_skill_days": m["daily_skill_days"], "unit": m["colorscales"][var]["unit"],
         "colorscale": m["colorscales"][var], "region": m.get("region"),
         "frames": [{**fr, "coordinates": fr.get("coordinates") or legacy, "url": build_url(f"{run}/{fr['file']}")}
-                   for fr in m["frames"][var]],
+                   for fr in m["frames"][var][skip:]],
         "attribution": ATTRIBUTION, "building_newer": building() or stale_layout,
     }
 

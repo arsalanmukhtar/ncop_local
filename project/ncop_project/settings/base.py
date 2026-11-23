@@ -173,6 +173,8 @@ HAWANAMA_BASE_URL = env("HAWANAMA_BASE_URL", default="https://hawanama.org")
 IWMI_ENSO_API_BASE_URL = env("IWMI_ENSO_API_BASE_URL", default="https://enso.iwmi.org/ENSO_api/api/v1")
 # NOAA GEFS 35-day outlook (gefs_client.py): NOAA Open Data on Azure / Planetary Computer.
 GEFS_BLOB_BASE_URL = env("GEFS_BLOB_BASE_URL", default="https://noaagefs.blob.core.windows.net/gefs")
+# DEW (Disaster Early Warning) exposures service — reached through /api/dew/exposures/
+DEW_EXPOSURES_URL = env("DEW_EXPOSURES_URL", default="http://172.18.1.108:8000/get-exposures/")
 IWMI_FLOOD_COUNTRIES = env.list(
     "IWMI_FLOOD_COUNTRIES",
     default=["PAK", "IND", "BGD", "LKA", "AFG", "MMR", "THA", "VNM", "KHM", "LAO", "IDN", "PHL", "MYS"],
@@ -285,6 +287,7 @@ REST_FRAMEWORK = {
         # per-client-abuse bound as the Hawanama JSON endpoints.
         "iwmi_flood_api": "120/min",
         "gefs_api": "240/min",
+        "dew_api": "120/min",
     },
 }
 

@@ -7,6 +7,7 @@ from .iwmi_flood_views import (
     IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView, IwmiWatchView,
 )
 from .gefs_views import GefsFramesView, GefsPointView, GefsHealthView, GefsDistrictsView
+from .dew_proxy import DewExposuresView
 from .hawanama_views import (
     HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
     HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
@@ -88,6 +89,8 @@ urlpatterns = [
     path("api/gefs/point/", GefsPointView.as_view(), name="gefs-point"),
     path("api/gefs/health/", GefsHealthView.as_view(), name="gefs-health"),
     path("api/gefs/districts/", GefsDistrictsView.as_view(), name="gefs-districts"),
+    # DEW exposures service, proxied same-origin (dew_proxy.py)
+    path("api/dew/exposures/", DewExposuresView.as_view(), name="dew-exposures"),
     # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see
     # hawanama_views.py. CC BY 4.0, attribution carried in every response.
     path("api/hawanama/stations/", HawanamaStationsView.as_view(), name="hawanama-stations"),

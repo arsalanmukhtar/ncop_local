@@ -296,10 +296,16 @@ def district_stats(var):
     with open(path, encoding="utf-8") as f:
         doc = json.load(f)
     keep = ("precip", "precip_max") if var == "precip" else ("t2m", "t2m_min", "t2m_max")
-    return {**{k: doc[k] for k in ("run", "init_time", "days", "dates", "daily_skill_days", "hr_days")},
+    # Served from today: drop days of the run that are already over. Day
+    # numbers in the response are local (1 = today); run_day_offset maps
+    # them back to the run's own day numbers (slider frames, point API).
+    skip = gc.past_days({"init_time": doc["init_time"], "days": doc["days"]})
+    return {"run": doc["run"], "init_time": doc["init_time"], "days": doc["days"] - skip, "dates": doc["dates"][skip:],
+            "run_day_offset": skip, "daily_skill_days": max(0, doc["daily_skill_days"] - skip),
+            "hr_days": max(0, doc["hr_days"] - skip),
             "var": var, "unit": gc.COLORSCALES[var]["unit"],
             "colorscale": {k: gc.COLORSCALES[var][k] for k in ("bounds", "colors")},
             "districts": [{**{k: d[k] for k in ("name", "province", "division", "bbox", "centroid")},
-                           **{k: d[k] for k in keep}} for d in doc["districts"]],
+                           **{k: d[k][skip:] for k in keep}} for d in doc["districts"]],
             "method": "Area-weighted mean over each district polygon (0.025° rasterisation of gcop:district_boundary)",
             "attribution": gc.ATTRIBUTION}

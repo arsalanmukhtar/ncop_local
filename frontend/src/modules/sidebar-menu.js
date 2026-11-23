@@ -1015,9 +1015,24 @@ export class SidebarMenu {
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
+            // Proxied services (e.g. /api/dew/exposures/) flag an unreachable
+            // upstream with this header instead of a failed request.
+            if (response.headers.get("X-NCOP-Upstream") === "unavailable") {
+              return { __upstreamUnavailable: true };
+            }
             return response.json();
           })
           .then((data) => {
+            if (data && data.__upstreamUnavailable) {
+              contentArea.innerHTML = `
+                            <div class="ncop-empty-state">
+                                <div class="ncop-empty-state-icon">📡</div>
+                                <div class="ncop-empty-state-text">Service temporarily unavailable — please try again later</div>
+                            </div>
+                        `;
+              countBadge.style.display = "none";
+              return;
+            }
             // Validate data is an array
             if (!Array.isArray(data)) {
               throw new Error("Endpoint did not return an array");

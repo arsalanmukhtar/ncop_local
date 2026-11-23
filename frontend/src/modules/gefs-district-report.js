@@ -82,10 +82,18 @@ function chipStyle(v, scale) {
 const sum = (a) => a.reduce((s, v) => s + (v ?? 0), 0);
 const fmt = (v, d = 1) => (v == null || !Number.isFinite(v) ? "–" : v.toFixed(d));
 
-function dayFromState(state) {
+// The slider's frames carry the run's own day number (gefsDay); the
+// district document starts at today (run_day_offset past days dropped).
+let _offset = 0;
+function dayFromState(state, doc) {
   const g = state?.currentEntry?.gefsDay;
-  return Number.isInteger(g) ? g : (state?.currentIndex || 0) + 1;
+  return Number.isInteger(g) ? g - (doc?.run_day_offset || 0) : (state?.currentIndex || 0) + 1;
 }
+
+const shortLabel = (iso) => {
+  const d = iso ? new Date(`${iso}T00:00:00Z`) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "";
+};
 
 function dateLabel(iso) {
   if (!iso) return "";
@@ -122,7 +130,7 @@ function sparkline(series, day, variable, scale, range) {
 function jumpToDay(day) {
   const state = window.getCurrentTemporalState?.();
   const defs = state?.layersDef || [];
-  let idx = defs.findIndex((f) => f?.gefsDay === day);
+  let idx = defs.findIndex((f) => f?.gefsDay === day + _offset);
   if (idx < 0) idx = day - 1;
   const slider = document.getElementById("slider1");
   if (!slider || idx < 0 || idx > Number(slider.max)) return;
@@ -131,7 +139,7 @@ function jumpToDay(day) {
 }
 
 // --------------------------------------------------------------- rendering
-function summaryCards(rows, d, variable, unit) {
+function summaryCards(rows, d, variable, unit, dl = `day ${d}`) {
   const valid = rows.filter((r) => r.v != null);
   if (!valid.length) return "";
   const card = (label, value, sub) => `<div class="wrp-card wrp-gefs-card"><span class="wrp-gefs-card__label">${esc(label)}</span><span class="wrp-gefs-card__value">${value}</span>${sub ? `<span class="wrp-gefs-card__sub">${sub}</span>` : ""}</div>`;
@@ -140,17 +148,17 @@ function summaryCards(rows, d, variable, unit) {
   if (variable === "precip") {
     const wet = valid.filter((r) => r.v >= 1).length;
     const top = by("v", 1), topT = by("total", 1);
-    return card(`Districts with ≥ 1 mm (day ${d})`, `${wet} <small>of ${valid.length}</small>`, "") +
-      (top.v >= 0.5 ? card(`Wettest district (day ${d})`, `${fmt(top.v)} <small>${esc(unit)}</small>`, esc(top.name))
-        : card(`Wettest district (day ${d})`, "No rain", "no district ≥ 0.5 mm")) +
-      card("Wettest over 35 days", `${fmt(topT.total, 0)} <small>mm</small>`, esc(topT.name)) +
-      card(`Mean of districts (day ${d})`, `${fmt(mean)} <small>${esc(unit)}</small>`, "");
+    return card(`Districts with ≥ 1 mm (${dl})`, `${wet} <small>of ${valid.length}</small>`, "") +
+      (top.v >= 0.5 ? card(`Wettest district (${dl})`, `${fmt(top.v)} <small>${esc(unit)}</small>`, esc(top.name))
+        : card(`Wettest district (${dl})`, "No rain", "no district ≥ 0.5 mm")) +
+      card(`Wettest over ${rows[0]?.series?.length || 35} days`, `${fmt(topT.total, 0)} <small>mm</small>`, esc(topT.name)) +
+      card(`Mean of districts (${dl})`, `${fmt(mean)} <small>${esc(unit)}</small>`, "");
   }
   const hot = by("hi", 1), cold = by("lo", -1);
-  return card(`Warmest district (day ${d})`, `${fmt(by("v", 1).v)} <small>${esc(unit)}</small>`, esc(by("v", 1).name)) +
-    card(`Coldest district (day ${d})`, `${fmt(by("v", -1).v)} <small>${esc(unit)}</small>`, esc(by("v", -1).name)) +
-    card(`Highest cell (day ${d})`, `${fmt(hot.hi)} <small>${esc(unit)}</small>`, esc(hot.name)) +
-    card(`Lowest cell (day ${d})`, `${fmt(cold.lo)} <small>${esc(unit)}</small>`, esc(cold.name));
+  return card(`Warmest district (${dl})`, `${fmt(by("v", 1).v)} <small>${esc(unit)}</small>`, esc(by("v", 1).name)) +
+    card(`Coldest district (${dl})`, `${fmt(by("v", -1).v)} <small>${esc(unit)}</small>`, esc(by("v", -1).name)) +
+    card(`Highest cell (${dl})`, `${fmt(hot.hi)} <small>${esc(unit)}</small>`, esc(hot.name)) +
+    card(`Lowest cell (${dl})`, `${fmt(cold.lo)} <small>${esc(unit)}</small>`, esc(cold.name));
 }
 
 function buildRows(doc, d) {
@@ -185,11 +193,11 @@ function renderTable(root, doc, d) {
 
   const extended = d > (doc.daily_skill_days || 14);
   const res = d <= (doc.hr_days || 10) ? "0.25°" : "0.5°";
-  root.querySelector(".wrp-gefs-summary").innerHTML = summaryCards(all.filter((r) => !_ui.province || r.province === _ui.province), d, variable, unit);
+  root.querySelector(".wrp-gefs-summary").innerHTML = summaryCards(all.filter((r) => !_ui.province || r.province === _ui.province), d, variable, unit, shortLabel(doc.dates?.[d - 1]) || `day ${d}`);
   root.querySelector(".wrp-gefs-daynote").innerHTML =
-    `<b>Day ${d}</b> · ${esc(dateLabel(doc.dates?.[d - 1]))} · GEFS ${res} grid${extended
+    `<b>${esc(dateLabel(doc.dates?.[d - 1]))}</b> · day ${d} of ${doc.days}${d === 1 ? " (today)" : ""} · GEFS ${res} grid${extended
       ? ` · <span class="wrp-gefs-ext">extended range — read as a weekly tendency, not an exact daily amount</span>` : ""}`;
-  const totalHead = variable === "precip" ? (_ui.sort === "week" ? "7 days" : "35 days") : "35-day range";
+  const totalHead = variable === "precip" ? (_ui.sort === "week" ? "7 days" : `${doc.days} days`) : `${doc.days}-day range`;
   const body = rows.map((r) => {
     const chip = chipStyle(r.v, scale);
     const val = r.v == null ? "–" : variable === "precip" && r.v < 0.5 ? "dry" : fmt(r.v);
@@ -208,7 +216,7 @@ function renderTable(root, doc, d) {
   }).join("");
   const unitHead = variable === "precip" ? "mm/day" : "°C";
   root.querySelector(".wrp-gefs-table-wrap").innerHTML = rows.length
-    ? `<table class="wrp-gefs-table"><thead><tr><th>District</th><th>Day ${d}<small> ${unitHead}</small></th><th>Days 1–35</th><th>${totalHead}</th></tr></thead><tbody>${body}</tbody></table>`
+    ? `<table class="wrp-gefs-table"><thead><tr><th>District</th><th>${esc(shortLabel(doc.dates?.[d - 1]) || `Day ${d}`)}<small> ${unitHead}</small></th><th>${esc(shortLabel(doc.dates?.[0]))} → ${esc(shortLabel(doc.dates?.[doc.days - 1]))}</th><th>${totalHead}</th></tr></thead><tbody>${body}</tbody></table>`
     : `<div class="wrp-empty"><p>No district matches the filter.</p></div>`;
   root.querySelector(".wrp-gefs-count").textContent = `${rows.length} of ${all.length} districts`;
 }
@@ -228,7 +236,7 @@ function shell(doc) {
     <div class="wrp-gefs-daynote"></div>
     <div class="wrp-gefs-controls">
       <select data-gefs-ui="province" aria-label="Province"><option value="">All provinces</option>${provinces.map((p) => `<option value="${esc(p)}"${_ui.province === p ? " selected" : ""}>${esc(p.replace(/_/g, " "))}</option>`).join("")}</select>
-      <select data-gefs-ui="sort" aria-label="Sort">${opt("day", isP ? "Wettest on this day" : "Warmest on this day")}${isP ? opt("week", "Wettest next 7 days") : ""}${opt("total", isP ? "Wettest over 35 days" : "Warmest over 35 days")}${opt("name", "A–Z")}</select>
+      <select data-gefs-ui="sort" aria-label="Sort">${opt("day", isP ? "Wettest on this day" : "Warmest on this day")}${isP ? opt("week", "Wettest next 7 days") : ""}${opt("total", isP ? `Wettest over ${doc.days} days` : `Warmest over ${doc.days} days`)}${opt("name", "A–Z")}</select>
       <input type="search" data-gefs-ui="q" placeholder="Find district…" value="${esc(_ui.q)}" aria-label="Find district">
       <span class="wrp-gefs-count"></span>
     </div>
@@ -286,11 +294,18 @@ function wire(root, rerender) {
  */
 export function renderGefsDistrictReport(o) {
   const variable = LAYER_VARS[o.state?.layerKey];
-  const d = Math.min(35, Math.max(1, dayFromState(o.state)));
   const label = variable === "precip" ? "GEFS precipitation by district" : "GEFS 2 m temperature by district";
-  if (o.subtitleEl) o.subtitleEl.textContent = `${label} · day ${d}`;
-
-  const doc = getDoc(variable, () => { _lastKey = ""; o.rerender?.(); });
+  const onReady = () => { _lastKey = ""; o.rerender?.(); };
+  let doc = getDoc(variable, onReady);
+  // Slider frames from a newer run (or a new day) than the cached table → refetch.
+  const frameRun = o.state?.currentEntry?.gefsRun;
+  if (doc && frameRun && String(frameRun) !== String(doc.run)) {
+    _data[variable].at = 0;
+    doc = getDoc(variable, onReady);
+  }
+  if (doc) _offset = doc.run_day_offset || 0;
+  const d = Math.min(doc?.days || 35, Math.max(1, dayFromState(o.state, doc)));
+  if (o.subtitleEl) o.subtitleEl.textContent = `${label} · ${doc?.dates?.[d - 1] ? dateLabel(doc.dates[d - 1]) : `day ${d}`}`;
   if (!doc) {
     const err = _data[variable]?.error;
     _lastKey = "";

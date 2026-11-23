@@ -3789,8 +3789,8 @@ export const ncop_menu_items = {
     "API Features": {
       dropdown: {
         dew_exposures: {
-          exposure_id_endpoint: "http://172.18.1.108:8000/get-exposures/",
-          exposure_feature_endpoint: `http://172.18.1.108:8000/get-exposures/?exposure_id=<individual_exposure_id>`,
+          exposure_id_endpoint: `${window.location.origin}/api/dew/exposures/`,   // same-origin proxy of the DEW service (dew_proxy.py)
+          exposure_feature_endpoint: `${window.location.origin}/api/dew/exposures/?exposure_id=<individual_exposure_id>`,
           key: "id",
           attribute: "remarks",
           type: "geojson",

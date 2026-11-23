@@ -24,6 +24,13 @@ function pickLabelIndices(total, target = LABEL_TARGET) {
   return picks;
 }
 
+// Short slider tick label: "19 Nov".
+function shortDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+}
+
 function dayLabel(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -83,9 +90,10 @@ export function generateGefsLoader(variable) {
           id, type: "raster", source: id, layout: { visibility: "visible" }, metadata: { "ncop:opacity": FRAME_OPACITY },
           paint: { "raster-opacity": i === 0 ? FRAME_OPACITY : 0, "raster-fade-duration": 250, "raster-resampling": "linear" },
         }],
-        date: showAt === null || showAt.has(i) ? `D${f.day}` : "",
-        dateFull: `Day ${f.day} · ${dayLabel(f.valid_start)}${f.resolution_deg ? ` · ${f.resolution_deg}°` : ""}${f.extended ? " · extended range" : ""} (run ${String(data.run).slice(0, 8)})`,
-        gefsDay: f.day,
+        date: showAt === null || showAt.has(i) ? (shortDate(f.valid_start) || `D${f.day}`) : "",
+        dateFull: `Day ${i + 1} · ${dayLabel(f.valid_start)}${f.resolution_deg ? ` · ${f.resolution_deg}°` : ""}${f.extended ? " · extended range" : ""} (run ${String(data.run).slice(0, 8)})`,
+        gefsDay: f.day,          // run day: keys the click popup and the district table
+        gefsRun: data.run,
       };
     });
     frames.initialIndex = 0;

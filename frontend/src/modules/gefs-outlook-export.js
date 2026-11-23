@@ -24,7 +24,15 @@
 // Word opens as a normal document with the pictures in place.
 
 const API = `${window.location.origin}/api/gefs/districts/`;
-const WEEKS = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 35]];
+// Weeks from today; set per document (the outlook starts today, so it has
+// 35 days once today's run is published and 34 before that).
+let WEEKS = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 35]];
+let NDAYS = 35;
+function setPeriod(days) {
+  NDAYS = days;
+  WEEKS = [0, 1, 2, 3, 4].map((i) => [i * 7 + 1, Math.min(days, i * 7 + 7)]).filter(([a, b]) => a <= b);
+  if (days > 35) WEEKS[WEEKS.length - 1][1] = days;
+}
 // Daily rainfall categories (IMD scale, also used in PMD bulletins).
 const RAIN_DAY = 2.5, MODERATE = 15.6, HEAVY = 64.5;
 // Fixed colours (light print surface). Rain = blue, temperature = orange;
@@ -67,6 +75,7 @@ export async function loadBoth() {
   let [p, t] = await Promise.all([getJson("precip"), getJson("t2m")]);
   if (p.run !== t.run) [p, t] = await Promise.all([getJson("precip"), getJson("t2m")]);   // a new run landed in between
   if (p.run !== t.run) throw new Error("GEFS run changed during export — please retry");
+  setPeriod(p.days);
   const tByKey = new Map(t.districts.map((d) => [`${d.province}|${d.name}`, d]));
   const rows = p.districts.map((d) => {
     const td = tByKey.get(`${d.province}|${d.name}`) || {};
@@ -276,7 +285,7 @@ function chartProvinceRain(provinces) {
     g += `<rect x="${m.l}" y="${y + 6}" width="${w.toFixed(1)}" height="${rowH - 12}" rx="4" fill="${C.rain}"/>`;
     g += txt(m.l + w + 6, y + 17, `${f0(p.total)} mm`, { size: 10.5, fill: C.ink, weight: 600 });
   });
-  return svg(W, H, g, "Average 35-day rainfall per district, by province");
+  return svg(W, H, g, `Average ${NDAYS}-day rainfall per district, by province`);
 }
 
 function chartWettestByWeek(rows) {
@@ -386,8 +395,8 @@ function heroTiles(rows) {
   const coldest = rows.filter((r) => r.tMean != null).reduce((a, b) => (b.tMean < a.tMean ? b : a));
   const tile = (k, v, s, col) => `<td class="hero" style="border-top-color:${col}"><div class="hero-k">${k}</div><div class="hero-v">${v}</div><div class="hero-s">${s}</div></td>`;
   return `<table class="heros"><tr>
-    ${tile("Districts with meaningful rain", `${meaningful}<small> of ${rows.length}</small>`, "10 mm or more over the 35 days", C.rain)}
-    ${tile("Wettest district", esc(wettest.name), `${f0(wettest.total)} mm in 35 days · ${esc(wettest.province)}`, C.rain)}
+    ${tile("Districts with meaningful rain", `${meaningful}<small> of ${rows.length}</small>`, `10 mm or more over the ${NDAYS} days`, C.rain)}
+    ${tile("Wettest district", esc(wettest.name), `${f0(wettest.total)} mm in ${NDAYS} days · ${esc(wettest.province)}`, C.rain)}
     ${tile("Temperature trend", `${arrow(dt)} ${dt >= 0 ? "+" : ""}${f1(dt)} °C`, `average from ${f1(w1)} °C (week 1) to ${f1(w5)} °C (week 5)`, C.temp)}
     ${tile("Coldest district", esc(coldest.name), `${f1(coldest.tMean)} °C average · ${esc(coldest.province)}`, "#3b7bc4")}
   </tr></table>`;
@@ -431,14 +440,14 @@ function provinceSentence(doc, p) {
   const wk = p.weekRain.indexOf(Math.max(...p.weekRain));
   const firstRain = Math.min(...p.rows.map((r) => r.firstRain).filter((d) => d > 0));
   const rain = p.total < RAIN_DAY ? "<b class=\"rainc\">Rain:</b> expected to stay <b>dry</b> for the whole period."
-    : `<b class="rainc">Rain:</b> ${Number.isFinite(firstRain) && firstRain > 3 ? `dry until about <b>${esc(dDate(doc, firstRain))}</b>, then ` : ""}${rainWords(p.total, 0).toLowerCase()}, mostly in <b>week ${wk + 1}</b> (${esc(weekRange(doc, wk))}). A district gets <b>${f0(p.total)} mm</b> on average over 35 days; the wettest is <b>${esc(p.wettest.name)}</b> (${f0(p.wettest.total)} mm).`;
+    : `<b class="rainc">Rain:</b> ${Number.isFinite(firstRain) && firstRain > 3 ? `dry until about <b>${esc(dDate(doc, firstRain))}</b>, then ` : ""}${rainWords(p.total, 0).toLowerCase()}, mostly in <b>week ${wk + 1}</b> (${esc(weekRange(doc, wk))}). A district gets <b>${f0(p.total)} mm</b> on average over ${NDAYS} days; the wettest is <b>${esc(p.wettest.name)}</b> (${f0(p.wettest.total)} mm).`;
   const dt = p.weekTemp[4] - p.weekTemp[0];
   const temp = `<b class="tempc">Temperature:</b> ${tempWord(p.weekTemp[0]).toLowerCase()} at about ${f1(p.weekTemp[0])} °C in week 1, ${trendWord(dt)} to ${f1(p.weekTemp[4])} °C by week 5.${p.subZero ? ` <b>${p.subZero}</b> district${p.subZero > 1 ? "s have" : " has"} areas below freezing.` : ""}`;
   return `${rain}<br>${temp}`;
 }
 
 function districtTable(doc, p, pScale, tScale) {
-  return `<table class="t dt"><thead><tr><th class="l" rowspan="2">District</th><th class="l" rowspan="2">Rain, in words</th><th colspan="5">Rain per week (mm)</th><th rowspan="2">35 days (mm)</th><th rowspan="2">Wettest day</th>
+  return `<table class="t dt"><thead><tr><th class="l" rowspan="2">District</th><th class="l" rowspan="2">Rain, in words</th><th colspan="5">Rain per week (mm)</th><th rowspan="2">${NDAYS} days (mm)</th><th rowspan="2">Wettest day</th>
     <th class="l" rowspan="2">Temperature, in words</th><th colspan="5">Average temperature per week (°C)</th><th rowspan="2">Coldest / warmest spot (°C)</th></tr>
     <tr>${WEEKS.map((_, i) => `<th>W${i + 1}</th>`).join("")}${WEEKS.map((_, i) => `<th>W${i + 1}</th>`).join("")}</tr></thead><tbody>
     ${p.rows.map((r) => `<tr><th class="l">${esc(r.name)}${r.division ? `<br><span class="sub">${esc(r.division)}</span>` : ""}</th>
@@ -563,8 +572,8 @@ export function buildGefsOutlookHtml({ p, t, rows }) {
     <p class="note">Each bar counts the districts expecting at least ${RAIN_DAY} mm that day (enough to wet the ground). Grey area = lower-confidence weeks.</p>
     ${chartRainyDistricts(p, rows)}</div>
   <table class="two keep"><tr>
-    <td><div class="card"><h3>Which provinces get the most rain?</h3><p class="note">Average 35-day total for a district in each province.</p>${chartProvinceRain(provinces)}</div></td>
-    <td><div class="card"><h3>Wettest districts, and when the rain falls</h3><p class="note">35-day total split by week (lighter = earlier).</p>${chartWettestByWeek(rows)}</div></td>
+    <td><div class="card"><h3>Which provinces get the most rain?</h3><p class="note">Average ${NDAYS}-day total for a district in each province.</p>${chartProvinceRain(provinces)}</div></td>
+    <td><div class="card"><h3>Wettest districts, and when the rain falls</h3><p class="note">${NDAYS}-day total split by week (lighter = earlier).</p>${chartWettestByWeek(rows)}</div></td>
   </tr></table>
 
   ${sec(4, "Temperature outlook")}
@@ -572,7 +581,7 @@ export function buildGefsOutlookHtml({ p, t, rows }) {
     <p class="note">The thick line is the typical district; the shaded band covers 8 out of 10 districts; dashed lines are the warmest and the coldest district. Values are daily averages (day and night together).</p>
     ${chartTempBand(p, rows)}</div>
   <div class="card keep"><h3>Temperature by province</h3>
-    <p class="note">The grey bar runs from the coldest to the warmest district (35-day average); the dot is the province average, coloured as on the map.</p>
+    <p class="note">The grey bar runs from the coldest to the warmest district (${NDAYS}-day average); the dot is the province average, coloured as on the map.</p>
     ${chartProvinceTemp(provinces, tScale)}</div>
 
   <div class="brk"></div>
