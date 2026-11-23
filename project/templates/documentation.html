@@ -1697,6 +1697,7 @@ sudo journalctl -u ncop-waitress.service -f
                             <tr><td>NASA POWER</td><td>JSON</td><td>Daily observations (IMERG-based precipitation, MERRA-2 temperature) and 2001&ndash;2025 normals used to verify and bias-correct the GEFS district outlook. Offline training only.</td></tr>
                             <tr><td>NOAA CFSv2 (AWS)</td><td>GRIB2</td><td>Evaluated as a free 45-day extension (offline backtest only; not shipped &mdash; see <a href="#gefs-outlook">GEFS</a>).</td></tr>
                             <tr><td>IWMI (CEMS GloFAS &amp; Google Flood Hub)</td><td>JSON &middot; tiles</td><td>GloFAS flood alerts and points, Flood Hub AI gauges and inundation extent for Pakistan.</td></tr>
+                            <tr><td>WFP market monitoring (HDX, CC&nbsp;BY-IGO)</td><td>CSV</td><td>Monthly retail food, fuel and wage prices in 5 markets &mdash; Food Security &amp; Agriculture Watch story.</td></tr>
                             <tr><td>Hawanama &mdash; Pakistan Air Quality Initiative (CC&nbsp;BY&nbsp;4.0)</td><td>JSON &middot; tiles</td><td>PM2.5 stations, daily estimate tiles, 72&nbsp;h forecast, station nowcast, crop-fire outlook.</td></tr>
                         </tbody>
                     </table>
@@ -2467,7 +2468,7 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
             <!-- ============================================================ -->
             <section id="story-mode">
                 <h2 class="section-title">Story Mode &mdash; Cinematic Briefings <span class="section-anchor">#</span></h2>
-                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts four live, data-driven briefings &mdash; not scripted demos &mdash; built from real feeds at play time, with <strong>English &harr; Urdu</strong> narration. Before a story is picked, the panel shows a short card for each (what it is based on, the data it uses and what it shows), defined in <code>StoryManager.BRIEFINGS</code> (<code>map-controls.js</code>).</p>
+                <p>The <strong>Story panel</strong> (film-strip icon, <code>#storyBtn</code>) hosts five live, data-driven briefings &mdash; not scripted demos &mdash; built from real feeds at play time, with <strong>English &harr; Urdu</strong> narration. Before a story is picked, the panel shows a short card for each (what it is based on, the data it uses and what it shows), defined in <code>StoryManager.BRIEFINGS</code> (<code>map-controls.js</code>).</p>
 
                 <h3 class="subsection-title">7-Day Weather Outlook (<code>story-provincial-forecast.js</code>)</h3>
                 <p>Pulls PMD&rsquo;s Provincial Daily Forecast (<code>api/pmd/monitor/daily-forecast-pro/</code>) and current PMD Weather Warnings, then auto-plays a province-by-province outlook segment followed by a warning-focus segment (10&nbsp;s / 14&nbsp;s per beat).</p>
@@ -2484,6 +2485,26 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
 
                 <h3 class="subsection-title">National Flood Watch (<code>story-flood-watch.js</code>)</h3>
                 <p>River status now and the flood outlook. Data: FFD barrages and dams, CEMS GloFAS 15-day outlook and Google Flood Hub gauges/inundation via IWMI (<code>/api/iwmi/watch/</code>), with context from 33 peer-reviewed studies on why Pakistan floods. A river-by-river tour shows each barrage&rsquo;s flow against its official <strong>flood limits</strong> (low / medium / high / very high / exceptionally high, from <a href="https://ffd.pmd.gov.pk/flood-limits" target="_blank" rel="noopener">ffd.pmd.gov.pk/flood-limits</a>, <code>ffd-flood-limits.js</code>): the FFD stats panel adds a capacity card and spill-over state, and the history/forecast chart draws the thresholds. The tour ends on AI gauge forecasts and a national watch level.</p>
+
+                <h3 class="subsection-title">National Food Security &amp; Agriculture Watch (<code>story-food-security-watch.js</code>) <em>(new)</em></h3>
+                <p>An operational (military-style) briefing: bottom line up front, situation, where, outlook and recommended actions. Built from one cached digest, <code>/api/foodsec/watch/</code> (<code>foodsec_watch.py</code>), that combines NCOP&rsquo;s IPC and PBS crop endpoints, WFP retail market prices (Humanitarian Data Exchange) and the bias-corrected GEFS district outlook. Five chapters (23 scenes with the current data):</p>
+                <ol>
+                    <li><strong>Hunger now (IPC)</strong> &mdash; population by phase, provinces, the five worst districts (blinking outline + the IPC Food Security panel docked beside the story), the 2017&rarr; trend and the regional picture (Afghanistan, Bangladesh).</li>
+                    <li><strong>The harvests (PBS)</strong> &mdash; wheat, rice, cotton and maize driven through the sidebar crop filter on the provincial layer; 15-year series vs the 5-year average; top wheat districts; the Crop Explorer.</li>
+                    <li><strong>Markets &amp; prices (WFP)</strong> &mdash; Lahore, Karachi, Peshawar, Quetta and Multan; year-on-year changes; purchasing power (kg of wheat flour one day&rsquo;s unskilled wage buys).</li>
+                    <li><strong>The next 1&ndash;2 months</strong> &mdash; GEFS rain and temperature vs 2001&ndash;2025 normals by province (the GEFS precipitation layer plays on the map), the crop calendar, and an <em>indicative</em> 1&ndash;3 month price path (median seasonal change of the last 5 years with a 10&ndash;90% range &mdash; labelled as a guide, not a forecast).</li>
+                    <li><strong>Why &amp; assessment</strong> &mdash; research context with sources, and a watch level (Normal / Watch / Warning / Alert) computed from listed indicators, with recommended actions.</li>
+                </ol>
+                <p>The digest is built in the background (about 45&nbsp;s; ~90&nbsp;KB) and cached for 6&nbsp;h; the endpoint answers <code>202</code> while the first build runs. A failing source leaves only its chapter out. The 20&nbsp;MB district crop map is never loaded by the story &mdash; district outlines and boxes come pre-simplified in the digest.</p>
+
+                <h3 class="subsection-title">Export Report (PDF / Word) <em>(new)</em></h3>
+                <p>The Flood Watch, Air Quality Watch and Food Security &amp; Agriculture Watch cards have an <strong>📄 Export</strong> button (PDF or Word). It works without playing the briefing: the report is built from the same data, narration, charts, tables, assessment and references the briefing shows, plus 2&ndash;3 map captures taken with the story&rsquo;s own layers. A progress checklist runs in the card; afterwards the camera and the current scene are restored (paused).</p>
+                <p>Before any story is chosen, the story picker also shows <strong>📄 Export a briefing as a report</strong>: pick a briefing and PDF or Word. The briefing opens paused (no language prompt, no autoplay), its report is built, and it then rests on its first scene. Reports are always in English, even when the narration is set to Urdu.</p>
+                <ul>
+                    <li><strong>Architecture</strong> (<code>story-report-export.js</code>): each story produces plain &ldquo;sections&rdquo;; one renderer turns them into both formats. PDF = the browser&rsquo;s print-to-PDF of the report page (correct Urdu shaping, page breaks, repeated table headers); Word = a single-file web archive (.doc) with every image embedded. No extra libraries.</li>
+                    <li><strong>Optimisation</strong>: map captures wait for the map to finish loading, are downscaled to 1,400&nbsp;px before JPEG encoding, and a blank frame becomes a &ldquo;map view unavailable&rdquo; placeholder; charts are rasterised once. Typical output: PDF 0.5&ndash;1&nbsp;MB, Word 0.1&ndash;0.4&nbsp;MB.</li>
+                    <li><strong>Safety</strong>: export is refused (with a message) while data are loading or the narration-language prompt is open; an unreadable popup is skipped, never failing the report.</li>
+                </ul>
 
                 <h3 class="subsection-title">English &harr; Urdu narration</h3>
                 <p>Each card has a language-toggle button (<code>.pf-lang</code> / <code>.dwr-lang</code>, labelled <span dir="rtl">&#1575;&#1585;&#1583;&#1608;</span>) plus an upfront language-choice prompt shown before playback starts. Unlike the one-time narration-preference prompt, this one re-asks on every genuinely fresh load &mdash; first open and manual Refresh &mdash; rather than only once ever. Narration itself speaks through the browser&rsquo;s native <code>window.speechSynthesis</code>, the same zero-dependency mechanism used everywhere else in NCOP.</p>
@@ -2503,7 +2524,8 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
 
                 <h3 class="subsection-title">Files</h3>
                 <ul>
-                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>story-dynamic-weather.js</code>, <code>story-air-quality-watch.js</code>, <code>story-flood-watch.js</code> &mdash; the four stories: scene building, camera work, language toggle, narration.</li>
+                    <li><code>frontend/src/modules/story-provincial-forecast.js</code>, <code>story-dynamic-weather.js</code>, <code>story-air-quality-watch.js</code>, <code>story-flood-watch.js</code>, <code>story-food-security-watch.js</code> &mdash; the five stories: scene building, camera work, language toggle, narration.</li>
+                    <li><code>project/ncop_internal/foodsec_watch.py</code> &mdash; the Food Security &amp; Agriculture Watch digest and endpoint.</li>
                     <li><code>frontend/src/modules/ffd-flood-limits.js</code>, <code>ffd-stats-modal.js</code>, <code>ffd-history-forecast.js</code> &mdash; barrage flood limits, capacity card and threshold lines.</li>
                     <li><code>project/ncop_internal/translate.py</code> &mdash; local NLLB-200 translation, throttled, cached, production-hardened.</li>
                     <li><code>project/ncop_project/settings/base.py</code> &mdash; <code>HF_HOME</code> (redirects the HuggingFace model cache off the system drive) and <code>HF_HUB_OFFLINE=1</code> (never phones home once cached), set before any <code>transformers</code> import.</li>
@@ -2940,6 +2962,7 @@ PMD_MONITOR_PASS  (rotate via .env / systemd Environment=)</code></pre>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/hawanama/stations/</code>, <code>.../stations/daily/&lt;date&gt;/</code>, <code>.../stations/&lt;id&gt;/history/</code></td><td>PM2.5 stations, daily station means, station history.</td></tr>
                             <tr><td><span class="pill pill--green">PNG</span></td><td><code>/api/hawanama/tiles/dates/</code>, <code>/api/hawanama/tiles/&lt;date&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.png</code></td><td>Daily PM2.5 estimate tile dates and tiles.</td></tr>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/hawanama/point/</code>, <code>/forecast/</code>, <code>/nowcast/</code>, <code>/fires/outlook/</code>, <code>/fires/season/</code>, <code>/watch/</code>, <code>/health/</code></td><td>Point values, forecast, nowcast, crop-fire products, Air Quality Watch summary, health.</td></tr>
+                            <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/foodsec/watch/</code></td><td>Food Security &amp; Agriculture Watch digest: IPC areas &amp; history, PBS staples, WFP prices with purchasing power and indicative path, GEFS 30-day outlook by province. 202 while building; cached 6&nbsp;h.</td></tr>
                             <tr><td><span class="pill pill--blue">JSON</span></td><td><code>/api/dew/exposures/</code>, <code>?exposure_id=&lt;id&gt;</code></td><td>Same-origin proxy of the DEW exposures service (<code>DEW_EXPOSURES_URL</code>). Unreachable host &rarr; <code>[]</code> with header <code>X-NCOP-Upstream: unavailable</code>.</td></tr>
                         </tbody>
                     </table>

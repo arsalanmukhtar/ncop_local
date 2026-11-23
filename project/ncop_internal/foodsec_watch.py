@@ -123,6 +123,12 @@ def _match(lookup, name):
     for c in cands:
         if c in lookup:
             return lookup[c]
+    # Last resort: a unique district whose name contains the first word
+    # ("Chitral Upper" -> "Upper Chitral" / "Chitral").
+    if w:
+        hits = [v for k, v in lookup.items() if w[0] in k.split()]
+        if len({h["province"] for h in hits}) == 1 and hits:
+            return hits[0]
     return None
 
 

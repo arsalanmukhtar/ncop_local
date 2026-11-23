@@ -46,6 +46,7 @@ import {
   disableCinematicAtmosphere,
   orbitAroundPoint,
 } from "./story-cinematic-engine.js";
+import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -205,9 +206,22 @@ function _signed(v, d = 1, unit = "%") {
   if (!Number.isFinite(v)) return "—";
   return `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(d)}${unit}`;
 }
+// Chart axis label: "Oct '26"; prose: "October 2026".
 function _monthLabel(ym) {
   const d = new Date(`${String(ym).slice(0, 7)}-01T00:00:00Z`);
-  return Number.isNaN(d.getTime()) ? String(ym) : d.toLocaleDateString("en-GB", { month: "short", year: "2-digit", timeZone: "UTC" });
+  if (Number.isNaN(d.getTime())) return String(ym);
+  return `${d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" })} '${String(d.getUTCFullYear()).slice(2)}`;
+}
+function _monthLong(ym) {
+  const d = new Date(`${String(ym).slice(0, 7)}-01T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(ym) : d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+function _dayMonth(iso) {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+function _yieldUnit(s) {
+  return s.unit === "000 bales" ? "bales per hectare" : "tonnes per hectare";
 }
 function _joinList(items) {
   if (items.length <= 1) return items.join("");
@@ -1129,7 +1143,7 @@ function _introNarrative(d) {
   const flour = _price(d, "Wheat flour");
   const tot = d?.prices?.terms_of_trade;
   const parts = [];
-  if (t) parts.push(`Bottom line up front: ${_mil(t.p3plus)} people across ${t.areas} analysed districts face Crisis-or-worse food insecurity (IPC Phase 3+), ${_pct(t.p3plus_pct)} of the ${_mil(t.pop)} people analysed; ${_mil(t.p[4], 2)} are in Emergency (Phase 4).`);
+  if (t) parts.push(`Bottom line up front: in the latest IPC projection, ${_mil(t.p3plus)} people across ${t.areas} analysed districts face Crisis-or-worse food insecurity (IPC Phase 3+), ${_pct(t.p3plus_pct)} of the ${_mil(t.pop)} people analysed; ${_mil(t.p[4], 2)} are in Emergency (Phase 4).`);
   if (wheat) parts.push(`The ${wheat.latest.year} wheat harvest was ${_fmt(wheat.latest.production / 1000, 1)} million tonnes, ${_signed(wheat.change_pct)} on the year before.`);
   if (flour && Number.isFinite(flour.yoy_pct)) parts.push(`Wheat flour costs ${_fmt(flour.latest)} PKR per kg, ${_signed(flour.yoy_pct)} in a year${tot?.latest ? `, and a day's unskilled wage now buys ${_fmt(tot.latest, 1)} kg of flour` : ""}.`);
   parts.push("This briefing covers who is hungry and where, the harvests, market prices, the next one to two months, and the assessment.");
@@ -1156,9 +1170,9 @@ function _trendNarrative(d) {
   const peak = h.reduce((a, b) => (b.phase3plus_pop > a.phase3plus_pop ? b : a));
   const last = h[h.length - 1];
   const flood = h.find((a) => /flood/i.test(a.title || ""));
-  return `Trend. Since ${h[0].date.slice(0, 4)}, IPC analyses have grown from one province to most of the country. The largest number in Phase 3+ was ${_mil(peak.phase3plus_pop)} (${peak.date.slice(0, 7)}). ` +
+  return `Trend. Since ${h[0].date.slice(0, 4)}, IPC analyses have grown from one province to most of the country. The largest number in Phase 3+ was ${_mil(peak.phase3plus_pop)} (${_monthLong(peak.date)}). ` +
     (flood ? `The 2022 flood update alone put ${_mil(flood.phase3plus_pop)} in Phase 3+. ` : "") +
-    `The latest analysis (${last.date.slice(0, 7)}) reports ${_mil(last.phase3plus_pop)}, ${_pct(last.phase3plus_pct)} of those analysed — lower as a share, but on a far larger population.`;
+    `The latest analysis (${_monthLong(last.date)}) reported ${_mil(last.phase3plus_pop)} for its current period, ${_pct(last.phase3plus_pct)} of those analysed; the projection shown on the map is ${_mil(d.ipc.totals.p3plus)}. Shares have eased, but on a far larger population.`;
 }
 
 function _regionNarrative(d) {
@@ -1183,7 +1197,7 @@ function _cropNarrative(s, prov) {
   let why = "";
   if (s.id === 4 && (s.change_pct || 0) < 0) why = " Planted area fell after the minimum support price was withdrawn in 2024, and the season saw adverse weather.";
   if (s.id === 5 && (s.change_pct || 0) < -10) why = " Lower planted area, heat, pests and monsoon flooding are the reported causes.";
-  return `${s.name}: ${_fmt(s.latest.production / 1000, 2)} ${unit} in ${s.latest.year}, ${_signed(s.change_pct)} on the year and ${_signed(s.vs_avg5_pct)} against the 5-year average; yield ${_fmt(s.latest.yield, 2)} tonnes per hectare.` +
+  return `${s.name}: ${_fmt(s.latest.production / 1000, 2)} ${unit} in ${s.latest.year}, ${_signed(s.change_pct)} on the year and ${_signed(s.vs_avg5_pct)} against the 5-year average; yield ${_fmt(s.latest.yield, 2)} ${_yieldUnit(s)}.` +
     (top.length ? ` ${top[0].name} produces ${_pct(share)} of it${top[1] ? `, followed by ${top[1].name}` : ""}.` : "") + why;
 }
 
@@ -1197,7 +1211,7 @@ function _pricesOverviewNarrative(d) {
   const up = KEY_PRICES.map((n) => _price(d, n)).filter((x) => x && (x.yoy_pct || 0) >= 10)
     .sort((a, b) => b.yoy_pct - a.yoy_pct).slice(0, 3);
   const down = KEY_PRICES.map((n) => _price(d, n)).filter((x) => x && (x.yoy_pct || 0) <= -10).slice(0, 2);
-  return `Markets, ${_monthLabel(p.latest_month)}. Retail prices in Lahore, Karachi, Peshawar, Quetta and Multan. ` +
+  return `Markets, ${_monthLong(p.latest_month)}. Retail prices in Lahore, Karachi, Peshawar, Quetta and Multan. ` +
     (up.length ? `Sharpest rises in a year: ${_joinList(up.map((x) => `${_short(x.commodity).toLowerCase()} ${_signed(x.yoy_pct)}`))}. ` : "") +
     (down.length ? `Cheaper than a year ago: ${_joinList(down.map((x) => `${_short(x.commodity).toLowerCase()} ${_signed(x.yoy_pct)}`))}.` : "");
 }
@@ -1228,7 +1242,7 @@ function _weatherNarrative(d) {
     return `${p.province} ${_fmt(p.rain_mm, 0)} mm${r != null ? ` (${_pct(r)} of normal)` : ""}`;
   });
   const warm = rows.filter((p) => Number.isFinite(p.temp_normal_c) && p.temp_c - p.temp_normal_c >= 1);
-  return `The next ${w.days} days (${w.from.slice(5)} to ${w.to.slice(5)}), bias-corrected GEFS outlook: ${_joinList(desc)}. ` +
+  return `The next ${w.days} days (${_dayMonth(w.from)} to ${_dayMonth(w.to)}), bias-corrected GEFS outlook: ${_joinList(desc)}. ` +
     (warm.length ? `Temperatures run warmer than normal in ${_joinList(warm.map((p) => p.province))}. ` : "") +
     "The map plays the daily rain forecast.";
 }
@@ -1247,7 +1261,7 @@ function _priceOutlookNarrative(d) {
   const f = _price(d, "Wheat flour");
   const last = f?.outlook?.[f.outlook.length - 1];
   return `Indicative price path. Applying the typical seasonal movement of the last five years to today's prices, ` +
-    (last ? `wheat flour would be around ${_fmt(last.mid)} PKR per kg by ${_monthLabel(last.month)} (range ${_fmt(last.lo)}–${_fmt(last.hi)}). ` : "") +
+    (last ? `wheat flour would be around ${_fmt(last.mid)} PKR per kg by ${_monthLong(last.month)} (range ${_fmt(last.lo)}–${_fmt(last.hi)} PKR). ` : "") +
     "This is a seasonal guide, not a forecast: stock releases, import decisions or a poor sowing season would move it.";
 }
 
@@ -1472,6 +1486,7 @@ function _ensureCard(root) {
   _state.lang = _loadLangPref();
   _bindCardEvents(card);
   _syncLangButton(card);
+  mountExportButton(card, _exportReport);
   return card;
 }
 
@@ -1694,7 +1709,7 @@ function _showCropPopup(scene) {
       ${_kpis([
         { html: _u(_fmt(s.latest.production / div, 2), _cropUnit(s)), label: "production" },
         { html: _u(_signed(s.change_pct), ""), label: "vs previous year", color: (s.change_pct || 0) < 0 ? "#f87171" : "#4ade80" },
-        { html: _u(_fmt(s.latest.yield, 2), "t/ha"), label: "yield" },
+        { html: _u(_fmt(s.latest.yield, 2), s.unit === "000 bales" ? "bales/ha" : "t/ha"), label: "yield" },
         { html: _u(_fmt(s.latest.area / 1000, 2), "M ha"), label: "area" },
       ])}
       ${_lineChart([{ label: `production (${_cropUnit(s)})`, color: "#22c55e", fill: true, values: series.map((r) => r.production / div) }],
@@ -1784,7 +1799,7 @@ function _showWeatherPopup() {
         const a = p.temp_c - p.temp_normal_c;
         return { label: p.province, value: a, color: a >= 0 ? "#f97316" : "#60a5fa", valueHtml: _u(_signed(a, 1, ""), "°C") };
       }))}
-      <div class="fswp-axis-note">White tick = normal rainfall. ${_esc(`${w.from} to ${w.to}, GEFS run ${String(w.run).slice(0, 8)}.`)} Week 1–2 values are the most reliable; weeks 3–5 are tendencies.</div>
+      <div class="fswp-axis-note">White tick = normal rainfall. ${_esc(`${_dayMonth(w.from)} to ${_dayMonth(w.to)}, GEFS run ${String(w.run).slice(0, 8)}.`)} Week 1–2 values are the most reliable; weeks 3–5 are tendencies.</div>
       ${_refsLine(["gefs"])}
     </div>`);
 }
@@ -1863,7 +1878,7 @@ function _showAssessmentPopup(scene) {
         <div><b>Situation</b>${_esc(d.ipc ? `${_mil(d.ipc.totals.p3plus)} people (${_pct(d.ipc.totals.p3plus_pct)}) in IPC Phase 3+, ${_mil(d.ipc.totals.p[4], 2)} in Phase 4.` : "IPC data unavailable.")}</div>
         <div><b>Where</b>${_esc(hs.length ? hs.map((h) => `${h.title}${h.province ? ` (${h.province})` : ""}`).join(", ") : "—")}</div>
         <div><b>Markets</b>${_esc(flour ? `Wheat flour ${_fmt(flour.latest)} PKR/kg (${_signed(flour.yoy_pct)} in a year); a day's wage buys ${_fmt(d.prices?.terms_of_trade?.latest, 1)} kg.` : "—")}</div>
-        <div><b>Next 1–2 months</b>${_esc(`${dry.length ? `Dry outlook in ${dry.join(", ")} during wheat sowing.` : "Rain near normal for wheat sowing."}${fLast ? ` Flour indicatively ${_fmt(fLast.mid)} PKR/kg by ${_monthLabel(fLast.month)}.` : ""}`)}</div>
+        <div><b>Next 1–2 months</b>${_esc(`${dry.length ? `Dry outlook in ${dry.join(", ")} during wheat sowing.` : "Rain near normal for wheat sowing."}${fLast ? ` Flour indicatively ${_fmt(fLast.mid)} PKR/kg by ${_monthLong(fLast.month)}.` : ""}`)}</div>
         <div><b>Action</b>${_esc(lvl.action)}</div>
       </div>
       <table class="fswp-table"><thead><tr><th>Indicator</th><th class="num">Now</th><th class="num">Points</th></tr></thead><tbody>
@@ -2294,7 +2309,22 @@ async function _fetchWatch(token) {
   }
 }
 
+// Wrapper: a pending export from the story picker is handed to the
+// loader; if the loader never reaches it (no data, story closed) the
+// pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
+  _state.exportAfterLoad = _state.pendingExport || null;
+  _state.pendingExport = null;
+  try {
+    await _loadAndPlayInner(card, forceRefresh);
+  } finally {
+    const p = _state.exportAfterLoad;
+    _state.exportAfterLoad = null;
+    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+  }
+}
+
+async function _loadAndPlayInner(card, forceRefresh = false) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && _state.digest;
   card.querySelector(".fsw-chapter-title").textContent = LABEL;
@@ -2327,6 +2357,18 @@ async function _loadAndPlay(card, forceRefresh = false) {
   _state.ttsEnabled = false; // every run starts muted, like the other briefings
   _syncMuteButton(card);
 
+  const exportReq = _state.exportAfterLoad;
+  if (exportReq) {
+    // Opened from the picker's Export: English, no language prompt, no
+    // autoplay — export, then rest paused on the first scene.
+    _state.exportAfterLoad = null;
+    _state.lang = "en";
+    _syncLangButton(card);
+    _state.isPlaying = false;
+    _setPlayGlyph(card, false);
+    await _exportReport(exportReq.format, exportReq.win);
+    return;
+  }
   if (!useCached) {
     const lang = await _showLangPrompt(card);
     if (token !== _state.runToken) return;
@@ -2402,6 +2444,131 @@ function _closeCompletely() {
   if (chapters) chapters.style.display = "grid";
 }
 
+// ==========================================================================
+// Export Report (PDF / Word) — sections from the briefing's own popups and
+// narration; renderers in story-report-export.js. Works without playing.
+// ==========================================================================
+const REPORT_POPUPS = {
+  "intro": () => _showIntroPopup(),
+  "ipc-overview": () => _showIpcOverviewPopup(),
+  "ipc-hotspot": (sc) => _showHotspotPopup(sc),
+  "ipc-trend": () => _showTrendPopup(),
+  "ipc-region": () => _showRegionPopup(),
+  "crops-overview": () => _showCropsOverviewPopup(),
+  "crop-focus": (sc) => _showCropPopup(sc),
+  "wheat-districts": () => _showDistrictsPopup(),
+  "prices-overview": () => _showPricesPopup(),
+  "price-flour": () => _showFlourPopup(),
+  "purchasing-power": () => _showTotPopup(),
+  "outlook-weather": () => _showWeatherPopup(),
+  "outlook-crops": () => _showCropStagePopup(),
+  "outlook-prices": () => _showPriceOutlookPopup(),
+  "why": () => _showWhyPopup(),
+  "assessment": (sc) => _showAssessmentPopup(sc),
+};
+// Run a scene's popup builder with its output redirected into the report.
+function _reportPopupHtml(scene) {
+  const fn = REPORT_POPUPS[scene.kind];
+  if (!fn) return "";
+  let html = "";
+  const present = _presentPopup;
+  _presentPopup = (h) => { html = h; };
+  try { fn(scene); } catch (e) { console.warn("[food-security-watch] report popup failed:", scene.kind, e); } finally { _presentPopup = present; }
+  return html;
+}
+
+let _exporting = false;
+async function _exportReport(format, win) {
+  const card = document.getElementById(CARD_ID);
+  // Not ready: still loading, or the narration-language prompt is open (the
+  // load flow is waiting on it and must not be interrupted).
+  const prompting = !!card?.querySelector('[class$="-prompt"]');
+  if (_exporting || !_state.digest || !_state.scenes.length || prompting) {
+    try { if (win && !win.closed) win.close(); } catch (_) {}
+    notifyCard(card, _exporting ? "An export is already running."
+      : prompting ? "Choose a narration language first, then export."
+      : "Briefing data is still loading — try again in a moment.");
+    return;
+  }
+  _exporting = true;
+  const narrationLang = _state.lang;
+  _state.lang = "en"; // reports are always in English
+  const map = window.ncop_map;
+  const cam = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+  _pause();
+  _closePopup();
+  _closePanels();
+  _state.runToken += 1;          // stops any running scene choreography
+  const token = _state.runToken;
+  const d = _state.digest;
+  try {
+    await runStoryExport({
+      format, win, card, slug: "food-security-agriculture-watch",
+      meta: {
+        title: LABEL,
+        subtitle: "IPC food insecurity · harvests · market prices · next 1–2 months · assessment",
+        strip: [
+          { label: "Issued", value: new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+          { label: "IPC analysis", value: String(d.ipc?.analysis_id || "n/a") },
+          { label: "Harvest / prices", value: `${d.crops?.latest_year || "n/a"} · ${d.prices ? _monthLong(d.prices.latest_month) : "n/a"}` },
+          { label: "Reference", value: `NDMA/NCOP/FSW/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` },
+        ],
+        glossary: [
+          { term: "IPC", def: "Integrated Food Security Phase Classification: the international hunger scale, from Phase 1 (Minimal) to Phase 5 (Famine)." },
+          { term: "Phase 3+ (Crisis or worse)", def: "People who cannot meet basic food needs without cutting meals or selling what they own. They need urgent help." },
+          { term: "Phase 4 (Emergency)", def: "Large food gaps, with high levels of malnutrition and deaths. Life-saving help is needed." },
+          { term: "Current vs projection", def: "The IPC estimate for the analysis period now, and its estimate for the coming months." },
+          { term: "Mt", def: "Million tonnes." },
+          { term: "5-year average", def: "The average of the last five harvests. It is used to judge whether a harvest was good or poor." },
+          { term: "Rabi / Kharif", def: "Winter crop season (wheat, sown Nov–Dec, harvested Apr–May) and summer crop season (rice, cotton, maize, sugarcane)." },
+          { term: "Year-on-year (YoY)", def: "The change compared with the same month last year." },
+          { term: "Terms of trade", def: "How much wheat flour a day's casual-labour wage buys. It falls when food becomes dearer than wages." },
+          { term: "Indicative price path", def: "A likely range for the next one to two months, based on usual seasonal price changes. It is not a guarantee." },
+          { term: "GEFS outlook", def: "NOAA's 35-day weather outlook, bias-corrected by NCOP against observations." },
+        ],
+        footer: "Sources: IPC, PBS Crop Reporting Service, WFP market monitoring (HDX), NOAA GEFS (bias-corrected by NCOP), FAO, World Bank and national reports.",
+      },
+      steps: [{ key: "data", label: "Briefing data" }, { key: "map1", label: "Map: IPC food insecurity & hotspots" },
+              { key: "map2", label: "Map: wheat production by province" }],
+      build: async ({ run, mark }) => {
+        run("data"); mark("data");
+        const shots = {};
+        if (map) {
+          run("map1");
+          await _ensureChapterLayers(1, token, card);
+          _setOutlines(hotspots(d).filter((h) => h.outline).map((h) => ({ type: "Feature", geometry: h.outline, properties: {} })));
+          map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+          const a = await captureMap(map, { settleMs: 300 });
+          shots[1] = [{ src: a, caption: "IPC acute food insecurity (projection) by district; outlined: the five hotspot districts." }];
+          mark("map1", a ? "ok" : "warn");
+          run("map2");
+          _clearOverlays();
+          const wheat = _staple(d, 4);
+          _selectCrop(4, wheat?.latest.year || d.crops?.latest_year);
+          await _ensureChapterLayers(2, token, card);
+          map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+          const b = await captureMap(map, { settleMs: 500 });
+          shots[2] = [{ src: b, caption: `Wheat production by province, ${wheat?.latest.year || ""} (darker = more).` }];
+          mark("map2", b ? "ok" : "warn");
+        } else {
+          mark("map1", "warn"); mark("map2", "warn");
+        }
+        return scenesToSections({ scenes: _state.scenes, chapterNames: CHAPTER_NAMES, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots });
+      },
+    });
+  } finally {
+    _clearOverlays();
+    _state.layerChapter = 0;
+    if (cam && map) { try { map.jumpTo(cam); } catch (_) {} }
+    _state.lang = narrationLang;
+    _exporting = false;
+    if (_state.active && _state.scenes.length) {
+      _setPlayGlyph(card, false);
+      _gotoScene(_state.index); // back to where the operator was, paused
+    }
+  }
+}
+
 const EXTRA_CSS = `
     #${CARD_ID} .fsw-dot.is-ch1 { background: rgba(230, 120, 0, 0.28); }
     #${CARD_ID} .fsw-dot.is-ch2 { background: rgba(34, 197, 94, 0.25); }
@@ -2458,8 +2625,19 @@ const EXTRA_CSS = `
 // Pure builders, exported for tests.
 export const _test = { buildScenes, watchLevel, hotspots, refs: REFS };
 
+// Story picker's Export button: open this briefing in export-only mode.
+function _exportFromPicker(format, win) {
+  const sel = document.getElementById(SELECT_ID);
+  if (!sel || _exporting) { try { if (win && !win.closed) win.close(); } catch (_) {} return false; }
+  _state.pendingExport = { format, win };
+  sel.value = SENTINEL;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 window.ncopFoodSecurityWatch = {
   closeAll: _closeCompletely,
+  exportReport: _exportFromPicker,
 };
 
 export function initStoryFoodSecurityWatch() {

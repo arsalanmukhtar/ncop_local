@@ -506,7 +506,7 @@ export class NavigationPanel {
       // Stop whichever cinematic briefing was active and strip its
       // layers/overlays — both hooks are safe no-ops when their story
       // wasn't the one running.
-      window.ncopProvincialForecast?.hide();
+      window.ncopProvincialForecast?.closeAll?.();
       window.ncopDynamicWeather?.closeAll();
       window.ncopAirQualityWatch?.closeAll();
       window.ncopFloodWatch?.closeAll();

@@ -59,6 +59,7 @@ import {
   disableCinematicAtmosphere,
   orbitAroundPoint,
 } from "./story-cinematic-engine.js";
+import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -628,6 +629,7 @@ function _ensureCard(root) {
   _state.lang = _loadLangPref();
   _bindCardEvents(card);
   _syncLangButton(card);
+  mountExportButton(card, _exportReport);
   return card;
 }
 
@@ -2071,7 +2073,22 @@ function _loadingHtml(msg) {
   return `<div class="aqw-status"><span class="aqw-spinner" aria-hidden="true"></span><span>${_esc(msg)}</span></div>`;
 }
 
+// Wrapper: a pending export from the story picker is handed to the
+// loader; if the loader never reaches it (no data, story closed) the
+// pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
+  _state.exportAfterLoad = _state.pendingExport || null;
+  _state.pendingExport = null;
+  try {
+    await _loadAndPlayInner(card, forceRefresh);
+  } finally {
+    const p = _state.exportAfterLoad;
+    _state.exportAfterLoad = null;
+    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+  }
+}
+
+async function _loadAndPlayInner(card, forceRefresh = false) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && _state.digest;
   card.querySelector(".aqw-chapter-title").textContent = LABEL;
@@ -2115,6 +2132,18 @@ async function _loadAndPlay(card, forceRefresh = false) {
   await _ensureDistrictSource();
   if (token !== _state.runToken) return;
 
+  const exportReq = _state.exportAfterLoad;
+  if (exportReq) {
+    // Opened from the picker's Export: English, no language prompt, no
+    // autoplay — export, then rest paused on the first scene.
+    _state.exportAfterLoad = null;
+    _state.lang = "en";
+    _syncLangButton(card);
+    _state.isPlaying = false;
+    _setPlayGlyph(card, false);
+    await _exportReport(exportReq.format, exportReq.win);
+    return;
+  }
   if (!useCached) {
     const lang = await _showLangPrompt(card);
     if (token !== _state.runToken) return;
@@ -2188,6 +2217,136 @@ function _hide() {
   window.ncopProvincialForecast?.restore();
 }
 
+// ==========================================================================
+// Export Report (PDF / Word) — sections from the briefing's own popups and
+// narration; renderers in story-report-export.js. Works without playing.
+// ==========================================================================
+const REPORT_CHAPTERS = { 1: "The Past Week", 2: "The Outlook" };
+const REPORT_POPUPS = {
+  "intro": (sc) => _showIntroPopup(sc),
+  "week-layer": (sc) => _showWeekLayerPopup(sc),
+  "week-city": (sc) => _showWeekCityPopup(sc),
+  "week-metros": (sc) => _showWeekMetrosPopup(sc),
+  "week-assessment": (sc) => _showWeekAssessmentPopup(sc),
+  "fc-intro": (sc) => _showFcIntroPopup(sc),
+  "fc-layer": (sc) => _showFcLayerPopup(sc),
+  "fc-city": (sc) => _showFcCityPopup(sc),
+  "fc-assessment": (sc) => _showFcAssessmentPopup(sc),
+};
+function _reportWorstDay(d) {
+  const daily = d?.past_week?.daily || [];
+  return daily.length ? daily.reduce((a, b) => (b.median > a.median ? b : a)) : null;
+}
+function _reportPeakLead(d) {
+  const leads = d?.forecast?.leads || [];
+  return leads.length ? leads.reduce((a, b) => ((b.mean ?? -1) > (a.mean ?? -1) ? b : a)) : null;
+}
+const REPORT_SHOTS = [
+  { key: "map1", chapter: 1, label: "Map: PM2.5 estimate, worst day", settleMs: 700,
+    prepare: async (d) => { const w = _reportWorstDay(d); if (w) _setFrame(_frameIndex((f) => f.hawanamaDate === w.date)); },
+    caption: (d) => { const w = _reportWorstDay(d); return w ? `Daily PM2.5 estimate on the week's worst day, ${_dayLabel(w.date)} (national station median ${_r(w.median)} µg/m³), with live stations.` : "Daily PM2.5 estimate."; } },
+  { key: "map2", chapter: 2, label: "Map: PM2.5 forecast peak", settleMs: 700,
+    prepare: async (d) => { const p = _reportPeakLead(d); if (p) _setFrame(_forecastIndexForLead(p.lead_h)); },
+    caption: (d) => { const p = _reportPeakLead(d); return p ? `PM2.5 forecast at its national peak, +${p.lead_h} h (${_pkt(p.valid_time)}), with live WAQI stations.` : "PM2.5 forecast."; } },
+];
+function _reportMeta(d) {
+  const dates = d?.past_week?.dates || [];
+  return {
+    title: LABEL,
+    subtitle: "PM2.5 over the past week and the next 72 hours, against WHO and Pak-NEQS limits",
+    strip: [
+      { label: "Issued", value: new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+      { label: "Past week", value: dates.length ? `${_dayLabel(dates[0])} – ${_dayLabel(dates[dates.length - 1])}` : "n/a" },
+      { label: "Forecast issued", value: d?.forecast?.init_time ? _pkt(d.forecast.init_time) : "n/a" },
+      { label: "Reference", value: `NDMA/NCOP/AQW/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` },
+    ],
+    glossary: [
+      { term: "PM2.5", def: "Tiny dust and smoke particles, smaller than 2.5 micrometres (about one-thirtieth of a hair's width), that reach deep into the lungs." },
+      { term: "µg/m³", def: "Micrograms per cubic metre of air: how much PM2.5 is in the air we breathe." },
+      { term: "WHO guideline (15 µg/m³)", def: "The World Health Organization's 2021 advice for a safe daily average." },
+      { term: "Pak-NEQS (35 µg/m³)", def: "Pakistan's legal daily limit (National Environmental Quality Standards, 2010)." },
+      { term: "AQI categories", def: "US EPA colour bands (Good, Moderate, Unhealthy for sensitive groups, Unhealthy, Very Unhealthy, Hazardous) that turn PM2.5 into health advice." },
+      { term: "Median / 90th percentile", def: "The middle station, and the level that only the worst 10% of stations exceed." },
+      { term: "Forecast lead (+24 h)", def: "How far ahead of the forecast's issue time a value is valid." },
+      { term: "VIIRS fires", def: "Fires spotted by NASA satellites, mostly crop-stubble burning." },
+      { term: "Smog season", def: "Roughly October to January, when cool, still air traps smoke and exhaust near the ground." },
+    ],
+    footer: "Sources: Pakistan Air Quality Initiative (Hawanama, CC BY 4.0), WAQI, Open-Meteo, NASA VIIRS fires; WHO AQG 2021, Pak-NEQS 2010, US EPA AQI 2024.",
+  };
+}
+
+// Run a scene's popup builder with its output redirected into the report.
+function _reportPopupHtml(scene) {
+  const fn = REPORT_POPUPS[scene.kind];
+  if (!fn) return "";
+  let html = "";
+  const present = _presentPopup;
+  _presentPopup = (h) => { html = h; };
+  try { fn(scene); } catch (e) { console.warn("[air-quality-watch] report popup failed:", scene.kind, e); } finally { _presentPopup = present; }
+  return html;
+}
+
+let _exporting = false;
+async function _exportReport(format, win) {
+  const card = document.getElementById(CARD_ID);
+  // Not ready: still loading, or the narration-language prompt is open (the
+  // load flow is waiting on it and must not be interrupted).
+  const prompting = !!card?.querySelector('[class$="-prompt"]');
+  if (_exporting || !_state.digest || !_state.scenes.length || prompting) {
+    try { if (win && !win.closed) win.close(); } catch (_) {}
+    notifyCard(card, _exporting ? "An export is already running."
+      : prompting ? "Choose a narration language first, then export."
+      : "Briefing data is still loading — try again in a moment.");
+    return;
+  }
+  _exporting = true;
+  const narrationLang = _state.lang;
+  _state.lang = "en"; // reports are always in English
+  const map = window.ncop_map;
+  const cam = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+  _pause();
+  _closePopup();
+  _clearHighlights();
+  _state.runToken += 1;          // stops any running scene choreography
+  const token = _state.runToken;
+  const d = _state.digest;
+  try {
+    await runStoryExport({
+      format, win, card, slug: "national-air-quality-watch", meta: _reportMeta(d),
+      steps: [{ key: "data", label: "Briefing data" }, ...REPORT_SHOTS.map((s) => ({ key: s.key, label: s.label }))],
+      build: async ({ run, mark }) => {
+        run("data"); mark("data");
+        const shots = {};
+        for (const s of REPORT_SHOTS) {
+          run(s.key);
+          let src = null;
+          if (map) {
+            try {
+              await _ensureChapterLayers(s.chapter, token, card);
+              await s.prepare?.(d);
+              map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+              src = await captureMap(map, { settleMs: s.settleMs || 300 });
+            } catch (e) { console.warn("[air-quality-watch] report capture failed:", s.key, e); }
+          }
+          (shots[s.chapter] ||= []).push({ src, caption: typeof s.caption === "function" ? s.caption(d) : s.caption });
+          mark(s.key, src ? "ok" : "warn");
+        }
+        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots, glanceKinds: ["week-layer", "fc-layer"] });
+      },
+    });
+  } finally {
+    _clearHighlights();
+    _state.layerChapter = 0;
+    if (cam && map) { try { map.jumpTo(cam); } catch (_) {} }
+    _state.lang = narrationLang;
+    _exporting = false;
+    if (_state.active && _state.scenes.length) {
+      _setPlayGlyph(card, false);
+      _gotoScene(_state.index); // back to where the operator was, paused
+    }
+  }
+}
+
 // Story panel's X button: stop without resurrecting another story.
 function _closeCompletely() {
   if (!_state.active) return;
@@ -2258,8 +2417,19 @@ function _wireModalVisibility() {
   return true;
 }
 
+// Story picker's Export button: open this briefing in export-only mode.
+function _exportFromPicker(format, win) {
+  const sel = document.getElementById(SELECT_ID);
+  if (!sel || _exporting) { try { if (win && !win.closed) win.close(); } catch (_) {} return false; }
+  _state.pendingExport = { format, win };
+  sel.value = SENTINEL;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 window.ncopAirQualityWatch = {
   closeAll: _closeCompletely,
+  exportReport: _exportFromPicker,
 };
 
 export function initStoryAirQualityWatch() {

@@ -4332,9 +4332,18 @@ function _restoreCardExternally() {
   }
 }
 
+// Story panel's X: stop AND forget the pick, so reopening the panel shows
+// the story picker instead of resurrecting this card.
+function _closeCompletely() {
+  _hideCardExternally();
+  _pfActiveViaPicker = false;
+  _wasPlayingBeforeExternalHide = false;
+}
+
 window.ncopProvincialForecast = {
   hide: _hideCardExternally,
   restore: _restoreCardExternally,
+  closeAll: _closeCompletely,
 };
 
 // ---- #storySelect integration ---------------------------------------

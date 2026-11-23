@@ -1,4 +1,5 @@
 // MapControls.js
+import { openPrintWindow, exportInProgress } from "./story-report-export.js";
 
 /**
  * Handles the Mapbox map instance and core map interactions (labels, projection, terrain).
@@ -198,11 +199,24 @@ export class StoryManager {
         <button id="storyEdit" class="custom-nav-btn" title="Edit Story"><i data-lucide="pencil"></i></button>
       </div>
       <div id="storyMeta" style="font-size:12px;opacity:.9;margin-bottom:6px;"></div>
+      <!-- report export: outside #storyChapters so it stays when a story hides the briefs -->
+      <div id="storyExport" style="margin-bottom:8px;"></div>
       <!-- scrollable chapter list -->
       <div id="storyChapters" style="display:grid;gap:8px;max-height:50vh;overflow-y:auto;padding-right:4px;"></div>
       <div id="storyEditor" style="display:none;border-top:1px solid #2a2a2a;margin-top:10px;padding-top:10px"></div>
     `;
     if (window.lucide?.createIcons) window.lucide.createIcons();
+    // The story briefs belong to "nothing picked" only: whenever any story
+    // card is on screen they are hidden, whichever path showed the card
+    // (picker, brief card, panel reopen). The export bar stays.
+    if (!document.getElementById("ncop-story-picker-style")) {
+      const st = document.createElement("style");
+      st.id = "ncop-story-picker-style";
+      const cards = ["ncop-provincial-forecast", "ncop-dynamic-weather-forecast", "ncop-air-quality-watch", "ncop-flood-watch", "ncop-food-security-watch"]
+        .map((id) => `#${id}:not([style*="display: none"])`).join(", ");
+      st.textContent = `#story-root:has(${cards}) .ncop-story-picker { display: none !important; }`;
+      document.head.appendChild(st);
+    }
   }
 
   // Placeholder/demo content (Glacier National Park, Pakistan Hydrological
@@ -249,6 +263,48 @@ export class StoryManager {
 
   static HIDDEN_STORY_IDS = new Set(["demostory", "hydrological", "meteorological"]);
 
+  // Briefings that can be exported straight from the picker (story value ->
+  // the module's window hook exposing exportReport(format, win)).
+  static EXPORT_HOOKS = {
+    __flood_watch__: "ncopFloodWatch",
+    __air_quality_watch__: "ncopAirQualityWatch",
+    __food_security_watch__: "ncopFoodSecurityWatch",
+  };
+
+  _exportPanelHtml() {
+    const rows = StoryManager.BRIEFINGS.filter((b) => StoryManager.EXPORT_HOOKS[b.value]).map((b) => `
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:7px;background:rgba(255,255,255,0.03);border-left:3px solid ${b.color};">
+                <span style="font-size:11.5px;font-weight:600;color:#eaeaea;">${b.icon} ${b.title}</span>
+                <span style="display:flex;gap:5px;flex:none;">
+                  <button type="button" data-rx-story="${b.value}" data-rx-format="pdf" title="Opens the print dialog — choose Save as PDF" style="all:unset;cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;">PDF</button>
+                  <button type="button" data-rx-story="${b.value}" data-rx-format="word" title="Downloads a .doc with maps and charts" style="all:unset;cursor:pointer;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;">Word</button>
+                </span>
+              </div>`).join("");
+    return `
+          <div class="ncop-pick-rx" style="display:flex;flex-direction:column;gap:6px;">
+            <button type="button" class="ncop-pick-rx-btn" aria-expanded="false" title="Export a briefing as a report without playing it"
+              style="all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border-radius:9px;background:rgba(70,178,255,0.12);border:1px solid rgba(70,178,255,0.35);color:#cfe9ff;font-size:12px;font-weight:700;">📄 Export a briefing as a report</button>
+            <div class="ncop-pick-rx-menu" style="display:none;flex-direction:column;gap:5px;">
+              ${rows}
+              <div style="font-size:10.5px;line-height:1.45;color:rgba(234,234,234,.6);">Report is in English. The briefing opens paused while its maps are captured, then stays on its first scene.</div>
+            </div>
+          </div>`;
+  }
+
+  _exportFromPicker(value, format) {
+    const hook = window[StoryManager.EXPORT_HOOKS[value]];
+    if (exportInProgress()) {
+      const btn = this.root?.querySelector(".ncop-pick-rx-btn");
+      if (btn) { btn.textContent = "⏳ A report is already being built…"; setTimeout(() => { btn.textContent = "📄 Export a briefing as a report"; }, 3000); }
+      return;
+    }
+    // The print window must be opened inside the click, or it is blocked.
+    const win = format === "pdf" ? openPrintWindow() : null;
+    let ok = false;
+    try { ok = !!hook?.exportReport?.(format, win); } catch (e) { console.warn("[story] export failed:", e); }
+    if (!ok) { try { if (win && !win.closed) win.close(); } catch (_) {} }
+  }
+
   _renderList() {
     const sel = this.root?.querySelector("#storySelect");
     const meta = this.root?.querySelector("#storyMeta");
@@ -272,7 +328,7 @@ export class StoryManager {
 
     if (meta) meta.textContent = "";
     chapters.innerHTML = `
-        <div style="padding:14px;border:1px dashed #444;border-radius:10px;display:flex;flex-direction:column;gap:10px;">
+        <div class="ncop-story-picker" style="padding:14px;border:1px dashed #444;border-radius:10px;display:flex;flex-direction:column;gap:10px;">
           <div style="font-weight:700;font-size:14px;color:#eaeaea;">Please pick a story</div>
           <div style="font-size:12px;line-height:1.5;opacity:.8;">
             Cinematic, data-driven briefings played on the map — live figures narrated scene by scene, nothing scripted. Pick one above, or click a card below; playback starts automatically.
@@ -290,6 +346,26 @@ export class StoryManager {
             </button>`).join("")}
         </div>
       `;
+    const exportBar = this.root?.querySelector("#storyExport");
+    if (exportBar) {
+      exportBar.innerHTML = this._exportPanelHtml();
+      if (!exportBar.dataset.rxWired) {
+        exportBar.dataset.rxWired = "1";
+        exportBar.addEventListener("click", (e) => {
+          const rxToggle = e.target.closest?.(".ncop-pick-rx-btn");
+          if (rxToggle) {
+            const menu = exportBar.querySelector(".ncop-pick-rx-menu");
+            if (menu) { const open = menu.style.display === "none"; menu.style.display = open ? "flex" : "none"; rxToggle.setAttribute("aria-expanded", String(open)); }
+            return;
+          }
+          const rx = e.target.closest?.("[data-rx-story]");
+          if (!rx) return;
+          const menu = exportBar.querySelector(".ncop-pick-rx-menu");
+          if (menu) menu.style.display = "none";
+          this._exportFromPicker(rx.dataset.rxStory, rx.dataset.rxFormat);
+        });
+      }
+    }
     // A card starts its briefing exactly as the selector does: set the
     // value and fire the same "change" event the story modules listen for.
     if (!chapters.dataset.briefsWired) {

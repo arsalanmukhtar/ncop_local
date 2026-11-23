@@ -53,6 +53,7 @@ import {
   orbitAroundPoint,
   flyAlongPath,
 } from "./story-cinematic-engine.js";
+import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -1873,6 +1874,7 @@ function _ensureCard(root) {
   _state.lang = _loadLangPref();
   _bindCardEvents(card);
   _syncLangButton(card);
+  mountExportButton(card, _exportReport);
   return card;
 }
 
@@ -2708,7 +2710,22 @@ async function _enterScene(card, scene, token, seq) {
 // ==========================================================================
 // Load / show / hide
 // ==========================================================================
+// Wrapper: a pending export from the story picker is handed to the
+// loader; if the loader never reaches it (no data, story closed) the
+// pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
+  _state.exportAfterLoad = _state.pendingExport || null;
+  _state.pendingExport = null;
+  try {
+    await _loadAndPlayInner(card, forceRefresh);
+  } finally {
+    const p = _state.exportAfterLoad;
+    _state.exportAfterLoad = null;
+    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+  }
+}
+
+async function _loadAndPlayInner(card, forceRefresh = false) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && (_state.digest || _state.ffd);
   card.querySelector(".nfw-chapter-title").textContent = LABEL;
@@ -2747,6 +2764,18 @@ async function _loadAndPlay(card, forceRefresh = false) {
   _state.ttsEnabled = false; // every run starts muted, like the other briefings
   _syncMuteButton(card);
 
+  const exportReq = _state.exportAfterLoad;
+  if (exportReq) {
+    // Opened from the picker's Export: English, no language prompt, no
+    // autoplay — export, then rest paused on the first scene.
+    _state.exportAfterLoad = null;
+    _state.lang = "en";
+    _syncLangButton(card);
+    _state.isPlaying = false;
+    _setPlayGlyph(card, false);
+    await _exportReport(exportReq.format, exportReq.win);
+    return;
+  }
   if (!useCached) {
     const lang = await _showLangPrompt(card);
     if (token !== _state.runToken) return;
@@ -2819,6 +2848,142 @@ function _closeCompletely() {
   if (chapters) chapters.style.display = "grid";
 }
 
+// ==========================================================================
+// Export Report (PDF / Word) — sections from the briefing's own popups and
+// narration; renderers in story-report-export.js. Works without playing.
+// ==========================================================================
+const REPORT_CHAPTERS = Object.fromEntries(CHAPTER_NAMES.map((n, i) => [i, n]));
+const REPORT_POPUPS = {
+  "intro": () => _showIntroPopup(),
+  "ffd-intro": (sc) => _showFfdIntroPopup(sc),
+  "ffd-river-overview": (sc) => _showFfdRiverOverviewPopup(sc),
+  "ffd-assessment": (sc) => _showFfdAssessmentPopup(sc),
+  "glofas-days": () => _showGlofasDaysPopup(),
+  "glofas-point": (sc) => _showGlofasPointPopup(sc),
+  "floodhub-overview": () => _showFloodhubPopup(),
+  "floodhub-gauge": (sc) => _showGaugePopup(sc, _state.fhSeries?.get(sc.gauge?.id) || null, false),
+  "inundation": (sc) => _showInundationPopup(sc),
+  "why-floods": () => _showWhyPopup(),
+  "assessment": (sc) => _showAssessmentPopup(sc),
+};
+// The forecast day with the most GloFAS points at warning or above.
+function _reportPeakLead(d) {
+  const days = d?.glofas?.day_counts || [];
+  let best = null;
+  for (const x of days) {
+    const a = (x.warning || 0) + (x.danger || 0) + (x.extreme || 0);
+    if (!best || a > best.a) best = { lead: x.lead, a };
+  }
+  return best?.lead || 1;
+}
+const REPORT_SHOTS = [
+  { key: "map1", chapter: 1, label: "Map: FFD barrages & dams", caption: "FFD barrage and dam network, current flood tier." },
+  { key: "map2", chapter: 2, label: "Map: GloFAS outlook, peak day", settleMs: 700,
+    prepare: async (d) => { _setFrame(_glofasFrameForLead(_reportPeakLead(d))); },
+    caption: (d) => `GloFAS flood-alert status on forecast day +${_reportPeakLead(d)} (the day with the most points at warning or above).` },
+  { key: "map3", chapter: 4, label: "Map: all flood layers", settleMs: 500,
+    caption: "FFD stations, GloFAS points, Flood Hub gauges and modelled inundation together." },
+];
+function _reportMeta(d) {
+  const g = d?.glofas, h = d?.floodhub;
+  return {
+    title: LABEL,
+    subtitle: "Rivers now (FFD) · 15-day outlook (GloFAS) · AI gauges (Flood Hub) · assessment",
+    strip: [
+      { label: "Issued", value: new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+      { label: "GloFAS run", value: g?.forecast_date || "n/a" },
+      { label: "Flood Hub issued", value: h?.issued_time ? _pkt(h.issued_time) : "n/a" },
+      { label: "Reference", value: `NDMA/NCOP/NFW/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` },
+    ],
+    glossary: [
+      { term: "FFD", def: "Flood Forecasting Division of the Pakistan Meteorological Department. It measures river flow at the main barrages and dams several times a day." },
+      { term: "Cusecs", def: "Cubic feet per second: how much water passes a point every second. 100,000 cusecs is about 2,830 cubic metres per second." },
+      { term: "Flood tiers", def: "FFD's official levels for each river site (Low, Medium, High, Very High, Exceptionally High). Each has a fixed flow limit." },
+      { term: "GloFAS", def: "Copernicus Global Flood Awareness System: a European computer forecast of river flow for the next 15 days." },
+      { term: "Ensemble / probability", def: "The forecast is run many times with small changes. \"30% probability\" means 30 of every 100 runs reach that level." },
+      { term: "Warning / Severe / Extreme (GloFAS)", def: "Flows seen on average about once every 2, 5 and 20 years. The rarer the flow, the more serious the flood." },
+      { term: "Google Flood Hub", def: "Google's AI forecasts of river level at individual gauges, up to about a week ahead, shared through IWMI." },
+      { term: "Discharge", def: "River flow, in cubic metres per second (m³/s)." },
+      { term: "Inundation map", def: "Modelled areas that would be under water if the forecast flood happens." },
+    ],
+    footer: "Sources: PMD Federal Flood Commission (FFD), CEMS GloFAS (Copernicus) and Google Flood Forecasting via IWMI, peer-reviewed research.",
+  };
+}
+
+// Run a scene's popup builder with its output redirected into the report.
+function _reportPopupHtml(scene) {
+  const fn = REPORT_POPUPS[scene.kind];
+  if (!fn) return "";
+  let html = "";
+  const present = _presentPopup;
+  _presentPopup = (h) => { html = h; };
+  try { fn(scene); } catch (e) { console.warn("[flood-watch] report popup failed:", scene.kind, e); } finally { _presentPopup = present; }
+  return html;
+}
+
+let _exporting = false;
+async function _exportReport(format, win) {
+  const card = document.getElementById(CARD_ID);
+  // Not ready: still loading, or the narration-language prompt is open (the
+  // load flow is waiting on it and must not be interrupted).
+  const prompting = !!card?.querySelector('[class$="-prompt"]');
+  if (_exporting || !_state.digest || !_state.scenes.length || prompting) {
+    try { if (win && !win.closed) win.close(); } catch (_) {}
+    notifyCard(card, _exporting ? "An export is already running."
+      : prompting ? "Choose a narration language first, then export."
+      : "Briefing data is still loading — try again in a moment.");
+    return;
+  }
+  _exporting = true;
+  const narrationLang = _state.lang;
+  _state.lang = "en"; // reports are always in English
+  const map = window.ncop_map;
+  const cam = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+  _pause();
+  _closePopup();
+  try { hideFfdModal(); } catch (_) {}
+  _clearFocus();
+  _state.runToken += 1;          // stops any running scene choreography
+  const token = _state.runToken;
+  const d = _state.digest;
+  try {
+    await runStoryExport({
+      format, win, card, slug: "national-flood-watch", meta: _reportMeta(d),
+      steps: [{ key: "data", label: "Briefing data" }, ...REPORT_SHOTS.map((s) => ({ key: s.key, label: s.label }))],
+      build: async ({ run, mark }) => {
+        run("data"); mark("data");
+        const shots = {};
+        for (const s of REPORT_SHOTS) {
+          run(s.key);
+          let src = null;
+          if (map) {
+            try {
+              await _ensureChapterLayers(s.chapter, token, card);
+              await s.prepare?.(d);
+              map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+              src = await captureMap(map, { settleMs: s.settleMs || 300 });
+            } catch (e) { console.warn("[flood-watch] report capture failed:", s.key, e); }
+          }
+          (shots[s.chapter] ||= []).push({ src, caption: typeof s.caption === "function" ? s.caption(d) : s.caption });
+          mark(s.key, src ? "ok" : "warn");
+        }
+        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots });
+      },
+    });
+  } finally {
+    try { hideFfdModal(); } catch (_) {}
+  _clearFocus();
+    _state.layerChapter = 0;
+    if (cam && map) { try { map.jumpTo(cam); } catch (_) {} }
+    _state.lang = narrationLang;
+    _exporting = false;
+    if (_state.active && _state.scenes.length) {
+      _setPlayGlyph(card, false);
+      _gotoScene(_state.index); // back to where the operator was, paused
+    }
+  }
+}
+
 const EXTRA_CSS = `
     #${CARD_ID} .nfw-dot.is-ch1 { background: rgba(56, 189, 248, 0.25); }
     #${CARD_ID} .nfw-dot.is-ch2 { background: rgba(231, 180, 22, 0.25); }
@@ -2865,8 +3030,19 @@ const EXTRA_CSS = `
 // Pure builders, exported for tests.
 export const _test = { buildScenes, ffdReading, watchLevel, pickGlofasTour: _pickGlofasTour, pickGaugeTour: _pickGaugeTour, refs: REFS };
 
+// Story picker's Export button: open this briefing in export-only mode.
+function _exportFromPicker(format, win) {
+  const sel = document.getElementById(SELECT_ID);
+  if (!sel || _exporting) { try { if (win && !win.closed) win.close(); } catch (_) {} return false; }
+  _state.pendingExport = { format, win };
+  sel.value = SENTINEL;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 window.ncopFloodWatch = {
   closeAll: _closeCompletely,
+  exportReport: _exportFromPicker,
 };
 
 export function initStoryFloodWatch() {
