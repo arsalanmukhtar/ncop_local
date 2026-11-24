@@ -60,6 +60,7 @@ import {
   orbitAroundPoint,
 } from "./story-cinematic-engine.js";
 import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
+import { aqiScale, aqiText, aqiHeadline, rankedCities, spreadCities, airQualityReportSections, airQualityReportMeta } from "./story-air-quality-report.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -104,8 +105,6 @@ const PAKISTAN_BOUNDS = [[60.8, 23.6], [77.9, 37.1]];
 const WHO_24H = 15;
 const WHO_ANNUAL = 5;
 const NEQS_24H = 35;
-const LIU_PER10 = 0.68;
-const CIGARETTE_UGM3 = 22;
 const AQLI_GAIN = { lahore: 5.3, islamabad: 4.6 };
 const AQLI_NATIONAL = 3.9;
 const EPA = [
@@ -731,8 +730,57 @@ function _waqiNear(lon, lat, km = WAQI_NEAR_KM) {
     .slice(0, 4);
 }
 
+// ---- AQI narration (primary) ------------------------------------------------
+// Used whenever the digest carries the backend AQI block (d.aqi). Every index
+// is computed by project/ncop_internal/aqi_engine.py; nothing is converted
+// here. The PM2.5 builders below are only the fallback when it is missing.
+function _sc(d) { return aqiScale(d.aqi.standard); }
+function _aqiIntroNarrative(d) {
+  const H = aqiHeadline(d);
+  return `National Air Quality Watch. ${H.nowLine} This briefing follows the Air Quality Index over the past ${H.days.length} days: how bad it was, where, and why. Then it looks ahead. The index is for fine particles, PM2.5, the only pollutant Pakistan's available stations report.`;
+}
+function _aqiWeekNarrative(d) {
+  const H = aqiHeadline(d);
+  return `${H.weekLine} On that day, ${H.S.atLeast(H.worst.category_counts, "very_unhealthy")} of ${H.worst.n_valid} stations were Very Unhealthy or Hazardous.${_weekWhySentence(d)} On the map, dots are stations coloured by AQI; the surface is the satellite-supported PM2.5 estimate behind them.`;
+}
+function _aqiCityNarrative(d, c, rank) {
+  const S = _sc(d), a = c.aqi;
+  const now = d.aqi.now?.cities?.find((x) => x.city === c.city);
+  return `${rank === 1 ? "Worst of the week" : `Hotspot number ${rank}`}: ${c.city}. The middle day had an AQI of ${aqiText(a.median_aqi)}, ${S.label(a.median_aqi)}, across ${a.n_stations} station${a.n_stations > 1 ? "s" : ""}. The worst day was ${_dayLabel(a.peak_date)}, at ${aqiText(a.peak)}, ${S.label(a.peak)}.${now ? ` Right now it reads ${aqiText(now.aqi)}, ${S.label(now.aqi)}.` : ""} The evidence behind it: PM2.5 averaged ${_r(a.mean_pm25)} µg/m³ over the week. Data confidence is ${a.confidence}. ${S.advice(a.last ?? a.median_aqi)}`;
+}
+function _aqiMetrosNarrative(d, metros) {
+  const S = _sc(d), list = [...metros].sort((x, y) => y.median_aqi - x.median_aqi), lo = list[list.length - 1];
+  return `Pulling back to the major cities. ${list[0].city} had the worst middle day, AQI ${aqiText(list[0].median_aqi)}, ${S.label(list[0].median_aqi)}; ${lo.city} the best, ${aqiText(lo.median_aqi)}, ${S.label(lo.median_aqi)}. In between: ${_joinList(list.slice(1, 4).map((m) => `${m.city} ${aqiText(m.median_aqi)}`))}. These are 24-hour values, so they are comparable with each other but not with a live reading.`;
+}
+function _aqiWeekAssessment(d) {
+  const H = aqiHeadline(d), n = H.S.atLeast(H.ref.counts, "hazardous");
+  return `Past-week assessment. ${H.nowLine}${n ? ` ${n} stations are Hazardous.` : ""} The week is ${d.aqi.observed.trend === "insufficient data" ? "too short for a trend" : d.aqi.observed.trend}. Next, the outlook.`;
+}
+function _aqiFcIntro(d) {
+  const fc = d.aqi.forecast;
+  if (!fc?.days?.length) return "Chapter 2: the outlook. The AQI forecast could not be made for this issue, so this chapter shows the PM2.5 forecast map and live stations only.";
+  return `Chapter 2: the outlook. The AQI forecast covers ${_dayLabel(fc.targets[0])} to ${_dayLabel(fc.targets[fc.targets.length - 1])}. It is a 24-hour forecast for each city, from the Copernicus model adjusted with the city's own stations. The map shows Hawanama's PM2.5 forecast; the dots are live WAQI stations.`;
+}
+function _aqiFcLayer(d) {
+  const H = aqiHeadline(d), fc = H.fc;
+  if (!fc?.days?.length) return _fcLayerNarrativePm(d);
+  return `${H.fcLine} ${fc.days.map((x) => `${_dayLabel(x.date)}: middle city ${aqiText(x.median_aqi)}, ${H.S.label(x.median_aqi)}`).join("; ")}. In a backtest, tomorrow's category was right ${fc.days.find((x) => x.lead === 2)?.skill.hit ?? fc.days[0].skill.hit}% of the time, and within one category almost always.`;
+}
+function _aqiFcCity(d, c, rank, waqi) {
+  const S = _sc(d), f = c.fcAqi, now = d.aqi.now?.cities?.find((x) => x.city === c.city);
+  const pk = f.days.filter(Boolean).reduce((x, y) => (y.aqi > x.aqi ? y : x));
+  return `${rank === 1 ? "Highest forecast" : `Forecast hotspot ${rank}`}: ${c.city}. AQI is expected to reach ${aqiText(f.peak)}, ${S.label(f.peak)}, on ${_dayLabel(f.peak_date)}, with a likely range of ${aqiText(pk.lo)} to ${aqiText(pk.hi)}. The best day is ${_dayLabel(f.best_date)}, at ${aqiText(f.best)}.${now ? ` Observed now: ${aqiText(now.aqi)}, ${S.label(now.aqi)}.` : ""}${waqi.length ? ` ${waqi.length} WAQI station${waqi.length > 1 ? "s" : ""} nearby read ${_joinList(waqi.map((x) => String(x.aqi)))}.` : ""} ${S.advice(f.peak)}`;
+}
+function _aqiFcAssessment(d) {
+  const H = aqiHeadline(d), fc = H.fc;
+  if (!fc?.days?.length) return "Outlook assessment: the AQI forecast is unavailable, so check the live stations again in a few hours. This concludes the National Air Quality Watch.";
+  const watch = fc.cities.filter((c) => c.days.filter((x) => x && x.aqi > 200).length >= 2).length;
+  return `Outlook assessment. ${H.fcLine} ${watch} of ${fc.cities.length} forecast cities stay Very Unhealthy or worse on two or more days. ${H.S.advice(H.fWorst.median_aqi)} Recheck the newest issue before acting: a forecast is not an observation. This concludes the National Air Quality Watch.`;
+}
+
 // ---- Narrative builders ---------------------------------------------------
 function _introNarrative(d) {
+  if (d.aqi) return _aqiIntroNarrative(d);
   const pw = d.past_week;
   const days = pw?.dates?.length || 0;
   const season = _isSmogSeason()
@@ -742,6 +790,7 @@ function _introNarrative(d) {
 }
 
 function _weekLayerNarrative(d) {
+  if (d.aqi) return _aqiWeekNarrative(d);
   const daily = d.past_week?.daily || [];
   if (!daily.length) return "The daily PM2.5 estimate for the past week is playing, but station daily means were not available for a summary.";
   const worstDay = daily.reduce((a, b) => (b.median > a.median ? b : a));
@@ -762,9 +811,7 @@ function _weekWhySentence(d) {
 
 function _weekCityNarrative(c, rank) {
   const cat = _epa(c.mean);
-  const gap = c.mean - WHO_24H;
-  const cig = c.mean / CIGARETTE_UGM3;
-  return `${rank === 1 ? "Worst of the week" : `Hotspot number ${rank}`}: ${c.city}. Across ${c.n_stations} station${c.n_stations > 1 ? "s" : ""}, the 7-day average was ${_r(c.mean)} µg/m³, ${_r(c.times_who24, 1)} × the WHO guideline, in the ${cat?.label || "—"} range. It peaked at ${_r(c.peak)} µg/m³ on ${_dayLabel(c.peak_date)}, and the national standard was exceeded on ${c.days_above_neqs24} of ${c.days} days. Liu and colleagues (New England Journal of Medicine, 2019) found daily deaths rise about ${LIU_PER10}% for every 10 µg/m³ increase; this week's average sat ${_r(gap)} µg/m³ above the WHO guideline. Breathing it for a day is roughly ${_r(cig, 0)} cigarettes, by Berkeley Earth's estimate.`;
+  return `${rank === 1 ? "Worst of the week" : `Hotspot number ${rank}`}: ${c.city}. Across ${c.n_stations} station${c.n_stations > 1 ? "s" : ""}, the 7-day average was ${_r(c.mean)} µg/m³, ${_r(c.times_who24, 1)} × the WHO guideline, in the ${cat?.label || "—"} range. It peaked at ${_r(c.peak)} µg/m³ on ${_dayLabel(c.peak_date)}, and the national standard was exceeded on ${c.days_above_neqs24} of ${c.days} days.`;
 }
 
 function _weekMetrosNarrative(metros) {
@@ -784,6 +831,7 @@ function _weekMetrosNarrative(metros) {
 }
 
 function _weekAssessmentNarrative(d) {
+  if (d.aqi) return _aqiWeekAssessment(d);
   const live = d.live;
   const pw = d.past_week;
   const daily = pw?.daily || [];
@@ -805,6 +853,7 @@ function _weekAssessmentNarrative(d) {
 }
 
 function _fcIntroNarrative(d) {
+  if (d.aqi) return _aqiFcIntro(d);
   const fc = d.forecast;
   if (!fc || !fc.leads?.length) return "Chapter 2: the outlook. The Hawanama gridded forecast is unavailable right now, so this chapter shows live WAQI stations only.";
   const last = fc.leads[fc.leads.length - 1];
@@ -812,6 +861,9 @@ function _fcIntroNarrative(d) {
 }
 
 function _fcLayerNarrative(d) {
+  return d.aqi ? _aqiFcLayer(d) : _fcLayerNarrativePm(d);
+}
+function _fcLayerNarrativePm(d) {
   const leads = d.forecast?.leads || [];
   if (!leads.length) return "Forecast frames are unavailable.";
   const peak = leads.reduce((a, b) => ((b.mean ?? -1) > (a.mean ?? -1) ? b : a));
@@ -831,6 +883,7 @@ function _fcCityNarrative(c, rank, waqi) {
 }
 
 function _fcAssessmentNarrative(d) {
+  if (d.aqi) return _aqiFcAssessment(d);
   const fc = d.forecast;
   const cities = fc?.cities || [];
   if (!cities.length) return "Outlook assessment: the forecast is unavailable, so check the live stations and the daily estimate again in a few hours.";
@@ -840,7 +893,7 @@ function _fcAssessmentNarrative(d) {
   const season = _isSmogSeason()
     ? " Beyond 72 hours, smog-season conditions usually persist until a western disturbance brings wind or rain, so expect episodes to recur."
     : "";
-  return `Outlook assessment. Of ${cities.length} cities sampled, ${unhealthy} are forecast to touch Unhealthy levels and ${veryUnhealthy} Very Unhealthy or worse within 72 hours; ${improving} end the run cleaner than they start.${season} Recommended actions: limit outdoor activity at the forecast peaks, use well-fitted N95 or FFP2 masks outdoors, keep windows shut during night-time peaks, and give priority care to children, older people and anyone with heart or lung disease. This concludes the National Air Quality Watch.`;
+  return `Outlook assessment. Of ${cities.length} cities sampled, ${unhealthy} are forecast to touch Unhealthy levels and ${veryUnhealthy} Very Unhealthy or worse within 72 hours; ${improving} end the run cleaner than they start.${season} Recommended actions: limit outdoor activity at the forecast peaks, and give priority care to children, older people and anyone with heart or lung disease. This concludes the National Air Quality Watch.`;
 }
 
 // ---- Scenes ---------------------------------------------------------------
@@ -849,11 +902,17 @@ function _buildScenes(d) {
   const pw = d.past_week;
   if (pw?.daily?.length) {
     scenes.push({ kind: "week-layer", chapter: 1, caption: _weekLayerNarrative(d) });
-    const tour = _dedupeByDistance(_reliableCities(pw.cities)).slice(0, PAST_TOUR_MAX);
+    // AQI ranking (valid 24-hour sub-indices) when available; PM2.5 fallback.
+    const byName = new Map(pw.cities.map((c) => [c.city, c]));
+    const tour = d.aqi
+      ? spreadCities(rankedCities(d.aqi)).slice(0, PAST_TOUR_MAX).map((a) => ({ city: a.city, lon: a.lon, lat: a.lat, n_stations: a.n_stations, ...(byName.get(a.city) || {}), peak_date: a.peak_date, aqi: a }))
+      : _dedupeByDistance(_reliableCities(pw.cities)).slice(0, PAST_TOUR_MAX);
     tour.forEach((c, i) => scenes.push({ kind: "week-city", chapter: 1, city: c, rank: i + 1,
-                                         caption: _weekCityNarrative(c, i + 1) }));
+                                         caption: c.aqi ? _aqiCityNarrative(d, c, i + 1) : _weekCityNarrative(c, i + 1) }));
     const metros = pw.cities.filter((c) => _isMetro(c.city));
-    if (metros.length >= 3) scenes.push({ kind: "week-metros", chapter: 1, metros, caption: _weekMetrosNarrative(metros) });
+    const aqiMetros = (d.aqi?.observed?.cities || []).filter((c) => _isMetro(c.city));
+    if (metros.length >= 3) scenes.push({ kind: "week-metros", chapter: 1, metros, aqiMetros: aqiMetros.length >= 3 ? aqiMetros : null,
+      caption: aqiMetros.length >= 3 ? _aqiMetrosNarrative(d, aqiMetros) : _weekMetrosNarrative(metros) });
   }
   scenes.push({ kind: "week-assessment", chapter: 1, caption: _weekAssessmentNarrative(d) });
 
@@ -867,10 +926,17 @@ function _buildScenes(d) {
     // same); on a tie the metro is kept.
     const ranked = fc.cities.filter((c) => reliable.has(c.city) || _isMetro(c.city))
       .sort((a, b) => (b.peak - a.peak) || (Number(_isMetro(b.city)) - Number(_isMetro(a.city))));
-    const tour = _dedupeByDistance(ranked).slice(0, FC_TOUR_MAX);
+    // Ranked by forecast AQI when available. The Hawanama record is kept for
+    // the map frame and camera, so only cities present in both are toured.
+    const hawanama = new Map(fc.cities.map((c) => [c.city, c]));
+    const ok = new Set(d.aqi ? rankedCities(d.aqi).map((c) => c.city) : []);
+    const aqiTour = d.aqi?.forecast?.cities?.length
+      ? spreadCities(d.aqi.forecast.cities.filter((c) => ok.has(c.city) && hawanama.has(c.city))).slice(0, FC_TOUR_MAX).map((f) => ({ ...hawanama.get(f.city), fcAqi: f }))
+      : [];
+    const tour = aqiTour.length ? aqiTour : _dedupeByDistance(ranked).slice(0, FC_TOUR_MAX);
     tour.forEach((c, i) => {
       const waqi = _waqiNear(c.lon, c.lat);
-      scenes.push({ kind: "fc-city", chapter: 2, city: c, rank: i + 1, waqi, caption: _fcCityNarrative(c, i + 1, waqi) });
+      scenes.push({ kind: "fc-city", chapter: 2, city: c, rank: i + 1, waqi, caption: c.fcAqi ? _aqiFcCity(d, c, i + 1, waqi) : _fcCityNarrative(c, i + 1, waqi) });
     });
   }
   scenes.push({ kind: "fc-assessment", chapter: 2, caption: _fcAssessmentNarrative(d) });
@@ -880,12 +946,12 @@ function _buildScenes(d) {
 function _sceneTitle(scene) {
   switch (scene.kind) {
     case "intro":           return "Chapter 1 — The Past Week";
-    case "week-layer":      return "Daily PM2.5 Estimate — Last 7 Days";
+    case "week-layer":      return "AQI — Last 7 Days";
     case "week-city":       return `Hotspot — ${scene.city.city}`;
-    case "week-metros":     return "Major Cities — 7-Day Averages";
+    case "week-metros":     return "Major Cities — AQI";
     case "week-assessment": return "Past-Week Assessment";
     case "fc-intro":        return "Chapter 2 — The Outlook";
-    case "fc-layer":        return "PM2.5 Forecast — Next 72 Hours";
+    case "fc-layer":        return "AQI Outlook — Coming Days";
     case "fc-city":         return `Forecast Focus — ${scene.city.city}`;
     case "fc-assessment":   return "Outlook Assessment";
     default:                return LABEL;
@@ -932,7 +998,22 @@ function _layersLegendHtml(chapter) {
 function _factsHtml(scene) {
   const d = _state.digest || {};
   let pills = [];
-  if (scene.kind === "week-city") {
+  const S = d.aqi ? _sc(d) : null;
+  if (S && scene.kind === "week-city" && scene.city.aqi) {
+    const a = scene.city.aqi;
+    pills = [_pill(`AQI ${aqiText(a.median_aqi)} ${S.label(a.median_aqi)}`, a.median_aqi > 150, S.color(a.median_aqi)), _pill(`worst day AQI ${aqiText(a.peak)}`), _pill(`PM2.5 ${_r(a.mean_pm25)} µg/m³`), _pill(`confidence ${a.confidence}`)];
+  } else if (S && scene.kind === "week-metros" && scene.aqiMetros) {
+    pills = [...scene.aqiMetros].sort((x, y) => y.median_aqi - x.median_aqi).slice(0, 4).map((m) => _pill(`${m.city}: AQI ${aqiText(m.median_aqi)}`, false, S.color(m.median_aqi)));
+  } else if (S && scene.kind === "week-assessment") {
+    const H = aqiHeadline(d);
+    pills = [_pill(`AQI ${aqiText(H.ref.aqi)} middle station`, H.ref.aqi > 150, S.color(H.ref.aqi)), _pill(`${H.bad} of ${H.ref.n} stations Unhealthy or worse`, true)];
+  } else if (S && scene.kind === "fc-city" && scene.city.fcAqi) {
+    const f = scene.city.fcAqi;
+    pills = [_pill(`forecast peak AQI ${aqiText(f.peak)} ${S.label(f.peak)}`, f.peak > 150, S.color(f.peak)), _pill(_shortDay(f.peak_date)), _pill(`best day AQI ${aqiText(f.best)}`)];
+  } else if (S && scene.kind === "fc-assessment" && d.aqi.forecast?.cities?.length) {
+    const n = d.aqi.forecast.cities.filter((c) => c.peak > 200).length;
+    pills = [_pill(`${n} of ${d.aqi.forecast.cities.length} cities reach Very Unhealthy or worse`, n > 0)];
+  } else if (scene.kind === "week-city") {
     const c = scene.city;
     const cat = _epa(c.mean);
     pills = [_pill(`${_r(c.mean)} µg/m³ 7-day avg`, c.mean > 55.4, cat?.color), _pill(`peak ${_r(c.peak)} µg/m³`),
@@ -1265,10 +1346,9 @@ const _fmtInt = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString("en-US
 
 // Research the "why" section cites (shown in the popup's source list).
 const WHY_REFS = [
-  "Urban Unit (2023), Emission Inventory of Lahore — PM2.5 shares, 2020–21 data (as reported by Dawn, 2025)",
-  "PAQI national source study (2025), reported by Dawn",
-  "Frontiers in Sustainable Cities (2023), 'Solving the mysteries of Lahore smog'",
-  "Punjab EPD — winter PM2.5, temperature inversions",
+  "Urban Unit Lahore emissions inventory (2023, 2020–21 data), as reported by Dawn, 5 Nov 2026",
+  "PAQI (2025), Unveiling Pakistan's Air Pollution, doi:10.5281/zenodo.17629179 (rejected by Punjab EPA, Dawn, 10 Dec 2025)",
+  "Majeed et al. (2024), Frontiers in Sustainable Cities 5, 1314426",
   "VIIRS active fires (NOAA-20/21) via Hawanama; weather: Open-Meteo",
 ];
 
@@ -1293,7 +1373,151 @@ function _standardsTable() {
   return `<table class="aqwp-table"><thead><tr><th>US EPA category (2024)</th><th class="num">24-h PM2.5</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// ---- AQI popups (primary; the PM2.5 popups below are the fallback) ----------
+function _aqiChart(S, rows, { note = "", aria = "AQI chart" } = {}) {
+  const n = rows.length || 1, top = 22, plotH = 128, base = top + plotH, H = base + 28;
+  const peak = Math.max(150, ...rows.flatMap((r) => [r.v, r.hi]).filter(Number.isFinite));
+  const ymax = Math.min(520, Math.max(200, Math.ceil((peak * 1.05) / 50) * 50));
+  const y = (v) => base - (Math.min(v, ymax) / ymax) * plotH;
+  const out = [];
+  for (const c of S.cats) {
+    const lo = Math.max(0, c.lo - 1), hi = Math.min(c.hi ?? ymax, ymax);
+    if (lo >= ymax) break;
+    out.push(`<rect x="${CH_PAD_L}" y="${y(hi)}" width="${CH_W - CH_PAD_L - CH_PAD_R}" height="${y(lo) - y(hi)}" fill="${c.color}" opacity="0.1"/>`);
+    if (lo > 0) out.push(`<text x="${CH_PAD_L - 5}" y="${y(lo) + 3}" font-size="8" fill="rgba(234,234,234,0.55)" text-anchor="end">${lo}</text>`);
+  }
+  out.push(`<line x1="${CH_PAD_L}" x2="${CH_W - CH_PAD_R}" y1="${base}" y2="${base}" stroke="rgba(255,255,255,0.25)"/><text x="${CH_PAD_L - 5}" y="${top - 10}" font-size="7.5" font-weight="700" fill="rgba(234,234,234,0.6)" text-anchor="end">AQI</text>`);
+  rows.forEach((r, i) => {
+    const { cw, cx } = _colX(i, n), w = cw * 0.56;
+    out.push(`<text x="${cx}" y="${base + 11}" font-size="8.5" font-weight="600" fill="rgba(234,234,234,0.8)" text-anchor="middle">${_esc(r.label)}</text>${r.sub ? `<text x="${cx}" y="${base + 21}" font-size="7.5" fill="rgba(234,234,234,0.5)" text-anchor="middle">${_esc(r.sub)}</text>` : ""}`);
+    if (!Number.isFinite(r.v)) { out.push(`<text x="${cx}" y="${base - 4}" font-size="8" fill="rgba(234,234,234,0.4)" text-anchor="middle">n/a</text>`); return; }
+    const t = y(r.v), h = Math.max(1.5, base - t), col = S.color(r.v);
+    if (Number.isFinite(r.hi) && r.hi > r.v) {
+      const hy = y(r.hi);
+      out.push(`<line x1="${cx}" x2="${cx}" y1="${t}" y2="${hy}" stroke="rgba(255,255,255,0.55)"/><line x1="${cx - cw * 0.14}" x2="${cx + cw * 0.14}" y1="${hy}" y2="${hy}" stroke="rgba(255,255,255,0.7)" stroke-width="1.2"/>`);
+    }
+    out.push(`<rect x="${cx - w / 2}" y="${t}" width="${w}" height="${h}" rx="2.5" fill="${col}" stroke="rgba(0,0,0,0.35)" stroke-width="0.6"><animate attributeName="height" from="0" to="${h}" dur="0.7s" fill="freeze"/><animate attributeName="y" from="${base}" to="${t}" dur="0.7s" fill="freeze"/></rect>
+      <text x="${cx}" y="${h > 16 ? t + 11 : t - 3}" font-size="9" font-weight="800" fill="${h > 16 ? _textOn(col) : "#fff"}" text-anchor="middle">${aqiText(r.v)}</text>`);
+  });
+  const used = S.cats.filter((c) => rows.some((r) => S.of(r.v)?.key === c.key));
+  return `<div class="aqwp-axis-note">${_esc(note)}</div><svg class="aqwp-chart" viewBox="0 0 ${CH_W} ${H}" role="img" aria-label="${_esc(aria)}">${out.join("")}</svg>
+    <div class="aqwp-legend">${used.map((c) => `<span><span class="aqwp-cat" style="background:${c.color}"></span>${_esc(c.label)}</span>`).join("")}</div>`;
+}
+function _aqiCell(S, v) {
+  return Number.isFinite(v) ? `<span class="aqwp-cat" style="background:${S.color(v)}"></span><b>${aqiText(v)}</b> <small>${_esc(S.label(v))}</small>` : "<small>insufficient data</small>";
+}
+function _aqiStdNote(d) {
+  const s = d.aqi.standard;
+  return `<div class="aqwp-src">Index: ${_esc(s.name)} (${_esc(s.version)})${s.approved ? "" : ", a reference standard not yet adopted for Pakistan"}. Observed AQI is the PM2.5 sub-index.</div>`;
+}
+function _aqiIntroPopup() {
+  const d = _state.digest, S = _sc(d), H = aqiHeadline(d);
+  const rows = S.cats.map((c) => `<tr><td><span class="aqwp-cat" style="background:${c.color}"></span>${_esc(c.label)}</td><td class="num">${c.lo}${c.hi == null ? "+" : `–${c.hi}`}</td><td>${_esc(c.meaning)}</td></tr>`).join("");
+  _presentPopup(`${_popupHead("About This Briefing", "2 Chapters", 1, S.color(H.ref.aqi))}
+    <div class="aqwp-body">
+      <div class="aqwp-grid">
+        <div class="aqwp-stat"><b style="color:${S.color(H.ref.aqi)}">${_u(aqiText(H.ref.aqi), "AQI")}</b><span>middle station now · ${_esc(S.label(H.ref.aqi))}</span></div>
+        <div class="aqwp-stat"><b>${_u(`${H.bad}/${H.ref.n}`, "stations")}</b><span>Unhealthy or worse</span></div>
+        <div class="aqwp-stat"><b>${_u(`${H.vbad}/${H.ref.n}`, "stations")}</b><span>Very Unhealthy or Hazardous</span></div>
+      </div>
+      <table class="aqwp-table"><thead><tr><th>Category</th><th class="num">AQI</th><th>Meaning</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="aqwp-label">Layers used</div>
+      <div class="aqwp-chips"><span class="aqwp-chip">Hawanama Stations (AQI)</span><span class="aqwp-chip">WAQI Stations (AQI)</span><span class="aqwp-chip">PM2.5 Estimate — daily</span><span class="aqwp-chip">PM2.5 Forecast +3 to +72 h</span><span class="aqwp-chip">District Boundaries</span></div>
+      ${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiWeekPopup() {
+  const d = _state.digest, S = _sc(d), H = aqiHeadline(d), days = H.days;
+  const best = days.reduce((a, b) => (b.median_aqi < a.median_aqi ? b : a));
+  const rows = days.map((x) => `<tr><td>${_esc(_dayLabel(x.date))}</td><td>${_aqiCell(S, x.median_aqi)}</td><td class="num">${aqiText(x.p90_aqi)}</td><td class="num">${x.n_valid}/${x.n_reporting}</td><td>${_esc(x.worst_city || "—")} <small>${aqiText(x.worst_city_aqi)}</small></td><td class="num">${_u(_r(x.median_pm25), "µg/m³")}</td></tr>`).join("");
+  const cards = _whyCards(d).map((c) => `<div class="aqwp-why"><div class="aqwp-why-head"><span aria-hidden="true">${c.icon}</span>${_esc(c.title)}</div>${c.data ? `<div class="aqwp-why-data">${_hl(_esc(c.data))}</div>` : ""}<div class="aqwp-why-research">${_esc(c.research)}</div></div>`).join("");
+  const w = _weekDrivers(d);
+  _presentPopup(`${_popupHead("Past 7 Days — National AQI", `${days.length} days`, 1, S.color(H.worst.median_aqi))}
+    <div class="aqwp-body">
+      <div class="aqwp-grid aqwp-grid--4">
+        <div class="aqwp-stat"><b style="color:${S.color(H.last.median_aqi)}">${_u(aqiText(H.last.median_aqi), "AQI")}</b><span>latest day · ${_esc(S.label(H.last.median_aqi))}</span></div>
+        <div class="aqwp-stat"><b>${_u(aqiText(H.worst.median_aqi), "AQI")}</b><span>worst day · ${_esc(_shortDay(H.worst.date))}</span></div>
+        <div class="aqwp-stat"><b>${_u(aqiText(best.median_aqi), "AQI")}</b><span>best day · ${_esc(_shortDay(best.date))}</span></div>
+        <div class="aqwp-stat"><b>${_u(`${S.atLeast(H.last.category_counts, "unhealthy")}/${H.last.n_valid}`, "stations")}</b><span>Unhealthy or worse, latest day</span></div>
+      </div>
+      <div class="aqwp-label">How bad was each day?</div>
+      ${_aqiChart(S, days.map((x) => ({ v: x.median_aqi, hi: x.p90_aqi, label: _shortDay(x.date), sub: _dayLabel(x.date).slice(0, 3) })), { note: "Bars: middle station's daily AQI (PM2.5, 24-hour). Line: worst 10% of stations.", aria: "Daily AQI for the past week" })}
+      ${w ? `<div class="aqwp-label">Context, day by day</div>${_driversStrip(days.map((x) => x.date), d.drivers)}` : ""}
+      <div class="aqwp-label">Why is the air unhealthy?</div>${cards}
+      <div class="aqwp-label">Day by day</div>
+      <table class="aqwp-table"><thead><tr><th>Day</th><th>Middle station</th><th class="num">Worst 10%</th><th class="num">Valid</th><th>Worst city</th><th class="num">PM2.5</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="aqwp-src">Research: ${_esc(WHY_REFS.join(" · "))}.</div>${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiCityPopup(scene) {
+  const d = _state.digest, S = _sc(d), a = scene.city.aqi, now = d.aqi.now?.cities?.find((x) => x.city === scene.city.city);
+  _presentPopup(`${_popupHead(scene.city.city, S.label(a.median_aqi), 1, S.color(a.median_aqi))}
+    <div class="aqwp-body">
+      <div class="aqwp-big"><span class="aqwp-big-value" style="color:${S.color(a.median_aqi)}">${aqiText(a.median_aqi)} <small style="font-size:12px">AQI</small></span><span class="aqwp-big-sub">middle day of the week · ${a.n_stations} station${a.n_stations > 1 ? "s" : ""} · confidence ${_esc(a.confidence)}</span></div>
+      <div class="aqwp-grid">
+        <div class="aqwp-stat"><b>${_u(aqiText(a.peak), "AQI")}</b><span>worst day · ${_esc(_shortDay(a.peak_date))}</span></div>
+        <div class="aqwp-stat"><b>${now ? _u(aqiText(now.aqi), "AQI") : "—"}</b><span>now (NowCast)${now ? ` · ${_esc(S.label(now.aqi))}` : ""}</span></div>
+        <div class="aqwp-stat"><b>${_u(_r(a.mean_pm25), "µg/m³")}</b><span>PM2.5, week mean (evidence)</span></div>
+      </div>
+      ${_aqiChart(S, a.series.map((x, i) => ({ v: x?.aqi, hi: x && x.n > 1 ? x.max : undefined, label: _shortDay(d.aqi.observed.dates[i]), sub: _dayLabel(d.aqi.observed.dates[i]).slice(0, 3) })), { note: "Middle station's daily AQI (PM2.5, 24-hour). Line: highest station.", aria: `Daily AQI, ${scene.city.city}` })}
+      ${_captionBlock(scene.caption)}
+      <div class="aqwp-advice">${_esc(S.advice(a.last ?? a.median_aqi))}</div>${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiMetrosPopup(scene) {
+  const d = _state.digest, S = _sc(d), now = new Map((d.aqi.now?.cities || []).map((c) => [c.city, c]));
+  const rows = [...scene.aqiMetros].sort((x, y) => y.median_aqi - x.median_aqi).map((m) => `<tr><td>${_esc(m.city)}</td><td>${_aqiCell(S, now.get(m.city)?.aqi)}</td><td>${_aqiCell(S, m.median_aqi)}</td><td class="num">${aqiText(m.peak)}</td><td>${_esc(m.trend)}</td><td class="num">${m.n_stations}</td></tr>`).join("");
+  _presentPopup(`${_popupHead("Major Cities — AQI", `${scene.aqiMetros.length} cities`, 1)}
+    <div class="aqwp-body"><table class="aqwp-table"><thead><tr><th>City</th><th>Now</th><th>Middle day</th><th class="num">Peak</th><th>Week</th><th class="num">Stations</th></tr></thead><tbody>${rows}</tbody></table>
+    ${_captionBlock(scene.caption)}${_aqiStdNote(d)}${SRC_NOTE}</div>`);
+}
+function _aqiAssessPopup(scene) {
+  const d = _state.digest, S = _sc(d), H = aqiHeadline(d), n = d.aqi.now;
+  _presentPopup(`${_popupHead("Past-Week Assessment", n ? "Live now" : "", 1, S.color(H.ref.aqi))}
+    <div class="aqwp-body">
+      <div class="aqwp-label">Stations by AQI category ${n ? "now (NowCast)" : `on ${_esc(_dayLabel(H.last.date))}`}</div>${_categoryStack(H.ref.counts)}
+      <div class="aqwp-grid">
+        <div class="aqwp-stat"><b style="color:${S.color(H.ref.aqi)}">${_u(aqiText(H.ref.aqi), "AQI")}</b><span>middle station · ${_esc(S.label(H.ref.aqi))}</span></div>
+        <div class="aqwp-stat"><b>${_u(`${H.bad}/${H.ref.n}`, "stations")}</b><span>Unhealthy or worse</span></div>
+        <div class="aqwp-stat"><b>${n ? _u(`${n.n_valid}/${n.n_listed}`, "stations") : "—"}</b><span>with a valid current AQI</span></div>
+      </div>
+      ${_captionBlock(scene.caption)}${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiFcLayerPopup() {
+  const d = _state.digest, S = _sc(d), fc = d.aqi.forecast, leads = d.forecast?.leads || [];
+  const rows = fc.days.map((x) => `<tr><td>${_esc(_dayLabel(x.date))}</td><td>${_aqiCell(S, x.median_aqi)}</td><td class="num">${S.atLeast(x.category_counts, "unhealthy")}/${x.n_cities}</td><td class="num">${S.atLeast(x.category_counts, "very_unhealthy")}/${x.n_cities}</td><td class="num">${x.skill.hit}%</td></tr>`).join("");
+  const sup = leads.map((l) => `<tr><td>+${l.lead_h} h</td><td>${_esc(_pkt(l.valid_time))}</td><td class="num">${_u(_r(l.mean), "µg/m³")}</td><td class="num">${_u(_r(l.p95), "µg/m³")}</td></tr>`).join("");
+  _presentPopup(`${_popupHead("AQI Outlook — Forecast Cities", `${fc.cities.length} cities`, 2)}
+    <div class="aqwp-body">
+      ${_aqiChart(S, fc.days.map((x) => ({ v: x.median_aqi, hi: x.max_aqi, label: _shortDay(x.date), sub: x.date === fc.today ? "today" : "" })), { note: "Forecast 24-hour AQI (PM2.5): middle city. Line: highest city.", aria: "Forecast AQI by day" })}
+      <table class="aqwp-table"><thead><tr><th>Day</th><th>Middle city</th><th class="num">Unhealthy+</th><th class="num">Very Unh.+</th><th class="num">Hit rate</th></tr></thead><tbody>${rows}</tbody></table>
+      ${sup ? `<div class="aqwp-label">Supporting: PM2.5 map frames (single hours, grid)</div><table class="aqwp-table"><thead><tr><th>Lead</th><th>Valid</th><th class="num">Grid mean</th><th class="num">Worst 5%</th></tr></thead><tbody>${sup}</tbody></table>` : ""}
+      <div class="aqwp-src">${_esc(fc.skill_note)}</div>${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiFcCityPopup(scene) {
+  const d = _state.digest, S = _sc(d), f = scene.city.fcAqi, fc = d.aqi.forecast;
+  const waqiRows = (scene.waqi || []).map((w) => `<tr><td>${_esc(w.name || `Station ${w.uid}`)}</td><td class="num">${_r(w.km)} km</td><td>${_aqiCell(S, w.aqi)}</td></tr>`).join("");
+  _presentPopup(`${_popupHead(scene.city.city, `Peak: ${S.label(f.peak)}`, 2, S.color(f.peak))}
+    <div class="aqwp-body">
+      <div class="aqwp-big"><span class="aqwp-big-value" style="color:${S.color(f.peak)}">${aqiText(f.peak)} <small style="font-size:12px">AQI</small></span><span class="aqwp-big-sub">forecast peak · ${_esc(_dayLabel(f.peak_date))}</span></div>
+      ${_aqiChart(S, f.days.map((x, i) => ({ v: x?.aqi, hi: x?.hi, label: _shortDay(fc.targets[i]), sub: fc.targets[i] === fc.today ? "today" : "" })), { note: "Forecast 24-hour AQI (PM2.5). Line: top of the likely range.", aria: `Forecast AQI, ${scene.city.city}` })}
+      <div class="aqwp-axis-note">Evidence: expected PM2.5 ${_esc(f.days.map((x) => (x ? _r(x.pm25) : "—")).join(", "))} µg/m³; model adjusted ×${_esc(f.ratio)} from the city's stations.</div>
+      ${waqiRows ? `<div class="aqwp-label">Observed reference: WAQI stations (US AQI)</div><table class="aqwp-table"><thead><tr><th>Station</th><th class="num">Distance</th><th>AQI</th></tr></thead><tbody>${waqiRows}</tbody></table>` : ""}
+      <div class="aqwp-advice">${_esc(S.advice(f.peak))}</div>${_aqiStdNote(d)}${SRC_NOTE}
+    </div>`);
+}
+function _aqiFcAssessPopup(scene) {
+  const d = _state.digest, S = _sc(d), fc = d.aqi.forecast;
+  const rows = fc.cities.slice(0, 10).map((c) => `<tr><td>${_esc(c.city)}</td><td>${_aqiCell(S, c.peak)}</td><td>${_esc(_shortDay(c.peak_date))}</td><td class="num">${aqiText(c.best)}</td><td>${_esc(c.trend)}</td></tr>`).join("");
+  _presentPopup(`${_popupHead("Outlook Assessment", "AQI", 2)}
+    <div class="aqwp-body"><table class="aqwp-table"><thead><tr><th>City</th><th>Forecast peak</th><th>On</th><th class="num">Best day</th><th>Trend</th></tr></thead><tbody>${rows}</tbody></table>
+    ${_captionBlock(scene.caption)}${_aqiStdNote(d)}${SRC_NOTE}</div>`);
+}
+
 function _showIntroPopup(scene) {
+  if (_state.digest?.aqi) return _aqiIntroPopup();
   const d = _state.digest;
   _presentPopup(`${_popupHead("About This Briefing", "2 Chapters", 1)}
     <div class="aqwp-body">
@@ -1329,11 +1553,11 @@ function _whyCards(d) {
     const corr = Number.isFinite(w.rWind) ? ` This week, daily wind moved ${_rText(w.rWind)}.` : "";
     cards.push({ icon: "🌫️", title: "Weather trapping the pollution",
       data: `Across ${pts}, wind averaged only ${_r(w.windMean, 1)} km/h this week, and the mixing layer that pollution can disperse into rose to about ${_fmtInt(w.blhMean)} m in the afternoon but collapsed to about ${_fmtInt(w.blhNightMean)} m at night.${cmp}${corr}`,
-      research: "In winter, cold clear nights form temperature inversions and a shallow mixing layer that hold emissions near the ground; Punjab EPD and Lahore smog studies identify this as the main reason PM2.5 peaks from November to January.",
+      research: "In winter, cold clear nights form temperature inversions and a shallow mixing layer that hold emissions near the ground; studies of Lahore's smog point to this shallow layer and stagnant air as a main cause of the winter peak.",
     });
   } else {
     cards.push({ icon: "🌫️", title: "Weather trapping the pollution", data: "",
-      research: "In winter, cold clear nights form temperature inversions and a shallow mixing layer that hold emissions near the ground; Punjab EPD and Lahore smog studies identify this as the main reason PM2.5 peaks from November to January." });
+      research: "In winter, cold clear nights form temperature inversions and a shallow mixing layer that hold emissions near the ground; studies of Lahore's smog point to this shallow layer and stagnant air as a main cause of the winter peak." });
   }
   // 2. Crop-residue burning
   const pk = w?.season?.punjab;
@@ -1354,7 +1578,7 @@ function _whyCards(d) {
   // 3. Year-round sources
   cards.push({ icon: "🚗", title: "Year-round local emissions",
     data: "",
-    research: "The same inventory puts transport at about 35% of Lahore's PM2.5 emissions and open waste burning at about 29%, with industry at about 3%; PAQI's 2025 national study instead names transport, industry and brick kilns as the dominant sources. Estimates differ, but all agree the baseline is local and year-round — winter weather and crop fires push it to extremes.",
+    research: "The same inventory puts transport at about 35% of Lahore's PM2.5 emissions and open waste burning at about 29%, with industry at about 3%; PAQI's 2025 report instead gives transport 35%, industry 28% and brick kilns 17%, which Punjab EPA rejects. Estimates differ; winter weather and crop fires push the year-round level to extremes.",
   });
   // 4. Geography
   cards.push({ icon: "⛰️", title: "A basin that holds the air",
@@ -1365,6 +1589,7 @@ function _whyCards(d) {
 }
 
 function _showWeekLayerPopup(scene) {
+  if (_state.digest?.aqi) return _aqiWeekPopup();
   const d = _state.digest || {};
   const daily = d.past_week?.daily || [];
   const dates = daily.map((x) => x.date);
@@ -1408,6 +1633,7 @@ function _showWeekLayerPopup(scene) {
 }
 
 function _showWeekCityPopup(scene) {
+  if (scene.city.aqi) return _aqiCityPopup(scene);
   const c = scene.city;
   const dates = _state.digest?.past_week?.dates || [];
   const cat = _epa(c.mean);
@@ -1417,7 +1643,7 @@ function _showWeekCityPopup(scene) {
       <div class="aqwp-grid">
         <div class="aqwp-stat"><b>${_u(`${_r(c.times_who24, 1)}×`, "the guideline")}</b><span>WHO 24-h guideline (${WHO_24H} µg/m³)</span></div>
         <div class="aqwp-stat"><b>${_u(`${c.days_above_neqs24}/${c.days}`, "days")}</b><span>above NEQS (${NEQS_24H} µg/m³)</span></div>
-        <div class="aqwp-stat"><b>${_u(_r(c.mean / CIGARETTE_UGM3, 0), "cigarettes/day")}</b><span>equivalent (Berkeley Earth, ${CIGARETTE_UGM3} µg/m³ ≈ 1)</span></div>
+        <div class="aqwp-stat"><b>${_u(_r(c.peak), "µg/m³")}</b><span>peak day · ${_esc(_shortDay(c.peak_date))}</span></div>
       </div>
       ${_pmChart(c.series, dates.map(_shortDay), { sub: dates.map((x) => _dayLabel(x).slice(0, 3)), unitLabel: "Daily mean PM2.5 across the city's stations, µg/m³" })}
       ${_captionBlock(scene.caption)}
@@ -1427,6 +1653,7 @@ function _showWeekCityPopup(scene) {
 }
 
 function _showWeekMetrosPopup(scene) {
+  if (scene.aqiMetros) return _aqiMetrosPopup(scene);
   const rows = [...scene.metros].sort((a, b) => b.mean - a.mean).map((m) => {
     const cat = _epa(m.mean);
     return `<tr><td><span class="aqwp-cat" style="background:${cat?.color}"></span>${_esc(m.city)}</td><td class="num">${_u(_r(m.mean), "µg/m³")}</td><td class="num">${_u(_r(m.peak), "µg/m³")}</td><td class="num">${_u(`${m.days_above_neqs24}/${m.days}`, "days")}</td></tr>`;
@@ -1440,6 +1667,7 @@ function _showWeekMetrosPopup(scene) {
 }
 
 function _showWeekAssessmentPopup(scene) {
+  if (_state.digest?.aqi) return _aqiAssessPopup(scene);
   const live = _state.digest?.live;
   const s = live?.summary;
   _presentPopup(`${_popupHead("Past-Week Assessment", s ? "Live now" : "", 1)}
@@ -1471,6 +1699,7 @@ function _showFcIntroPopup(scene) {
 }
 
 function _showFcLayerPopup(scene) {
+  if (_state.digest?.aqi?.forecast?.days?.length) return _aqiFcLayerPopup();
   const leads = _state.digest?.forecast?.leads || [];
   const rows = leads.map((l) => `<tr><td>+${l.lead_h} h</td><td>${_esc(_pkt(l.valid_time))}</td><td class="num">${_u(_r(l.mean), "µg/m³")}</td><td class="num">${_u(_r(l.p95), "µg/m³")}</td></tr>`).join("");
   _presentPopup(`${_popupHead("PM2.5 Forecast — National Grid", "Next 72 h", 2)}
@@ -1483,6 +1712,7 @@ function _showFcLayerPopup(scene) {
 }
 
 function _showFcCityPopup(scene) {
+  if (scene.city.fcAqi) return _aqiFcCityPopup(scene);
   const c = scene.city;
   const leads = _state.digest?.forecast?.leads || [];
   const cat = _epa(c.peak);
@@ -1498,6 +1728,7 @@ function _showFcCityPopup(scene) {
 }
 
 function _showFcAssessmentPopup(scene) {
+  if (_state.digest?.aqi?.forecast?.cities?.length) return _aqiFcAssessPopup(scene);
   const cities = (_state.digest?.forecast?.cities || []).filter((c) => _isMetro(c.city) || c.peak > 55.4).slice(0, 8);
   const rows = cities.map((c) => {
     const cat = _epa(c.peak);
@@ -2077,18 +2308,16 @@ function _loadingHtml(msg) {
 // loader; if the loader never reaches it (no data, story closed) the
 // pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
-  _state.exportAfterLoad = _state.pendingExport || null;
+  const job = _state.pendingExport || null; // belongs to this load only
   _state.pendingExport = null;
   try {
-    await _loadAndPlayInner(card, forceRefresh);
+    await _loadAndPlayInner(card, forceRefresh, job);
   } finally {
-    const p = _state.exportAfterLoad;
-    _state.exportAfterLoad = null;
-    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+    if (job && !job.taken) { try { if (job.win && !job.win.closed) job.win.close(); } catch (_) {} }
   }
 }
 
-async function _loadAndPlayInner(card, forceRefresh = false) {
+async function _loadAndPlayInner(card, forceRefresh = false, job = null) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && _state.digest;
   card.querySelector(".aqw-chapter-title").textContent = LABEL;
@@ -2132,16 +2361,15 @@ async function _loadAndPlayInner(card, forceRefresh = false) {
   await _ensureDistrictSource();
   if (token !== _state.runToken) return;
 
-  const exportReq = _state.exportAfterLoad;
-  if (exportReq) {
+  if (job) {
     // Opened from the picker's Export: English, no language prompt, no
     // autoplay — export, then rest paused on the first scene.
-    _state.exportAfterLoad = null;
+    job.taken = true;
     _state.lang = "en";
     _syncLangButton(card);
     _state.isPlaying = false;
     _setPlayGlyph(card, false);
-    await _exportReport(exportReq.format, exportReq.win);
+    await _exportReport(job.format, job.win);
     return;
   }
   if (!useCached) {
@@ -2244,12 +2472,13 @@ function _reportPeakLead(d) {
 const REPORT_SHOTS = [
   { key: "map1", chapter: 1, label: "Map: PM2.5 estimate, worst day", settleMs: 700,
     prepare: async (d) => { const w = _reportWorstDay(d); if (w) _setFrame(_frameIndex((f) => f.hawanamaDate === w.date)); },
-    caption: (d) => { const w = _reportWorstDay(d); return w ? `Daily PM2.5 estimate on the week's worst day, ${_dayLabel(w.date)} (national station median ${_r(w.median)} µg/m³), with live stations.` : "Daily PM2.5 estimate."; } },
+    caption: (d) => { const w = _reportWorstDay(d); if (w && d.aqi) return `Dots: ground stations coloured by US AQI (observed, live). Surface: satellite-supported PM2.5 estimate for ${_dayLabel(w.date)}, the week's worst day (modelled, µg/m³).`; return w ? `Daily PM2.5 estimate on the week's worst day, ${_dayLabel(w.date)} (national station median ${_r(w.median)} µg/m³), with live stations.` : "Daily PM2.5 estimate."; } },
   { key: "map2", chapter: 2, label: "Map: PM2.5 forecast peak", settleMs: 700,
     prepare: async (d) => { const p = _reportPeakLead(d); if (p) _setFrame(_forecastIndexForLead(p.lead_h)); },
-    caption: (d) => { const p = _reportPeakLead(d); return p ? `PM2.5 forecast at its national peak, +${p.lead_h} h (${_pkt(p.valid_time)}), with live WAQI stations.` : "PM2.5 forecast."; } },
+    caption: (d) => { const p = _reportPeakLead(d); if (p && d.aqi) return `Surface: Hawanama PM2.5 forecast for one hour, ${_pkt(p.valid_time)} (+${p.lead_h} h, its national peak; modelled, µg/m³). Dots: live WAQI stations coloured by US AQI (observed).`; return p ? `PM2.5 forecast at its national peak, +${p.lead_h} h (${_pkt(p.valid_time)}), with live WAQI stations.` : "PM2.5 forecast."; } },
 ];
 function _reportMeta(d) {
+  if (d?.aqi) return airQualityReportMeta(d);
   const dates = d?.past_week?.dates || [];
   return {
     title: LABEL,
@@ -2319,6 +2548,7 @@ async function _exportReport(format, win) {
         const shots = {};
         for (const s of REPORT_SHOTS) {
           run(s.key);
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
           let src = null;
           if (map) {
             try {
@@ -2328,10 +2558,14 @@ async function _exportReport(format, win) {
               src = await captureMap(map, { settleMs: s.settleMs || 300 });
             } catch (e) { console.warn("[air-quality-watch] report capture failed:", s.key, e); }
           }
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
           (shots[s.chapter] ||= []).push({ src, caption: typeof s.caption === "function" ? s.caption(d) : s.caption });
           mark(s.key, src ? "ok" : "warn");
         }
-        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots, glanceKinds: ["week-layer", "fc-layer"] });
+        // AQI-first report; the popup-based PM2.5 report is the fallback.
+        const aqiSections = airQualityReportSections(d, { shots, waqiNear: _waqiNear });
+        if (aqiSections) return aqiSections;
+        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots, glanceKinds: ["week-layer", "fc-layer"], bottomLineKinds: ["week-assessment", "fc-assessment"] });
       },
     });
   } finally {

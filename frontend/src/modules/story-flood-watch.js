@@ -2714,18 +2714,16 @@ async function _enterScene(card, scene, token, seq) {
 // loader; if the loader never reaches it (no data, story closed) the
 // pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
-  _state.exportAfterLoad = _state.pendingExport || null;
+  const job = _state.pendingExport || null; // belongs to this load only
   _state.pendingExport = null;
   try {
-    await _loadAndPlayInner(card, forceRefresh);
+    await _loadAndPlayInner(card, forceRefresh, job);
   } finally {
-    const p = _state.exportAfterLoad;
-    _state.exportAfterLoad = null;
-    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+    if (job && !job.taken) { try { if (job.win && !job.win.closed) job.win.close(); } catch (_) {} }
   }
 }
 
-async function _loadAndPlayInner(card, forceRefresh = false) {
+async function _loadAndPlayInner(card, forceRefresh = false, job = null) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && (_state.digest || _state.ffd);
   card.querySelector(".nfw-chapter-title").textContent = LABEL;
@@ -2764,16 +2762,15 @@ async function _loadAndPlayInner(card, forceRefresh = false) {
   _state.ttsEnabled = false; // every run starts muted, like the other briefings
   _syncMuteButton(card);
 
-  const exportReq = _state.exportAfterLoad;
-  if (exportReq) {
+  if (job) {
     // Opened from the picker's Export: English, no language prompt, no
     // autoplay — export, then rest paused on the first scene.
-    _state.exportAfterLoad = null;
+    job.taken = true;
     _state.lang = "en";
     _syncLangButton(card);
     _state.isPlaying = false;
     _setPlayGlyph(card, false);
-    await _exportReport(exportReq.format, exportReq.win);
+    await _exportReport(job.format, job.win);
     return;
   }
   if (!useCached) {
@@ -2901,12 +2898,12 @@ function _reportMeta(d) {
       { term: "Flood tiers", def: "FFD's official levels for each river site (Low, Medium, High, Very High, Exceptionally High). Each has a fixed flow limit." },
       { term: "GloFAS", def: "Copernicus Global Flood Awareness System: a European computer forecast of river flow for the next 15 days." },
       { term: "Ensemble / probability", def: "The forecast is run many times with small changes. \"30% probability\" means 30 of every 100 runs reach that level." },
-      { term: "Warning / Severe / Extreme (GloFAS)", def: "Flows seen on average about once every 2, 5 and 20 years. The rarer the flow, the more serious the flood." },
+      { term: "Warning / Severe / Extreme (GloFAS)", def: "Three rising flow limits set for each forecast point. Each step up is a rarer, more serious flood." },
       { term: "Google Flood Hub", def: "Google's AI forecasts of river level at individual gauges, up to about a week ahead, shared through IWMI." },
       { term: "Discharge", def: "River flow, in cubic metres per second (m³/s)." },
       { term: "Inundation map", def: "Modelled areas that would be under water if the forecast flood happens." },
     ],
-    footer: "Sources: PMD Federal Flood Commission (FFD), CEMS GloFAS (Copernicus) and Google Flood Forecasting via IWMI, peer-reviewed research.",
+    footer: "Sources: PMD Flood Forecasting Division (FFD), CEMS GloFAS (Copernicus) and Google Flood Forecasting via IWMI, peer-reviewed research.",
   };
 }
 
@@ -2955,6 +2952,7 @@ async function _exportReport(format, win) {
         const shots = {};
         for (const s of REPORT_SHOTS) {
           run(s.key);
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
           let src = null;
           if (map) {
             try {
@@ -2964,10 +2962,11 @@ async function _exportReport(format, win) {
               src = await captureMap(map, { settleMs: s.settleMs || 300 });
             } catch (e) { console.warn("[flood-watch] report capture failed:", s.key, e); }
           }
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
           (shots[s.chapter] ||= []).push({ src, caption: typeof s.caption === "function" ? s.caption(d) : s.caption });
           mark(s.key, src ? "ok" : "warn");
         }
-        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots });
+        return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots, bottomLineKinds: ["assessment"] });
       },
     });
   } finally {

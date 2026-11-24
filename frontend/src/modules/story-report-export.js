@@ -16,7 +16,7 @@
 //
 // SECTION CONTRACT (every key optional; a renderer draws only what is present)
 //   glance     {bottomLine, kpis, level, chapters:[{n,name,text}]}  page-1 summary
-//   chapter    {n, name}                    chapter banner (new page)
+//   chapter    {n, name, kicker?, flow?}    chapter banner (new page unless flow)
 //   heading    string                       plain section heading (References …)
 //   subheading string                       scene heading
 //   level      {label, color, steps?:[{label,color,on}]}  watch-level scale
@@ -27,6 +27,9 @@
 //   cards      [{title, text, source}]      research / reason cards
 //   chart      {svg, title?, legend?}       inline SVG chart (rasterised to JPEG)
 //   bars       {label, rows:[{name,value,n}]}  ranked list drawn as a bar infographic
+//   banner     {value, label, color, title, text, unit?}  large index + category panel
+//   cards3     [{title, value, label, color, lines}]  coloured summary cards, 3 per row
+//   (table cells may be {t, bg}: text on a category colour; chart.bg = light chart)
 //   image      {src|null, caption}          map capture; null = placeholder
 //   table      {head: string[], rows: string[][]}
 //   refs       string[]                     numbered reference list
@@ -127,10 +130,10 @@ export async function captureMap(map, { timeoutMs = 8000, settleMs = 0 } = {}) {
 // SVG chart -> JPEG (charts are drawn for the dark story popups, so they are
 // rasterised onto the same dark panel colour and read as figure cards)
 // ==========================================================================
-export function svgToJpeg(svgText, { maxWidth = 1100, pad = 14 } = {}) {
+export function svgToJpeg(svgText, { maxWidth = 1100, pad = 14, bg = CHART_BG } = {}) {
   return new Promise((resolve) => {
     try {
-      let s = String(svgText);
+      let s = String(svgText).replace(/<animate\w*\b[^>]*(?:\/>|>[\s\S]*?<\/animate\w*>)/gi, "");
       // Size from the ROOT <svg> tag only (inner <rect width=…> must not leak in).
       const open = /<svg\b[^>]*>/i.exec(s)?.[0] || "<svg>";
       const vb = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/i.exec(open);
@@ -148,7 +151,7 @@ export function svgToJpeg(svgText, { maxWidth = 1100, pad = 14 } = {}) {
           const c = document.createElement("canvas");
           c.width = Math.round((w + 2 * pad) * k); c.height = Math.round((h + 2 * pad) * k);
           const ctx = c.getContext("2d", { alpha: false });
-          ctx.fillStyle = CHART_BG; ctx.fillRect(0, 0, c.width, c.height);
+          ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height);
           ctx.drawImage(img, pad * k, pad * k, w * k, h * k);
           resolve({ src: c.toDataURL("image/jpeg", 0.9), w: w + 2 * pad, h: h + 2 * pad });
         } catch (_) { resolve(null); }
@@ -284,9 +287,9 @@ function _tint(c, t = 0.78) {
 // Text colour that reads on a given background.
 function _ink(c) {
   const [r, g, b] = _rgb(c);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 150 ? "#111827" : "#ffffff";
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 140 ? "#111827" : "#ffffff";
 }
-function _firstSentences(text, max = 240) {
+export function firstSentences(text, max = 240) {
   const t = String(text || "").replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
   const cut = t.slice(0, max);
@@ -316,6 +319,7 @@ const CSS = `
   h2.sec { font-size: 13pt; color: ${NAVY}; margin: 14pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid ${NAVY}; break-after: avoid; page-break-after: avoid; }
   .label { font-size: 7.5pt; font-weight: 800; letter-spacing: 1.2pt; text-transform: uppercase; color: #6b7280; margin: 10pt 0 4pt; }
   table.chapter { width: 100%; border-collapse: collapse; margin: 0 0 10pt; page-break-before: always; break-before: page; }
+  table.chapter.flow { page-break-before: auto; break-before: auto; margin-top: 18pt; break-after: avoid; page-break-after: avoid; }
   table.chapter td { padding: 10pt 12pt; color: #fff; }
   table.chapter td.num { width: 58pt; text-align: center; font-size: 24pt; font-weight: 800; }
   table.chapter .k { font-size: 7.5pt; letter-spacing: 1.4pt; text-transform: uppercase; opacity: .85; }
@@ -337,6 +341,22 @@ const CSS = `
   table.lvl td.on { font-size: 10.5pt; font-weight: 800; border: 2pt solid #111827; }
   .lvl-note { font-size: 8.5pt; color: #4b5563; margin: 2pt 0 8pt; }
 
+  /* index banner + category cards */
+  table.ban { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; break-inside: avoid; page-break-inside: avoid; }
+  table.ban td { vertical-align: middle; padding: 8pt 12pt; }
+  table.ban td.v { width: 150pt; text-align: center; }
+  table.ban .num { font-size: 27pt; font-weight: 800; line-height: 1.05; }
+  table.ban .lab { font-size: 10.5pt; font-weight: 800; }
+  table.ban .unit { font-size: 7.5pt; letter-spacing: 1pt; text-transform: uppercase; }
+  table.ban td.x { background: #f8fafc; border: 1px solid #e5e7eb; }
+  table.ban .ti { font-size: 11.5pt; font-weight: 800; color: #111827; }
+  table.ban .tx { font-size: 9.5pt; color: #374151; }
+  table.c3 { width: 100%; border-collapse: separate; border-spacing: 5pt 5pt; table-layout: fixed; margin: 0 -5pt; break-inside: avoid; page-break-inside: avoid; }
+  table.c3 td { background: #f8fafc; border: 1px solid #e5e7eb; border-top: 6pt solid; padding: 6pt 8pt; vertical-align: top; font-size: 8.3pt; color: #374151; }
+  table.c3 .ti { font-size: 10pt; font-weight: 800; color: #111827; }
+  table.c3 .num { font-size: 15pt; font-weight: 800; color: #111827; }
+  table.c3 .lab { font-size: 8.5pt; font-weight: 700; color: #111827; }
+
   /* key figures */
   table.kpis { width: 100%; border-collapse: separate; border-spacing: 5pt 5pt; table-layout: fixed; margin: 0 -5pt 4pt; }
   table.kpis td { background: #f4f7fb; border-top: 3pt solid; padding: 6pt 8pt; vertical-align: top; }
@@ -357,7 +377,9 @@ const CSS = `
   .fig.chart img { width: 82%; margin: 0 auto; border: 0; }
   .cap { font-size: 8.3pt; color: #4b5563; margin-top: 3pt; text-align: left; }
   .cap b { color: #111827; }
+  .tcap { break-after: avoid; page-break-after: avoid; }
   .fig.chart .cap { width: 82%; margin: 3pt auto 0; }
+  .fig.chart.light img, .fig.chart.light .cap { width: 100%; }
   .ph { border: 1.5px dashed #9ca3af; color: #6b7280; padding: 34pt 10pt; text-align: center; font-size: 9pt; background: #f9fafb; }
 
   /* bar infographic */
@@ -393,6 +415,27 @@ function _kpis(kpis, color) {
   return rows.map((r) => `<table class="kpis"><tr>${r.map((k) => `<td style="border-top-color:${color}"><div class="v">${esc(k.value)}</div><div class="l">${esc(k.label)}</div></td>`).join("")}${
     "<td style=\"background:none;border:0\"></td>".repeat(per - r.length)}</tr></table>`).join("");
 }
+function _banner(b) {
+  const c = _safeColor(b.color);
+  return `<table class="ban"><tr><td class="v" style="background:${c};color:${_ink(c)}"><div class="unit">${esc(b.unit ?? "AQI")}</div><div class="num">${esc(b.value)}</div><div class="lab">${esc(b.label)}</div></td><td class="x"><div class="ti">${esc(b.title)}</div><div class="tx">${esc(b.text)}</div></td></tr></table>`;
+}
+function _cards3(cards) {
+  const out = [];
+  for (let i = 0; i < cards.length; i += 3) {
+    const r = cards.slice(i, i + 3);
+    out.push(`<table class="c3"><tr>${r.map((c) => `<td style="border-top-color:${_safeColor(c.color, "#9ca3af")}"><div class="ti">${esc(c.title)}</div><div class="num">${esc(c.value)}</div><div class="lab">${esc(c.label)}</div>${(c.lines || []).map((l) => `<div>${esc(l)}</div>`).join("")}</td>`).join("")}${
+      "<td style=\"background:none;border:0\"></td>".repeat(3 - r.length)}</tr></table>`);
+  }
+  return out.join("");
+}
+function _cell(c) {
+  if (c && typeof c === "object") {
+    const bg = c.bg ? _safeColor(c.bg) : null;
+    const nw = c.nw ? ";white-space:nowrap" : "";
+    return bg ? `<td style="background:${bg};color:${_ink(bg)};font-weight:700${nw}">${esc(c.t)}</td>` : `<td style="${nw.slice(1)}">${esc(c.t)}</td>`;
+  }
+  return `<td>${esc(c)}</td>`;
+}
 function _levelScale(level) {
   const steps = level.steps?.length ? level.steps : [{ label: level.label, color: level.color, on: true }];
   const cells = steps.map((st) => {
@@ -410,9 +453,9 @@ function _bars(b, color, n) {
   const signed = b.rows.some((r) => r.signed || r.n < 0);
   const max = Math.max(...b.rows.map((r) => Math.abs(r.n)), 0) || 1;
   const rows = b.rows.map((r) => {
-    const pct = Math.max(1, Math.round((Math.abs(r.n) / max) * 100));
+    const pct = r.n ? Math.max(1, Math.round((Math.abs(r.n) / max) * 100)) : 0;
     const c = signed ? (r.n < 0 ? FALL : RISE) : color;
-    return `<tr><td class="nm">${esc(r.name)}</td><td><table class="bar"><tr><td style="width:${pct}%;background:${c}"></td>${pct < 100 ? `<td style="width:${100 - pct}%;background:#eef1f5"></td>` : ""}</tr></table></td><td class="vl">${esc(r.value)}</td></tr>`;
+    return `<tr><td class="nm">${esc(r.name)}</td><td><table class="bar"><tr>${pct ? `<td style="width:${pct}%;background:${c}"></td>` : ""}${pct < 100 ? `<td style="width:${100 - pct}%;background:#eef1f5"></td>` : ""}</tr></table></td><td class="vl">${esc(r.value)}</td></tr>`;
   }).join("");
   const how = signed ? "longer bar = bigger change; orange = fall, blue = rise" : "longest bar = highest";
   return `<div class="bars"><div class="cap"><b>Figure ${n}.</b> ${esc(b.label || "Ranking")} (${how})</div><table class="bars">${rows}</table></div>`;
@@ -425,17 +468,20 @@ function _renderSections(sections) {
     if (s.glance) out.push(_glance(s.glance));
     if (s.chapter) {
       color = _chColor(s.chapter.n);
-      // Word ignores CSS breaks on tables; its own page-break <br> is inline, so browsers ignore it.
-      out.push(`<br clear="all" style="mso-special-character:line-break;page-break-before:always">`);
-      out.push(`<table class="chapter"><tr><td class="num" style="background:${color}">${esc(s.chapter.n)}</td><td style="background:${_tint(color, 0.15)}"><div class="k">Chapter ${esc(s.chapter.n)}</div><div class="t">${esc(s.chapter.name)}</div></td></tr></table>`);
+      // Word ignores CSS breaks on tables, so it gets its own page-break <br>,
+      // hidden from browsers (there it could spill onto an otherwise blank page).
+      if (!s.chapter.flow) out.push(`<!--[if mso]><br clear="all" style="mso-special-character:line-break;page-break-before:always"><![endif]-->`);
+      out.push(`<table class="chapter${s.chapter.flow ? " flow" : ""}"><tr><td class="num" style="background:${color}">${esc(s.chapter.n)}</td><td style="background:${_tint(color, 0.15)}"><div class="k">${esc(s.chapter.kicker || `Chapter ${s.chapter.n}`)}</div><div class="t">${esc(s.chapter.name)}</div></td></tr></table>`);
     }
     if (s.heading) out.push(`<h2 class="sec">${esc(s.heading)}</h2>`);
     if (s.subheading) scene = s.subheading;
     if (s.subheading) out.push(`<div class="scene-head" style="border-left-color:${color}">${esc(s.subheading)}</div>`);
+    if (s.banner) out.push(_banner(s.banner));
     if (s.level) out.push(`<div class="label">Watch level</div>${_levelScale(s.level)}`);
     if (s.callout) out.push(`<table class="callout block"><tr><td${s.callout.color ? ` style="border-left-color:${_safeColor(s.callout.color)}"` : ""}><span class="tag">${esc(s.callout.tag || "NOTE")}</span>${esc(s.callout.text)}</td></tr></table>`);
     if (s.body) out.push(`<p class="lead">${esc(s.body)}</p>`);
     if (s.kpis?.length) out.push(_kpis(s.kpis, color));
+    if (s.cards3?.length) out.push(_cards3(s.cards3));
     if (s.bullets?.length) out.push(`<ul>${s.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`);
     if (s.image) {
       fig += 1;
@@ -446,15 +492,15 @@ function _renderSections(sections) {
     }
     if (s.chartImg) {
       fig += 1;
-      const w = 500, h = Math.round((w * s.chartImg.h) / s.chartImg.w);
+      const w = s.chart?.bg ? 600 : 500, h = Math.round((w * s.chartImg.h) / s.chartImg.w);
       const what = [s.chart?.title, s.chart?.legend ? `Key: ${s.chart.legend}` : ""].filter(Boolean).map(esc).join(". ");
-      out.push(`<div class="fig chart"><img src="${s.chartImg.src}" width="${w}" height="${h}" alt="${esc(s.chart?.title || "")}"><div class="cap"><b>Figure ${fig}.</b> ${what}</div></div>`);
+      out.push(`<div class="fig chart${s.chart?.bg ? " light" : ""}"><img src="${s.chartImg.src}" width="${w}" height="${h}" alt="${esc(s.chart?.title || "")}"><div class="cap"><b>Figure ${fig}.</b> ${what}</div></div>`);
     }
     if (s.bars?.rows?.length) { fig += 1; out.push(_bars(s.bars, color, fig)); }
     if (s.table?.rows?.length) {
       tab += 1;
-      out.push(`<div class="cap"><b>Table ${tab}.</b> ${esc(s.table.title || (scene ? `${scene} — details` : "Details"))}</div><table class="t">${s.table.head?.length ? `<thead><tr>${s.table.head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>` : ""}<tbody>${
-        s.table.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+      out.push(`<div class="cap tcap"><b>Table ${tab}.</b> ${esc(s.table.title || (scene ? `${scene} — details` : "Details"))}</div><table class="t">${s.table.head?.length ? `<thead><tr>${s.table.head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>` : ""}<tbody>${
+        s.table.rows.map((r) => `<tr>${r.map(_cell).join("")}</tr>`).join("")}</tbody></table>`);
     }
     if (s.cards?.length) out.push(s.cards.map((c) => `<div class="card" style="border-left-color:${color}"><b>${esc(c.title)}</b><div>${esc(c.text)}</div>${c.source ? `<div class="src">${esc(c.source)}</div>` : ""}</div>`).join(""));
     if (s.glossary?.length) out.push(`<table class="gl">${s.glossary.map((g) => `<tr><td class="term">${esc(g.term)}</td><td>${esc(g.def)}</td></tr>`).join("")}</table>`);
@@ -464,11 +510,13 @@ function _renderSections(sections) {
 }
 
 function _glance(g) {
-  const out = [`<h2 class="sec">At a glance</h2>`];
+  const out = [`<h2 class="sec">${esc(g.heading || "At a glance")}</h2>`];
+  if (g.banner) out.push(_banner(g.banner));
+  if (g.advice) out.push(`<table class="callout block"><tr><td><span class="tag">${esc(g.advice.tag)}</span>${esc(g.advice.text)}</td></tr></table>`);
   if (g.bottomLine) out.push(`<table class="bl block"><tr><td><span class="tag">BOTTOM LINE</span>${esc(g.bottomLine)}</td></tr></table>`);
   if (g.level) {
-    out.push(`<div class="label">National watch level</div>${_levelScale(g.level)}`);
-    out.push(`<div class="lvl-note">The highlighted box is today's level. Levels run from left (calm) to right (most serious).</div>`);
+    out.push(`<div class="label">${esc(g.levelLabel || "National watch level")}</div>${_levelScale(g.level)}`);
+    out.push(`<div class="lvl-note">${esc(g.levelNote || "The highlighted box is today's level. Levels run from left (calm) to right (most serious).")}</div>`);
   }
   if (g.kpis?.length) out.push(`<div class="label">Key figures</div>${_kpis(g.kpis, NAVY)}`);
   if (g.chapters?.length) {
@@ -487,16 +535,16 @@ export async function prepareSections(sections) {
 }
 async function _prepare(sections) {
   for (const s of sections) {
-    if (s.chart?.svg && !s.chartImg) s.chartImg = await svgToJpeg(s.chart.svg);
+    if (s.chart?.svg && !s.chartImg) s.chartImg = await svgToJpeg(s.chart.svg, s.chart.bg ? { bg: s.chart.bg, pad: 4, maxWidth: 1400 } : {});
   }
   return sections;
 }
 
-const HOW_TO_READ = "Every chapter opens with a map, then short scenes. Each scene gives the message in plain words first, followed by the figures, charts and tables behind it. Colours follow the traffic-light rule: green is normal, yellow means watch, orange means warning and red means severe. Technical terms are explained in the glossary at the end.";
+const HOW_TO_READ = "Every chapter opens with a map, then short scenes. Each scene gives the message in plain words first, followed by the figures, charts and tables behind it. On each level scale, the boxes run from calm (left) to most serious (right). Technical terms are explained in the glossary at the end.";
 
 export function renderReportHtml(meta, sections) {
   const strip = (meta.strip || []).map((m) => `<td><b>${esc(m.label)}</b>${esc(m.value)}</td>`).join("");
-  const body = sections.map((s) => (s.glance && !s.glance.howToRead ? { ...s, glance: { ...s.glance, howToRead: meta.howToRead || HOW_TO_READ } } : s));
+  const body = sections.map((s) => (s.glance && s.glance.howToRead == null ? { ...s, glance: { ...s.glance, howToRead: meta.howToRead || HOW_TO_READ } } : s));
   if (meta.glossary?.length) body.push({ heading: "Glossary — terms in plain words", glossary: meta.glossary });
   return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
 <title>${esc(meta.title)}</title><style>${CSS}</style></head><body>
@@ -665,7 +713,8 @@ export const exportInProgress = () => _running > 0;
 
 export async function runStoryExport({ format, win, card, meta, slug, steps, build }) {
   _running += 1;
-  try { return await _runStoryExport({ format, win, card, meta, slug, steps, build }); } finally { _running -= 1; }
+  if (card) card.inert = true; // no Next/Play/language clicks while maps are captured
+  try { return await _runStoryExport({ format, win, card, meta, slug, steps, build }); } finally { _running -= 1; if (card) card.inert = false; }
 }
 
 async function _runStoryExport({ format, win, card, meta, slug, steps, build }) {
@@ -703,8 +752,9 @@ async function _runStoryExport({ format, win, card, meta, slug, steps, build }) 
  * popupOf:      scene -> popup HTML (the story's own popup, captured)
  * shots:        {chapter: [{src|null, caption}]} map captures per chapter
  * glanceKinds:  scene kinds whose first two key figures lead page 1's tiles
+ * bottomLineKinds: scene kinds (assessments) that make up the bottom line
  */
-export function scenesToSections({ scenes, chapterNames, titleOf, popupOf, shots = {}, glanceKinds = [] }) {
+export function scenesToSections({ scenes, chapterNames, titleOf, popupOf, shots = {}, glanceKinds = [], bottomLineKinds = [] }) {
   const sections = [];
   const refs = [];
   const intro = scenes[0];
@@ -715,10 +765,11 @@ export function scenesToSections({ scenes, chapterNames, titleOf, popupOf, shots
   const chapters = [];
   for (const sc of scenes) {
     if (sc === intro || chapters.some((c) => c.n === sc.chapter)) continue;
-    chapters.push({ n: sc.chapter, name: chapterNames[sc.chapter] || "", text: _firstSentences(String(sc.caption || "").replace(/^Chapter \d+\s*[:.—-]\s*/i, "")) });
+    chapters.push({ n: sc.chapter, name: chapterNames[sc.chapter] || "", text: firstSentences(String(sc.caption || "").replace(/^Chapter \d+\s*[:.—-]\s*/i, "")) });
   }
   sections.push({ glance: {
-    bottomLine: intro?.caption || "",
+    bottomLine: bottomLineKinds.map((k) => scenes.find((x) => x.kind === k)?.caption).filter(Boolean)
+      .map((t) => firstSentences(t.replace(/\s*(Next, the outlook\.|This concludes [^.]*\.)/g, ""), 420)).join(" ") || intro?.caption || "",
     level,
     kpis: [
       ...glanceKinds.flatMap((k) => {

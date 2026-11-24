@@ -1,12 +1,14 @@
 # Unit tests for the Food Security & Agriculture Watch digest (foodsec_watch.py).
 # No network: the HDX price CSV is mocked.
 #   python manage.py test ncop_internal.tests_foodsec
+import io
 import json
 import tempfile
 from unittest import mock
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
 
+from . import foodsec_sources as fs
 from . import foodsec_watch as fw
 
 
@@ -40,14 +42,6 @@ def _price_rows():
     return rows
 
 
-class _Resp:
-    def __init__(self, text=None, js=None):
-        self.text, self._js = text, js
-
-    def json(self):
-        return self._js
-
-
 class HelperTests(SimpleTestCase):
     def test_month_add_crosses_years_both_ways(self):
         self.assertEqual(fw._month_add((2026, 10), -12), (2025, 10))
@@ -68,14 +62,8 @@ class HelperTests(SimpleTestCase):
 
 class PriceTests(SimpleTestCase):
     def _section(self):
-        pkg = {"result": {"resources": [{"name": "Pakistan - Food Prices CSV", "url": "http://x/prices.csv"}]}}
-        csv_text = _csv(_price_rows())
-
-        def fake_get(url, timeout=None):
-            return _Resp(js=pkg) if "package_show" in url else _Resp(text=csv_text)
-
-        with mock.patch.object(fw.requests.Session, "get", side_effect=lambda url, **kw: fake_get(url)):
-            return fw._prices_section()
+        data = fs.parse_wfp(io.StringIO(_csv(_price_rows())), fw.PRICE_ITEMS)
+        return fw._prices_section({"data": data})
 
     def test_yoy_seasonal_path_and_purchasing_power(self):
         p = self._section()
@@ -121,6 +109,8 @@ class ViewTests(SimpleTestCase):
 
     def test_failing_section_does_not_break_build(self):
         with mock.patch.object(fw, "_district_lookup", return_value={}), \
+             mock.patch.object(fs, "fetch_all", return_value={"wfp": None}), \
+             mock.patch.object(fw, "_ews_section", side_effect=RuntimeError("no store")), \
              mock.patch.object(fw, "_ipc_section", side_effect=RuntimeError("ipc down")), \
              mock.patch.object(fw, "_crops_section", return_value={"staples": []}), \
              mock.patch.object(fw, "_prices_section", side_effect=RuntimeError("hdx down")), \
@@ -129,3 +119,17 @@ class ViewTests(SimpleTestCase):
         self.assertIsNone(doc["ipc"])
         self.assertIsNone(doc["prices"])
         self.assertEqual(doc["crops"], {"staples": []})
+        self.assertIsNone(doc["ews"])
+
+    def test_flour_outlook_is_replaced_by_the_tested_model_and_baseline_kept(self):
+        doc = {"prices": {"latest_month": "2026-10", "items": [{"commodity": "Wheat flour", "outlook": [1]}, {"commodity": "Sugar", "outlook": [2]}]},
+               "ews": {"price_outlook": {"item": "Wheat flour", "month": "2026-10", "path": [9]}}}
+        fw._use_tested_outlook(doc)
+        self.assertEqual([(i["outlook"], i.get("baseline")) for i in doc["prices"]["items"]], [([9], [1]), ([2], None)])
+        fw._use_tested_outlook({"prices": None, "ews": None})             # nothing to do, no error
+
+    def test_harvest_label_by_crop(self):
+        self.assertEqual(fw.harvest_label("Wheat", "2024-25"), "spring 2025")
+        self.assertEqual(fw.harvest_label("Rice", "2024-25"), "autumn 2024")
+        self.assertEqual(fw.harvest_label("Sugarcane", "2024-25"), "winter 2024-25")
+        self.assertIsNone(fw.harvest_label("Wheat", ""))

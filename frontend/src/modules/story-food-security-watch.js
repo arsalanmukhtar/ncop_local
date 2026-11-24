@@ -47,6 +47,7 @@ import {
   orbitAroundPoint,
 } from "./story-cinematic-engine.js";
 import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
+import { LEVELS as EWS_LEVELS, ewsHeadline, districtReason, concernList, prettyProvince, foodReportMeta, foodReportSections } from "./story-food-security-report.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -113,7 +114,7 @@ const WATCH_LEVELS = [
 // under a finding; `full` the reference list in the assessment.
 const REFS = {
   ipc2026: { cite: "IPC Pakistan analysis, Dec 2025–Sep 2026",
-    full: "IPC (2026). Pakistan: Acute Food Insecurity Situation Dec 2025–Mar 2026 and Projection Apr–Sep 2026. ipcinfo.org." },
+    full: "IPC (2026). Pakistan: Acute Food Insecurity Situation Dec 2025–Mar 2026 and Projection Apr–Sep 2026 (45 districts), with the March 2026 Punjab analysis (6 districts). Both projections ended 30 September 2026. ipcinfo.org." },
   ipcMal: { cite: "IPC Pakistan acute malnutrition analysis, 2025–26",
     full: "IPC (2026). Pakistan: Acute Malnutrition Oct 2025–Mar 2026 and Projection Apr–Sep 2026 (Balochistan, KP, Sindh). ipcinfo.org." },
   pdna: { cite: "Pakistan Floods 2022 PDNA",
@@ -145,6 +146,21 @@ const REFS = {
   gefs: { cite: "NOAA GEFS v12, bias-corrected by NCOP",
     full: "NOAA GEFS v12 ensemble mean via NOAA Open Data; district values bias-corrected against NASA POWER (IMERG/MERRA-2) by NCOP (158 verified forecasts)." },
 };
+Object.assign(REFS, {
+  fewsOct: { cite: "FEWS NET Pakistan outlook, Oct 2026",
+    full: "FEWS NET (2026). Pakistan Food Security Outlook, October 2026, and district classification data. fews.net/asia/pakistan" },
+  hies: { cite: "PBS HIES 2024–25",
+    full: "Pakistan Bureau of Statistics (2026). Household Integrated Economic Survey 2024–25, Tables 7.1–7.2." },
+  diet: { cite: "World Bank / FAO, cost of a healthy diet",
+    full: "World Bank and FAO (2026). Food Prices for Nutrition 5.0: cost and affordability of a healthy diet. CC BY 4.0." },
+  psd: { cite: "USDA PSD", full: "USDA Foreign Agricultural Service (2026). Production, Supply and Distribution database: Pakistan grains." },
+  irsa: { cite: "IRSA decision, Dawn 7 Oct 2026", full: "Dawn (7 October 2026). IRSA okays 22pc lower water share for Rabi. dawn.com/news/2035296" },
+  monsoon: { cite: "PMD monsoon 2026, The Nation", full: "The Nation (30 September 2026). Pakistan's 2026 monsoon rainfall falls 19.3 percent below normal (PMD data)." },
+  eo: { cite: "CHIRPS v3, NASA FLDAS, MODIS", full: "CHIRPS v3 rainfall (UC Santa Barbara), FLDAS soil moisture (NASA), MODIS vegetation index (NASA); district means by NCOP." },
+  enso: { cite: "NOAA CPC", full: "NOAA Climate Prediction Center (2026). Oceanic Niño Index and weekly Niño 3.4 sea-surface temperature." },
+  acled: { cite: "ACLED via HDX", full: "ACLED monthly conflict events for Pakistan, through OCHA HDX HAPI." },
+  khaleej: { cite: "Khaleej Times, 20 Nov 2026", full: "Khaleej Times (20 November 2026). Why is food becoming unaffordable for millions of households in Pakistan?" },
+});
 function _cite(...ids) {
   return ids.map((id) => REFS[id]?.cite).filter(Boolean).join("; ");
 }
@@ -1099,8 +1115,11 @@ function _majorProvinces(w) {
   return (w?.provinces || []).filter((p) => ["Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan"].includes(p.province));
 }
 
-// Transparent watch level: every indicator that adds a point is listed.
+// National level: the early-warning layer's own result (foodsec_ews.py). Without
+// it, a simple point count in which every indicator that adds a point is listed.
 export function watchLevel(d) {
+  const H = ewsHeadline(d);
+  if (H) return { level: H.n.level, ews: true, indicators: [] };
   const ind = [];
   const t = d?.ipc?.totals;
   if (t) {
@@ -1138,6 +1157,11 @@ export function watchLevel(d) {
 // Narrative (operational briefing tone, every figure from the digest)
 // ==========================================================================
 function _introNarrative(d) {
+  const H = ewsHeadline(d);
+  if (H) {
+    return `Bottom line: the national level is ${H.lv.label.toUpperCase()}. ${H.line} ${Number.isFinite(H.pk.kg) ? `A day's wage now buys ${_fmt(H.pk.kg, 1)} kilograms of flour, against a five-year average of ${_fmt(H.pk.kg_avg5, 1)}. ` : ""}` +
+      `FEWS NET puts ${H.crisisNow} districts in Crisis now and expects ${H.crisisNext} by January. This briefing shows where, why, what may come next, and what to do.`;
+  }
   const t = d?.ipc?.totals;
   const wheat = _staple(d, 4);
   const flour = _price(d, "Wheat flour");
@@ -1150,7 +1174,53 @@ function _introNarrative(d) {
   return parts.join(" ");
 }
 
+function _ewsLevelNarrative(d) {
+  const H = ewsHeadline(d);
+  const top = concernList(H.e, 4).map((r) => r.name);
+  return `Warning levels. ${H.alert.length ? `Alert: ${_joinList(H.alertText)} districts. ` : ""}${H.warnText.length ? `Warning: ${_joinList(H.warnText)} districts. ` : ""}` +
+    `Each district is scored on hunger, food prices and wages, water and crops, and shocks. ${H.karachiOnly ? "Karachi is at Alert because of food prices alone. " : ""}` +
+    `${top.length ? `First on the list: ${_joinList(top)}. ` : ""}Confidence is mostly low, because only five cities report prices, so check on the ground first. This is an NCOP overlay, not an IPC classification.`;
+}
+function _fewsNarrative(d) {
+  const H = ewsHeadline(d);
+  const need = (H.e.register || []).find((r) => r.id === "needs2026");
+  return `The newest independent outlook, FEWS NET October 2026: ${H.crisisNow} districts are in Crisis now, rising to ${H.crisisNext} by January. ` +
+    `${need && need.state === "current" ? need.text : ""} This is a forecast by analysts of whole districts and is a different measure from the IPC head count.`;
+}
+function _householdNarrative(d) {
+  const h = d.ews.household, v = h.hies, y = Object.keys(h.diet || {}).sort().pop(), x = h.diet?.[y];
+  return `Families. In the national survey of ${v.year}, ${_fmt(v.moderate_or_severe)}% of households were food insecure, up from ${_fmt(v.prev_moderate_or_severe)}% in ${v.prev_year}. ` +
+    `Among the poorest fifth it is ${_fmt(v.poorest)}%. ${x ? `${_fmt(x.cannot_afford_pct)}% of people could not afford a healthy diet in ${y}. ` : ""}` +
+    "No open district data on child malnutrition are available now. That is the biggest gap in this picture.";
+}
+function _supplyNarrative(d) {
+  const r = d.ews.supply.wheat.rows, l = r[r.length - 1], best = r.reduce((a, b) => (b.cover_days > a.cover_days ? b : a));
+  return `Wheat supply. For the crop cut in spring ${l.harvest_year}, USDA estimates ${_fmt(l.production / 1000, 1)} million tonnes against ${_fmt(l.use / 1000, 1)} million needed. ` +
+    `Stores would hold about ${l.cover_days} days of food at the end of the season, against ${best.cover_days} days at their best. Other estimates of this harvest are lower, down to about 26 million tonnes, so treat it as a range.`;
+}
+function _waterNarrative(d) {
+  const w = d.ews.water, si = (w.provinces || []).find((p) => p.province === "Sindh"), ba = (w.provinces || []).find((p) => p.province === "Balochistan");
+  return `Rain and water. ${si ? `Satellites show the 2026 monsoon ${_signed(si.monsoon_pct, 0)} in Sindh` : ""}${ba ? ` and ${_signed(ba.monsoon_pct, 0)} in Balochistan` : ""}, dry but not record-breaking. ` +
+    `${w.canal_pct != null ? `Canal water for Punjab and Sindh this winter is planned ${Math.abs(w.canal_pct)}% below normal: the main risk to the wheat crop. ` : ""}` +
+    `${w.enso ? `A ${w.enso.strength || ""} ${w.enso.state} is under way. For Pakistan it does not mean a dry winter: average to above-average rain is expected.` : ""}`;
+}
+function _shocksNarrative(d) {
+  const c = d.ews.shocks?.conflict, reg = d.ews.register || [];
+  const get = (id) => { const r = reg.find((x) => x.id === id); return r && r.state === "current" ? r.text : ""; };
+  return `Shocks and trade. ${c ? `${_fmt(c.events)} violent political events were recorded in ${_monthLong(c.month)}; the average month of the year before had ${_fmt(c.avg12)}. ` : ""}${get("border2026")} ${get("fertiliser2026")}`.trim();
+}
+function _trustNarrative(d) {
+  const b = d.ews.backtest, m = b.market.warning, p = d.ews.price_outlook, c = p?.skill.find((s) => s.model === "chosen");
+  return `How far to trust this. The rules were replayed over ${_fmt(m.months)} past months. After a price Warning, flour jumped 10% or more within three months ${_fmt((m.precision || 0) * 100)}% of the time, against ${_fmt((m.base_rate || 0) * 100)}% in any month, but ${m.missed} of ${m.surges} jumps came without a Warning. ` +
+    (c ? `The flour forecast has typically been ${_fmt(c.by_horizon["1"])}% off one month ahead and ${_fmt(c.by_horizon["3"])}% off three months ahead.` : "");
+}
+
 function _ipcOverviewNarrative(d) {
+  const L = d.ews?.ipc?.lines;
+  if (L?.length) {
+    return `The last official count (IPC). ${_joinList(L.map((l) => `${l.label}: ${_mil(l.projected?.p3plus, 2)} people in Crisis or worse, ${_pct(l.projected?.p3plus_pct)} of those analysed`))}. ` +
+      `${L.length > 1 ? "These are two analyses with different dates, so they are shown apart. " : ""}${d.ews.ipc.expired ? `Both projections ended on ${_dayMonth(d.ews.ipc.valid_to)} 2026 and nothing newer is published, so this is the last known count, not today's.` : ""}`;
+  }
   const i = d.ipc;
   const prov = (i.provinces || []).filter((p) => p.province !== "Other").slice(0, 4);
   const worst = prov.slice().sort((a, b) => (b.p3plus_pct || 0) - (a.p3plus_pct || 0))[0];
@@ -1160,8 +1230,10 @@ function _ipcOverviewNarrative(d) {
 }
 
 function _hotspotNarrative(h, rank) {
-  return `Hotspot ${rank}: ${h.title}${h.province ? `, ${h.province}` : ""}. ${_mil(h.p3plus, 2)} people in Phase 3 or worse — ${_pct(h.p3plus_pct)} of the district — ` +
-    `including ${_fmt(h.p[4])} in Emergency. Overall classification: Phase ${h.phase}${h.prolonged ? ", flagged as a prolonged crisis" : ""}.`;
+  const r = (_state.digest?.ews?.districts || []).find((x) => x.name === h.title);
+  return `Hotspot ${rank}: ${h.title}${h.province ? `, ${h.province}` : ""}. ${_mil(h.p3plus, 2)} people in Crisis or worse (${_pct(h.p3plus_pct)} of the district), ` +
+    `including ${_fmt(h.p[4])} in Emergency, in the IPC projection to 30 September. Class: Phase ${h.phase}${h.prolonged ? ", a prolonged crisis" : ""}.` +
+    (r ? ` NCOP level today: ${EWS_LEVELS[r.level].label}. ${districtReason(r)}.` : "");
 }
 
 function _trendNarrative(d) {
@@ -1260,6 +1332,12 @@ function _cropStageNarrative(d) {
 function _priceOutlookNarrative(d) {
   const f = _price(d, "Wheat flour");
   const last = f?.outlook?.[f.outlook.length - 1];
+  const po = d.ews?.price_outlook;
+  if (po) {
+    const e = po.path[po.path.length - 1], c = po.skill.find((x) => x.model === "chosen");
+    return `Flour price outlook. The central estimate is about ${_fmt(e.mid)} rupees a kilogram by ${_monthLong(e.month)}, and the likely range is ${_fmt(e.lo)} to ${_fmt(e.hi)}. ` +
+      `It is a possible range, not a guaranteed price: three months ahead this method has typically been ${_fmt(c?.by_horizon?.["3"])}% off. Stock releases, imports or a poor sowing season would move it.`;
+  }
   return `Indicative price path. Applying the typical seasonal movement of the last five years to today's prices, ` +
     (last ? `wheat flour would be around ${_fmt(last.mid)} PKR per kg by ${_monthLong(last.month)} (range ${_fmt(last.lo)}–${_fmt(last.hi)} PKR). ` : "") +
     "This is a seasonal guide, not a forecast: stock releases, import decisions or a poor sowing season would move it.";
@@ -1288,6 +1366,11 @@ function _whyNarrative() {
 
 function _assessmentNarrative(d, w) {
   const lvl = WATCH_LEVELS[w.level];
+  const H = ewsHeadline(d);
+  if (H) {
+    const ac = H.e.actions || [];
+    return `Assessment: ${H.lv.label.toUpperCase()}, ${H.lv.say}. ${ac.length ? `Priority actions: ${_joinList(ac.map((a, i) => `${["first", "second", "third", "fourth"][i] || ""}, ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}`))}. ` : ""}The owners and dates are on the panel.`;
+  }
   const hs = hotspots(d).slice(0, 3).map((h) => h.title);
   return `Assessment: watch level ${lvl.label.toUpperCase()}. ` +
     (hs.length ? `Priority districts: ${_joinList(hs)}. ` : "") +
@@ -1299,12 +1382,17 @@ function _assessmentNarrative(d, w) {
 // ==========================================================================
 export function buildScenes(d) {
   const scenes = [{ kind: "intro", chapter: 1, caption: _introNarrative(d) }];
+  const ews = ewsHeadline(d) ? d.ews : null;
+  if (ews) scenes.push({ kind: "ews-level", chapter: 1, caption: _ewsLevelNarrative(d) }, { kind: "fews-outlook", chapter: 1, caption: _fewsNarrative(d) });
   if (d?.ipc) {
     scenes.push({ kind: "ipc-overview", chapter: 1, caption: _ipcOverviewNarrative(d) });
     hotspots(d).forEach((h, i) => scenes.push({ kind: "ipc-hotspot", chapter: 1, hotspot: h, rank: i + 1, caption: _hotspotNarrative(h, i + 1) }));
     if ((d.ipc.history || []).length >= 2) scenes.push({ kind: "ipc-trend", chapter: 1, caption: _trendNarrative(d) });
-    if (Object.keys(d.ipc.neighbours || {}).length) scenes.push({ kind: "ipc-region", chapter: 1, caption: _regionNarrative(d) });
+    // Different countries' analyses cover different dates and areas: no comparison in the decision briefing.
+    if (!ews && Object.keys(d.ipc.neighbours || {}).length) scenes.push({ kind: "ipc-region", chapter: 1, caption: _regionNarrative(d) });
   }
+  if (ews?.household?.hies) scenes.push({ kind: "household", chapter: 1, caption: _householdNarrative(d) });
+  if (ews?.supply?.wheat?.rows?.length) scenes.push({ kind: "supply", chapter: 2, caption: _supplyNarrative(d) });
   if (d?.crops?.staples?.length) {
     scenes.push({ kind: "crops-overview", chapter: 2, caption: _cropsOverviewNarrative(d) });
     for (const id of FOCUS_CROPS) {
@@ -1318,36 +1406,46 @@ export function buildScenes(d) {
     if (_price(d, "Wheat flour")) scenes.push({ kind: "price-flour", chapter: 3, caption: _flourNarrative(d) });
     if (d.prices.terms_of_trade?.latest) scenes.push({ kind: "purchasing-power", chapter: 3, caption: _totNarrative(d) });
   }
+  if (ews?.water) scenes.push({ kind: "water", chapter: 4, caption: _waterNarrative(d) });
   if (d?.outlook) {
     if (d.outlook.weather) scenes.push({ kind: "outlook-weather", chapter: 4, caption: _weatherNarrative(d) });
     scenes.push({ kind: "outlook-crops", chapter: 4, caption: _cropStageNarrative(d) });
     if (d?.prices?.items?.length) scenes.push({ kind: "outlook-prices", chapter: 4, caption: _priceOutlookNarrative(d) });
   }
+  if (ews?.shocks) scenes.push({ kind: "shocks", chapter: 4, caption: _shocksNarrative(d) });
   const w = watchLevel(d);
+  if (ews?.backtest) scenes.push({ kind: "trust", chapter: 5, caption: _trustNarrative(d) });
   scenes.push({ kind: "why", chapter: 5, caption: _whyNarrative() });
   scenes.push({ kind: "assessment", chapter: 5, watch: w, caption: _assessmentNarrative(d, w) });
   return scenes;
 }
 
-const CHAPTER_NAMES = ["", "Hunger Now · IPC", "The Harvests · PBS", "Markets & Prices · WFP", "Next 1–2 Months", "Why & Assessment"];
+const CHAPTER_NAMES = ["", "Warning Level & Hunger", "Harvests & Supply", "Prices & Wages", "The Months Ahead", "Why & What to Do"];
 
 function _sceneTitle(scene) {
   switch (scene.kind) {
-    case "intro":            return "Chapter 1 — Hunger Now";
-    case "ipc-overview":     return "IPC Situation — Pakistan";
+    case "intro":            return "Chapter 1 — Warning Level & Hunger";
+    case "ews-level":        return "Where Pressure Is Building";
+    case "fews-outlook":     return "Independent Outlook — FEWS NET";
+    case "household":        return "Nutrition & Households";
+    case "supply":           return "Chapter 2 — Is There Enough Wheat?";
+    case "water":            return "Chapter 4 — Rain, Canals & El Niño";
+    case "shocks":           return "Shocks & Trade";
+    case "trust":            return "Chapter 5 — How Far to Trust This";
+    case "ipc-overview":     return "Last Official Count — IPC";
     case "ipc-hotspot":      return `Hotspot ${scene.rank} — ${scene.hotspot.title}`;
     case "ipc-trend":        return "IPC Trend, 2017 →";
     case "ipc-region":       return "Regional Picture";
-    case "crops-overview":   return "Chapter 2 — The Harvests";
+    case "crops-overview":   return "Official Harvests — PBS";
     case "crop-focus":       return `${scene.crop.name} — ${scene.crop.latest.year}`;
     case "wheat-districts":  return "Wheat Breadbasket Districts";
-    case "prices-overview":  return "Chapter 3 — Markets & Prices";
+    case "prices-overview":  return "Chapter 3 — Prices & Wages";
     case "price-flour":      return "Wheat Flour";
     case "purchasing-power": return "Purchasing Power";
-    case "outlook-weather":  return "Chapter 4 — Next 30 Days: Weather";
+    case "outlook-weather":  return "Next 30 Days: Weather";
     case "outlook-crops":    return "Next 1–2 Months: In the Fields";
-    case "outlook-prices":   return "Next 1–3 Months: Indicative Prices";
-    case "why":              return "Chapter 5 — Why It Happens";
+    case "outlook-prices":   return "Next 1–3 Months: Flour Price";
+    case "why":              return "Why It Happens";
     case "assessment":       return "Assessment & Recommended Actions";
     default:                 return LABEL;
   }
@@ -1366,7 +1464,8 @@ function _legendRow(kind, title, unit, body) {
 function _layersLegendHtml(scene) {
   const rows = [];
   const ch = scene.chapter;
-  if (ch === 1 || ch === 5) rows.push(_legendRow("Area", "IPC acute food insecurity", "phase", _steps(IPC_PHASES)));
+  if (scene.kind === "ews-level" || scene.kind === "assessment") rows.push(_legendRow("Points", "NCOP level by district (Warning and Alert)", "", _steps(EWS_LEVELS.slice(2))));
+  if (ch === 1 || ch === 5) rows.push(_legendRow("Area", "IPC acute food insecurity (last projection)", "phase", _steps(IPC_PHASES)));
   if (ch === 2) {
     const s = scene.crop || _staple(_state.digest, 4);
     rows.push(_legendRow("Area", `${s?.name || "Crop"} production by province`, s?.unit || "",
@@ -1386,7 +1485,16 @@ function _factsHtml(scene) {
   const d = _state.digest || {};
   const pills = [];
   const k = scene.kind;
-  if (k === "ipc-overview" && d.ipc) {
+  if (k === "ews-level") {
+    const H = ewsHeadline(d);
+    pills.push(_pill(`${H.lv.label}`, H.n.level >= 2, H.lv.color), _pill(`${H.wp.districts} districts at Warning or Alert`, true), _pill("Modelled"));
+  } else if (k === "fews-outlook") pills.push(_pill("Forecast"), _pill("Oct 2026 to May 2027"));
+  else if (k === "household") pills.push(_pill("Survey 2024–25"));
+  else if (k === "supply" || k === "water") pills.push(_pill("Modelled"));
+  else if (k === "shocks") pills.push(_pill("Observed"));
+  else if (k === "outlook-prices" && d.ews?.price_outlook) pills.push(_pill("Forecast, tested"));
+  else if (k === "ipc-overview" && d.ews?.ipc?.expired) pills.push(_pill(`Modelled · expired ${_dayMonth(d.ews.ipc.valid_to)}`, true));
+  else if (k === "ipc-overview" && d.ipc) {
     pills.push(_pill(`${_mil(d.ipc.totals.p3plus)} in Phase 3+`, true), _pill(`${_pct(d.ipc.totals.p3plus_pct)} of analysed`));
   } else if (k === "ipc-hotspot") {
     const h = scene.hotspot;
@@ -1475,10 +1583,10 @@ function _ensureCard(root) {
       <button type="button" class="fsw-btn fsw-btn--play" title="Play" aria-label="Play">${ICON_PLAY}</button>
       <button type="button" class="fsw-btn fsw-btn--next" title="Next scene" aria-label="Next">${ICON_NEXT}</button>
       <button type="button" class="fsw-btn fsw-btn--ff" title="Fast-forward (cycles 1x-5x)" aria-label="Fast-forward">${ICON_FF}<span class="fsw-speed"></span></button>
-      <span class="fsw-hint">Chapter 1 · Hunger Now · IPC</span>
+      <span class="fsw-hint">Chapter 1 · Warning Level & Hunger</span>
     </div>
     <div class="fsw-dots" role="tablist"></div>
-    <div class="fsw-meta">Sources: IPC · PBS Crop Reporting Service · WFP market monitoring (HDX) · NOAA GEFS (bias-corrected) · FAO, World Bank, IPC & national reports</div>
+    <div class="fsw-meta">Sources: IPC · FEWS NET · WFP (HDX) · PBS · USDA · CHIRPS, NASA FLDAS & MODIS · NOAA · ACLED · World Bank/FAO · national reports. Not an IPC classification.</div>
   `;
   const selectRow = root.querySelector(`#${SELECT_ID}`)?.parentElement;
   if (selectRow && selectRow.parentElement === root) selectRow.insertAdjacentElement("afterend", card);
@@ -1580,7 +1688,146 @@ function _lineChart(series, labels, refs = [], opts = {}) {
   return `<svg class="fswp-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${_esc(opts.aria || "chart")}">${out.join("")}</svg>${legend}`;
 }
 
+function _levelSteps(cur) {
+  return `<div class="fswp-level">${EWS_LEVELS.map((l, i) => `<span class="${i === cur ? "is-on" : ""}" style="background:${l.color}">${_esc(l.label)}</span>`).join("")}</div>`;
+}
+function _showEwsIntroPopup(H) {
+  _presentPopup(`${_popupHead("Briefing Overview", `National: ${H.lv.label}`, 1, H.lv.color)}
+    <div class="fswp-body">
+      <div class="fswp-label">National level today</div>${_levelSteps(H.n.level)}
+      ${_kpis([
+        { html: _u(String(H.wp.districts), `of ${H.n.districts}`), label: "districts at Warning or Alert", color: "#E67800" },
+        { html: _u((H.wp.people / 1e6).toFixed(0), "million"), label: "people live there" },
+        { html: _u(_fmt(H.pk.kg, 1), "kg"), label: `flour for a day's wage (average ${_fmt(H.pk.kg_avg5, 1)})` },
+        { html: _u(_signed(H.pk.flour_y1, 0), ""), label: "flour price, 1 year" },
+      ])}
+      <div class="fswp-label">Chapters</div>
+      <div class="fswp-steps">
+        <div><b>1</b> Warning level and hunger: where pressure is building, and the last official counts</div>
+        <div><b>2</b> Harvests and supply: is there enough wheat?</div>
+        <div><b>3</b> Prices and wages: what families can afford</div>
+        <div><b>4</b> The months ahead: rain, canal water, crops, prices, shocks</div>
+        <div><b>5</b> How far to trust this, why it happens, and what to do</div>
+      </div>
+      <div class="fswp-axis-note">${_esc(`Prices to ${_monthLong(H.e.periods.prices)} · rain, soil and crops to ${_monthLong(H.e.periods.eo.rain)} · FEWS NET ${_monthLong(String(H.e.periods.fews_round || "").slice(0, 7))} · issue ${H.e.issue?.number ?? 1}. Levels are an NCOP overlay, not an IPC classification.`)}</div>
+    </div>`);
+}
+function _scoreCell(p) { return p ? `<td class="num"><span class="fswp-cat" style="background:${EWS_LEVELS[p[0]].color}"></span> ${p[0]}</td>` : `<td class="num">–</td>`; }
+function _showEwsLevelPopup() {
+  const H = ewsHeadline(_state.digest);
+  const list = concernList(H.e, 8);
+  _presentPopup(`${_popupHead("Where Pressure Is Building", H.lv.label, 1, H.lv.color)}
+    <div class="fswp-body">
+      ${_levelSteps(H.n.level)}
+      <div class="fswp-label">Districts at each level, by province</div>
+      ${_hBars((H.e.provinces || []).filter((p) => p.count[2] + p.count[3]).map((p) => ({ label: prettyProvince(p.province), value: p.count[2] + p.count[3], color: p.count[3] ? "#C80100" : "#E67800", valueHtml: `${p.count[3] ? `${p.count[3]} Alert, ` : ""}${p.count[2]} Warning <small>of ${p.districts}</small>` })))}
+      <div class="fswp-label">Most concern (0 normal … 3 alert)</div>
+      <table class="fswp-table"><thead><tr><th>District</th><th class="num">Hunger</th><th class="num">Prices</th><th class="num">Water</th><th class="num">Shocks</th></tr></thead><tbody>
+        ${list.map((r) => `<tr><td><span class="fswp-cat" style="background:${EWS_LEVELS[r.level].color}"></span> ${_esc(r.name)}<small class="fswp-u">${_esc(districtReason(r))}</small></td>${["hunger", "market", "water", "shocks"].map((k) => _scoreCell(r.pillars[k])).join("")}</tr>`).join("")}
+      </tbody></table>
+      <div class="fswp-axis-note">Warning: two pressures at 2 or more. Alert: one at 3 with medium confidence, or two at 3. A level falls only after two calm months. Confidence is Low for ${H.n.confidence?.Low || 0} of ${H.wp.districts} districts: one city's prices stand for a province.</div>
+      ${_refsLine(["fewsOct", "wfpPrices", "eo", "irsa"])}
+    </div>`);
+}
+function _showFewsPopup() {
+  const H = ewsHeadline(_state.digest);
+  const cnt = (i) => [1, 2, 3, 4].map((k) => H.rows.filter((r) => r.fews?.[i] === k).length);
+  const rows = ["Now (Oct 2026)", "To Jan 2027", "Feb–May 2027"].map((t, i) => ({ t, c: cnt(i) }));
+  const need = (H.e.register || []).find((r) => r.id === "needs2026");
+  _presentPopup(`${_popupHead("FEWS NET Outlook, October 2026", "Forecast", 1)}
+    <div class="fswp-body">
+      <div class="fswp-label">Number of districts in each class</div>
+      <table class="fswp-table"><thead><tr><th>Period</th>${IPC_PHASES.slice(0, 4).map((p) => `<th class="num">${_esc(p.label)}</th>`).join("")}</tr></thead><tbody>
+        ${rows.map((r) => `<tr><td>${_esc(r.t)}</td>${r.c.map((v, i) => `<td class="num"><span class="fswp-cat" style="background:${IPC_PHASES[i].color}"></span> ${v}</td>`).join("")}</tr>`).join("")}
+      </tbody></table>
+      ${need ? `<div class="fswp-brief"><div><b>Need</b>${_esc(need.text)}</div></div>` : ""}
+      <div class="fswp-axis-note">IPC-compatible classes by FEWS NET analysts for whole districts. They are not IPC consensus results and not a head count.</div>
+      ${_refsLine(["fewsOct"])}
+    </div>`);
+}
+function _showHouseholdPopup() {
+  const h = _state.digest.ews.household, v = h.hies, y = Object.keys(h.diet || {}).sort().pop(), x = h.diet?.[y], uy = Object.keys(h.undernourished || {}).sort().pop();
+  _presentPopup(`${_popupHead("Nutrition & Households", `Survey ${v.year}`, 1)}
+    <div class="fswp-body">
+      ${_kpis([
+        { html: _u(_fmt(v.moderate_or_severe, 1), "%"), label: `households food insecure (${_fmt(v.prev_moderate_or_severe, 1)}% in ${v.prev_year})`, color: "#E67800" },
+        { html: _u(_fmt(v.severe, 1), "%"), label: "severely food insecure", color: "#ef4444" },
+        ...(x ? [{ html: _u(_fmt(x.cannot_afford_pct), "%"), label: `cannot afford a healthy diet, ${y}` }] : []),
+        ...(uy ? [{ html: _u(_fmt(h.undernourished[uy], 1), "%"), label: `undernourished, ${uy}` }] : []),
+      ])}
+      <div class="fswp-label">Food-insecure households by province</div>
+      ${_hBars(Object.entries(v.provinces).sort((a, b) => b[1] - a[1]).map(([p, n]) => ({ label: p, value: n, color: "#E67800", valueHtml: `${_fmt(n, 1)}%` })))}
+      <div class="fswp-axis-note">Poorest fifth of families ${_fmt(v.poorest)}%, richest ${_fmt(v.richest)}%. These change slowly and do not set today's level. Child malnutrition has no open district data now.</div>
+      ${_refsLine(["hies", "diet"])}
+    </div>`);
+}
+function _showSupplyPopup() {
+  const s = _state.digest.ews.supply, r = s.wheat.rows, l = r[r.length - 1];
+  _presentPopup(`${_popupHead("Is There Enough Wheat?", l.marketing_year, 2)}
+    <div class="fswp-body">
+      ${_kpis([
+        { html: _u(_fmt(l.production / 1000, 1), "Mt"), label: `harvest, spring ${l.harvest_year} (USDA)` },
+        { html: _u(_fmt(l.use / 1000, 1), "Mt"), label: "needed" },
+        { html: _u(_fmt((l.imports || 0) / 1000, 1), "Mt"), label: "imports expected" },
+        { html: _u(String(l.cover_days), "days"), label: "in store at season end", color: "#E67800" },
+      ])}
+      <div class="fswp-label">Days of wheat in store at season end</div>
+      ${_lineChart([{ label: "days of use", color: "#f59e0b", fill: true, values: r.map((x) => x.cover_days) }], r.map((x) => x.marketing_year), [], { unit: "days", zero: true, aria: "Wheat stock cover" })}
+      <div class="fswp-axis-note">Estimates of the 2026 harvest differ: 29.3 million tonnes (government committee), 29.0 (USDA), about 27.5 (Dawn), about 26 (trade). Season labels are USDA marketing years.</div>
+      ${_refsLine(["psd"])}
+    </div>`);
+}
+function _showWaterPopup() {
+  const w = _state.digest.ews.water, rows = (w.provinces || []).filter((p) => ["Sindh", "Balochistan", "Punjab", "Khyber Pakhtunkhwa", "Gilgit Baltistan", "Azad Kashmir"].includes(p.province));
+  _presentPopup(`${_popupHead("Rain, Canals & El Niño", "", 4)}
+    <div class="fswp-body">
+      ${_kpis([
+        ...(w.canal_pct != null ? [{ html: _u(_signed(w.canal_pct, 0), ""), label: "canal water this winter, Punjab & Sindh", color: "#E67800" }] : []),
+        ...(w.reservoirs?.dams || []).map((x) => ({ html: _u(String(x.range_pct), "%"), label: `${x.name} level (0 lowest, 100 full)` })),
+        ...(w.enso ? [{ html: _u(`${w.enso.oni > 0 ? "+" : ""}${_fmt(w.enso.oni, 1)}`, "°C"), label: `${w.enso.strength || ""} ${w.enso.state}` }] : []),
+      ].slice(0, 4))}
+      <div class="fswp-label">Monsoon ${rows[0]?.monsoon_year || ""} and conditions now, satellite</div>
+      <table class="fswp-table"><thead><tr><th>Province</th><th class="num">Monsoon rain</th><th class="num">Soil (percentile)</th><th class="num">Crops (0–100)</th></tr></thead><tbody>
+        ${rows.map((p) => `<tr><td>${_esc(prettyProvince(p.province))}</td><td class="num ${p.monsoon_pct < -20 ? "is-down" : ""}">${_signed(p.monsoon_pct, 0)}</td><td class="num">${_fmt(p.soil_pct)}</td><td class="num">${_fmt(p.vci)}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="fswp-axis-note">Most of Punjab and Sindh is watered by canals, so canal water matters more there than local rain. Reservoir level is not the same as volume.</div>
+      ${_refsLine(["eo", "irsa", "monsoon", "enso"])}
+    </div>`);
+}
+function _showShocksPopup() {
+  const e = _state.digest.ews, c = e.shocks?.conflict;
+  const get = (id) => (e.register || []).find((x) => x.id === id);
+  _presentPopup(`${_popupHead("Shocks & Trade", c ? _monthLabel(c.month) : "", 4)}
+    <div class="fswp-body">
+      ${c ? `<div class="fswp-label">Violent political events a month (national)</div>${_lineChart([{ label: "events", color: "#f87171", fill: true, values: c.series.map((x) => x.events) }], c.series.map((x) => _monthLabel(x.month)), [{ v: c.avg12, label: "average of the year before", color: "#94a3b8" }], { unit: "events", zero: true, aria: "Conflict events" })}` : ""}
+      <div class="fswp-brief">
+        ${["border2026", "imports2026", "fertiliser2026"].map(get).filter(Boolean).map((r) => `<div><b>${_esc(r.topic)}</b>${_esc(r.text)} <small>(as of ${_esc(_dayMonth(r.as_of))}${r.state === "current" ? "" : ", out of date"})</small></div>`).join("")}
+      </div>
+      <div class="fswp-axis-note">Conflict data are national only, so districts are not scored on conflict.</div>
+      ${_refsLine(["acled", "fewsOct", "khaleej"])}
+    </div>`);
+}
+function _showTrustPopup() {
+  const e = _state.digest.ews, b = e.backtest, m = b.market, po = e.price_outlook;
+  const res = (x) => (x.kind === "quiet" ? (x.first_signal ? "false alarm" : "quiet, correct") : !x.first_signal ? (x.watch_share != null ? "Watch only" : "missed") : x.kind === "wet" ? "seen as it happened" : x.known_lead_months > 0 ? `${x.known_lead_months}+ months early` : "seen after the jump");
+  _presentPopup(`${_popupHead("How Far to Trust This", `${m.warning.months} months tested`, 5)}
+    <div class="fswp-body">
+      ${_kpis([
+        { html: _u(_fmt((m.warning.precision || 0) * 100), "%"), label: "price Warnings followed by a 10% flour jump" },
+        { html: _u(_fmt((m.warning.base_rate || 0) * 100), "%"), label: "chance in any month" },
+        { html: _u(`${m.warning.missed}`, `of ${m.warning.surges}`), label: "jumps that came without a Warning", color: "#ef4444" },
+      ])}
+      <div class="fswp-label">Past events, replayed</div>
+      <table class="fswp-table"><thead><tr><th>Event</th><th class="num">Result</th></tr></thead><tbody>${b.episodes.map((x) => `<tr><td>${_esc(x.label)}</td><td class="num">${_esc(res(x))}</td></tr>`).join("")}</tbody></table>
+      ${po ? `<div class="fswp-label">Flour forecast: typical error since ${_esc(po.test_from.slice(0, 4))}</div>
+      <table class="fswp-table"><thead><tr><th>Method</th><th class="num">1 month</th><th class="num">3 months</th></tr></thead><tbody>${po.skill.filter((s) => ["chosen", "seasonal", "no_change"].includes(s.model)).map((s) => `<tr><td>${{ chosen: "Used here", seasonal: "Old seasonal method", no_change: "Assume no change" }[s.model]}</td><td class="num">${_fmt(s.by_horizon["1"], 1)}%</td><td class="num">${_fmt(s.by_horizon["3"], 1)}%</td></tr>`).join("")}</tbody></table>` : ""}
+      <div class="fswp-axis-note">The thresholds are starting values and were not tuned on these events. Data issues found this time: ${(e.issues || []).length}, listed in the exported report.</div>
+    </div>`);
+}
+
 function _showIntroPopup() {
+  const H = ewsHeadline(_state.digest);
+  if (H) return _showEwsIntroPopup(H);
   const d = _state.digest || {};
   const t = d.ipc?.totals;
   const wheat = _staple(d, 4);
@@ -1616,8 +1863,14 @@ function _showIntroPopup() {
 function _showIpcOverviewPopup() {
   const i = _state.digest.ipc;
   const prov = (i.provinces || []).filter((p) => p.province !== "Other");
-  _presentPopup(`${_popupHead("IPC Acute Food Insecurity — Pakistan", `${i.totals.areas} districts`, 1)}
+  const L = _state.digest.ews?.ipc?.lines;
+  const two = L?.length ? `<div class="fswp-label">Two analyses, shown apart</div>
+      <table class="fswp-table"><thead><tr><th>Analysis</th><th class="num">Then</th><th class="num">Projected</th><th class="num">Ends</th></tr></thead><tbody>
+        ${L.map((l) => `<tr><td>${_esc(l.label)}</td><td class="num">${_u((l.current?.p3plus / 1e6).toFixed(2), "M")} ${_pct(l.current?.p3plus_pct)}</td><td class="num">${_u((l.projected?.p3plus / 1e6).toFixed(2), "M")} ${_pct(l.projected?.p3plus_pct)}</td><td class="num">${_esc(_dayMonth(l.periods.projected?.to))}</td></tr>`).join("")}
+      </tbody></table>` : "";
+  _presentPopup(`${_popupHead("Last Official Count — IPC", `${i.totals.areas} districts`, 1)}
     <div class="fswp-body">
+      ${two}
       ${_kpis([
         { html: _u((i.totals.pop / 1e6).toFixed(1), "M"), label: "people analysed" },
         { html: _u((i.totals.p3plus / 1e6).toFixed(2), "M"), label: "Phase 3+", color: "#E67800" },
@@ -1864,6 +2117,19 @@ function _showAssessmentPopup(scene) {
   const d = _state.digest || {};
   const w = scene.watch;
   const lvl = WATCH_LEVELS[w.level];
+  const H = ewsHeadline(d);
+  if (H) {
+    const all = Object.values(REFS).map((r) => `<li>${_esc(r.full)}</li>`).join("");
+    _presentPopup(`${_popupHead("What to Do", H.lv.label, 5, H.lv.color)}
+      <div class="fswp-body">
+        ${_levelSteps(H.n.level)}
+        <div class="fswp-brief">${(H.e.actions || []).map((a, i) => `<div><b>Action ${i + 1}</b><strong>${_esc(a.title)}.</strong> ${_esc(a.text)} <small>Who: ${_esc(a.owner)}. When: ${_esc(a.by)}.</small></div>`).join("")}</div>
+        <div class="fswp-label">Risk calendar</div>
+        <table class="fswp-table"><tbody>${(H.e.calendar || []).map((c) => `<tr><td>${c.now ? "<b>NOW</b> " : ""}${_esc(c.window)}</td><td>${_esc(c.risk)}</td></tr>`).join("")}</tbody></table>
+        <details class="fswp-refs-all"><summary>References (${Object.keys(REFS).length})</summary><ol>${all}</ol></details>
+      </div>`);
+    return;
+  }
   const hs = hotspots(d);
   const flour = _price(d, "Wheat flour");
   const fLast = flour?.outlook?.[flour.outlook.length - 1];
@@ -1900,8 +2166,8 @@ function _ensureOverlayLayers() {
     if (!map.getLayer(OUTLINE_FILL)) map.addLayer({ id: OUTLINE_FILL, type: "fill", source: OUTLINE_SRC, paint: { "fill-color": "#fbbf24", "fill-opacity": 0.12 } });
     if (!map.getLayer(OUTLINE_LINE)) map.addLayer({ id: OUTLINE_LINE, type: "line", source: OUTLINE_SRC, paint: { "line-color": "#fbbf24", "line-width": 3, "line-opacity": 1 } });
     if (!map.getSource(FOCUS_SRC)) map.addSource(FOCUS_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    if (!map.getLayer(FOCUS_HALO_ID)) map.addLayer({ id: FOCUS_HALO_ID, type: "circle", source: FOCUS_SRC, paint: { "circle-radius": 20, "circle-color": "#f59e0b", "circle-blur": 0.9, "circle-opacity": 0.35 } });
-    if (!map.getLayer(FOCUS_RING_ID)) map.addLayer({ id: FOCUS_RING_ID, type: "circle", source: FOCUS_SRC, paint: { "circle-radius": 12, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#f59e0b", "circle-stroke-width": 3 } });
+    if (!map.getLayer(FOCUS_HALO_ID)) map.addLayer({ id: FOCUS_HALO_ID, type: "circle", source: FOCUS_SRC, paint: { "circle-radius": 20, "circle-color": ["coalesce", ["get", "color"], "#f59e0b"], "circle-blur": 0.9, "circle-opacity": 0.35 } });
+    if (!map.getLayer(FOCUS_RING_ID)) map.addLayer({ id: FOCUS_RING_ID, type: "circle", source: FOCUS_SRC, paint: { "circle-radius": 12, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": ["coalesce", ["get", "color"], "#f59e0b"], "circle-stroke-width": 3 } });
     for (const id of [OUTLINE_FILL, OUTLINE_LINE, FOCUS_HALO_ID, FOCUS_RING_ID]) map.moveLayer(id);
   } catch (_) { /* best-effort */ }
 }
@@ -1918,9 +2184,14 @@ function _setMarkets(points) {
   _ensureOverlayLayers();
   try {
     map.getSource(FOCUS_SRC)?.setData({ type: "FeatureCollection", features: points.filter((p) => Number.isFinite(p.lon) && Number.isFinite(p.lat))
-      .map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: {} })) });
+      .map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: p.color ? { color: p.color } : {} })) });
   } catch (_) {}
   _startBlink();
+}
+/** Districts at Warning and Alert as coloured rings (Alert drawn last, on top). */
+function _levelPoints(d) {
+  return (d?.ews?.districts || []).filter((r) => r.level >= 2 && r.centroid).sort((a, b) => a.level - b.level)
+    .map((r) => ({ lon: r.centroid[0], lat: r.centroid[1], color: EWS_LEVELS[r.level].color }));
 }
 function _startBlink() {
   if (_state.blinkTimer) return;
@@ -2114,9 +2385,30 @@ async function _runIntro(map, scene, token, seq, card) {
   await cinematicEaseTo(map, { bearing: 8, pitch: 36, duration: _dur(2200) });
 }
 
+async function _runEwsLevel(map, scene, token, seq, card) {
+  await _ensureChapterLayers(1, token, card);
+  if (_isStale(token, seq)) return;
+  _setMarkets(_levelPoints(_state.digest));
+  _showEwsLevelPopup();
+  await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 0, bearing: 0, duration: _dur(2600) });
+}
+/** Scenes that only need a popup and a steady country view. */
+function _panelScene(chapter, show, camera) {
+  return async (map, scene, token, seq, card) => {
+    await _ensureChapterLayers(chapter, token, card);
+    if (_isStale(token, seq)) return;
+    _closePanels();
+    _clearOverlays();
+    if (chapter === 4) { await _deactivateTemporal(GEFS_KEY); if (_isStale(token, seq)) return; }
+    show(scene);
+    await cinematicFitBounds(map, PAKISTAN_BOUNDS, { bearing: 0, duration: _dur(2600), ...camera });
+  };
+}
+
 async function _runIpcOverview(map, scene, token, seq, card) {
   await _ensureChapterLayers(1, token, card);
   if (_isStale(token, seq)) return;
+  _clearOverlays();
   _showIpcOverviewPopup();
   await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 0, bearing: 0, duration: _dur(2600) });
 }
@@ -2258,7 +2550,8 @@ async function _runAssessment(map, scene, token, seq, card) {
   await _ensureChapterLayers(5, token, card);
   if (_isStale(token, seq)) return;
   _closePopup();
-  _setOutlines(hotspots(_state.digest).filter((h) => h.outline).map((h) => ({ type: "Feature", geometry: h.outline, properties: {} })));
+  if (scene.watch.ews) _setMarkets(_levelPoints(_state.digest));
+  else _setOutlines(hotspots(_state.digest).filter((h) => h.outline).map((h) => ({ type: "Feature", geometry: h.outline, properties: {} })));
   await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch: 0, bearing: 0, duration: _dur(2600) });
   if (_isStale(token, seq)) return;
   _showAssessmentPopup(scene);
@@ -2267,6 +2560,13 @@ async function _runAssessment(map, scene, token, seq, card) {
 
 const RUNNERS = {
   "intro": _runIntro,
+  "ews-level": _runEwsLevel,
+  "fews-outlook": _panelScene(1, _showFewsPopup, { pitch: 10 }),
+  "household": _panelScene(1, _showHouseholdPopup, { pitch: 25 }),
+  "supply": _panelScene(2, _showSupplyPopup, { pitch: 20 }),
+  "water": _panelScene(4, _showWaterPopup, { pitch: 15 }),
+  "shocks": _panelScene(4, _showShocksPopup, { pitch: 20 }),
+  "trust": _panelScene(5, _showTrustPopup, { pitch: 10 }),
   "ipc-overview": _runIpcOverview,
   "ipc-hotspot": _runHotspot,
   "ipc-trend": _runTrend,
@@ -2313,18 +2613,16 @@ async function _fetchWatch(token) {
 // loader; if the loader never reaches it (no data, story closed) the
 // pre-opened print window is closed instead of being left blank.
 async function _loadAndPlay(card, forceRefresh = false) {
-  _state.exportAfterLoad = _state.pendingExport || null;
+  const job = _state.pendingExport || null; // belongs to this load only
   _state.pendingExport = null;
   try {
-    await _loadAndPlayInner(card, forceRefresh);
+    await _loadAndPlayInner(card, forceRefresh, job);
   } finally {
-    const p = _state.exportAfterLoad;
-    _state.exportAfterLoad = null;
-    if (p) { try { if (p.win && !p.win.closed) p.win.close(); } catch (_) {} }
+    if (job && !job.taken) { try { if (job.win && !job.win.closed) job.win.close(); } catch (_) {} }
   }
 }
 
-async function _loadAndPlayInner(card, forceRefresh = false) {
+async function _loadAndPlayInner(card, forceRefresh = false, job = null) {
   const token = _state.runToken;
   const useCached = !forceRefresh && _state.loadedOnce && _state.digest;
   card.querySelector(".fsw-chapter-title").textContent = LABEL;
@@ -2343,7 +2641,7 @@ async function _loadAndPlayInner(card, forceRefresh = false) {
     clearInterval(loadTimer);
     _hideLoader(card);
     if (token !== _state.runToken) return;
-    if (!digest || (!digest.ipc && !digest.crops && !digest.prices)) {
+    if (!digest || (!digest.ipc && !digest.crops && !digest.prices && !digest.ews)) {
       card.querySelector(".fsw-body").innerHTML = `<div class="fsw-status">Food-security data are unavailable right now. Try Refresh in a few minutes.</div>`;
       return;
     }
@@ -2357,16 +2655,15 @@ async function _loadAndPlayInner(card, forceRefresh = false) {
   _state.ttsEnabled = false; // every run starts muted, like the other briefings
   _syncMuteButton(card);
 
-  const exportReq = _state.exportAfterLoad;
-  if (exportReq) {
+  if (job) {
     // Opened from the picker's Export: English, no language prompt, no
     // autoplay — export, then rest paused on the first scene.
-    _state.exportAfterLoad = null;
+    job.taken = true;
     _state.lang = "en";
     _syncLangButton(card);
     _state.isPlaying = false;
     _setPlayGlyph(card, false);
-    await _exportReport(exportReq.format, exportReq.win);
+    await _exportReport(job.format, job.win);
     return;
   }
   if (!useCached) {
@@ -2450,6 +2747,13 @@ function _closeCompletely() {
 // ==========================================================================
 const REPORT_POPUPS = {
   "intro": () => _showIntroPopup(),
+  "ews-level": () => _showEwsLevelPopup(),
+  "fews-outlook": () => _showFewsPopup(),
+  "household": () => _showHouseholdPopup(),
+  "supply": () => _showSupplyPopup(),
+  "water": () => _showWaterPopup(),
+  "shocks": () => _showShocksPopup(),
+  "trust": () => _showTrustPopup(),
   "ipc-overview": () => _showIpcOverviewPopup(),
   "ipc-hotspot": (sc) => _showHotspotPopup(sc),
   "ipc-trend": () => _showTrendPopup(),
@@ -2504,7 +2808,7 @@ async function _exportReport(format, win) {
   try {
     await runStoryExport({
       format, win, card, slug: "food-security-agriculture-watch",
-      meta: {
+      meta: ewsHeadline(d) ? foodReportMeta(d) : {
         title: LABEL,
         subtitle: "IPC food insecurity · harvests · market prices · next 1–2 months · assessment",
         strip: [
@@ -2528,7 +2832,7 @@ async function _exportReport(format, win) {
         ],
         footer: "Sources: IPC, PBS Crop Reporting Service, WFP market monitoring (HDX), NOAA GEFS (bias-corrected by NCOP), FAO, World Bank and national reports.",
       },
-      steps: [{ key: "data", label: "Briefing data" }, { key: "map1", label: "Map: IPC food insecurity & hotspots" },
+      steps: [{ key: "data", label: "Briefing data" }, { key: "map1", label: "Map: warning levels & food insecurity" },
               { key: "map2", label: "Map: wheat production by province" }],
       build: async ({ run, mark }) => {
         run("data"); mark("data");
@@ -2536,23 +2840,33 @@ async function _exportReport(format, win) {
         if (map) {
           run("map1");
           await _ensureChapterLayers(1, token, card);
-          _setOutlines(hotspots(d).filter((h) => h.outline).map((h) => ({ type: "Feature", geometry: h.outline, properties: {} })));
+          const levels = _levelPoints(d);
+          if (levels.length) _setMarkets(levels);
+          else _setOutlines(hotspots(d).filter((h) => h.outline).map((h) => ({ type: "Feature", geometry: h.outline, properties: {} })));
           map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
           const a = await captureMap(map, { settleMs: 300 });
-          shots[1] = [{ src: a, caption: "IPC acute food insecurity (projection) by district; outlined: the five hotspot districts." }];
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
+          shots[1] = [{ src: a, caption: levels.length
+            ? "Rings: districts at Warning (orange) and Alert (red) today [Modelled, NCOP]. Shading: the last IPC projection, to 30 September 2026. They are different measures."
+            : "IPC acute food insecurity (projection) by district; outlined: the five hotspot districts." }];
           mark("map1", a ? "ok" : "warn");
           run("map2");
           _clearOverlays();
           const wheat = _staple(d, 4);
           _selectCrop(4, wheat?.latest.year || d.crops?.latest_year);
           await _ensureChapterLayers(2, token, card);
+          _selectCrop(4, wheat?.latest.year || d.crops?.latest_year); // again: the layer may only exist now
           map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
-          const b = await captureMap(map, { settleMs: 500 });
-          shots[2] = [{ src: b, caption: `Wheat production by province, ${wheat?.latest.year || ""} (darker = more).` }];
+          for (let i = 0; i < 12 && !map.getLayer?.(`${CROP_KEY}-fill`); i++) await wait(250);
+          const b = await captureMap(map, { settleMs: 1200 });
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
+          shots[2] = [{ src: b, caption: `Wheat production by province, PBS crop year ${wheat?.latest.year || ""}${wheat?.harvest ? ` (cut in ${wheat.harvest})` : ""}; darker = more [Observed].` }];
           mark("map2", b ? "ok" : "warn");
         } else {
           mark("map1", "warn"); mark("map2", "warn");
         }
+        const decision = foodReportSections(d, { shots });
+        if (decision) return decision;
         return scenesToSections({ scenes: _state.scenes, chapterNames: CHAPTER_NAMES, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots });
       },
     });

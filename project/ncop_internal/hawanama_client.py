@@ -710,8 +710,11 @@ AQ_STANDARDS = {
 }
 _EPA_CATEGORIES = ("good", "moderate", "usg", "unhealthy", "very_unhealthy", "hazardous")
 _WATCH_TTL_SECONDS = 900
+_WATCH_MAX_STALE_SECONDS = 3 * 3600
 _watch_memo = {"at": 0.0, "key": None, "payload": None}
 _watch_lock = threading.Lock()
+_watch_build_lock = threading.Lock()   # one build at a time, whoever asks
+_watch_refreshing = {"on": False}
 
 
 def epa_category(pm25):
@@ -1039,15 +1042,49 @@ def prefetch_estimate_tiles(dates, zooms=(4, 5, 6), workers=4):
     return len(todo)
 
 
+def _watch_refresh_async(days):
+    """Rebuild the digest in the background (at most one at a time)."""
+    with _watch_lock:
+        if _watch_refreshing["on"]:
+            return
+        _watch_refreshing["on"] = True
+
+    def run():
+        try:
+            with _watch_build_lock:
+                _build_watch(days)
+        except Exception:
+            logger.warning("hawanama_client: background watch refresh failed", exc_info=True)
+        finally:
+            with _watch_lock:
+                _watch_refreshing["on"] = False
+
+    threading.Thread(target=run, name="aq-watch-refresh", daemon=True).start()
+
+
 def air_quality_watch(days=7):
     """Digest for the National Air Quality Watch story (memoised 15 min).
     Each part degrades independently: a missing part is null, not a 503,
-    unless every part is unavailable."""
+    unless every part is unavailable. Between 15 minutes and 3 hours old the
+    last digest is served at once and rebuilt in the background (its
+    generated_at tells the reader how old it is)."""
     days = max(3, min(int(days), 14))
-    now = time.time()
     with _watch_lock:
-        if _watch_memo["key"] == days and now - _watch_memo["at"] < _WATCH_TTL_SECONDS:
-            return _watch_memo["payload"]
+        age = time.time() - _watch_memo["at"]
+        hit = _watch_memo["payload"] if _watch_memo["key"] == days and age < _WATCH_MAX_STALE_SECONDS else None
+    if hit is not None:
+        if age >= _WATCH_TTL_SECONDS:
+            _watch_refresh_async(days)
+        return hit
+    with _watch_build_lock:
+        # Someone else may have built it while this request waited.
+        with _watch_lock:
+            if _watch_memo["key"] == days and time.time() - _watch_memo["at"] < _WATCH_TTL_SECONDS:
+                return _watch_memo["payload"]
+        return _build_watch(days)
+
+
+def _build_watch(days):
     errors = {}
 
     def part(name, fn, *a):
@@ -1065,7 +1102,11 @@ def air_quality_watch(days=7):
         # Warm the 7 frames' national-view tiles while the operator is still
         # on the language prompt / intro fly-in.
         part("tile_prefetch", prefetch_estimate_tiles, past["dates"])
-    drivers =part("drivers", _drivers, (past or {}).get("dates") or [])
+    drivers = part("drivers", _drivers, (past or {}).get("dates") or [])
+    aqi = None
+    if past:
+        from . import aqi_watch
+        aqi = part("aqi", aqi_watch.build, past["dates"])
     live = part("live", _live_now)
     # Forecast points: every city seen in the past week or reporting now.
     pts = {c["city"]: c for c in (past or {}).get("cities", [])}
@@ -1076,7 +1117,7 @@ def air_quality_watch(days=7):
                     [{"city": k, "lon": v["lon"], "lat": v["lat"]} for k, v in pts.items()])
     if past is None and live is None and forecast is None:
         raise HawanamaUnavailable("air quality watch: no part available")
-    payload = {"standards": AQ_STANDARDS, "past_week": past, "drivers": drivers, "live": live, "forecast": forecast,
+    payload = {"standards": AQ_STANDARDS, "aqi": aqi, "past_week": past, "drivers": drivers, "live": live, "forecast": forecast,
                "errors": errors, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                "attribution": ATTRIBUTION}
     # A partial digest is only kept for 2 minutes so a recovered part shows up soon.

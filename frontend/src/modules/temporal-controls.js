@@ -9,6 +9,7 @@
 // ADDED: Temporal Opacity Controller (global factor applied to all temporal layers/steps)
 
 import { legends } from "./temporal-layer-legends";
+import { sourceSpec } from "./map-source-spec.js";
 
 // ===== GLOBAL VARIABLES =====
 let sliderLayers = []; // Array of arrays of layer ids for each timestep
@@ -625,11 +626,11 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
 
     if (entry.sources) {
       entry.sources.forEach((source) => {
-        if (!map.getSource(source.id)) map.addSource(source.id, source);
+        if (!map.getSource(source.id)) map.addSource(source.id, sourceSpec(source));
       });
     } else if (entry.source) {
       if (!map.getSource(entry.source.id))
-        map.addSource(entry.source.id, entry.source);
+        map.addSource(entry.source.id, sourceSpec(entry.source));
     }
 
     entry.layers.forEach((layerDef) => {
@@ -752,11 +753,11 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
     if (entry.sources)
       entry.sources.forEach((s) => {
-        if (!map.getSource(s.id)) map.addSource(s.id, s);
+        if (!map.getSource(s.id)) map.addSource(s.id, sourceSpec(s));
       });
     else if (entry.source) {
       const sid = entry.source.id;
-      if (!map.getSource(sid)) map.addSource(sid, entry.source);
+      if (!map.getSource(sid)) map.addSource(sid, sourceSpec(entry.source));
     }
 
     entry.layers.forEach((layerDef) => {

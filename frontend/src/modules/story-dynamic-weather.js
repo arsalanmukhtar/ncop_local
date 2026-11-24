@@ -84,6 +84,8 @@ import {
   enableRainEffect,
   disableRainEffect,
 } from "./story-cinematic-engine.js";
+import { sourceSpec } from "./map-source-spec.js";
+import { mountExportButton, runStoryExport, captureMap, waitForMapIdle, notifyCard } from "./story-report-export.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -147,6 +149,7 @@ let _optionObserver = null;
 const SPEED_LEVELS = [1, 2, 3, 4, 5];
 
 const _state = {
+  active:      false,    // this story is the one on screen (set by _show, cleared on hide/close)
   isPlaying:   false,
   ttsEnabled:  false, // muted by default — operator opts IN to narration via the mute button
   runToken:    0,        // bumped on every _hide()/_teardown() so an in-flight
@@ -1097,6 +1100,7 @@ function _ensureCard(root) {
   _state.lang = _loadLangPref();
   _bindCardEvents(card);
   _syncLangButton(card);
+  mountExportButton(card, _exportReport);
   return card;
 }
 
@@ -1197,7 +1201,15 @@ function _bindCardEvents(card) {
 async function _fetchRainfallReport() {
   const res = await fetch("/api/pmd/nwfc/rainfall-report/");
   if (!res.ok) throw new Error(`rainfall report HTTP ${res.status}`);
-  return res.json();
+  const report = await res.json();
+  // The PDF's water-level table says just "NORMAL" when nothing is above
+  // normal; parsed as a station row it would read as a flood alert.
+  const wl = report?.water_level;
+  if (wl && wl.normal === false && (wl.observations || []).length
+      && wl.observations.every((o) => /^normal\b/i.test(String(o.station || "").trim()) && o.level_ft == null && !o.flood_situation)) {
+    report.water_level = { normal: true, observations: [] };
+  }
+  return report;
 }
 
 // Chapter 2's primary station data source — NCOP's own Heatwave
@@ -1317,7 +1329,7 @@ async function _sampleMeteoblueAllSteps(map, candidates) {
   for (const j of jobs) {
     try {
       if (!map.getSource(j.source.id)) {
-        map.addSource(j.source.id, j.source);
+        map.addSource(j.source.id, sourceSpec(j.source));
         addedSourceIds.push(j.source.id);
       }
     } catch (_) { continue; }
@@ -1409,7 +1421,7 @@ async function _sampleMeteoblueTemperatureAllSteps(map, candidates) {
   for (const j of jobs) {
     try {
       if (!map.getSource(j.source.id)) {
-        map.addSource(j.source.id, j.source);
+        map.addSource(j.source.id, sourceSpec(j.source));
         addedSourceIds.push(j.source.id);
       }
     } catch (_) { continue; }
@@ -1574,7 +1586,7 @@ async function _districtBoundaryCandidates(map) {
 
   let addedSource = false, addedLayer = false;
   try {
-    if (!map.getSource(source.id)) { map.addSource(source.id, source); addedSource = true; }
+    if (!map.getSource(source.id)) { map.addSource(source.id, sourceSpec(source)); addedSource = true; }
     if (!map.getLayer(fillLayerDef.id)) {
       map.addLayer({ ...fillLayerDef, layout: { ...fillLayerDef.layout, visibility: "visible" }, paint: { ...fillLayerDef.paint, "fill-opacity": 0 } });
       addedLayer = true;
@@ -3138,6 +3150,69 @@ async function _runAssessment(map) {
 // _dur(), number highlighting, and the district-blink overlay re-pointed
 // at the hottest stations instead of rainfall districts.
 // ==========================================================================
+// ==========================================================================
+// Chapter 2/3 sampled data — each step runs once per session and is shared
+// by playback (_runChapter2Intro / _runChapter3Intro) and the report export.
+// ==========================================================================
+async function _ensureDistrictCandidates(map) {
+  if (!_state.districtBoundaryCandidatesComputed) {
+    _state.districtBoundaryCandidates = await _districtBoundaryCandidates(map).catch(() => []);
+    _state.districtBoundaryCandidatesComputed = true;
+  }
+  return _state.districtBoundaryCandidates.length
+    ? _state.districtBoundaryCandidates
+    : _precipCandidateDistricts(_state.report, _state.observations?.features || []);
+}
+async function _ensureTempSamples(map, card) {
+  const candidates = await _ensureDistrictCandidates(map);
+  if (!_state.meteoblueTempSampledOnce) {
+    _setLayerLoadingNote(card, "Sampling Meteoblue 8-day temperature outlook for monitored districts…");
+    const temperatureMap = await _sampleMeteoblueTemperatureAllSteps(map, candidates).catch(() => new Map());
+    _state.meteoblueTemperature = temperatureMap;
+    _state.weeklyTempSamples = _buildTempWeeklySamples(candidates, temperatureMap);
+    _state.meteoblueTempSampledOnce = true;
+    _setLayerLoadingNote(card, null);
+  }
+}
+async function _ensurePrecipSamples(map, card) {
+  const candidates = await _ensureDistrictCandidates(map);
+  if (!_state.meteoblueSampledOnce) {
+    _setLayerLoadingNote(card, "Sampling Meteoblue precipitation forecasts for monitored districts…");
+    const sampled = await _sampleMeteoblueAllSteps(map, candidates).catch(() => ({ weekly: new Map(), hourly: new Map() }));
+    _state.meteoblueWeekly = sampled.weekly;
+    _state.meteoblueHourly = sampled.hourly;
+    _state.meteoblueSampledOnce = true;
+    _setLayerLoadingNote(card, null);
+  }
+  return candidates;
+}
+function _ensureWeeklyTempScene() {
+  if (_state.chapter2WeeklyScenesBuilt) return;
+  const assessmentIdx = _state.scenes.findIndex((sc) => sc.kind === "temp-assessment");
+  const insertAt = assessmentIdx >= 0 ? assessmentIdx : _state.scenes.length;
+  _state.scenes.splice(insertAt, 0, {
+    kind: "temp-weekly",
+    chapter: 2,
+    weeklyTempSamples: _state.weeklyTempSamples,
+    caption: _tempWeeklyNarrative(_state.weeklyTempSamples),
+  });
+  _state.chapter2WeeklyScenesBuilt = true;
+  const cardEl = document.getElementById(CARD_ID);
+  if (cardEl) _renderDots(cardEl);
+  _queueTranslateNewCaptions(cardEl);
+}
+async function _ensureChapter3Scenes(candidates, isStale) {
+  if (_state.chapter3ScenesBuilt) return;
+  const newScenes = await _buildChapter3Scenes(_state.report, _state.observations?.features || [], candidates);
+  if (isStale()) return;
+  const stub = _state.scenes.findIndex((sc) => sc.kind === "ch3-intro");
+  _state.scenes.splice((stub >= 0 ? stub : _state.index) + 1, 0, ...newScenes);
+  _state.chapter3ScenesBuilt = true;
+  const cardEl = document.getElementById(CARD_ID);
+  if (cardEl) _renderDots(cardEl);
+  _queueTranslateNewCaptions(cardEl);
+}
+
 async function _runChapter2Intro(map, token, seq) {
   // Chapter 1's own layer (NWFC Station Observations) has no reason to
   // stay on once we've moved past the rainfall chapter — Chapter 2 brings
@@ -3172,40 +3247,13 @@ async function _runChapter2Intro(map, token, seq) {
   // coverage), computed once and shared with Chapter 3's own sampling pass
   // below; _precipCandidateDistricts (a handful of report-driven districts)
   // is only the fallback if the boundary query comes back empty.
-  if (!_state.districtBoundaryCandidatesComputed) {
-    _state.districtBoundaryCandidates = await _districtBoundaryCandidates(map).catch(() => []);
-    _state.districtBoundaryCandidatesComputed = true;
-  }
-  if (!_state.meteoblueTempSampledOnce) {
-    _setLayerLoadingNote(card, "Sampling Meteoblue 8-day temperature outlook for monitored districts…");
-    const candidates = _state.districtBoundaryCandidates.length
-      ? _state.districtBoundaryCandidates
-      : _precipCandidateDistricts(_state.report, _state.observations?.features || []);
-    const temperatureMap = await _sampleMeteoblueTemperatureAllSteps(map, candidates).catch(() => new Map());
-    _state.meteoblueTemperature = temperatureMap;
-    _state.weeklyTempSamples = _buildTempWeeklySamples(candidates, temperatureMap);
-    _state.meteoblueTempSampledOnce = true;
-    _setLayerLoadingNote(card, null);
-  }
+  await _ensureTempSamples(map, card);
   if (_isStale(token, seq)) return;
 
   // Splice the weekly-outlook scene in right before temp-assessment —
   // guarded so re-entering ch2-intro (Prev/dot-click) never inserts a
   // second copy. Mirrors _runChapter3Intro's own scene-splice pattern.
-  if (!_state.chapter2WeeklyScenesBuilt) {
-    const assessmentIdx = _state.scenes.findIndex((s) => s.kind === "temp-assessment");
-    const insertAt = assessmentIdx >= 0 ? assessmentIdx : _state.scenes.length;
-    _state.scenes.splice(insertAt, 0, {
-      kind: "temp-weekly",
-      chapter: 2,
-      weeklyTempSamples: _state.weeklyTempSamples,
-      caption: _tempWeeklyNarrative(_state.weeklyTempSamples),
-    });
-    _state.chapter2WeeklyScenesBuilt = true;
-    const cardEl = document.getElementById(CARD_ID);
-    if (cardEl) _renderDots(cardEl);
-    _queueTranslateNewCaptions(cardEl);
-  }
+  _ensureWeeklyTempScene();
 }
 
 async function _runTempLayer(map, token, seq) {
@@ -3347,21 +3395,7 @@ async function _runChapter3Intro(map, token, seq) {
   // once and shared with Chapter 2's own sampling pass, whichever of the
   // two chapters reaches it first this session; _precipCandidateDistricts
   // is only the fallback if that boundary query came back empty.
-  if (!_state.districtBoundaryCandidatesComputed) {
-    _state.districtBoundaryCandidates = await _districtBoundaryCandidates(map).catch(() => []);
-    _state.districtBoundaryCandidatesComputed = true;
-  }
-  const precipCandidates = _state.districtBoundaryCandidates.length
-    ? _state.districtBoundaryCandidates
-    : _precipCandidateDistricts(_state.report, _state.observations?.features || []);
-  if (!_state.meteoblueSampledOnce) {
-    _setLayerLoadingNote(card, "Sampling Meteoblue precipitation forecasts for monitored districts…");
-    const sampled = await _sampleMeteoblueAllSteps(map, precipCandidates).catch(() => ({ weekly: new Map(), hourly: new Map() }));
-    _state.meteoblueWeekly = sampled.weekly;
-    _state.meteoblueHourly = sampled.hourly;
-    _state.meteoblueSampledOnce = true;
-    _setLayerLoadingNote(card, null);
-  }
+  const precipCandidates = await _ensurePrecipSamples(map, card);
   if (_isStale(token, seq)) return;
 
   // Precipitation VISUAL: the actual Meteoblue weekly layer, shown for
@@ -3384,15 +3418,7 @@ async function _runChapter3Intro(map, token, seq) {
   // already played would otherwise splice a second copy in every time;
   // the layer preload above this is fine to repeat (all idempotent), only
   // the scene-list build+splice needs the guard.
-  if (!_state.chapter3ScenesBuilt) {
-    const newScenes = await _buildChapter3Scenes(_state.report, _state.observations?.features || [], precipCandidates);
-    if (_isStale(token, seq)) return;
-    _state.scenes.splice(_state.index + 1, 0, ...newScenes);
-    _state.chapter3ScenesBuilt = true;
-    const cardEl = document.getElementById(CARD_ID);
-    if (cardEl) _renderDots(cardEl);
-    _queueTranslateNewCaptions(cardEl);
-  }
+  await _ensureChapter3Scenes(precipCandidates, () => _isStale(token, seq));
 }
 
 async function _runPrecipLayer(map, token, seq) {
@@ -4239,6 +4265,17 @@ function _cycleSpeed(direction) {
 // also resets THOSE, so Refresh genuinely re-fetches everything, not
 // just this function's own upfront batch.
 async function _loadAndPlay(card, forceRefresh = false) {
+  const job = _state.pendingExport || null; // a picker export belongs to this load only
+  _state.pendingExport = null;
+  try {
+    await _loadAndPlayInner(card, forceRefresh, job);
+  } finally {
+    // Never reached (no data / closed): close the waiting print window.
+    if (job && !job.taken) { try { if (job.win && !job.win.closed) job.win.close(); } catch (_) {} }
+  }
+}
+
+async function _loadAndPlayInner(card, forceRefresh = false, job = null) {
   const token = _state.runToken;
 
   if (forceRefresh) {
@@ -4326,6 +4363,18 @@ async function _loadAndPlay(card, forceRefresh = false) {
   _state.ttsEnabled = false;
   _syncMuteButton(card);
 
+  if (job) {
+    // Opened from the picker's Export: English, no language prompt, no
+    // autoplay — export, then rest paused on the first scene.
+    job.taken = true;
+    _state.lang = "en";
+    _syncLangButton(card);
+    _state.isPlaying = false;
+    _setPlayGlyph(card, false);
+    await _exportReport(job.format, job.win);
+    return;
+  }
+
   // Language prompt — shown only when this run involved a genuine fetch
   // (first-ever open, or after Refresh; useCached being true means this
   // is a plain reopen of already-loaded data, which never re-prompts —
@@ -4388,6 +4437,7 @@ function _show() {
   _injectStyles();
   const root = document.getElementById(ROOT_ID);
   if (!root) return;
+  _state.active = true;
   _state.runToken += 1; // invalidate any previous in-flight sequence
   // Pause + hide the provincial outlook via its own public hook (defined
   // in story-provincial-forecast.js) — its internal logic is untouched,
@@ -4400,7 +4450,12 @@ function _show() {
   _loadAndPlay(card);
 }
 
+// Only acts when this story was on screen. (It used to run on every
+// #storySelect change: it re-showed the story briefs under whichever story
+// had just been picked and revived the 7-Day card.)
 function _hide() {
+  if (!_state.active) return;
+  _state.active = false;
   _state.runToken += 1; // stop any in-flight async scene choreography
   _pause();
   _closePopup();
@@ -4438,6 +4493,7 @@ function _teardown() {
 // _teardown()'s existing cleanup exactly; only adds the display/visibility
 // bookkeeping _hide() also does.
 function _closeCompletely() {
+  _state.active = false;
   _teardown();
   const root = document.getElementById(ROOT_ID);
   const card = root?.querySelector(`#${CARD_ID}`);
@@ -4523,8 +4579,329 @@ function _wireModalVisibility() {
 // navigation-panel.js) to fully stop this story regardless of whether it
 // was the active one, without the cross-story restore _hide() otherwise
 // triggers on close.
+// ==========================================================================
+// Export Report (PDF / Word) — built from the briefing's own loaded data;
+// renderers in story-report-export.js. Works without playing, in English.
+// ==========================================================================
+const REPORT_STALE_DAYS = 2;
+const _r1 = (v) => Math.round(v * 10) / 10;
+// "HYDERABAD AIRPORT" -> "Hyderabad Airport" (mixed-case names are left alone)
+const _name = (n) => { const t = String(n || ""); return t === t.toUpperCase() ? t.toLowerCase().replace(/(^|[\s(\-.])([a-z])/g, (_, a, b) => a + b.toUpperCase()) : t; };
+function _reportAgeDays(report) {
+  const t = Date.parse(report?.date || "");
+  return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null;
+}
+function _listNames(list, max = 4) {
+  const a = list.slice(0, max);
+  return a.length < 2 ? (a[0] || "") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
+}
+// Everything the report states, computed once from the loaded data.
+function _reportFacts() {
+  const report = _state.report || {};
+  const stations = Object.entries(report.provinces || {}).flatMap(([province, p]) =>
+    (p.stations || []).map((st) => ({ province, name: st.name, mm: st.mm, trace: !!st.trace })));
+  const live = (_state.observations?.features || []).map((f) => f.properties || {});
+  const heat = (_state.heatwaveStations?.features || []).map((f) => f.properties || {});
+  const num = (arr, k) => arr.filter((x) => Number.isFinite(x[k]));
+  const by = (arr, k, dir) => [...num(arr, k)].sort((a, b) => dir * (a[k] - b[k]));
+  const precip = _state.topPrecipDistricts || [];
+  return {
+    report, stations,
+    age: _reportAgeDays(report),
+    provinces: _provinceRanking(report),
+    districts: _districtRankingFromDay(report).filter((d) => d.mm_total > 0),
+    wind: (report.wind || []).filter((w) => w.wind_kt).sort((a, b) => b.wind_kt - a.wind_kt)[0] || null,
+    waterHigh: report.water_level?.normal === false,
+    live,
+    liveRain: live.filter((p) => Number.isFinite(p.rain_24h) && p.rain_24h > 0).sort((a, b) => b.rain_24h - a.rain_24h),
+    liveRainKnown: num(live, "rain_24h").length,
+    heat,
+    nowHot: by(heat, "temperature", -1),
+    maxHot: by(heat, "temp_max", -1),
+    minCold: by(heat, "temp_min", 1),
+    alerts: heat.filter((p) => p.alert_level && p.alert_level !== "Normal"),
+    pmdMax: _state.maxTempRecords || [],
+    weeklyTemp: _state.weeklyTempSamples || [],
+    precip,
+    wetForecast: precip.filter((d) => d.mm > 0),
+    heavy: precip.filter((d) => d.mm >= 25),
+  };
+}
+const _dayBars = (series, key, unit) => (series || []).map((p, i) => ({
+  name: `${_DAY_WISE_LABELS[i] || `+${i}d`}${p.date ? ` · ${p.date}` : ""}`, value: `${p[key]} ${unit}`, n: Math.max(0, Number(p[key]) || 0),
+}));
+
+function _reportSections(shots) {
+  const f = _reportFacts();
+  const stale = f.age != null && f.age >= REPORT_STALE_DAYS;
+  const reportDay = f.report.date || "the latest report";
+  const wetProv = f.provinces.filter((p) => p.mm > 0);
+  const place = (p) => `${p.name}${p.province ? ` (${p.province})` : ""}`;
+
+  const rainLine = f.report.total_mm > 0
+    ? `PMD's rainfall report of ${reportDay} logged ${f.report.total_mm} mm in total, led by ${f.districts[0] ? `${f.districts[0].name} (${f.districts[0].mm_total} mm)` : _listNames(wetProv.map((p) => p.name), 2)}.`
+    : `PMD's rainfall report of ${reportDay} logged no measurable rain.`;
+  const liveLine = !f.liveRainKnown ? "" : f.liveRain.length
+    ? ` In the live station feed, ${f.liveRain.length} of the ${f.liveRainKnown} stations that sent a rain reading ${f.liveRain.length === 1 ? "reports" : "report"} rain in the last 24 hours, most at ${_name(f.liveRain[0].name)} (${f.liveRain[0].rain_24h} mm).`
+    : ` In the live station feed, none of the ${f.liveRainKnown} stations that sent a rain reading reports rain in the last 24 hours.`;
+  const tempLine = f.nowHot.length
+    ? `The warmest monitored city now is ${place(f.nowHot[0])} at ${f.nowHot[0].temperature}°C; ${f.alerts.length ? `${f.alerts.length} station${f.alerts.length === 1 ? " is" : "s are"} under a heat alert` : "no station is under a heat alert"}.`
+    : "Live city temperatures are unavailable right now.";
+  const nextLine = !f.precip.length
+    ? "The rain forecast could not be sampled for this report."
+    : f.wetForecast.length
+      ? `Today's forecast shows rain in ${f.wetForecast.length} of ${f.precip.length} sampled districts, most at ${place(f.wetForecast[0])} (at least ${f.wetForecast[0].mm} mm).${f.heavy.length ? ` ${f.heavy.length} reach the heavy-rain mark of 25 mm.` : " None reaches the heavy-rain mark of 25 mm."}`
+      : `Today's forecast shows no rain in any of the ${f.precip.length} sampled districts.`;
+
+  const out = [{ glance: {
+    bottomLine: `${rainLine}${liveLine} ${tempLine} ${nextLine}`,
+    kpis: [
+      { value: `${f.report.total_mm ?? "n/a"} mm`, label: `total rain in the PMD report of ${reportDay}` },
+      { value: f.liveRainKnown ? `${f.liveRain.length} of ${f.liveRainKnown}` : "n/a", label: "live stations with rain in the last 24 h (of those that sent a reading)" },
+      { value: f.nowHot.length ? `${f.nowHot[0].temperature}°C` : "n/a", label: f.nowHot.length ? `warmest city now: ${f.nowHot[0].name}` : "warmest city now" },
+      { value: f.minCold.length ? `${f.minCold[0].temp_min}°C` : "n/a", label: f.minCold.length ? `today's lowest: ${f.minCold[0].name}` : "today's lowest" },
+      { value: f.heat.length ? String(f.alerts.length) : "n/a", label: "cities under a heat alert" },
+      { value: f.precip.length ? `${f.wetForecast.length} of ${f.precip.length}` : "n/a", label: "districts with rain forecast today" },
+    ],
+    chapters: [
+      { n: 1, name: "Rainfall", text: `${rainLine}${liveLine}` },
+      { n: 2, name: "Temperature", text: tempLine },
+      { n: 3, name: "Rain Forecast", text: nextLine },
+    ],
+  } }];
+  if (stale) out.push({ callout: { tag: "DATA AGE", color: "#f59e0b", text: `The newest PMD daily rainfall report available is dated ${reportDay}, ${f.age} days ago. Its figures describe the 24 hours to that date, not today. The live station figures in this report are current.` } });
+
+  // ---- Chapter 1
+  out.push({ chapter: { n: 1, name: "Rainfall" } });
+  if (shots.ir) out.push({ image: shots.ir });
+  out.push({ subheading: `Rain in the 24 hours to ${reportDay}`, body: f.report.total_mm > 0
+    ? `${rainLine} ${wetProv.length} of ${f.provinces.length} provinces and regions recorded rain.${(f.report.nil_provinces || []).length ? ` No rain was recorded in ${_listNames(f.report.nil_provinces, 8)}.` : ""}`
+    : rainLine });
+  out.push({ kpis: [
+    { value: `${f.report.total_mm ?? "n/a"} mm`, label: "total, all stations" },
+    { value: `${wetProv.length} of ${f.provinces.length}`, label: "provinces / regions with rain" },
+    { value: f.districts[0] ? `${f.districts[0].mm_total} mm` : "0 mm", label: f.districts[0] ? `wettest: ${f.districts[0].name}` : "wettest district" },
+    { value: String((f.report.trace_stations || []).length), label: "stations with only a trace" },
+  ] });
+  if (wetProv.length) out.push({ bars: { label: "Rainfall by province", rows: f.provinces.map((p) => ({ name: p.name, value: p.mm > 0 ? `${p.mm} mm` : "none", n: p.mm })) } });
+  if (f.districts.length) out.push({ bars: { label: "Wettest districts (highest gauge in each)", rows: f.districts.slice(0, 12).map((d) => ({ name: `${d.name} (${d.province})`, value: `${d.mm_total} mm`, n: d.mm_total })) } });
+  if (f.stations.length) out.push({ table: { title: `All stations with rain, report of ${reportDay}`, head: ["Province", "Station", "Rainfall"],
+    rows: [...f.stations].sort((a, b) => (b.mm || 0) - (a.mm || 0)).map((st) => [st.province, st.name, st.trace ? "Trace" : `${st.mm} mm`]) } });
+  out.push({ bullets: [
+    f.wind ? `Strongest wind: ${f.wind.station}, ${f.wind.wind_kt} knots (about ${Math.round(f.wind.wind_kt * 1.852)} km/h).` : "No strong wind was listed in the report.",
+    f.waterHigh ? "Water levels above normal were reported at monitored points; see the National Flood Watch briefing." : "Water levels at monitored points were reported normal.",
+  ] });
+  out.push({ subheading: "Rain at live stations, last 24 hours", body: f.liveRainKnown ? liveLine.trim() : "The live station feed is unavailable right now." });
+  if (f.liveRain.length) out.push({ table: { title: "Live NWFC stations reporting rain", head: ["Station", "Rain, last 24 h", "Weather now", "Observed"],
+    rows: f.liveRain.slice(0, 25).map((p) => [_name(p.name), `${p.rain_24h} mm`, p.weather || "n/a", p.obs_time || "n/a"]) } });
+
+  // ---- Chapter 2
+  out.push({ chapter: { n: 2, name: "Temperature" } });
+  if (shots.temp) out.push({ image: shots.temp });
+  out.push({ subheading: "Cities now", body: tempLine });
+  if (f.heat.length) {
+    out.push({ kpis: [
+      { value: f.nowHot.length ? `${f.nowHot[0].temperature}°C` : "n/a", label: f.nowHot.length ? `warmest now: ${f.nowHot[0].name}` : "warmest now" },
+      { value: f.nowHot.length ? `${f.nowHot[f.nowHot.length - 1].temperature}°C` : "n/a", label: f.nowHot.length ? `coolest now: ${f.nowHot[f.nowHot.length - 1].name}` : "coolest now" },
+      { value: f.maxHot.length ? `${f.maxHot[0].temp_max}°C` : "n/a", label: f.maxHot.length ? `today's highest: ${f.maxHot[0].name}` : "today's highest" },
+      { value: f.minCold.length ? `${f.minCold[0].temp_min}°C` : "n/a", label: f.minCold.length ? `today's lowest: ${f.minCold[0].name}` : "today's lowest" },
+    ] });
+    out.push({ bars: { label: "Warmest monitored cities now", rows: f.nowHot.slice(0, 10).map((p) => ({ name: place(p), value: `${p.temperature} °C`, n: Math.max(0, p.temperature) })) } });
+    out.push({ table: { title: "All monitored cities, warmest first", head: ["City", "Province", "Now", "Feels like", "High / low today", "Humidity", "Heat alert"],
+      rows: f.nowHot.map((p) => [p.name || "", p.province || "", `${p.temperature}°C`, Number.isFinite(p.apparent_temperature) ? `${p.apparent_temperature}°C` : "n/a",
+        Number.isFinite(p.temp_max) && Number.isFinite(p.temp_min) ? `${p.temp_max}° / ${p.temp_min}°` : "n/a", Number.isFinite(p.humidity) ? `${p.humidity}%` : "n/a", p.alert_level || "n/a"]) } });
+  }
+  if (f.pmdMax.length) out.push({ subheading: "Highest PMD station temperatures", table: { title: "PMD daily maximum temperatures, highest first", head: ["Station", "Maximum", "Date"],
+    rows: f.pmdMax.slice(0, 12).map((r) => [_name(r.name), `${r.temp}°C`, r.date || "n/a"]) } });
+  out.push({ subheading: "8-day temperature outlook" });
+  if (f.weeklyTemp.length) {
+    out.push({ body: `The warmest of ${f.weeklyTemp.length} sampled districts in today's Meteoblue forecast is ${place(f.weeklyTemp[0])}, at least ${f.weeklyTemp[0].tempC}°C.` });
+    out.push({ bars: { label: "Warmest districts in today's forecast", rows: f.weeklyTemp.slice(0, 10).map((d) => ({ name: place(d), value: `${d.tempC} °C`, n: Math.max(0, d.tempC) })) } });
+    out.push({ bars: { label: `${f.weeklyTemp[0].name}: the next 8 days`, rows: _dayBars(f.weeklyTemp[0].weeklySeries, "tempC", "°C") } });
+  } else out.push({ body: "The Meteoblue temperature forecast could not be sampled for this report." });
+
+  // ---- Chapter 3
+  out.push({ chapter: { n: 3, name: "Rain Forecast" } });
+  if (shots.precip) out.push({ image: shots.precip });
+  out.push({ subheading: "Today's rain forecast", body: nextLine });
+  if (f.precip.length) {
+    out.push({ kpis: [
+      { value: String(f.precip.length), label: "districts sampled" },
+      { value: String(f.wetForecast.length), label: "with rain forecast today" },
+      { value: String(f.heavy.length), label: "reaching 25 mm (heavy rain)" },
+      { value: f.wetForecast[0] ? `≥ ${f.wetForecast[0].mm} mm` : "0 mm", label: f.wetForecast[0] ? `highest: ${f.wetForecast[0].name}` : "highest forecast" },
+    ] });
+    if (f.wetForecast.length) {
+      out.push({ bars: { label: "Districts with the most rain forecast today", rows: f.wetForecast.slice(0, 12).map((d) => ({ name: place(d), value: `${d.mm} ${d.unit}`, n: d.mm })) } });
+      const groups = _groupPrecipByProvince(f.wetForecast);
+      out.push({ bars: { label: "Average over each province's wet districts", rows: groups.map((g) => ({ name: `${g.province || "Unnamed area"} (${g.districts.length})`, value: `${_r1(g.avgMm)} mm`, n: g.avgMm })) } });
+      out.push({ bars: { label: `${f.wetForecast[0].name}: the next 8 days`, rows: _dayBars(f.wetForecast[0].weeklySeries, "mm", "mm") } });
+    } else {
+      // Dry today: does rain appear anywhere later in the 8 days?
+      const later = f.precip.map((d) => ({ d, best: (d.weeklySeries || []).reduce((a, x) => (x.mm > (a?.mm ?? 0) ? x : a), null) })).filter((x) => x.best).sort((a, b) => b.best.mm - a.best.mm);
+      out.push({ body: later.length
+        ? `Later in the 8 days, rain is forecast in ${later.length} of the ${f.precip.length} sampled districts, most at ${place(later[0].d)} (at least ${later[0].best.mm} mm${later[0].best.date ? `, ${later[0].best.date}` : ""}).`
+        : `No rain is forecast in any of these districts in the following days either.` });
+      if (later.length) out.push({ bars: { label: "Wettest single day ahead, by district", rows: later.slice(0, 10).map((x) => ({ name: place(x.d), value: `${x.best.mm} mm${x.best.date ? ` · ${x.best.date}` : ""}`, n: x.best.mm })) } });
+    }
+    out.push({ body: "Forecast values are read from the Meteoblue map within about 20 km of each district's centre. The map shows ranges, so each value is the lower end of its range: read it as \"at least\"." });
+  }
+
+  // ---- What it means
+  out.push({ heading: "What it means" });
+  out.push({ bullets: [
+    f.heavy.length ? `Heavy rain: ${_listNames(f.heavy.map((d) => d.name))} reach 25 mm in today's forecast. Watch low-lying areas and streams.` : f.precip.length ? "Heavy rain: none forecast today in the sampled districts." : "Heavy rain: the forecast could not be sampled; check PMD's bulletin.",
+    f.alerts.length ? `Heat: ${_listNames(f.alerts.map((p) => `${p.name} (${p.alert_level})`))} under a heat alert. Limit outdoor work in the afternoon and drink water often.` : f.heat.length ? "Heat: no monitored city is under a heat alert." : "Heat: live city data are unavailable.",
+    f.waterHigh ? "Rivers: above-normal levels were reported; open the National Flood Watch briefing." : "Rivers: water levels were reported normal in the PMD rainfall report.",
+    "For official warnings, follow PMD. The 7-Day Weather Outlook report lists the warnings in force.",
+  ] });
+  return out;
+}
+
+function _reportMeta() {
+  return {
+    title: "Dynamic Weather Report",
+    subtitle: "Rainfall, temperature and the rain forecast for Pakistan",
+    strip: [
+      { label: "Issued", value: new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+      { label: "PMD rainfall report", value: _state.report?.date || "n/a" },
+      { label: "Live data", value: "PMD stations · city weather · Meteoblue" },
+      { label: "Reference", value: `NDMA/NCOP/DWR/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` },
+    ],
+    glossary: [
+      { term: "mm of rain", def: "Depth of water. 1 mm is one litre of water on every square metre of ground." },
+      { term: "Trace", def: "Rain too light to measure." },
+      { term: "Heavy rain (25 mm)", def: "The daily amount this briefing uses to flag heavy rain, when low-lying areas need watching." },
+      { term: "NWFC", def: "PMD's National Weather Forecasting Centre, which runs the station network and the daily rainfall report." },
+      { term: "Satellite infrared", def: "A picture of cloud-top temperature. Bright, cold cloud tops are usually taller and more likely to bring rain." },
+      { term: "Feels like", def: "How warm the air feels to the body once humidity and wind are counted." },
+      { term: "Heat alert", def: "The briefing's rating for each city: Normal, Elevated, High, Severe or Extreme." },
+      { term: "Sampled district", def: "A district whose forecast value could be read from the Meteoblue map layer." },
+      { term: "Knot", def: "Wind speed unit; 1 knot is about 1.85 km/h." },
+    ],
+    footer: "Sources: PMD NWFC daily rainfall report, station observations and daily maximum temperatures; NCOP heatwave monitoring (Open-Meteo); Meteoblue forecast layers; DWD satellite infrared; PMD 2 m temperature layer.",
+  };
+}
+
+// Activate one of the briefing's own layers, settle it on `frame`
+// ("first" | "last") at full view, and capture it.
+async function _reportLayerShot(map, itemKey, title, frame, token, seq) {
+  const ready = await _activateTemporalLayer(map, itemKey, title, token, seq, { maxAttempts: 130 }); // ~40 s
+  if (!ready || _isStale(token, seq)) return null;
+  const slider = document.getElementById("slider1");
+  if (slider) {
+    slider.value = frame === "last" ? slider.max : "0";
+    try { slider.dispatchEvent(new Event("input", { bubbles: true })); } catch (_) {}
+    _hideTempSlider();
+  }
+  _setActiveLayerVisibility(map, true);
+  await _setActiveLayerOpacity(map, 0.8, 50);
+  map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+  const src = await captureMap(map, { settleMs: 900, timeoutMs: 12000 });
+  const t = window.getCurrentTemporalState ? window.getCurrentTemporalState() : null;
+  return { src, date: t?.currentEntry?.date || t?.date || "" };
+}
+
+let _exporting = false;
+async function _exportReport(format, win) {
+  const card = document.getElementById(CARD_ID);
+  if (_exporting || !_state.report || !_state.scenes.length || card?.querySelector('[class$="-prompt"]')) {
+    try { if (win && !win.closed) win.close(); } catch (_) {}
+    notifyCard(card, _exporting ? "An export is already running."
+      : card?.querySelector('[class$="-prompt"]') ? "Choose a narration language first, then export." : "Briefing data is still loading — try again in a moment.");
+    return;
+  }
+  _exporting = true;
+  const lang = _state.lang;
+  _state.lang = "en"; // reports are always in English
+  const map = window.ncop_map;
+  const cam = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+  _pause();
+  _closePopup();
+  try { hideHeatwaveModal(); } catch (_) {}
+  _state.runToken += 1; // stops any running scene choreography
+  const token = _state.runToken;
+  const seq = ++_state.sceneSeq;
+  const here = _state.scenes[_state.index];
+  const check = () => { if (token !== _state.runToken) throw new Error("briefing closed during export"); };
+  const SHOTS = [
+    { key: "ir", item: RADAR_ITEM_KEY, title: "DWD Satellite Infrared", label: "Map: satellite infrared", frame: "last", caption: (d) => `Satellite infrared cloud picture${d ? `, ${d}` : ", latest frame"}. Shown for cloud cover; rainfall amounts come from the stations.` },
+    { key: "temp", item: TEMP_ITEM_KEY, title: "2m Temperature", label: "Map: 2 m temperature", frame: "first", caption: (d) => `Air temperature at 2 metres, PMD prediction layer${d ? `, ${d}` : ""}.` },
+    { key: "precip", item: METEOBLUE_WEEKLY_ITEM_KEY, title: "Weekly Precipitation", label: "Map: rain forecast", frame: "first", caption: (d) => `Meteoblue daily rain forecast${d ? `, ${d}` : ", first day"}.` },
+  ];
+  try {
+    if (map) { disableCinematicAtmosphere(map); disableRainEffect(map); }
+    await runStoryExport({
+      format, win, card, slug: "dynamic-weather-report", meta: _reportMeta(),
+      steps: [{ key: "data", label: "Station data" }, { key: "sample", label: "Forecast values by district" }, ...SHOTS.map((x) => ({ key: x.key, label: x.label }))],
+      build: async ({ run, mark }) => {
+        run("data"); mark("data");
+        run("sample");
+        if (map) {
+          try {
+            await _deactivateTemporalLayer(map, _state.activeLayerKey);
+            _clearDistrictOverlay();
+            map.jumpTo({ center: PAKISTAN_CENTER, zoom: 4.8, pitch: 0, bearing: 0 }); // the framing the sampling needs
+            await waitForMapIdle(map);
+            check();
+            await _ensureTempSamples(map, null);
+            check();
+            const candidates = await _ensurePrecipSamples(map, null);
+            check();
+            _ensureWeeklyTempScene();
+            await _ensureChapter3Scenes(candidates, () => token !== _state.runToken);
+          } catch (e) {
+            check();
+            console.warn("[dynamic-weather] report sampling failed", e);
+          }
+        }
+        mark("sample", _state.topPrecipDistricts?.length || _state.weeklyTempSamples?.length ? "ok" : "warn");
+        const shots = {};
+        for (const sh of SHOTS) {
+          run(sh.key);
+          check();
+          let shot = null;
+          if (map) {
+            try { shot = await _reportLayerShot(map, sh.item, sh.title, sh.frame, token, seq); } catch (e) { console.warn("[dynamic-weather] report capture failed:", sh.key, e); }
+            check();
+            await _deactivateTemporalLayer(map, sh.item);
+          }
+          shots[sh.key] = { src: shot?.src || null, caption: sh.caption(shot?.date || "") };
+          mark(sh.key, shot?.src ? "ok" : "warn");
+        }
+        check();
+        return _reportSections(shots);
+      },
+    });
+  } finally {
+    _state.lang = lang;
+    _exporting = false;
+    // Nothing could be sampled (map still loading, offline): let the next
+    // visit to the chapters try again instead of caching "no data".
+    if (!_state.districtBoundaryCandidates?.length) _state.districtBoundaryCandidatesComputed = false;
+    if (!_state.weeklyTempSamples?.length) { _state.meteoblueTempSampledOnce = false; _state.chapter2WeeklyScenesBuilt = false; _state.scenes = _state.scenes.filter((x) => x.kind !== "temp-weekly"); }
+    if (!_state.topPrecipDistricts?.length) { _state.meteoblueSampledOnce = false; _state.chapter3ScenesBuilt = false; _state.scenes = _state.scenes.filter((x) => !String(x.kind).startsWith("precip-")); }
+    if (cam && map) { try { map.jumpTo(cam); } catch (_) {} }
+    if (_state.active && token === _state.runToken && _state.scenes.length) {
+      _setPlayGlyph(card, false);
+      _gotoScene(Math.max(0, _state.scenes.indexOf(here))); // back to where the operator was, paused
+    }
+  }
+}
+
+// Story picker's Export: open this briefing in export-only mode.
+function _exportFromPicker(format, win) {
+  const sel = document.getElementById(SELECT_ID);
+  if (!sel || _exporting) { try { if (win && !win.closed) win.close(); } catch (_) {} return false; }
+  _state.pendingExport = { format, win };
+  sel.value = SENTINEL;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 window.ncopDynamicWeather = {
   closeAll: _closeCompletely,
+  exportReport: _exportFromPicker,
 };
 
 export function initStoryDynamicWeather() {

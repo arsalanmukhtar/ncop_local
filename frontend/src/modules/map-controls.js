@@ -243,9 +243,9 @@ export class StoryManager {
     },
     {
       value: "__air_quality_watch__", icon: "🌫️", title: "National Air Quality Watch", theme: "Air quality", color: "#a78bfa",
-      basis: "Fine-particle (PM2.5) pollution over the past week and the next 72 hours, judged against WHO and Pak-NEQS limits.",
+      basis: "How unhealthy the air is: the AQI over the past week, right now, and the coming days, with the PM2.5 evidence behind it.",
       data: "Hawanama (PAQI) PM2.5 estimate, stations & forecast · WAQI stations · Open-Meteo weather · VIIRS crop fires.",
-      shows: "Worst cities and days, why air is bad (weather, crop burning, emissions), forecast peaks and health advice.",
+      shows: "AQI by day and city, why the air is bad (weather, crop burning, emissions), an AQI outlook and health advice.",
     },
     {
       value: "__flood_watch__", icon: "🌊", title: "National Flood Watch", theme: "Floods", color: "#14b8a6",
@@ -255,9 +255,9 @@ export class StoryManager {
     },
     {
       value: "__food_security_watch__", icon: "🌾", title: "National Food Security & Agriculture Watch", theme: "Food security", color: "#f59e0b",
-      basis: "Who is going hungry and where, how the harvests went, what food costs, and what the next one to two months hold.",
-      data: "IPC food-insecurity analysis · PBS crop production · WFP market prices (5 cities) · bias-corrected GEFS outlook · FAO, World Bank & IPC research.",
-      shows: "Hotspot districts, harvests vs average, prices & purchasing power, an indicative price path and an operational assessment with actions.",
+      basis: "Which districts are at Watch, Warning or Alert, why, what may come next, and what to do.",
+      data: "IPC · FEWS NET · WFP prices (5 cities) · PBS and USDA crops · CHIRPS rain, NASA soil moisture and MODIS crops · NOAA El Niño · ACLED · World Bank/FAO · bias-corrected GEFS.",
+      shows: "District warning levels, hunger counts with their dates, wheat supply, prices & wages, water, a tested flour outlook, past performance and actions with owners.",
     },
   ];
 
@@ -266,6 +266,8 @@ export class StoryManager {
   // Briefings that can be exported straight from the picker (story value ->
   // the module's window hook exposing exportReport(format, win)).
   static EXPORT_HOOKS = {
+    __provincial_forecast__: "ncopProvincialForecast",
+    __dynamic_weather__: "ncopDynamicWeather",
     __flood_watch__: "ncopFloodWatch",
     __air_quality_watch__: "ncopAirQualityWatch",
     __food_security_watch__: "ncopFoodSecurityWatch",

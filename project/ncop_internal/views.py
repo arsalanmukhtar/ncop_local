@@ -9865,7 +9865,8 @@ def _parse_nwfc_rainfall_pdf(pdf_bytes, report_date, source_url):
                             })
 
                     elif section == "water_level":
-                        if low == "normal water level":
+                        # "NORMAL" / "NORMAL WATER LEVEL" with no reading is a statement, not a station row.
+                        if low == "normal water level" or (low.startswith("normal") and not any(rest)):
                             continue
                         water_level_normal = False
                         water_level.append({

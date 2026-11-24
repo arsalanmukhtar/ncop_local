@@ -1,0 +1,12 @@
+# /etc/systemd/system/foodsec-eo.timer
+# Refreshes the district drought indicators on the 5th and 20th of every month.
+[Unit]
+Description=NCOP food-security drought indicators refresh
+
+[Timer]
+OnCalendar=*-*-05,20 03:15:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

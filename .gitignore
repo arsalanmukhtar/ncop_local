@@ -260,3 +260,13 @@ project/media/iwmi_flood_cache/
 # NOAA GEFS outlook runs (gefs_client.py): rendered frames + values per run.
 project/media/gefs/
 project/media/gefs_backtest/
+
+# Air Quality Watch digest snapshots (rebuilt at runtime, newest 60 kept)
+project/media/aqi_snapshots/
+
+# Food Security early-warning runtime stores (foodsec_sources / foodsec_eo / foodsec_ews),
+# rebuilt by `manage.py foodsec_eo --backfill` and the digest build
+project/media/foodsec/sources/
+project/media/foodsec/eo_v1.npz
+project/media/foodsec/issues.json
+project/media/foodsec/backtest.json

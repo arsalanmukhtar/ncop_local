@@ -16,6 +16,9 @@
 #            (kg of wheat flour per daily wage) and an INDICATIVE 1-3 month
 #            path: the median seasonal month-to-month movement of the last
 #            5 years applied to the latest price, with a 10-90 % range.
+#   ews      early-warning layer: district levels, two-line IPC count, water,
+#            supply, shocks, households, price outlook with its test results,
+#            data checks, source health, actions   [foodsec_ews / foodsec_sources]
 #   outlook  next ~30 days by province from the bias-corrected GEFS district
 #            outlook vs the 2001-2025 normals (gefs_calibration model), and
 #            the crop calendar for the coming two months.
@@ -25,8 +28,6 @@
 # requests read the cached digest (202 while the first build runs).
 # ---------------------------------------------------------------------------
 
-import csv
-import io
 import json
 import logging
 import os
@@ -37,14 +38,12 @@ import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-import requests
 from django.conf import settings
 from django.test import RequestFactory
 
 logger = logging.getLogger(__name__)
 
 TTL_S = 6 * 3600
-HDX_PACKAGE = "https://data.humdata.org/api/3/action/package_show?id=wfp-food-prices-for-pakistan"
 STAPLES = [  # (PBS crop id, name, unit)
     (4, "Wheat", "000 t"), (2, "Rice", "000 t"), (1, "Maize", "000 t"),
     (3, "Sugarcane", "000 t"), (5, "Cotton", "000 bales"),
@@ -233,6 +232,16 @@ def _ipc_section(lookup):
 
 
 # ------------------------------------------------------------------- crops
+def harvest_label(crop, crop_year):
+    """PBS crop year ("2024-25") -> when it was actually harvested. Crop years and
+    USDA marketing years differ, so the bare label is never used to join them."""
+    m = re.match(r"(\d{4})", str(crop_year))
+    if not m:
+        return None
+    y = int(m.group(1))
+    return {"Wheat": f"spring {y + 1}", "Sugarcane": f"winter {y}-{str(y + 1)[2:]}"}.get(crop, f"autumn {y}")
+
+
 def _crops_section(lookup):
     from .views import CropGeoJSONAPIView, CropMapAPIView, CropYearlyAPIView
 
@@ -249,6 +258,7 @@ def _crops_section(lookup):
         avg5 = statistics.mean(s["production"] for s in series[-6:-1]) if len(series) >= 6 else None
         latest_year = latest_year or last["year"]
         staples.append({"id": cid, "name": name, "unit": unit, "series": series[-20:], "latest": last, "prev": prev,
+                        "source_crop_label": last["year"], "harvest": harvest_label(name, last["year"]),
                         "avg5": avg5,
                         "change_pct": round((last["production"] / prev["production"] - 1) * 100, 1) if prev else None,
                         "vs_avg5_pct": round((last["production"] / avg5 - 1) * 100, 1) if avg5 else None})
@@ -288,24 +298,12 @@ def _month_add(ym, n):
     return (k // 12, k % 12 + 1)
 
 
-def _prices_section():
-    s = requests.Session()
-    s.headers["User-Agent"] = "NCOP/1.0 (food security watch)"
-    pk = s.get(HDX_PACKAGE, timeout=60).json()["result"]
-    url = next(r["url"] for r in pk["resources"] if "Food Prices" in r.get("name", ""))
-    text = s.get(url, timeout=120).text
-    rows = [r for r in csv.DictReader(io.StringIO(text)) if r.get("date", "")[:1].isdigit()
-            and r.get("pricetype") == "Retail" and r.get("commodity") in PRICE_ITEMS]
-    markets = {}
-    data = {}  # commodity -> {(y,m): {market: price}}
-    for r in rows:
-        ym = (int(r["date"][:4]), int(r["date"][5:7]))
-        p = _num(r["price"])
-        if p is None:
-            continue
-        data.setdefault(r["commodity"], {}).setdefault(ym, {})[r["market"]] = p
-        markets[r["market"]] = {"market": r["market"], "province": r["admin1"].title(),
-                                "lon": _num(r["longitude"]), "lat": _num(r["latitude"])}
+def _prices_section(wfp):
+    """wfp: the compact WFP document of foodsec_sources."""
+    d = wfp["data"]
+    markets = d["markets"]
+    # commodity -> {(y,m): {market: price}}
+    data = {c: {(int(m[:4]), int(m[5:])): v for m, v in by.items()} for c, by in d["prices"].items()}
     latest = max(ym for c in data.values() for ym in c)
     items = []
     for name in PRICE_ITEMS:
@@ -342,11 +340,8 @@ def _prices_section():
                       "yoy_pct": round((nat[latest] / yoy - 1) * 100, 1) if yoy else None,
                       "m3_pct": round((nat[latest] / m3 - 1) * 100, 1) if m3 else None,
                       "series": series, "outlook": path})
-    units = {}
-    for r in rows:
-        units.setdefault(r["commodity"], r["unit"])
     for it in items:
-        it["unit"] = f"PKR/{units.get(it['commodity'], 'unit')}"
+        it["unit"] = f"PKR/{(d['units'].get(it['commodity']) or ['unit'])[0]}"
     # Purchasing power: kg of wheat flour bought by one day's unskilled wage.
     tot = None
     w, f = data.get(WAGE), data.get("Wheat flour")
@@ -423,18 +418,41 @@ def _outlook_section():
     return out
 
 
+def _ews_section(docs):
+    from . import foodsec_ews as ews
+    from . import gefs_districts as gd
+
+    meta = gd._load_index()[1] if gd.ensure_index(block=False) else []
+    return ews.build(docs, meta)
+
+
+def _use_tested_outlook(doc):
+    """The flour outlook comes from the tested model; other items keep the seasonal baseline."""
+    po = (doc.get("ews") or {}).get("price_outlook")
+    if not po:
+        return
+    for it in (doc.get("prices") or {}).get("items", []):
+        if it["commodity"] == po["item"] and po["month"] == doc["prices"]["latest_month"]:
+            it["baseline"] = it["outlook"]
+            it["outlook"] = po["path"]
+
+
 # ------------------------------------------------------------------ build
 def build():
     t0 = time.time()
     lookup = _district_lookup()
     doc = {"generated_at": datetime.now(timezone.utc).isoformat()}
+    from . import foodsec_sources as fs
+    docs = fs.fetch_all()
     for key, fn in (("ipc", lambda: _ipc_section(lookup)), ("crops", lambda: _crops_section(lookup)),
-                    ("prices", _prices_section), ("outlook", _outlook_section)):
+                    ("prices", lambda: _prices_section(docs["wfp"])), ("outlook", _outlook_section),
+                    ("ews", lambda: _ews_section(docs))):
         try:
             doc[key] = fn()
         except Exception:
             logger.warning("foodsec: section %s failed", key, exc_info=True)
             doc[key] = None
+    _use_tested_outlook(doc)
     doc["build_seconds"] = round(time.time() - t0, 1)
     tmp = _path() + f".tmp{uuid.uuid4().hex[:6]}"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -516,6 +534,6 @@ class FoodSecurityWatchView(APIView):
         except Exception:
             logger.exception("foodsec: watch failed")
             return JsonResponse({"error": "data unavailable"}, status=503)
-        resp = JsonResponse(doc, json_dumps_params={"ensure_ascii": False})
+        resp = JsonResponse(doc, json_dumps_params={"ensure_ascii": False, "separators": (",", ":")})
         resp["Cache-Control"] = "public, max-age=600"
         return resp

@@ -244,8 +244,10 @@ class WatchDigestTests(_TmpMediaTest):
 
         with mock.patch.object(hc, "tile_dates", return_value={"dates": dates}),              mock.patch.object(hc, "stations_daily_geojson", side_effect=lambda d: {"features": daily[d]}),              mock.patch.object(hc, "stations_geojson", return_value=live),              mock.patch.object(hc, "cached_json", side_effect=fake_cached), \
              mock.patch.object(hc, "_drivers", return_value={"dates": dates}), \
+             mock.patch("ncop_internal.aqi_watch.build", return_value={"observed": {}}) as aqi, \
              mock.patch.object(hc, "prefetch_estimate_tiles", return_value=3) as prefetch:
             d = hc.air_quality_watch(days=3)
+        aqi.assert_called_once_with(dates)
         prefetch.assert_called_once_with(dates)
         self.assertEqual(d["errors"], {})
         pw = d["past_week"]
