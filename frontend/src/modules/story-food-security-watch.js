@@ -964,9 +964,9 @@ function _scheduleAdvance(card, token, seq, caption, minDwellMs = 0) {
     if (_isStale(token, seq) || !_state.isPlaying) return;
     const speaking = _state.ttsEnabled && window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
     if (speaking) { _state.tickTimer = setTimeout(advance, 1000); return; }
-    // Stop at the end instead of looping back to the intro.
-    const next = _state.index + _state.direction;
-    if (next >= _state.scenes.length || next < 0) { _pause(); return; }
+    // Loop back to the intro once the last scene finishes playing.
+    const n = _state.scenes.length;
+    const next = ((_state.index + _state.direction) % n + n) % n;
     _gotoScene(next);
   };
   _state.tickTimer = setTimeout(advance, dwell);
