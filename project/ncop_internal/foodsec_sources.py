@@ -383,7 +383,7 @@ def _undernourished(prev):
 def _reservoirs(prev):
     """Tarbela / Mangla level today, from the Flood Forecasting Division feed NCOP already uses."""
     j = _get("http://172.18.7.21:8000/get-ffd-waterlevels/", timeout=25, tries=2).json()
-    lims = {"Tarbela": (1402.0, 1550.0), "Mangla": (1050.0, 1242.0)}     # dead and maximum conservation level, ft
+    lims = {"Tarbela": (1380.0, 1550.0), "Mangla": (1040.0, 1242.0)}     # dead and maximum conservation level, ft (FFD bulletin)
     out, when = {}, ""
     for ft in j["features"]:
         p = ft["properties"]

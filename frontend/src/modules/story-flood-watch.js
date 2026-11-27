@@ -53,7 +53,8 @@ import {
   orbitAroundPoint,
   flyAlongPath,
 } from "./story-cinematic-engine.js";
-import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard } from "./story-report-export.js";
+import { mountExportButton, runStoryExport, captureMap, scenesToSections, notifyCard, pictureToJpeg } from "./story-report-export.js";
+import { FLOOD_LEVELS as EWS_LEVELS, floodHeadline, floodReportMeta, floodReportSections, leadWave, reliabilityChart, cusecs } from "./story-flood-report.js";
 
 const MODAL_ID  = "story-modal";
 const ROOT_ID   = "story-root";
@@ -74,6 +75,8 @@ const FH_GAUGES_KEY   = "iwmi_floodhub_gauges";
 const FH_INUND_KEY    = "iwmi_floodhub_inundation";
 const STORY_TOGGLES   = [FFD_KEY, GLOFAS_PTS_KEY, FH_GAUGES_KEY, FH_INUND_KEY];
 const WATCH_URL = "/api/iwmi/watch/?iso3=PAK";
+const EWS_URL = "/api/flood/watch/";
+const EWS_WAIT_MS = 30000;             // first build on a cold server; the briefing starts without it after that
 const FH_DISCHARGE_URL = (id) => `/api/iwmi/floodhub/gauges/${encodeURIComponent(id)}/discharge/`;
 // Vite-bundled static asset (same pattern the Dynamic Weather Report used).
 const FLOOD_ROUTING_MAP_SRC = new URL("../assets/images/ffd_flood_routing/flood_routing_map.png", import.meta.url).href;
@@ -1392,12 +1395,16 @@ function _headroom(p) {
   return Number.isFinite(p?.headroom_ratio) ? p.headroom_ratio : null;
 }
 
-// Combined watch level: 0 Normal .. 4 Severe (max over the three systems).
+// 0 Normal .. 4 Severe: the early-warning document's own result (flood_ews.py).
+// Without it, the highest of the three systems, where a stale GloFAS run and
+// unreliable points do not count.
 export function watchLevel(stats, digest) {
+  const H = floodHeadline(digest?.ews);
+  if (H) return H.n.level;
   let lvl = 0;
   const ffdTop = Math.max(-1, ...(stats?.alerts || []).map((w) => _tier(w.properties?.status).rank));
   if (ffdTop >= 1) lvl = Math.max(lvl, ffdTop >= 4 ? 4 : ffdTop >= 3 ? 3 : ffdTop >= 2 ? 2 : 1);
-  const gc = digest?.glofas?.counts || {};
+  const gc = digest?.glofas?.run_stale ? {} : digest?.glofas?.counts || {};
   if (gc.extreme) lvl = Math.max(lvl, 4); else if (gc.danger) lvl = Math.max(lvl, 3); else if (gc.warning) lvl = Math.max(lvl, 2);
   const fc = digest?.floodhub?.counts || {};
   if (fc.EXTREME) lvl = Math.max(lvl, 4); else if (fc.SEVERE) lvl = Math.max(lvl, 3); else if (fc.ABOVE_NORMAL) lvl = Math.max(lvl, 2);
@@ -1422,6 +1429,11 @@ function _seasonSentence() {
 }
 
 function _introNarrative(stats, d) {
+  const H = floodHeadline(d?.ews);
+  if (H) {
+    return `National Flood Watch. Highest level in Pakistan: ${H.lv.label.toUpperCase()}, ${H.lv.say}. ${H.line} ${H.glText.charAt(0).toUpperCase()}${H.glText.slice(1)}; ${H.fhText}. ` +
+      `${H.e.season?.open ? "The flood season is open." : `The flood season is closed and opens again in ${H.e.season?.days_to_next} days.`} FFD is the main source; the other systems assist.`;
+  }
   const g = d?.glofas;
   const h = d?.floodhub;
   const parts = [];
@@ -1439,6 +1451,63 @@ function _ffdIntroNarrative(stats) {
   const trend = stats.rising || stats.falling ? ` ${stats.rising} rising and ${stats.falling} falling.` : "";
   const peak = Number.isFinite(stats.medianOfPeak) ? ` The typical station is carrying ${_pct(stats.medianOfPeak)} of its peak flow so far this year.` : "";
   return `Chapter 1: rivers now. The Federal Flood Commission network reports ${stats.n} barrages and dams; ${alerts}${trend}${peak} The tour follows the water downstream, river by river, from the mountains to the Arabian Sea.`;
+}
+
+function _ewsLevelNarrative(d) {
+  const H = floodHeadline(d.ews), c = H.closest;
+  return `How close are the rivers to flooding? ${c ? `${c.name} is the closest, at ${Math.round(c.of_low * 100)} percent of its low-flood limit. ` : ""}` +
+    `${H.raised.length ? `Districts above Normal: ${_joinList(H.raised.slice(0, 5).map((x) => x.name))}. ` : "No district is above Normal. "}` +
+    "The bars show each station against FFD's own flood levels. A danger in one district is never hidden by a calm national picture.";
+}
+function _reservoirNarrative(d) {
+  const r = d.ews.reservoirs || [], w = d.ews.storage;
+  return `Room in the dams. ${r.filter((x) => Number.isFinite(x.level_ft)).map((x) => `${x.name} stands at ${_fmt(x.level_ft)} feet, with ${_fmt(x.room_ft)} feet left before it is full`).join("; ")}. ` +
+    `${w?.dams?.Mangla ? `FFD expects inflow at ${w.dams.Tarbela?.pct ?? "n/a"} percent of normal at Tarbela and ${w.dams.Mangla.pct} percent at Mangla until ${_shortDay(w.to)}. ` : ""}An empty dam can hold back flood water; a full one cannot.`;
+}
+function _catchmentNarrative(d) {
+  const c = d.ews.catchments, rn = d.ews.rain, wet = (c.rows || []).filter((r) => (r.p7 ?? 0) >= 90 || (r.soil_pct ?? 0) >= 90).map((r) => r.name);
+  const rise = (c.rows || []).map((r) => ({ n: r.name, v: r.gfs?.d1_3 })).filter((x) => Number.isFinite(x.v)).sort((a, b) => b.v - a.v)[0];
+  return `Rain and ground. ${wet.length ? `Wetter than nearly all earlier years: ${_joinList(wet)}. ` : "No catchment is unusually wet. "}` +
+    `${rise ? `The most rain expected in three days is ${_fmt(rise.v)} millimetres, over the ${rise.n} catchment. ` : ""}` +
+    `${rn ? (rn.wet ? `${rn.wet} districts may reach a flash-flood rain level.` : "No district reaches a flash-flood rain level in the next three days.") : "The district rain outlook is not available."}`;
+}
+function _outlookNarrative(d) {
+  const st = (d.ews.stations || []).filter((s) => s.outlook?.leads?.some((x) => x.status === "ok"));
+  const top = st.map((s) => ({ s, p: Math.max(...s.outlook.leads.map((x) => x.prob?.low ?? 0)) })).sort((a, b) => b.p - a.p)[0];
+  const no = (d.ews.stations || []).filter((s) => s.limits && !st.includes(s)).length;
+  return `The next three days. NCOP follows the water already measured upstream, with FFD's travel times, at ${st.length} stations. ` +
+    `${top && top.p >= 0.05 ? `The highest chance of a low flood or more is ${_pct(top.p)}, at ${top.s.name}. ` : "No station has a real chance of even a low flood. "}` +
+    `${no ? `For ${no} other stations the method is not good enough, so no number is given and FFD's forecast should be used.` : ""}`;
+}
+function _exposureNarrative(d) {
+  const p = d.ews.plan;
+  return `Who lives where it floods? About ${_fmt(p.people.once / 1e6)} million people live on land that satellites mapped as flooded at least once in ${p.years.length} years between ${p.years[0]} and ${p.years[p.years.length - 1]}; ` +
+    `${_fmt(p.people.often / 1e6, 1)} million on land flooded in three or more of them. Most are in ${_joinList(p.by_people.slice(0, 3).map((r) => r.name))}. Flooded most often: ${_joinList(p.often.slice(0, 3).map((r) => r.name))}. These are planning numbers, not a forecast.`;
+}
+const _hours = (h) => (h < 48 ? `${_fmt(h)} hours` : `${_fmt(h / 24, 1)} days`);
+function _waveNarrative(d) {
+  const w = leadWave(d.ews.hydraulic), S = w.s, R = w.reach, f = (S.districts || []).find((x) => x.km2 > 0), t = d.ews.hydraulic.tests || [];
+  const b = t.slice().sort((a, c) => c.likely.csi - a.likely.csi)[0];
+  return `How deep, and how soon? ${d.ews.hydraulic.now?.length ? `${R.station} is at or near ${S.label.toLowerCase()}, so we show` : "No station is at High flood. For planning, we show"} a simulated ${S.label.toLowerCase()} of ${cusecs(S.flow)} cusecs from ${R.station} to ${R.to}. ` +
+    `About ${_fmt(S.people / 1e6, 2)} million people live on the land it would likely cover, ${_fmt(S.deep_people / 1e3)} thousand of them under more than 1.5 metres. ${f ? `The first water reaches ${f.name} after about ${_hours(f.first_h)}.` : ""} ` +
+    `${b ? `Tested on the ${b.year} flood below ${b.station}, the model found ${_pct(b.likely.found)} of the flooded land and ${_pct(b.likely.dry)} of the land it marked stayed dry.` : ""} ${R.trust?.grade === "Low" ? "Trust here is low: treat these numbers as a rough upper guide. " : ""}Embankments and breaches are not in the model, so FFD's readings always come first.`;
+}
+function _susNarrative(d) {
+  const s = d.ews.susceptibility;
+  return `Where does the land flood easily? This map uses the method of NCOP's Flood Model panel for the whole country: height above the river, slope, distance to the river, wetness, monsoon rain and land cover. ` +
+    `In years it had not seen, a flooded spot ranked above a dry one ${_pct(s.auc_mean.ensemble)} of the time, where half would be a coin toss${Number.isFinite(s.auc_mean.plains) ? `; on the plains alone, ${_pct(s.auc_mean.plains)}` : ""}. The highest class is ${_pct(s.shares[4])} of the country and holds ${_pct(s.captured[4])} of all land mapped as flooded. Most exposed by share of land: ${_joinList(s.top.slice(0, 3).map((r) => r.name))}. It says where, not when.`;
+}
+function _otherNarrative(d) {
+  const g = d.ews.glof || {}, r = d.ews.rain;
+  return `Other dangers. ${r ? (r.wet ? `${r.wet} districts may see hill torrents or flash floods.` : "No hill-torrent or city-flood rain is expected in three days.") : "The rain outlook is not available."} ` +
+    `${g.status === "valid" ? `${g.online} glacier-lake stations are working.` : g.stations ? `Glacier-lake danger is not known: all ${g.stations} PMD stations are offline, so their old warning labels are not used.` : "Glacier-lake danger is not known."} ` +
+    "Embankment breaches and water released across the border are not covered by any data here.";
+}
+function _trustNarrative(d) {
+  const sk = d.ews.skill || [], f = (n) => sk.find((x) => x.name === n)?.leads?.[1];
+  const a = f("Sukkur"), b = f("Marala");
+  return `How far to trust this. The river outlook was tested on every flood season since 2016, each one left out of the training. Two days ahead it scores ${_fmt(a?.nse, 2)} at Sukkur, where 1 is perfect, but only ${_fmt(b?.nse, 2)} at Marala, where floods arrive within hours. ` +
+    `${(d.ews.issues || []).length} data problems were found and are listed in the report.`;
 }
 
 function _ffdRoutingMapNarrative() {
@@ -1507,6 +1576,10 @@ function _ffdAssessmentNarrative(stats) {
 }
 
 function _glofasDaysNarrative(g) {
+  if (g?.run_stale) {
+    return `The GloFAS forecast is from ${g.forecast_date}, ${g.run_age_days} days ago. That is too old to use as an outlook, so it does not count in the level. It is shown only as a record. ` +
+      `${g.unreliable ? `${g.unreliable} of its ${g.points.length} points are unreliable and left out.` : ""}`;
+  }
   if (!g) return "Chapter 2: the 15-day outlook. GloFAS data from IWMI is unavailable right now, so this chapter is skipped.";
   const reliable = g.points.filter((p) => p.quality !== "unreliable");
   const alerting = reliable.filter((p) => p.status !== "normal");
@@ -1606,6 +1679,11 @@ function _whyNarrative() {
 }
 
 function _assessmentNarrative(stats, d, lvl) {
+  const H = floodHeadline(d?.ews);
+  if (H) {
+    const ac = H.e.actions || [];
+    return `National assessment: ${H.lv.label.toUpperCase()}. ${H.line} ${ac.length ? `Priority actions: ${ac.slice(0, 3).map((a) => a.title).join("; ")}.` : ""} This concludes the National Flood Watch.`;
+  }
   const w = WATCH_LEVELS[lvl];
   const g = d?.glofas;
   const h = d?.floodhub;
@@ -1658,6 +1736,8 @@ function _pickGaugeTour(h) {
 export function buildScenes(d, waypoints) {
   const stats = _ffdNetworkStats(waypoints);
   const scenes = [{ kind: "intro", chapter: 1, caption: _introNarrative(stats, d) }];
+  const ews = floodHeadline(d?.ews) ? d.ews : null;
+  if (ews) scenes.push({ kind: "ews-level", chapter: 1, caption: _ewsLevelNarrative(d) });
 
   if (waypoints.length) {
     scenes.push({ kind: "ffd-intro", chapter: 1, caption: _ffdIntroNarrative(stats) });
@@ -1683,8 +1763,11 @@ export function buildScenes(d, waypoints) {
     scenes.push({ kind: "ffd-assessment", chapter: 1, stats, caption: _ffdAssessmentNarrative(stats) });
   }
 
+  if (ews?.reservoirs?.some((x) => Number.isFinite(x.level_ft))) scenes.push({ kind: "reservoirs", chapter: 1, caption: _reservoirNarrative(d) });
+  if (ews?.catchments?.rows?.length) scenes.push({ kind: "catchments", chapter: 2, caption: _catchmentNarrative(d) });
+  if (ews) scenes.push({ kind: "outlook", chapter: 2, caption: _outlookNarrative(d) });
   scenes.push({ kind: "glofas-days", chapter: 2, caption: _glofasDaysNarrative(d?.glofas) });
-  if (d?.glofas) {
+  if (d?.glofas && !d.glofas.run_stale) {
     _pickGlofasTour(d.glofas).forEach((p, i) =>
       scenes.push({ kind: "glofas-point", chapter: 2, point: p, rank: i + 1, caption: _glofasPointNarrative(p, i + 1) }));
   }
@@ -1697,27 +1780,41 @@ export function buildScenes(d, waypoints) {
   scenes.push({ kind: "inundation", chapter: 3, caption: _inundationNarrative(d?.inundation) });
 
   const lvl = watchLevel(stats, d);
+  if (ews?.plan) scenes.push({ kind: "exposure", chapter: 4, caption: _exposureNarrative(d) });
+  if (leadWave(ews?.hydraulic)) scenes.push({ kind: "flood-wave", chapter: 4, caption: _waveNarrative(d) });
+  if (ews?.susceptibility) scenes.push({ kind: "susceptibility", chapter: 4, caption: _susNarrative(d) });
+  if (ews) scenes.push({ kind: "other-dangers", chapter: 4, caption: _otherNarrative(d) });
+  if (ews?.skill?.length) scenes.push({ kind: "trust", chapter: 4, caption: _trustNarrative(d) });
   scenes.push({ kind: "why-floods", chapter: 4, caption: _whyNarrative() });
   scenes.push({ kind: "assessment", chapter: 4, stats, level: lvl, caption: _assessmentNarrative(stats, d, lvl) });
   return scenes;
 }
 
-const CHAPTER_NAMES = ["", "Rivers Now · FFD", "15-Day Outlook · GloFAS", "AI Gauges · Flood Hub", "Context & Assessment"];
+const CHAPTER_NAMES = ["", "Rivers Now · FFD", "What May Come Next", "AI Gauges · Flood Hub", "Who Is at Risk & What to Do"];
 
 function _sceneTitle(scene) {
   switch (scene.kind) {
     case "intro":              return "Chapter 1 — Rivers Now";
+    case "ews-level":          return "How Close to Flooding?";
+    case "reservoirs":         return "Room Left in the Dams";
+    case "catchments":         return "Chapter 2 — Rain, Soil & Snow";
+    case "outlook":            return "The Next Three Days";
+    case "exposure":           return "Chapter 4 — Who Lives Where It Floods";
+    case "flood-wave":         return "How Deep, How Soon?";
+    case "susceptibility":     return "Where Land Floods Easily";
+    case "other-dangers":      return "Hill Torrents, Cities, Glacier Lakes";
+    case "trust":              return "How Far to Trust This";
     case "ffd-intro":          return "FFD Barrage & Dam Network";
     case "ffd-routing-map":    return "FFD Flood Routing Map";
     case "ffd-barrage":        return `${scene.waypoint.name}${scene.waypoint.area ? ` — ${scene.waypoint.area}` : ""}`;
     case "ffd-river-overview": return `${scene.river} — Overview`;
     case "ffd-assessment":     return "FFD Network Assessment";
-    case "glofas-days":        return "Chapter 2 — 15-Day Outlook (GloFAS)";
+    case "glofas-days":        return "15-Day Outlook (GloFAS)";
     case "glofas-point":       return `Outlook Focus — ${scene.point.river || `Point ${scene.point.id}`}`;
     case "floodhub-overview":  return "Chapter 3 — AI River Forecasts (Flood Hub)";
     case "floodhub-gauge":     return `Gauge Focus — ${scene.gauge.river || scene.gauge.id}`;
     case "inundation":         return "Modelled Inundation";
-    case "why-floods":         return "Chapter 4 — Why Pakistan Floods";
+    case "why-floods":         return "Why Pakistan Floods";
     case "assessment":         return "National Flood Assessment";
     default:                   return LABEL;
   }
@@ -1739,12 +1836,13 @@ function _layersLegendHtml(scene) {
   const rows = [];
   const ch = scene.chapter;
   if (ch === 1 || ch === 4) rows.push(_legendRow("Points", "FFD barrages & dams", "flood tier", _steps(FFD_TIERS)));
-  if (ch === 2) {
+  if (ch === 2 && _newerGlofas()) rows.push(_legendRow("Rings", "GloFAS points, worst level in 15 days", "", _steps(GLOFAS_LEVELS)));
+  else if (ch === 2) {
     const scale = String(TEMPORAL_LEGENDS?.[GLOFAS_DAYS_KEY] || "");
     rows.push(_legendRow("Temporal", "GloFAS alerts by forecast day", "≥30% exceedance probability",
       `<div class="nfw-legend-scale">${scale}</div><div class="nfw-legend-note">Hollow grey ring: unreliable point · dot size: river size × level</div>`));
   }
-  if (ch === 4) rows.push(_legendRow("Points", "GloFAS flood-alert points", "", _steps(GLOFAS_LEVELS)));
+  if (ch === 4 && !_newerGlofas()) rows.push(_legendRow("Points", "GloFAS flood-alert points", "", _steps(GLOFAS_LEVELS)));
   if (ch === 3 || ch === 4) {
     rows.push(_legendRow("Points", "Flood Hub gauges", "severity",
       `${_steps(FH_LEVELS)}<div class="nfw-legend-note"><span class="nfw-ring is-rise"></span>rising <span class="nfw-ring is-fall"></span>falling <span class="nfw-ring"></span>steady</div>`));
@@ -1761,7 +1859,16 @@ function _factsHtml(scene) {
   const d = _state.digest || {};
   const pills = [];
   const k = scene.kind;
-  if (k === "ffd-barrage") {
+  if (k === "ews-level") {
+    const H = floodHeadline(d.ews);
+    pills.push(_pill(`Highest level: ${H.lv.label}`, H.n.level >= 2, H.lv.color), _pill(`${H.above.length} of ${H.cur.length} stations in flood`, H.above.length > 0), _pill("Observed"));
+  } else if (k === "reservoirs") pills.push(_pill("Observed · FFD"));
+  else if (k === "catchments") pills.push(_pill("Satellite"), _pill("Forecast"));
+  else if (k === "outlook") pills.push(_pill("Forecast, tested on 2016–2026"));
+  else if (k === "flood-wave" || k === "susceptibility") pills.push(_pill("Modelled"), _pill("Not a forecast of a given day"));
+  else if (k === "exposure") pills.push(_pill("Planning, not a forecast"));
+  else if (k === "glofas-days" && d.glofas?.run_stale) pills.push(_pill(`too old: run ${d.glofas.forecast_date}`, true));
+  else if (k === "ffd-barrage") {
     const r = scene.waypoint.reading;
     const t = _tier(scene.waypoint.properties?.status);
     pills.push(_pill(t.label, t.rank > 0, t.color));
@@ -1793,7 +1900,7 @@ function _factsHtml(scene) {
     const w = WATCH_LEVELS[scene.level];
     pills.push(_pill(`Watch level: ${w.label}`, scene.level >= 2, w.color));
   }
-  const frame = scene.chapter === 2 ? `<span class="nfw-pill nfw-frame-pill">Frame <span class="nfw-frame-value">—</span></span>` : "";
+  const frame = scene.chapter === 2 && !_newerGlofas() ? `<span class="nfw-pill nfw-frame-pill">Frame <span class="nfw-frame-value">—</span></span>` : "";
   const facts = frame || pills.length ? `<div class="nfw-facts">${frame}${pills.join("")}</div>` : "";
   return scene.kind === "intro" ? facts : facts + _layersLegendHtml(scene);
 }
@@ -1997,7 +2104,167 @@ function _kpis(items) {
     `<div class="nfwp-stat"><b${k.color ? ` style="color:${k.color}"` : ""}>${k.html}</b><span>${_esc(k.label)}</span></div>`).join("")}</div>`;
 }
 
+function _levelSteps(cur) {
+  return `<div class="nfwp-level">${EWS_LEVELS.map((l, i) => `<span class="${i === cur ? "is-on" : ""}" style="background:${l.color}">${_esc(l.label)}</span>`).join("")}</div>`;
+}
+function _showEwsIntroPopup(H) {
+  const e = H.e;
+  _presentPopup(`${_popupHead("National Flood Watch", H.lv.label, 1, H.lv.color)}
+    <div class="nfwp-body">
+      <div class="nfwp-label">Highest level anywhere in Pakistan</div>${_levelSteps(H.known ? H.n.level : -1)}
+      ${_kpis([
+        { html: _u(`${H.above.length}/${H.cur.length}`, "stations"), label: "FFD stations in flood" },
+        { html: _u(H.closest ? `${Math.round(H.closest.of_low * 100)}%` : "—", ""), label: H.closest ? `${H.closest.name}: share of its low-flood limit` : "closest station" },
+        { html: _u(String(H.raised.length), "districts"), label: "above Normal" },
+        { html: _u(e.season?.open ? "open" : String(e.season?.days_to_next ?? "—"), e.season?.open ? "" : "days"), label: e.season?.open ? "flood season" : "to the flood season" },
+      ])}
+      ${e.ffd_status ? `<div class="nfwp-advice"><b>FFD:</b> ${_esc(e.ffd_status.headline)} <small>(${_esc(_pkt(e.ffd_status.at))})</small></div>` : ""}
+      <div class="nfwp-label">Chapters</div>
+      <div class="nfwp-steps">
+        <div><b>1</b> Rivers and dams now, from FFD</div>
+        <div><b>2</b> What may come next: rain, river outlook, GloFAS</div>
+        <div><b>3</b> Google Flood Hub gauges</div>
+        <div><b>4</b> Who is at risk, how far to trust this, what to do</div>
+      </div>
+      <div class="nfwp-axis-note">${_esc(`FFD is the main source. GloFAS: ${H.glText}. Flood Hub: ${H.fhText}. Old or missing forecasts never count as "no flood". Levels are for readiness, not official warnings.`)}</div>
+      ${SRC_FFD}
+    </div>`);
+}
+function _showEwsLevelPopup() {
+  const H = floodHeadline(_state.digest.ews);
+  const rows = H.cur.filter((s) => s.limits && Number.isFinite(s.q)).sort((a, b) => (b.of_low || 0) - (a.of_low || 0)).slice(0, 9);
+  _presentPopup(`${_popupHead("How Close to Flooding?", `${H.n.stations.current} stations`, 1)}
+    <div class="nfwp-body">
+      ${_levelSteps(H.known ? H.n.level : -1)}
+      <div class="nfwp-label">Flow now as a share of FFD's low-flood limit</div>
+      ${_hBars(rows.map((s) => ({ label: `${s.name} (${s.river})`, value: s.of_low, color: (FFD_TIERS[s.tier || 0] || {}).color || "#38bdf8", valueHtml: `${Math.round(s.of_low * 100)}% <small>${_esc(cusecs(s.q))}</small>` })), { min: 1 })}
+      ${H.raised.length ? `<div class="nfwp-label">Districts above Normal</div><table class="nfwp-table"><tbody>${H.raised.slice(0, 7).map((x) => `<tr><td><span class="nfwp-cat" style="background:${EWS_LEVELS[x.level].color}"></span> ${_esc(x.name)}</td><td>${_esc(x.hazards[0].hazard)}: ${_esc(x.hazards[0].why)}</td></tr>`).join("")}</tbody></table>` : `<div class="nfwp-axis-note">No district is above Normal.</div>`}
+      <div class="nfwp-axis-note">100% = low flood begins. ${H.st.length - H.cur.length ? `${H.st.length - H.cur.length} stations have no current reading and are not counted as normal.` : ""}</div>
+      ${SRC_FFD}
+    </div>`);
+}
+function _showReservoirPopup() {
+  const r = _state.digest.ews.reservoirs || [], w = _state.digest.ews.storage;
+  _presentPopup(`${_popupHead("Room Left in the Dams", "FFD", 1)}
+    <div class="nfwp-body">
+      ${_hBars(r.filter((x) => Number.isFinite(x.range_pct)).map((x) => ({ label: x.name, value: x.range_pct, color: x.range_pct >= 95 ? "#dc2626" : "#38bdf8", valueHtml: `${x.range_pct}% <small>${_fmt(x.level_ft, 0)} ft of ${_fmt(x.max_ft)}</small>` })), { min: 100 })}
+      <table class="nfwp-table"><thead><tr><th>Dam</th><th class="num">In / out (cusecs)</th><th class="num">Room left</th><th class="num">Inflow outlook</th></tr></thead><tbody>
+        ${r.map((x) => `<tr><td>${_esc(x.name)}</td><td class="num">${_esc(cusecs(x.inflow))} / ${_esc(cusecs(x.outflow))}</td><td class="num">${Number.isFinite(x.room_ft) ? `${_fmt(x.room_ft)} ft` : "—"}</td><td class="num">${x.inflow_outlook ? `${x.inflow_outlook.pct}% of normal` : "—"}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="nfwp-axis-note">0% = lowest working level, 100% = full. Level is not volume. ${w ? `Inflow outlook ${_esc(_shortDay(w.from))} to ${_esc(_shortDay(w.to))}.` : ""}</div>
+      ${SRC_FFD}
+    </div>`);
+}
+function _showCatchmentPopup() {
+  const c = _state.digest.ews.catchments;
+  _presentPopup(`${_popupHead("Rain, Soil & Snow", `to ${_shortDay(String(c.rain_to).slice(0, 10))}`, 2)}
+    <div class="nfwp-body">
+      <table class="nfwp-table"><thead><tr><th>Catchment</th><th class="num">7-day rain</th><th class="num">Soil wetness</th><th class="num">Snow</th><th class="num">Next 3 days</th></tr></thead><tbody>
+        ${c.rows.map((r) => `<tr><td>${_esc(r.name)}</td><td class="num">${Number.isFinite(r.r7) ? `${_fmt(r.r7)} mm` : "—"}</td><td class="num">${Number.isFinite(r.soil_pct) ? r.soil_pct : "—"}</td><td class="num">${r.snow ? `${r.snow.share}% <small>(${r.snow.normal ?? "—"}%)</small>` : "—"}</td><td class="num">${r.gfs ? `${_fmt(r.gfs.d1_3)}` : "—"} / ${r.ecmwf ? `${_fmt(r.ecmwf.d1_3)} mm` : "—"}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="nfwp-axis-note">Soil wetness: 0 driest to 100 wettest for this time of year. Snow: share of the catchment now (usual). Next 3 days: US model / European model.</div>
+      <div class="nfwp-src">Data: NASA GPM IMERG and SMAP, MODIS snow, NOAA GFS, ECMWF open data; catchment means by NCOP.</div>
+    </div>`);
+}
+function _showOutlookPopup() {
+  const st = (_state.digest.ews.stations || []).filter((s) => s.outlook?.leads?.some((x) => x.status === "ok"));
+  const c = (x) => (x?.status === "ok" ? _esc(cusecs(x.q)) : `<small>${_esc(x?.status || "—")}</small>`);
+  _presentPopup(`${_popupHead("The Next Three Days", "Forecast", 2)}
+    <div class="nfwp-body">
+      <table class="nfwp-table"><thead><tr><th>Station</th><th class="num">Now</th><th class="num">+1 day</th><th class="num">+2</th><th class="num">+3</th><th class="num">Chance of low flood</th></tr></thead><tbody>
+        ${st.map((s) => { const p = Math.max(...s.outlook.leads.map((x) => x.prob?.low ?? 0)); return `<tr><td>${_esc(s.name)}</td><td class="num">${_esc(cusecs(s.outlook.now))}</td>${s.outlook.leads.map((x) => `<td class="num">${c(x)}</td>`).join("")}<td class="num">${p < 0.01 ? "below 1%" : _pct(p)}</td></tr>`; }).join("")}
+      </tbody></table>
+      <div class="nfwp-axis-note">Cusecs. "Not skilful" = tested and no better than saying "no change", so no number is given. FFD's own forecast comes first.</div>
+      <div class="nfwp-src">Data: FFD readings and travel times, GPM IMERG, NOAA GFS; model by NCOP.</div>
+    </div>`);
+}
+function _showExposurePopup() {
+  const p = _state.digest.ews.plan, pl = p.places || {};
+  _presentPopup(`${_popupHead("Who Lives Where It Floods", "Planning", 4)}
+    <div class="nfwp-body">
+      ${_kpis([
+        { html: _u(_fmt(p.people.once / 1e6, 1), "M"), label: "people on land that has flooded" },
+        { html: _u(_fmt(p.people.often / 1e6, 1), "M"), label: "on land flooded in 3+ years" },
+        { html: _u(pl.schools ? _fmt(pl.schools[1]) : "—", ""), label: "schools on that land" },
+        { html: _u(pl.health ? _fmt(pl.health[1]) : "—", ""), label: "health facilities on that land" },
+      ])}
+      <div class="nfwp-label">Most people on land that has flooded</div>
+      ${_hBars(p.by_people.slice(0, 7).map((r) => ({ label: r.name, value: r.once, color: "#2563eb", valueHtml: `${_fmt(r.once / 1e6, 2)}M <small>flooded in ${r.years_flooded} of ${p.years.length} mapped years</small>` })))}
+      <div class="nfwp-axis-note">Land mapped as flooded by satellite in ${_esc(p.years.join(", "))}. People living there, not damage, and not a forecast.</div>
+      <div class="nfwp-src">Data: NCOP flood extents (SUPARCO, NDMA), GHSL 2025 scaled to census 2023, NCOP schools and health layers.</div>
+    </div>`);
+}
+function _showWavePopup() {
+  const h = _state.digest.ews.hydraulic, w = leadWave(h), S = w.s, R = w.reach;
+  const dr = (S.districts || []).filter((x) => x.km2 > 0).slice(0, 7);
+  _presentPopup(`${_popupHead("How Deep, How Soon?", h.now?.length ? "Level reached" : "Planning", 4)}
+    <div class="nfwp-body">
+      <div class="nfwp-label">${_esc(`${S.label} at ${R.station}: ${cusecs(S.flow)} cusecs, down to ${R.to}`)}${R.trust ? ` · <b>trust ${_esc(R.trust.grade.toLowerCase())}</b>` : ""}</div>
+      ${_kpis([
+        { html: _u(_fmt(S.people / 1e6, 2), "M"), label: "people on likely flooded land" },
+        { html: _u(_fmt(S.deep_people / 1e3), "thousand"), label: "under more than 1.5 m" },
+        { html: _u(_fmt(S.km2), "km²"), label: "likely flooded" },
+        { html: _u(_fmt(S.people_upper / 1e6, 2), "M"), label: "outer limit, all embankments overtopped" },
+      ])}
+      ${_steps([...h.depth_classes.map((c) => ({ label: c[3], color: c[2] })), { label: "outer limit", color: "#fdbe6e" }])}
+      <table class="nfwp-table"><thead><tr><th>District</th><th class="num">First water</th><th class="num">Depth</th><th class="num">People</th></tr></thead><tbody>
+        ${dr.map((x) => `<tr><td>${_esc(x.name)}</td><td class="num">${_esc(_hours(x.first_h))}</td><td class="num">${_fmt(x.depth_m, 1)} m</td><td class="num">${_fmt(x.people / 1e3)}k</td></tr>`).join("")}
+      </tbody></table>
+      <div class="nfwp-label">Tested on real floods</div>
+      <table class="nfwp-table"><thead><tr><th>Flood</th><th class="num">Found</th><th class="num">Stayed dry</th><th class="num">Agreement</th></tr></thead><tbody>
+        ${(h.tests || []).map((t) => `<tr><td>${_esc(`${t.station} ${t.year}`)}</td><td class="num">${_pct(t.likely.found)}</td><td class="num">${_pct(t.likely.dry)}</td><td class="num">${_fmt(t.likely.csi, 2)}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="nfwp-axis-note">Hours count from the start of the rise at ${_esc(R.station)}. Grid 500 m; embankments, gates and breaches are not in the model. FFD readings come first.</div>
+      <div class="nfwp-src">Method: LISFLOOD-FP's equations (Bates 2010), FABDEM terrain, FFD flood limits. Built ${_esc(h.built)}.</div>
+    </div>`);
+}
+function _showSusceptibilityPopup() {
+  const s = _state.digest.ews.susceptibility;
+  _presentPopup(`${_popupHead("Where Land Floods Easily", "Modelled", 4)}
+    <div class="nfwp-body">
+      ${_steps(s.classes.map((c, i) => ({ label: c, color: s.colors[i] })))}
+      ${_kpis([
+        { html: _u(_pct(s.auc_mean.ensemble), ""), label: "test score on unseen floods (50% = coin toss)" },
+        { html: _u(_pct(s.captured[3] + s.captured[4]), ""), label: "of flooded land in the two highest classes" },
+        { html: _u(_pct(s.shares[3] + s.shares[4]), ""), label: "of the country is in them" },
+      ])}
+      <div class="nfwp-label">Largest share of land in the two highest classes</div>
+      ${_hBars(s.top.slice(0, 7).map((r) => ({ label: r.name, value: r.high_pct, color: "#d73027", valueHtml: `${r.high_pct}%` })))}
+      <div class="nfwp-axis-note">Says where, not when. Embankments are not in the map.</div>
+      <div class="nfwp-src">Method: NCOP Flood Model panel (AHP weights from studies in Pakistan, with observed flood frequency). MERIT Hydro, CHIRPS, MODIS, NCOP flood extents.</div>
+    </div>`);
+}
+function _showOtherPopup() {
+  const e = _state.digest.ews, g = e.glof || {}, r = e.rain, w = e.pmd_rain || {};
+  const row = (k, v, c) => `<tr><td>${_esc(k)}</td><td><span class="nfwp-cat" style="background:${c}"></span> ${_esc(v)}</td></tr>`;
+  _presentPopup(`${_popupHead("Other Flood Dangers", "", 4)}
+    <div class="nfwp-body">
+      <table class="nfwp-table"><tbody>
+        ${row("Hill torrents, flash floods", r ? (r.wet ? `${r.wet} districts may reach the rain level` : "no district reaches the rain level in 3 days") : "not known", r ? (r.wet ? "#E7B416" : "#22c55e") : "#94a3b8")}
+        ${row("Heaviest day this week", r?.week_top?.[0] && !(r.week_top[0].peak_mm >= 1) ? "almost no rain expected" : r?.week_top?.[0] ? `${_fmt(r.week_top[0].peak_mm)} mm, ${r.week_top[0].name}, ${_shortDay(r.week_top[0].peak_day)}` : "not known", "#38bdf8")}
+        ${row("Glacier lakes", g.status === "valid" ? `${g.online} stations working, ${g.alerts.length} alerts` : g.stations ? `NOT KNOWN: all ${g.stations} stations offline` : "not known", g.status === "valid" ? (g.alerts.length ? "#E2683C" : "#22c55e") : "#94a3b8")}
+        ${row("PMD rain warnings", w.status === "valid" ? `${w.count} active` : "not known", w.status === "valid" ? (w.count ? "#E7B416" : "#22c55e") : "#94a3b8")}
+        ${row("Embankment breach, releases across the border", "no data", "#94a3b8")}
+      </tbody></table>
+      <div class="nfwp-axis-note">Grey = not known. It does not mean safe.</div>
+    </div>`);
+}
+function _showTrustPopup() {
+  const e = _state.digest.ews, sk = (e.skill || []).filter((r) => r.leads.some((l) => l.days));
+  const c = (l) => (l?.days ? `<span style="color:${l.usable ? "#4ade80" : "#f87171"}">${_fmt(l.nse, 2)}</span>` : "—");
+  _presentPopup(`${_popupHead("How Far to Trust This", "tested 2016–2026", 4)}
+    <div class="nfwp-body">
+      <div class="nfwp-label">River outlook score (1 = perfect; red = not used)</div>
+      <table class="nfwp-table"><thead><tr><th>Station</th><th class="num">1 day</th><th class="num">2 days</th><th class="num">3 days</th><th class="num">Floods caught, 2 days</th></tr></thead><tbody>
+        ${sk.slice().sort((a, b) => (b.leads[1]?.nse ?? -9) - (a.leads[1]?.nse ?? -9)).slice(0, 14).map((r) => { const f = r.leads[1]?.flood; return `<tr><td>${_esc(r.name)}</td><td class="num">${c(r.leads[0])}</td><td class="num">${c(r.leads[1])}</td><td class="num">${c(r.leads[2])}</td><td class="num">${f?.events ? `${f.hits} of ${f.events} days` : "—"}</td></tr>`; }).join("")}
+      </tbody></table>
+      <div class="nfwp-axis-note">Each season was forecast by a model trained without it. Data problems found this time: ${(e.issues || []).length}. NCOP runs no hydraulic model, so flood depth and arrival on the ground are not forecast.</div>
+    </div>`);
+}
+
 function _showIntroPopup() {
+  const H = floodHeadline(_state.digest?.ews);
+  if (H) return _showEwsIntroPopup(H);
   const d = _state.digest || {};
   const stats = _ffdNetworkStats(_state.waypoints);
   const g = d.glofas, h = d.floodhub;
@@ -2324,6 +2591,20 @@ function _showWhyPopup() {
 }
 
 function _showAssessmentPopup(scene) {
+  const H = floodHeadline(_state.digest?.ews);
+  if (H) {
+    const all = Object.values(REFS).map((r) => `<li>${_esc(r.full)}</li>`).join("");
+    _presentPopup(`${_popupHead("What to Do", H.lv.label, 4, H.lv.color)}
+      <div class="nfwp-body">
+        ${_levelSteps(H.known ? H.n.level : -1)}
+        <div class="nfwp-steps">${(H.e.actions || []).map((a, i) => `<div><b>${i + 1}</b> <strong>${_esc(a.title)}.</strong> ${_esc(a.text)} <small>Who: ${_esc(a.owner)}. When: ${_esc(a.by)}.</small></div>`).join("")}</div>
+        <div class="nfwp-label">Risk calendar</div>
+        <table class="nfwp-table"><tbody>${(H.e.calendar || []).map((c) => `<tr><td>${c.now ? "<b>NOW</b> " : ""}${_esc(c.window)}</td><td>${_esc(c.risk)}</td></tr>`).join("")}</tbody></table>
+        <details class="nfwp-refs-all"><summary>References (${Object.keys(REFS).length})</summary><ol>${all}</ol></details>
+        ${SRC_FFD}${SRC_IWMI}
+      </div>`);
+    return;
+  }
   const d = _state.digest || {};
   const stats = scene.stats;
   const w = WATCH_LEVELS[scene.level];
@@ -2407,11 +2688,42 @@ function _clearFocus() {
   try { map?.getSource(FOCUS_SRC)?.setData({ type: "FeatureCollection", features: [] }); } catch (_) {}
 }
 function _removeFocusLayers() {
+  _clearOverlay();
   _clearFocus();
   const map = window.ncop_map;
   if (!map) return;
   for (const id of [FOCUS_RING_ID, FOCUS_HALO_ID]) { try { if (map.getLayer(id)) map.removeLayer(id); } catch (_) {} }
   try { if (map.getSource(FOCUS_SRC)) map.removeSource(FOCUS_SRC); } catch (_) {}
+}
+// One ready-made picture (depth or susceptibility) under the points.
+const OVERLAY_ID = "_ncop_nfw_picture";
+function _clearOverlay() {
+  const map = window.ncop_map;
+  if (!map) return;
+  try { if (map.getLayer(OVERLAY_ID)) map.removeLayer(OVERLAY_ID); if (map.getSource(OVERLAY_ID)) map.removeSource(OVERLAY_ID); } catch (_) { /* best-effort */ }
+}
+function _setOverlay(url, bbox) {
+  const map = window.ncop_map;
+  _clearOverlay();
+  if (!map || !bbox) return;
+  const [w, s, e, n] = bbox;
+  try {
+    map.addSource(OVERLAY_ID, { type: "image", url, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
+    map.addLayer({ id: OVERLAY_ID, type: "raster", source: OVERLAY_ID, paint: { "raster-opacity": 0.8, "raster-fade-duration": 0 } }, map.getLayer(FOCUS_HALO_ID) ? FOCUS_HALO_ID : undefined);
+  } catch (e2) { console.warn("[flood-watch] picture layer failed", e2); }
+}
+/** A scene with one picture on the map. pick(digest) -> {url, bbox}. */
+function _pictureScene(show, pick) {
+  return async (map, scene, token, seq, card) => {
+    await _ensureChapterLayers(4, token, card);
+    if (_isStale(token, seq)) return;
+    _clearFocus();
+    show(scene);
+    const p = pick(_state.digest);
+    _setOverlay(p.url, p.bbox);
+    const [w, s, e, n] = p.bbox;
+    await cinematicFitBounds(map, [[w, s], [e, n]], { pitch: 0, bearing: 0, duration: _dur(2600), maxZoom: 8.5, padding: { top: 60, bottom: 60, left: 400, right: 60 } });
+  };
 }
 function _wpFocus(wp) {
   return { lon: wp.center[0], lat: wp.center[1], color: _tier(wp.properties?.status).color === "#28a745" ? "#38bdf8" : _tier(wp.properties?.status).color };
@@ -2435,6 +2747,10 @@ function _storyToggleOff(key) {
 
 // Exactly one chapter's layers on the map; idempotent, also used when the
 // operator jumps across chapters.
+// True when the briefing holds a newer GloFAS run than IWMI's map layers.
+const _newerGlofas = () => _state.digest?.glofas?.feed === "open-meteo";
+const _glofasRings = (d) => (d?.glofas?.points || []).filter((p) => p.quality !== "unreliable" && p.q?.length)
+  .map((p) => ({ lon: p.lon, lat: p.lat, color: (GLOFAS_LEVELS.find((l) => l.key === p.status) || GLOFAS_LEVELS[0]).color }));
 async function _ensureChapterLayers(chapter, token, card) {
   if (_state.layerChapter === chapter) return true;
   _stopLayerTracking(card); // a previous chapter's loader must not linger
@@ -2445,6 +2761,9 @@ async function _ensureChapterLayers(chapter, token, card) {
     [GLOFAS_PTS_KEY, FH_GAUGES_KEY, FH_INUND_KEY].forEach(_storyToggleOff);
     await _deactivateTemporal(GLOFAS_DAYS_KEY);
     await _storyToggleOn(FFD_KEY);
+  } else if (chapter === 2 && _newerGlofas()) {
+    [FFD_KEY, GLOFAS_PTS_KEY, FH_GAUGES_KEY, FH_INUND_KEY].forEach(_storyToggleOff);
+    await _deactivateTemporal(GLOFAS_DAYS_KEY);
   } else if (chapter === 2) {
     [FFD_KEY, GLOFAS_PTS_KEY, FH_GAUGES_KEY, FH_INUND_KEY].forEach(_storyToggleOff);
     _trackLayerLoading(card, token, GLOFAS_DAYS_KEY, "GloFAS 15-day outlook");
@@ -2455,7 +2774,7 @@ async function _ensureChapterLayers(chapter, token, card) {
     await _storyToggleOn(FH_GAUGES_KEY);
   } else {
     await _deactivateTemporal(GLOFAS_DAYS_KEY);
-    await Promise.all([FFD_KEY, GLOFAS_PTS_KEY, FH_GAUGES_KEY, FH_INUND_KEY].map(_storyToggleOn));
+    await Promise.all([FFD_KEY, ...(_newerGlofas() ? [] : [GLOFAS_PTS_KEY]), FH_GAUGES_KEY, FH_INUND_KEY].map(_storyToggleOn));
   }
   if (token !== _state.runToken) return false;
   _state.layerChapter = chapter;
@@ -2484,6 +2803,21 @@ async function _runIntro(map, scene, token, seq, card) {
   if (_isStale(token, seq)) return;
   await cinematicEaseTo(map, { bearing: 10, pitch: 38, duration: _dur(2000) });
 }
+
+/** Scenes that need only a panel, a steady view and (optionally) rings on the map. */
+function _panelScene(chapter, show, { pitch = 10, focus = null } = {}) {
+  return async (map, scene, token, seq, card) => {
+    if (chapter === 2) { await _deactivateTemporal(GLOFAS_DAYS_KEY); _state.layerChapter = 0; } // these two come before the GloFAS slider
+    else await _ensureChapterLayers(chapter, token, card);
+    if (_isStale(token, seq)) return;
+    try { hideFfdModal(); } catch (_) {}
+    _clearFocus();
+    if (focus) _setFocus(focus(_state.digest));
+    show(scene);
+    await cinematicFitBounds(map, PAKISTAN_BOUNDS, { pitch, bearing: 0, duration: _dur(2600) });
+  };
+}
+const _stationRings = (d) => (d?.ews?.stations || []).filter((s) => Number.isFinite(s.lon)).map((s) => ({ lon: s.lon, lat: s.lat, color: s.state !== "current" ? "#94a3b8" : s.watch ? EWS_LEVELS[s.watch].color : "#22c55e" }));
 
 async function _runFfdIntro(map, scene, token, seq, card) {
   await _ensureChapterLayers(1, token, card);
@@ -2566,6 +2900,7 @@ async function _runGlofasDays(map, scene, token, seq, card) {
   ]);
   if (_isStale(token, seq)) return;
   _showGlofasDaysPopup();
+  if (_newerGlofas()) { _setFocus(_glofasRings(_state.digest)); return; }
   const defs = _temporal()?.layersDef || [];
   _loopFrames(defs.map((_, i) => i), token, seq);
 }
@@ -2575,7 +2910,7 @@ async function _runGlofasPoint(map, scene, token, seq, card) {
   await _ensureChapterLayers(2, token, card);
   if (_isStale(token, seq)) return;
   _closePopup();
-  _setFrame(_glofasFrameForLead(p.max_lead || 1));
+  if (!_newerGlofas()) _setFrame(_glofasFrameForLead(p.max_lead || 1));
   const lvl = GLOFAS_LEVELS.find((l) => l.key === p.status) || GLOFAS_LEVELS[0];
   _setFocus([{ lon: p.lon, lat: p.lat, color: p.status === "normal" ? "#38bdf8" : lvl.color }]);
   await cinematicFlyTo(map, { center: [p.lon, p.lat], zoom: 8.2, pitch: 48, bearing: (Math.random() * 30) - 15, duration: _dur(3000) });
@@ -2681,6 +3016,15 @@ async function _runAssessment(map, scene, token, seq, card) {
 
 const RUNNERS = {
   "intro": _runIntro,
+  "ews-level": _panelScene(1, _showEwsLevelPopup, { focus: _stationRings }),
+  "reservoirs": _panelScene(1, _showReservoirPopup, { pitch: 15, focus: (d) => _stationRings({ ews: { stations: (d?.ews?.stations || []).filter((s) => s.id === "tarbela" || s.id === "mangla") } }) }),
+  "catchments": _panelScene(2, _showCatchmentPopup),
+  "outlook": _panelScene(2, _showOutlookPopup, { focus: _stationRings }),
+  "exposure": _panelScene(4, _showExposurePopup),
+  "flood-wave": _pictureScene(_showWavePopup, (d) => { const w = leadWave(d.ews.hydraulic); return { url: w.url, bbox: w.reach.bbox }; }),
+  "susceptibility": _pictureScene(_showSusceptibilityPopup, (d) => ({ url: "/api/flood/watch/map/susceptibility.png", bbox: d.ews.susceptibility.bbox })),
+  "other-dangers": _panelScene(4, _showOtherPopup),
+  "trust": _panelScene(4, _showTrustPopup),
   "ffd-intro": _runFfdIntro,
   "ffd-routing-map": _runFfdRoutingMap,
   "ffd-barrage": _runFfdBarrage,
@@ -2696,6 +3040,7 @@ const RUNNERS = {
 };
 
 async function _enterScene(card, scene, token, seq) {
+  _clearOverlay();
   _renderScene(card);
   _speak(_tr(scene.caption));
   const map = window.ncop_map;
@@ -2710,6 +3055,16 @@ async function _enterScene(card, scene, token, seq) {
 // ==========================================================================
 // Load / show / hide
 // ==========================================================================
+// The early-warning document; 202 while its first build runs.
+async function _fetchEws(token) {
+  const started = Date.now();
+  for (;;) {
+    const r = await fetch(EWS_URL, { credentials: "same-origin" });
+    if (r.status === 200) return r.json();
+    if (r.status !== 202 || Date.now() - started > EWS_WAIT_MS || token !== _state.runToken) return null;
+    await wait(Math.min(Number(r.headers.get("Retry-After")) || 8, 10) * 1000);
+  }
+}
 // Wrapper: a pending export from the story picker is handed to the
 // loader; if the loader never reaches it (no data, story closed) the
 // pre-opened print window is closed instead of being left blank.
@@ -2738,18 +3093,22 @@ async function _loadAndPlayInner(card, forceRefresh = false, job = null) {
       if (token !== _state.runToken) { clearInterval(loadTimer); return; }
       _showLoader(card, "Fetching FFD telemetry, GloFAS outlook and Flood Hub gauges…", null, startedAt);
     }, 250);
-    const [digest, ffd] = await Promise.all([
+    const [digest, ews, ffd] = await Promise.all([
       _fetchJson(WATCH_URL).catch(() => null),
+      _fetchEws(token).catch(() => null),
       getFfdWaterlevels().then((fc) => (fc && Array.isArray(fc.features) ? fc : null)).catch(() => null),
     ]);
     clearInterval(loadTimer);
     _hideLoader(card);
     if (token !== _state.runToken) return;
-    if (!digest && !ffd) {
+    if (!digest && !ffd && !ews) {
       card.querySelector(".nfw-body").innerHTML = `<div class="nfw-status">River and flood-forecast data are unavailable right now. Try Refresh in a few minutes.</div>`;
       return;
     }
-    _state.digest = digest;
+    _state.digest = ews ? { ...(digest || {}), ews } : digest;
+    // The newest GloFAS run wins; IWMI's map layers (older run) are then not drawn.
+    const feed = ews?.glofas_feed;
+    if (feed && (!digest?.glofas || feed.forecast_date > digest.glofas.forecast_date)) _state.digest.glofas = feed;
     _state.ffd = ffd;
     _state.fhSeries = new Map();
     _state.loadedOnce = true;
@@ -2857,6 +3216,15 @@ const REPORT_POPUPS = {
   "ffd-assessment": (sc) => _showFfdAssessmentPopup(sc),
   "glofas-days": () => _showGlofasDaysPopup(),
   "glofas-point": (sc) => _showGlofasPointPopup(sc),
+  "ews-level": () => _showEwsLevelPopup(),
+  "reservoirs": () => _showReservoirPopup(),
+  "catchments": () => _showCatchmentPopup(),
+  "outlook": () => _showOutlookPopup(),
+  "exposure": () => _showExposurePopup(),
+  "flood-wave": () => _showWavePopup(),
+  "susceptibility": () => _showSusceptibilityPopup(),
+  "other-dangers": () => _showOtherPopup(),
+  "trust": () => _showTrustPopup(),
   "floodhub-overview": () => _showFloodhubPopup(),
   "floodhub-gauge": (sc) => _showGaugePopup(sc, _state.fhSeries?.get(sc.gauge?.id) || null, false),
   "inundation": (sc) => _showInundationPopup(sc),
@@ -2874,12 +3242,12 @@ function _reportPeakLead(d) {
   return best?.lead || 1;
 }
 const REPORT_SHOTS = [
-  { key: "map1", chapter: 1, label: "Map: FFD barrages & dams", caption: "FFD barrage and dam network, current flood tier." },
+  { key: "map1", chapter: 1, label: "Map: FFD barrages & dams", caption: (d) => `FFD stations [Observed]. Rings: NCOP level for that station${d.ews ? " (green Normal, blue Elevated, yellow Alert, orange Warning, dark red Severe, grey no current reading)" : ""}.` },
   { key: "map2", chapter: 2, label: "Map: GloFAS outlook, peak day", settleMs: 700,
-    prepare: async (d) => { _setFrame(_glofasFrameForLead(_reportPeakLead(d))); },
-    caption: (d) => `GloFAS flood-alert status on forecast day +${_reportPeakLead(d)} (the day with the most points at warning or above).` },
+    prepare: async (d) => { if (_newerGlofas()) _setFocus(_glofasRings(d)); else _setFrame(_glofasFrameForLead(_reportPeakLead(d))); },
+    caption: (d) => _newerGlofas() ? `GloFAS forecast points, run of ${_shortDay(d.glofas.forecast_date)} [Forecast]: ring = worst level in the next 15 days (green none, yellow warning, orange severe, dark red extreme).` : d.glofas?.run_stale ? `GloFAS run of ${d.glofas.forecast_date}: ${d.glofas.run_age_days} days old and TOO OLD to use as a forecast. Shown as a record only.` : `GloFAS flood-alert status on forecast day +${_reportPeakLead(d)} (the day with the most points at warning or above).` },
   { key: "map3", chapter: 4, label: "Map: all flood layers", settleMs: 500,
-    caption: "FFD stations, GloFAS points, Flood Hub gauges and modelled inundation together." },
+    caption: (d) => _newerGlofas() ? "FFD stations, Google Flood Hub gauges and any Google flood map, together." : "FFD stations, GloFAS points, Flood Hub gauges and modelled inundation together." },
 ];
 function _reportMeta(d) {
   const g = d?.glofas, h = d?.floodhub;
@@ -2940,13 +3308,14 @@ async function _exportReport(format, win) {
   _closePopup();
   try { hideFfdModal(); } catch (_) {}
   _clearFocus();
+  _clearOverlay();
   _state.runToken += 1;          // stops any running scene choreography
   const token = _state.runToken;
   const d = _state.digest;
   try {
     await runStoryExport({
-      format, win, card, slug: "national-flood-watch", meta: _reportMeta(d),
-      steps: [{ key: "data", label: "Briefing data" }, ...REPORT_SHOTS.map((s) => ({ key: s.key, label: s.label }))],
+      format, win, card, slug: "national-flood-watch", meta: floodHeadline(d.ews) ? floodReportMeta(d.ews) : _reportMeta(d),
+      steps: [{ key: "data", label: "Briefing data" }, ...REPORT_SHOTS.map((s) => ({ key: s.key, label: s.label })), ...(d.ews?.hydraulic || d.ews?.susceptibility ? [{ key: "pictures", label: "Depth and susceptibility maps" }] : [])],
       build: async ({ run, mark }) => {
         run("data"); mark("data");
         const shots = {};
@@ -2957,6 +3326,7 @@ async function _exportReport(format, win) {
           if (map) {
             try {
               await _ensureChapterLayers(s.chapter, token, card);
+              if (s.chapter === 1) _setFocus(_stationRings(d)); else _clearFocus();
               await s.prepare?.(d);
               map.fitBounds(PAKISTAN_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
               src = await captureMap(map, { settleMs: s.settleMs || 300 });
@@ -2966,6 +3336,19 @@ async function _exportReport(format, win) {
           (shots[s.chapter] ||= []).push({ src, caption: typeof s.caption === "function" ? s.caption(d) : s.caption });
           mark(s.key, src ? "ok" : "warn");
         }
+        const pictures = {};
+        if (d.ews?.hydraulic || d.ews?.susceptibility) {
+          run("pictures");
+          const wv = leadWave(d.ews.hydraulic), su = d.ews.susceptibility;
+          [pictures.wave, pictures.susceptibility] = await Promise.all([
+            wv ? pictureToJpeg(wv.url, [...d.ews.hydraulic.depth_classes.map((c) => ({ label: c[3], color: c[2] })), { label: "outer limit", color: "#fdd9a8" }]) : null,
+            su ? pictureToJpeg("/api/flood/watch/map/susceptibility.png", su.classes.map((c, i) => ({ label: c, color: su.colors[i] }))) : null,
+          ]);
+          if (token !== _state.runToken) throw new Error("briefing closed during export");
+          mark("pictures", (!wv || pictures.wave) && (!su || pictures.susceptibility) ? "ok" : "warn");
+        }
+        const decision = d.ews ? floodReportSections(d.ews, { shots, pictures }) : null;
+        if (decision) return decision;
         return scenesToSections({ scenes: _state.scenes, chapterNames: REPORT_CHAPTERS, titleOf: _sceneTitle, popupOf: _reportPopupHtml, shots, bottomLineKinds: ["assessment"] });
       },
     });

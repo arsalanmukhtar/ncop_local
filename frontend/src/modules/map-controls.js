@@ -249,9 +249,9 @@ export class StoryManager {
     },
     {
       value: "__flood_watch__", icon: "🌊", title: "National Flood Watch", theme: "Floods", color: "#14b8a6",
-      basis: "River status now and the flood outlook, with the research on why Pakistan floods.",
-      data: "FFD barrages & dams · CEMS GloFAS 15-day outlook & Google Flood Hub gauges/inundation (via IWMI) · 33 peer-reviewed studies.",
-      shows: "River-by-river tour, how close each river is to its warning level, AI gauge forecasts and a national watch level.",
+      basis: "How close the rivers are to flooding, what may come next, who could be affected, and what to do.",
+      data: "FFD readings, limits, bulletins and dam levels (main source) · NCOP river outlook tested on 2016–2026 · GPM, SMAP, GFS, ECMWF · GloFAS & Google Flood Hub · NCOP flood extents 2010–2025.",
+      shows: "Station and district levels, dam storage, a 3-day river outlook with its skill, people on land that floods, and actions with owners.",
     },
     {
       value: "__food_security_watch__", icon: "🌾", title: "National Food Security & Agriculture Watch", theme: "Food security", color: "#f59e0b",

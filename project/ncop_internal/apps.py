@@ -57,6 +57,10 @@ def _warm_up_translation_model():
     is_reloader_watcher = "runserver" in sys.argv and os.environ.get("RUN_MAIN") != "true"
     if is_reloader_watcher:
         return
+    # Management commands other than runserver (data jobs, timers, tests) never
+    # translate; warming 2.4 GB there only competes with the job for memory.
+    if os.path.basename(sys.argv[0] if sys.argv else "") == "manage.py" and "runserver" not in sys.argv:
+        return
     try:
         from . import translate
     except Exception:

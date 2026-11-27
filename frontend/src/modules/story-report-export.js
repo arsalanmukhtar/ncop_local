@@ -30,6 +30,7 @@
 //   banner     {value, label, color, title, text, unit?}  large index + category panel
 //   cards3     [{title, value, label, color, lines}]  coloured summary cards, 3 per row
 //   (table cells may be {t, bg}: text on a category colour; chart.bg = light chart)
+//   pageBreak  true                         start on a new page
 //   image      {src|null, caption}          map capture; null = placeholder
 //   table      {head: string[], rows: string[][]}
 //   refs       string[]                     numbered reference list
@@ -122,6 +123,39 @@ export async function captureMap(map, { timeoutMs = 8000, settleMs = 0 } = {}) {
     return out.toDataURL("image/jpeg", JPEG_Q);
   } catch (e) {
     console.warn("[report-export] map capture failed", e);
+    return null;
+  }
+}
+
+/**
+ * A ready-made transparent map picture as a JPEG data URL, fitted into the
+ * report's 3:2 frame on white with a legend strip. null when it cannot be read.
+ */
+export async function pictureToJpeg(url, legend = []) {
+  try {
+    const r = await fetch(url, { credentials: "same-origin" });
+    if (!r.ok) return null;
+    const bmp = await createImageBitmap(await r.blob());
+    const W = 1200, H = Math.round(W / MAP_ASPECT), strip = legend.length ? 46 : 0;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d", { alpha: false });
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    const k = Math.min((W - 20) / bmp.width, (H - strip - 20) / bmp.height), w = bmp.width * k, h = bmp.height * k;
+    ctx.drawImage(bmp, (W - w) / 2, (H - strip - h) / 2, w, h);
+    bmp.close?.();
+    ctx.font = "20px Arial, sans-serif"; ctx.textBaseline = "middle";
+    const widths = legend.map((l) => ctx.measureText(l.label).width + 48), total = widths.reduce((a, b) => a + b, 0);
+    let x = Math.max(10, (W - total) / 2);
+    legend.forEach((l, i) => {
+      ctx.fillStyle = l.color; ctx.fillRect(x, H - strip + 13, 22, 20);
+      ctx.strokeStyle = "#6b7280"; ctx.strokeRect(x, H - strip + 13, 22, 20);
+      ctx.fillStyle = "#111827"; ctx.fillText(l.label, x + 28, H - strip + 23);
+      x += widths[i];
+    });
+    return c.toDataURL("image/jpeg", 0.88);
+  } catch (e) {
+    console.warn("[report-export] picture failed", url, e);
     return null;
   }
 }
@@ -466,6 +500,7 @@ function _renderSections(sections) {
   let fig = 0, tab = 0, color = NAVY, scene = "";
   for (const s of sections) {
     if (s.glance) out.push(_glance(s.glance));
+    if (s.pageBreak) out.push(`<!--[if mso]><br clear="all" style="mso-special-character:line-break;page-break-before:always"><![endif]--><div style="page-break-before:always;break-before:page"></div>`);
     if (s.chapter) {
       color = _chColor(s.chapter.n);
       // Word ignores CSS breaks on tables, so it gets its own page-break <br>,
@@ -610,7 +645,12 @@ function _print(html, win) {
   document.body.appendChild(frame);
   const doc = frame.contentDocument || frame.contentWindow.document;
   doc.open(); doc.write(html); doc.close();
-  setTimeout(() => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (_) {} setTimeout(() => frame.remove(), 2000); }, 500);
+  // Pop-up blocked: print from a hidden frame. It stays until the print dialog
+  // is done; removing it earlier closes the dialog or saves an empty PDF.
+  const done = () => { if (frame.isConnected) frame.remove(); };
+  frame.contentWindow.addEventListener("afterprint", () => setTimeout(done, 1000), { once: true });
+  setTimeout(done, 10 * 60 * 1000);
+  setTimeout(() => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (_) {} }, 500);
 }
 
 export function reportFilename(slug, ext) {

@@ -9,6 +9,7 @@ from .iwmi_flood_views import (
 from .gefs_views import GefsFramesView, GefsPointView, GefsHealthView, GefsDistrictsView
 from .dew_proxy import DewExposuresView
 from .foodsec_watch import FoodSecurityWatchView
+from .flood_ews import FloodEwsView, FloodMapView
 from .hawanama_views import (
     HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
     HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
@@ -92,6 +93,9 @@ urlpatterns = [
     path("api/gefs/districts/", GefsDistrictsView.as_view(), name="gefs-districts"),
     # DEW exposures service, proxied same-origin (dew_proxy.py)
     path("api/dew/exposures/", DewExposuresView.as_view(), name="dew-exposures"),
+    # National Flood Watch early-warning document (flood_ews.py)
+    path("api/flood/watch/", FloodEwsView.as_view(), name="flood-watch"),
+    path("api/flood/watch/map/<slug:name>.png", FloodMapView.as_view(), name="flood-watch-map"),
     # Food Security & Agriculture Watch story digest (foodsec_watch.py)
     path("api/foodsec/watch/", FoodSecurityWatchView.as_view(), name="foodsec-watch"),
     # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see

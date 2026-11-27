@@ -1,0 +1,12 @@
+# /etc/systemd/system/flood-watch-data.timer
+# River, rain and soil data of the National Flood Watch, every 6 hours.
+[Unit]
+Description=NCOP flood-watch data refresh
+
+[Timer]
+OnCalendar=*-*-* 02,08,14,20:20:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

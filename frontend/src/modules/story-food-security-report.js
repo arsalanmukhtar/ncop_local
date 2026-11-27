@@ -164,7 +164,7 @@ function levelBars(provinces) {
 }
 
 /** Line chart with optional forecast band and reference lines. */
-function lineChart({ series, labels, refs = [], band = null, unit = "", zero = false, dp = 0, h = 150, aria = "chart" }) {
+export function lineChart({ series, labels, refs = [], band = null, unit = "", zero = false, dp = 0, h = 150, aria = "chart" }) {
   const padL = 44, padR = 14, top = 18, base = top + h, H = base + 20;
   const vals = [...series.flatMap((s) => s.values), ...(band || []).flatMap((b) => [b.lo, b.hi]), ...refs.map((r) => r.v)].filter(Number.isFinite);
   if (vals.length < 2) return "";
@@ -198,7 +198,7 @@ function lineChart({ series, labels, refs = [], band = null, unit = "", zero = f
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${_x(aria)}">${out.join("")}</svg>`;
 }
 
-function columns(rows, { unit = "", color = "#2563eb", h = 130, dp = 0, aria = "chart" } = {}) {
+export function columns(rows, { unit = "", color = "#2563eb", h = 130, dp = 0, aria = "chart" } = {}) {
   const padL = 40, top = 20, base = top + h, H = base + 20;
   const max = Math.max(...rows.map((r) => r.v).filter(Number.isFinite), 1) * 1.1;
   const cw = (W - padL - 8) / Math.max(rows.length, 1);

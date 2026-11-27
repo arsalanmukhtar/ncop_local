@@ -270,3 +270,7 @@ project/media/foodsec/sources/
 project/media/foodsec/eo_v1.npz
 project/media/foodsec/issues.json
 project/media/foodsec/backtest.json
+
+# Flood Watch early-warning runtime stores (flood_store / flood_eo / flood_atlas / flood_ews),
+# rebuilt by `manage.py flood_watch_data --backfill --atlas`
+project/media/floodwatch/
