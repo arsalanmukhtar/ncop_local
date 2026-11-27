@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="day">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NCOP Production Health Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* =========================================================
+       ENHANCED HEALTH DASHBOARD — NDMA/NCOP FUTURISTIC DESIGN
+       Professional Space Theme with Improved Readability
+    ========================================================== */
+
+        :root {
+            /* Enhanced background with deeper space feel */
+            --hb-bg-1: radial-gradient(1400px 800px at 15% 10%, rgba(70, 178, 255, 0.15), transparent 65%),
+                radial-gradient(1000px 700px at 85% 20%, rgba(28, 169, 30, 0.12), transparent 60%),
+                radial-gradient(1300px 900px at 50% 95%, rgba(255, 0, 0, 0.08), transparent 65%),
+                linear-gradient(180deg, rgba(5, 10, 20, 0.98), rgba(10, 15, 25, 0.95));
+
+            --hb-card: var(--primary-bg);
+            --hb-card-2: var(--secondary-bg);
+            --hb-border: var(--border-light);
+            --hb-text: var(--text-primary);
+            --hb-muted: var(--text-secondary);
+            --hb-dim: var(--text-muted);
+            --hb-glow-blue: var(--shadow-glow-blue);
+            --hb-glow-green: var(--shadow-glow-green);
+            --hb-glow-red: var(--shadow-glow-red);
+            --hb-radius: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--hb-text);
+            background: var(--hb-bg-1);
+            overflow-x: hidden;
+        }
+
+        /* Enhanced animated grid with parallax effect - OPTIMIZED */
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(rgba(70, 178, 255, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(70, 178, 255, 0.06) 1px, transparent 1px);
+            background-size: 60px 60px;
+            opacity: 0.4;
+            mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.9), transparent 85%);
+            z-index: 0;
+            animation: gridDrift 30s linear infinite;
+            /* Slowed down from 20s */
+        }
+
+        @keyframes gridDrift {
+            0% {
+                transform: translate3d(0, 0, 0);
+            }
+
+            100% {
+                transform: translate3d(-60px, -60px, 0);
+            }
+        }
+
+        /* Enhanced aurora with smoother animation - OPTIMIZED */
+        .aurora {
+            position: fixed;
+            inset: -30%;
+            pointer-events: none;
+            z-index: 0;
+            filter: blur(50px) saturate(140%);
+            opacity: 0.35;
+            background:
+                radial-gradient(circle at 25% 35%, rgba(70, 178, 255, 0.25), transparent 45%),
+                radial-gradient(circle at 75% 30%, rgba(28, 169, 30, 0.20), transparent 45%),
+                radial-gradient(circle at 50% 80%, rgba(255, 0, 0, 0.15), transparent 50%);
+            animation: auroraFloat 20s ease-in-out infinite alternate;
+            /* Slowed down from 15s */
+        }
+
+        @keyframes auroraFloat {
+            0% {
+                transform: translate3d(0, 0, 0) scale(1);
+                opacity: 0.35;
+            }
+
+            100% {
+                transform: translate3d(30px, -20px, 0) scale(1.03);
+                opacity: 0.38;
+            }
+        }
+
+        /* Floating stars animation - OPTIMIZED */
+        .stars {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                radial-gradient(2px 2px at 20% 30%, rgba(255, 255, 255, 0.9), transparent),
+                radial-gradient(2px 2px at 60% 70%, rgba(70, 178, 255, 0.8), transparent),
+                radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.7), transparent),
+                radial-gradient(1px 1px at 80% 10%, rgba(28, 169, 30, 0.6), transparent),
+                radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.8), transparent);
+            background-size: 200% 200%;
+            animation: starsFloat 40s ease-in-out infinite;
+            /* Slowed down from 25s */
+            opacity: 0.6;
+            will-change: background-position;
+            /* Performance hint */
+        }
+
+        @keyframes starsFloat {
+
+            0%,
+            100% {
+                background-position: 0% 0%, 100% 100%, 50% 50%, 80% 20%, 90% 60%;
+            }
+
+            50% {
+                background-position: 100% 100%, 0% 0%, 60% 60%, 70% 30%, 85% 65%;
+            }
+        }
+
+        /* Performance optimizations */
+        .bg-grid {
+            will-change: transform;
+        }
+
+        .aurora {
+            will-change: transform, opacity;
+        }
+
+        /* Reduce animations for better performance */
+        @media (prefers-reduced-motion: reduce) {
+
+            .bg-grid,
+            .aurora,
+            .stars,
+            .shooting-star,
+            .brand-badge,
+            .brand-badge::after,
+            .chip .dot.live,
+            .badge .ping,
+            .spinner,
+            .meter>div {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+
+        /* Shooting stars */
+        @keyframes shootingStar {
+            0% {
+                transform: translateX(0) translateY(0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateX(-1000px) translateY(500px);
+                opacity: 0;
+            }
+        }
+
+        .shooting-star {
+            position: fixed;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            box-shadow: 0 0 10px 2px rgba(70, 178, 255, 0.8);
+            animation: shootingStar 3s linear;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 2;
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 20px 20px 40px;
+        }
+
+        /* Enhanced top bar with better readability */
+        .topbar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 22px;
+            border-radius: var(--hb-radius);
+            background: rgba(0, 0, 0, 0.65);
+            border: 2px solid rgba(70, 178, 255, 0.3);
+            backdrop-filter: blur(25px) saturate(120%) brightness(1.1);
+            -webkit-backdrop-filter: blur(25px) saturate(120%) brightness(1.1);
+            box-shadow:
+                0 15px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                0 0 30px rgba(70, 178, 255, 0.1);
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 280px;
+        }
+
+        .brand-badge {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(70, 178, 255, 0.3), rgba(28, 169, 30, 0.25));
+            border: 2px solid rgba(70, 178, 255, 0.4);
+            box-shadow:
+                0 0 25px rgba(70, 178, 255, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 25px rgba(70, 178, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            }
+
+            50% {
+                box-shadow: 0 0 35px rgba(70, 178, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        .brand-badge::after {
+            content: "";
+            position: absolute;
+            inset: -80%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transform: rotate(25deg);
+            animation: sheen 3.5s ease-in-out infinite;
+        }
+
+        @keyframes sheen {
+            0% {
+                transform: translateX(-40%) rotate(25deg);
+                opacity: 0;
+            }
+
+            40% {
+                opacity: 0.8;
+            }
+
+            80% {
+                transform: translateX(40%) rotate(25deg);
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        .brand-title {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .brand-title h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 0.5px;
+            font-weight: 900;
+            line-height: 1.1;
+            text-shadow: 0 2px 8px rgba(70, 178, 255, 0.4);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(70, 178, 255, 0.9));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-title .sub {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(70, 178, 255, 0.3);
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .chip .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+        }
+
+        .chip .dot.live {
+            background: var(--ndma-blue);
+            box-shadow: 0 0 0 4px rgba(70, 178, 255, 0.2), 0 0 15px rgba(70, 178, 255, 0.6);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+                box-shadow: 0 0 0 4px rgba(70, 178, 255, 0.2), 0 0 15px rgba(70, 178, 255, 0.6);
+            }
+
+            50% {
+                transform: scale(1.3);
+                opacity: 0.8;
+                box-shadow: 0 0 0 6px rgba(70, 178, 255, 0.3), 0 0 25px rgba(70, 178, 255, 0.8);
+            }
+        }
+
+        .btn {
+            border: none;
+            cursor: pointer;
+            padding: 12px 18px;
+            border-radius: 14px;
+            font-weight: 900;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(70, 178, 255, 0.6), rgba(30, 144, 255, 0.5));
+            border-color: rgba(70, 178, 255, 0.5);
+            box-shadow: 0 4px 15px rgba(70, 178, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, rgba(70, 178, 255, 0.7), rgba(30, 144, 255, 0.6));
+            box-shadow: 0 6px 25px rgba(70, 178, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, rgba(255, 76, 76, 0.5), rgba(255, 0, 0, 0.6));
+            border-color: rgba(255, 0, 0, 0.5);
+            box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, rgba(255, 76, 76, 0.6), rgba(255, 0, 0, 0.7));
+            box-shadow: 0 6px 25px rgba(255, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.5), rgba(28, 169, 30, 0.6));
+            border-color: rgba(28, 169, 30, 0.5);
+            box-shadow: 0 4px 15px rgba(28, 169, 30, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.6), rgba(28, 169, 30, 0.7));
+            box-shadow: 0 6px 25px rgba(28, 169, 30, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-report {
+            background: linear-gradient(135deg, rgba(156, 39, 176, 0.5), rgba(123, 31, 162, 0.6));
+            border-color: rgba(156, 39, 176, 0.5);
+            box-shadow: 0 4px 15px rgba(156, 39, 176, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-report:hover {
+            background: linear-gradient(135deg, rgba(156, 39, 176, 0.6), rgba(123, 31, 162, 0.7));
+            box-shadow: 0 6px 25px rgba(156, 39, 176, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        /* Layout grid */
+        .grid {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 1.3fr 0.7fr;
+            gap: 18px;
+        }
+
+        @media (max-width: 1100px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .brand {
+                min-width: 0;
+            }
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.65);
+            border: 2px solid rgba(70, 178, 255, 0.25);
+            border-radius: var(--hb-radius);
+            backdrop-filter: blur(25px) saturate(120%) brightness(1.1);
+            -webkit-backdrop-filter: blur(25px) saturate(120%) brightness(1.1);
+            box-shadow:
+                0 15px 50px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            animation: fadeIn 0.8s ease-out backwards;
+        }
+
+        .panel:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .panel:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(70, 178, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-shadow: 0 2px 8px rgba(70, 178, 255, 0.4);
+        }
+
+        .panel-header .hint {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+        }
+
+        .panel-body {
+            padding: 20px;
+        }
+
+        /* Enhanced status badge with better contrast */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            font-weight: 900;
+            letter-spacing: 0.7px;
+            font-size: 12px;
+            text-transform: uppercase;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .badge .ping {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.1);
+        }
+
+        .badge.healthy {
+            background: rgba(28, 169, 30, 0.25);
+            border-color: rgba(28, 169, 30, 0.6);
+            box-shadow: 0 0 20px rgba(28, 169, 30, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .badge.healthy .ping {
+            background: var(--ndma-green);
+            box-shadow: 0 0 0 6px rgba(28, 169, 30, 0.25), 0 0 20px rgba(28, 169, 30, 0.5);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        .badge.degraded {
+            background: rgba(245, 158, 11, 0.25);
+            border-color: rgba(245, 158, 11, 0.6);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .badge.degraded .ping {
+            background: #f59e0b;
+            box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.2), 0 0 20px rgba(245, 158, 11, 0.5);
+            animation: pulseGlow 2.5s ease-in-out infinite;
+        }
+
+        .badge.critical {
+            background: rgba(255, 0, 0, 0.25);
+            border-color: rgba(255, 0, 0, 0.6);
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .badge.critical .ping {
+            background: var(--ndma-red);
+            box-shadow: 0 0 0 6px rgba(255, 0, 0, 0.2), 0 0 20px rgba(255, 0, 0, 0.5);
+            animation: pulseGlow 1.2s ease-in-out infinite;
+        }
+
+        .badge.missing {
+            background: rgba(107, 114, 128, 0.25);
+            border-color: rgba(107, 114, 128, 0.5);
+        }
+
+        /* Enhanced KPI cards */
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        @media (max-width: 1100px) {
+            .kpis {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 520px) {
+            .kpis {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .kpi {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 18px;
+            padding: 16px;
+            box-shadow:
+                0 10px 25px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(15px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kpi:hover {
+            transform: translateY(-3px);
+            border-color: rgba(70, 178, 255, 0.4);
+            box-shadow:
+                0 15px 35px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(70, 178, 255, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        }
+
+        .kpi .label {
+            font-size: 11px;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.75);
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+
+        .kpi .value {
+            margin-top: 8px;
+            font-size: 26px;
+            font-weight: 900;
+            letter-spacing: 0.3px;
+            line-height: 1.0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(70, 178, 255, 0.85));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 2px 10px rgba(70, 178, 255, 0.3);
+        }
+
+        .kpi .sub {
+            margin-top: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.65);
+            font-weight: 800;
+            letter-spacing: 0.3px;
+        }
+
+        /* Enhanced component cards */
+        .cards {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow:
+                0 12px 30px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(15px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(70, 178, 255, 0.4);
+            box-shadow:
+                0 15px 40px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(70, 178, 255, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(600px 200px at 20% 15%, rgba(70, 178, 255, 0.1), transparent 65%),
+                radial-gradient(600px 200px at 80% 15%, rgba(28, 169, 30, 0.08), transparent 65%);
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .card h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .card .content {
+            margin-top: 14px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Enhanced progress meters */
+        .meter {
+            margin-top: 12px;
+            width: 100%;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 999px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .meter>div {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Shimmer animation removed to reduce CPU usage */
+
+        .meter.good>div {
+            background: linear-gradient(90deg, rgba(28, 169, 30, 0.7), rgba(46, 204, 113, 0.9));
+            box-shadow: 0 0 20px rgba(28, 169, 30, 0.4);
+        }
+
+        .meter.warn>div {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.6), rgba(251, 191, 36, 0.9));
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+        }
+
+        .meter.crit>div {
+            background: linear-gradient(90deg, rgba(255, 0, 0, 0.7), rgba(255, 76, 76, 0.9));
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+        }
+
+        /* Right column */
+        .right-stack {
+            display: grid;
+            gap: 18px;
+            max-height: 100vh;
+            overflow: visible;
+        }
+
+        .right-stack .panel {
+            overflow: hidden;
+            max-height: fit-content;
+        }
+
+        /* Enhanced tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            overflow: hidden;
+            border-radius: 16px;
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        th,
+        td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(70, 178, 255, 0.15);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        th {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(0, 0, 0, 0.5);
+            font-weight: 900;
+        }
+
+        td {
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        tr:hover td {
+            background: rgba(70, 178, 255, 0.08);
+            transition: background 0.2s ease;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Enhanced logs */
+        .logs {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 18px;
+            padding: 16px;
+            max-height: 420px;
+            overflow: auto;
+            font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .logs::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .logs::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+        }
+
+        .logs::-webkit-scrollbar-thumb {
+            background: rgba(70, 178, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .logs::-webkit-scrollbar-thumb:hover {
+            background: rgba(70, 178, 255, 0.5);
+        }
+
+        .logline {
+            padding: 10px 12px;
+            border-bottom: 1px dashed rgba(70, 178, 255, 0.15);
+            white-space: pre-wrap;
+            word-break: break-word;
+            transition: background 0.2s ease;
+        }
+
+        .logline:hover {
+            background: rgba(70, 178, 255, 0.05);
+        }
+
+        .logline:last-child {
+            border-bottom: none;
+        }
+
+        .log-error {
+            color: rgba(255, 120, 120, 1);
+            font-weight: 600;
+        }
+
+        .log-warning {
+            color: rgba(255, 210, 120, 1);
+            font-weight: 600;
+        }
+
+        .log-info {
+            color: rgba(160, 210, 255, 1);
+        }
+
+        .log-ok {
+            color: rgba(160, 255, 200, 1);
+        }
+
+        /* Loading state */
+        .loading {
+            display: grid;
+            place-items: center;
+            padding: 30px;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 900;
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid rgba(70, 178, 255, 0.2);
+            border-top-color: rgba(70, 178, 255, 1);
+            animation: spin 0.8s linear infinite;
+            box-shadow: 0 0 30px rgba(70, 178, 255, 0.4);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Chart containers */
+        .chartbox {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 16px;
+            align-items: center;
+        }
+
+        @media (max-width: 520px) {
+            .chartbox {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-canvas {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 18px;
+            padding: 14px;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Enhanced sparklines */
+        .sparks {
+            display: grid;
+            gap: 12px;
+        }
+
+        .spark {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 16px;
+            padding: 14px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .spark:hover {
+            border-color: rgba(70, 178, 255, 0.4);
+            box-shadow: 0 0 25px rgba(70, 178, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .spark-top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .spark-top .name {
+            font-weight: 900;
+            font-size: 13px;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .spark-top .pct {
+            font-weight: 900;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 2px 8px rgba(70, 178, 255, 0.3);
+        }
+
+        /* CRITICAL: Fix sparkline canvas height issue */
+        .spark canvas {
+            max-height: 56px !important;
+            height: 56px !important;
+            width: 100% !important;
+        }
+
+        .footer-note {
+            margin-top: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.5;
+            padding: 12px;
+            background: rgba(70, 178, 255, 0.05);
+            border-left: 3px solid rgba(70, 178, 255, 0.4);
+            border-radius: 8px;
+        }
+
+        /* Report modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(10, 15, 25, 0.95);
+            border: 2px solid rgba(70, 178, 255, 0.4);
+            border-radius: 20px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.6),
+                0 0 50px rgba(70, 178, 255, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            padding: 24px 28px;
+            border-bottom: 2px solid rgba(70, 178, 255, 0.3);
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 0.8px;
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 2px 10px rgba(70, 178, 255, 0.4);
+        }
+
+        .modal-close {
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: 900;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+        }
+
+        .modal-body {
+            padding: 28px;
+        }
+
+        .report-section {
+            margin-bottom: 24px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid rgba(70, 178, 255, 0.2);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        .report-section h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.6px;
+            color: rgba(255, 255, 255, 0.95);
+            text-transform: uppercase;
+            padding-bottom: 12px;
+            border-bottom: 2px solid rgba(70, 178, 255, 0.3);
+        }
+
+        .report-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px dashed rgba(70, 178, 255, 0.15);
+            font-size: 14px;
+        }
+
+        .report-item:last-child {
+            border-bottom: none;
+        }
+
+        .report-label {
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.3px;
+        }
+
+        .report-value {
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.95);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            background: rgba(28, 169, 30, 0.9);
+            border: 2px solid rgba(28, 169, 30, 1);
+            border-radius: 14px;
+            color: white;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            box-shadow:
+                0 10px 30px rgba(28, 169, 30, 0.5),
+                0 0 40px rgba(28, 169, 30, 0.3);
+            z-index: 2000;
+            animation: slideInRight 0.4s ease-out;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .notification.error {
+            background: rgba(255, 0, 0, 0.9);
+            border-color: rgba(255, 0, 0, 1);
+            box-shadow:
+                0 10px 30px rgba(255, 0, 0, 0.5),
+                0 0 40px rgba(255, 0, 0, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-grid"></div>
+    <div class="aurora"></div>
+    <div class="stars"></div>
+
+    <div class="wrap">
+        <!-- TOP BAR -->
+        <div class="topbar">
+            <div class="brand">
+                <div class="brand-badge" title="NDMA | NCOP">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 2l8 4v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4z" stroke="rgba(255,255,255,0.95)"
+                            stroke-width="1.8" />
+                        <path d="M8 12h8M12 8v8" stroke="rgba(255,255,255,0.95)" stroke-width="1.8"
+                            stroke-linecap="round" />
+                    </svg>
+                </div>
+                <div class="brand-title">
+                    <h1>NCOP Production Health</h1>
+                    <div class="sub">NDMA • National Common Operating Picture</div>
+                </div>
+            </div>
+
+            <div class="meta">
+                <div class="chip" title="Manual refresh mode">
+                    <span class="dot live"></span>
+                    <span>Manual Mode</span>
+                </div>
+                <div class="chip" title="Last update time">
+                    <span class="dot"></span>
+                    <span id="timestamp">Not loaded</span>
+                </div>
+                <button class="btn btn-primary" onclick="fetchHealthData()">
+                    <span>🔄 Refresh</span>
+                </button>
+                <button class="btn btn-success" onclick="refreshLogs()">
+                    <span>📋 Logs</span>
+                </button>
+                <button class="btn btn-report" onclick="generateReport()">
+                    <span>📊 Report</span>
+                </button>
+                <button class="btn btn-danger" onclick="confirmRestart()">
+                    <span>⚠️ Restart</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- LEFT: OVERVIEW + COMPONENTS -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🎯 System Overview</h2>
+                    <div class="hint" id="overviewHint">Waiting for telemetry…</div>
+                </div>
+
+                <div class="panel-body">
+                    <div class="chartbox">
+                        <div class="chart-canvas">
+                            <canvas id="overallChart" height="140"></canvas>
+                        </div>
+
+                        <div class="kpis">
+                            <div class="kpi">
+                                <div class="label">Overall</div>
+                                <div class="value" id="overallText">—</div>
+                                <div class="sub" id="overallSub">—</div>
+                            </div>
+                            <div class="kpi">
+                                <div class="label">Service</div>
+                                <div class="value" id="serviceText">—</div>
+                                <div class="sub" id="serviceSub">—</div>
+                            </div>
+                            <div class="kpi">
+                                <div class="label">Database</div>
+                                <div class="value" id="dbText">—</div>
+                                <div class="sub" id="dbSub">—</div>
+                            </div>
+                            <div class="kpi">
+                                <div class="label">Build/Static</div>
+                                <div class="value" id="buildText">—</div>
+                                <div class="sub" id="buildSub">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cards">
+                        <!-- Server -->
+                        <div class="card">
+                            <h3>
+                                <span>🖥️ Server</span>
+                                <span id="serverBadge" class="badge missing"><span class="ping"></span>Loading</span>
+                            </h3>
+                            <div class="content" id="serverBox">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    <div>Loading server…</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Build -->
+                        <div class="card">
+                            <h3>
+                                <span>🔨 Build</span>
+                                <span id="buildBadge" class="badge missing"><span class="ping"></span>Loading</span>
+                            </h3>
+                            <div class="content" id="buildBox">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    <div>Loading build…</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Static -->
+                        <div class="card">
+                            <h3>
+                                <span>📦 Static</span>
+                                <span id="staticBadge" class="badge missing"><span class="ping"></span>Loading</span>
+                            </h3>
+                            <div class="content" id="staticBox">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    <div>Loading static…</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DB -->
+                        <div class="card">
+                            <h3>
+                                <span>🗄️ Database</span>
+                                <span id="dbBadge" class="badge missing"><span class="ping"></span>Loading</span>
+                            </h3>
+                            <div class="content" id="dbBox">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    <div>Loading database…</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="footer-note">
+                        💡 <strong>Tip:</strong> If you serve this behind a reverse-proxy subpath, replace fetch URLs
+                        with an absolute base (e.g. <b>/admin/health/api/</b>). Manual refresh mode active - click
+                        Refresh button to update.
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: RESOURCES + APIS + LOGS -->
+            <div class="right-stack">
+                <!-- Resources -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>⚡ System Resources</h2>
+                        <div class="hint" id="resourcesHint">CPU • RAM • Disk</div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="sparks">
+                            <div class="spark">
+                                <div class="spark-top">
+                                    <div class="name">CPU Usage</div>
+                                    <div class="pct"><span id="cpuPct">—</span>%</div>
+                                </div>
+                                <div class="meter" id="cpuMeter">
+                                    <div></div>
+                                </div>
+                                <canvas id="cpuSpark" width="400" height="56"></canvas>
+                            </div>
+
+                            <div class="spark">
+                                <div class="spark-top">
+                                    <div class="name">Memory</div>
+                                    <div class="pct"><span id="memPct">—</span>%</div>
+                                </div>
+                                <div class="meter" id="memMeter">
+                                    <div></div>
+                                </div>
+                                <canvas id="memSpark" width="400" height="56"></canvas>
+                            </div>
+
+                            <div class="spark">
+                                <div class="spark-top">
+                                    <div class="name">Disk Space</div>
+                                    <div class="pct"><span id="diskPct">—</span>%</div>
+                                </div>
+                                <div class="meter" id="diskMeter">
+                                    <div></div>
+                                </div>
+                                <canvas id="diskSpark" width="400" height="56"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- APIs -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>🌐 External APIs</h2>
+                        <div class="hint" id="apisHint">Latency & status codes</div>
+                    </div>
+                    <div class="panel-body" id="api-health">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <div>Loading APIs…</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>📝 Recent Logs</h2>
+                        <div class="hint">Last 50 lines</div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="logs-container" class="logs">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                <div>Loading logs…</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="reportModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>📊 System Health Report</h2>
+                <button class="modal-close" onclick="closeReportModal()">Close</button>
+            </div>
+            <div class="modal-body" id="reportContent">
+                <!-- Report content will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let healthData = null;
+
+        // Simple trend buffers for sparklines
+        const trend = {
+            cpu: [],
+            mem: [],
+            disk: []
+        };
+        const TREND_MAX = 36;
+
+        // Charts
+        let overallChart, cpuSpark, memSpark, diskSpark;
+
+        // Helper functions
+        function cssVar(name, fallback) {
+            const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            return v || fallback;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function showNotification(message, isError = false) {
+            // Clean up old notifications first to prevent memory leaks
+            const oldNotifications = document.querySelectorAll('.notification');
+            oldNotifications.forEach(notif => notif.remove());
+
+            const notification = document.createElement('div');
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideInRight 0.4s ease-out reverse';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 400);
+            }, 3000);
+        }
+
+        // Shooting star effect with DOM cleanup
+        function createShootingStar() {
+            // Limit total shooting stars to prevent memory issues
+            const existingStars = document.querySelectorAll('.shooting-star');
+            if (existingStars.length > 3) return; // Max 3 shooting stars at once
+
+            const star = document.createElement('div');
+            star.className = 'shooting-star';
+            star.style.top = Math.random() * 30 + '%';
+            star.style.left = Math.random() * 100 + '%';
+            document.body.appendChild(star);
+
+            setTimeout(() => {
+                if (star.parentNode) {
+                    star.remove();
+                }
+            }, 3000);
+        }
+
+        // Create shooting stars occasionally (reduced frequency for performance)
+        setInterval(() => {
+            if (Math.random() > 0.85) { // Reduced from 0.7 to 0.85
+                createShootingStar();
+            }
+        }, 15000); // Increased from 8000 to 15000ms
+
+        // Initialize charts
+        function initCharts() {
+            const ctxOverall = document.getElementById('overallChart');
+
+            overallChart = new Chart(ctxOverall, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Healthy', 'Degraded', 'Critical'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        borderWidth: 2,
+                        hoverOffset: 8,
+                        borderColor: 'rgba(0, 0, 0, 0.8)',
+                        backgroundColor: [
+                            'rgba(28, 169, 30, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(255, 0, 0, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '65%',
+                    animation: false, // Disable all animations
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.9)',
+                                font: {
+                                    size: 11,
+                                    weight: 'bold',
+                                    family: 'Inter'
+                                },
+                                padding: 10,
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                            titleColor: 'rgba(255, 255, 255, 0.95)',
+                            bodyColor: 'rgba(255, 255, 255, 0.9)',
+                            borderColor: 'rgba(70, 178, 255, 0.5)',
+                            borderWidth: 2,
+                            padding: 12,
+                            displayColors: true,
+                            titleFont: {
+                                size: 13,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            });
+
+            function sparkConfig(canvasId, color) {
+                const ctx = document.getElementById(canvasId);
+                return new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: Array.from({ length: TREND_MAX }, (_, i) => i + 1),
+                        datasets: [{
+                            data: [],
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            borderColor: color,
+                            backgroundColor: color.replace('1)', '0.2)')
+                        }]
+                    },
+                    options: {
+                        responsive: false, // CRITICAL: Disable responsive to prevent infinite growth
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: false }
+                        },
+                        scales: {
+                            x: { display: false },
+                            y: { display: false, suggestedMin: 0, suggestedMax: 100 }
+                        }
+                    }
+                });
+            }
+
+            cpuSpark = sparkConfig('cpuSpark', 'rgba(70, 178, 255, 1)');
+            memSpark = sparkConfig('memSpark', 'rgba(156, 39, 176, 1)');
+            diskSpark = sparkConfig('diskSpark', 'rgba(245, 158, 11, 1)');
+        }
+
+        function pushTrend(arr, val) {
+            arr.push(val);
+            if (arr.length > TREND_MAX) arr.shift();
+            return arr;
+        }
+
+        function setMeter(el, pct) {
+            const meter = document.getElementById(el);
+            const bar = meter.querySelector('div');
+            bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+
+            meter.classList.remove('good', 'warn', 'crit');
+            if (pct < 70) meter.classList.add('good');
+            else if (pct < 85) meter.classList.add('warn');
+            else meter.classList.add('crit');
+        }
+
+        function badgeClassFromStatus(status) {
+            if (!status) return 'missing';
+            const s = String(status).toLowerCase();
+            if (s === 'healthy') return 'healthy';
+            if (s === 'degraded' || s === 'warning') return 'degraded';
+            if (s === 'critical' || s === 'down' || s === 'invalid' || s === 'missing') return 'critical';
+            return 'missing';
+        }
+
+        function setBadge(id, text, cls) {
+            const el = document.getElementById(id);
+            el.className = 'badge ' + cls;
+            el.innerHTML = '<span class="ping"></span>' + escapeHtml(text);
+        }
+
+        // Fetch health data
+        async function fetchHealthData() {
+            try {
+                showNotification('Fetching health data...');
+
+                const response = await fetch('/health/api/', { cache: 'no-store' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                healthData = data; // Store globally for report generation
+                updateDashboard(data);
+
+                showNotification('Health data updated successfully!');
+            } catch (error) {
+                console.error('Error fetching health data:', error);
+                showNotification('Failed to fetch health data: ' + error.message, true);
+
+                document.getElementById('overviewHint').textContent = 'Health API unreachable';
+                setBadge('serverBadge', 'API Error', 'critical');
+                setBadge('buildBadge', 'API Error', 'critical');
+                setBadge('staticBadge', 'API Error', 'critical');
+                setBadge('dbBadge', 'API Error', 'critical');
+            }
+        }
+
+        // Update dashboard with health data
+        function updateDashboard(data) {
+            // Timestamp
+            const ts = data.timestamp ? new Date(data.timestamp) : new Date();
+            document.getElementById('timestamp').textContent = ts.toLocaleTimeString();
+
+            // Overview KPI
+            const overall = (data.overall_status || 'missing').toUpperCase();
+            document.getElementById('overallText').textContent = overall;
+            document.getElementById('overallSub').textContent = 'Manual refresh mode';
+
+            // Service KPI (server)
+            const srv = data.server || {};
+            document.getElementById('serviceText').textContent = srv.running ? 'RUNNING' : 'DOWN';
+            document.getElementById('serviceSub').textContent = srv.port ? ('Port ' + srv.port) : '—';
+
+            // DB KPI
+            const db = data.database || {};
+            document.getElementById('dbText').textContent = db.connected ? 'CONNECTED' : 'OFFLINE';
+            document.getElementById('dbSub').textContent = db.name ? db.name : '—';
+
+            // Build KPI
+            const build = data.build || {};
+            const stat = data.static || {};
+            const buildOk = !!build.valid;
+            const staticOk = !!stat.collected;
+            document.getElementById('buildText').textContent = (buildOk && staticOk) ? 'OK' : 'CHECK';
+            document.getElementById('buildSub').textContent =
+                (buildOk ? ('Build ' + (build.age_hours ?? '—') + 'h') : 'Build invalid') + ' • ' +
+                (staticOk ? 'Static ready' : 'Static missing');
+
+            document.getElementById('overviewHint').textContent =
+                `Status: ${overall} • Host: ${data?.server?.host || '—'} • Env: Production`;
+
+            // Donut chart distribution
+            const statusKey = (data.overall_status || 'missing').toLowerCase();
+            const dist = {
+                healthy: [1, 0, 0],
+                degraded: [0, 1, 0],
+                warning: [0, 1, 0],
+                critical: [0, 0, 1],
+                missing: [0, 0, 1]
+            };
+            const v = dist[statusKey] || [0, 0, 1];
+            overallChart.data.datasets[0].data = v;
+            overallChart.update('none'); // Update without animation
+
+            // Component cards
+            updateServerStatus(data.server || {});
+            updateBuildStatus(data.build || {});
+            updateStaticStatus(data.static || {});
+            updateDatabaseStatus(data.database || {});
+
+            // Resources
+            updateResources(data.resources || {});
+
+            // API table
+            updateApiHealth(data.apis || {});
+        }
+
+        function updateServerStatus(server) {
+            const cls = server.running ? 'healthy' : 'critical';
+            setBadge('serverBadge', server.running ? 'Running' : 'Down', cls);
+
+            const box = document.getElementById('serverBox');
+            box.innerHTML = `
+        <div class="kpis" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="kpi">
+            <div class="label">Port</div>
+            <div class="value">${escapeHtml(String(server.port ?? '—'))}</div>
+            <div class="sub">${escapeHtml(String(server.host ?? ''))}</div>
+          </div>
+          <div class="kpi">
+            <div class="label">PID</div>
+            <div class="value">${escapeHtml(String(server?.process?.pid ?? '—'))}</div>
+            <div class="sub">Uptime: ${server?.process?.uptime_hours != null ? Number(server.process.uptime_hours).toFixed(1) + 'h' : '—'}</div>
+          </div>
+        </div>
+        <div class="footer-note">
+          💾 Memory: ${server?.process?.memory_mb != null ? escapeHtml(String(server.process.memory_mb)) + ' MB' : '—'}
+        </div>
+      `;
+        }
+
+        function updateBuildStatus(build) {
+            const cls = build.valid ? 'healthy' : 'critical';
+            setBadge('buildBadge', build.valid ? 'Valid' : 'Invalid', cls);
+
+            const box = document.getElementById('buildBox');
+            if (build.valid) {
+                box.innerHTML = `
+          <div class="kpis" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="kpi">
+              <div class="label">Total entries</div>
+              <div class="value">${escapeHtml(String(build.total_entries ?? '—'))}</div>
+              <div class="sub">manifest.json</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Critical</div>
+              <div class="value">${escapeHtml(String(build.critical_entries ?? '—'))}</div>
+              <div class="sub">required entries</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Age</div>
+              <div class="value">${escapeHtml(String(build.age_hours ?? '—'))}h</div>
+              <div class="sub">since build</div>
+            </div>
+          </div>
+        `;
+            } else {
+                box.innerHTML = `<div class="logline log-error">⚠️ Error: ${escapeHtml(build.error || 'Unknown')}</div>`;
+            }
+        }
+
+        function updateStaticStatus(staticData) {
+            const cls = staticData.collected ? 'healthy' : 'critical';
+            setBadge('staticBadge', staticData.collected ? 'Collected' : 'Missing', cls);
+
+            const box = document.getElementById('staticBox');
+            if (staticData.collected) {
+                box.innerHTML = `
+          <div class="kpis" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="kpi">
+              <div class="label">JS Files</div>
+              <div class="value">${escapeHtml(String(staticData.js_count ?? '—'))}</div>
+              <div class="sub">assets</div>
+            </div>
+            <div class="kpi">
+              <div class="label">CSS Files</div>
+              <div class="value">${escapeHtml(String(staticData.css_count ?? '—'))}</div>
+              <div class="sub">assets</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Size</div>
+              <div class="value">${escapeHtml(String(staticData.total_size_mb ?? '—'))}MB</div>
+              <div class="sub">static root</div>
+            </div>
+          </div>
+        `;
+            } else {
+                box.innerHTML = `<div class="logline log-error">⚠️ Error: ${escapeHtml(staticData.error || 'Unknown')}</div>`;
+            }
+        }
+
+        function updateDatabaseStatus(db) {
+            const cls = db.connected ? 'healthy' : 'critical';
+            setBadge('dbBadge', db.connected ? 'Connected' : 'Disconnected', cls);
+
+            const box = document.getElementById('dbBox');
+            if (db.connected) {
+                box.innerHTML = `
+          <div class="kpis" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="kpi">
+              <div class="label">Engine</div>
+              <div class="value">${escapeHtml(String(db.engine ?? '—'))}</div>
+              <div class="sub">driver</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Database</div>
+              <div class="value">${escapeHtml(String(db.name ?? '—'))}</div>
+              <div class="sub">schema</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Tables</div>
+              <div class="value">${escapeHtml(String(db.table_count ?? '—'))}</div>
+              <div class="sub">count</div>
+            </div>
+          </div>
+        `;
+            } else {
+                box.innerHTML = `<div class="logline log-error">⚠️ Error: ${escapeHtml(db.error || 'Unknown')}</div>`;
+            }
+        }
+
+        function updateResources(resources) {
+            const cpu = Number(resources?.cpu?.percent ?? 0);
+            const mem = Number(resources?.memory?.percent ?? 0);
+            const disk = Number(resources?.disk?.percent ?? 0);
+
+            document.getElementById('cpuPct').textContent = cpu.toFixed(1);
+            document.getElementById('memPct').textContent = mem.toFixed(1);
+            document.getElementById('diskPct').textContent = disk.toFixed(1);
+
+            setMeter('cpuMeter', cpu);
+            setMeter('memMeter', mem);
+            setMeter('diskMeter', disk);
+
+            cpuSpark.data.datasets[0].data = pushTrend(trend.cpu, cpu);
+            memSpark.data.datasets[0].data = pushTrend(trend.mem, mem);
+            diskSpark.data.datasets[0].data = pushTrend(trend.disk, disk);
+
+            cpuSpark.update('none'); // Update without animation
+            memSpark.update('none'); // Update without animation
+            diskSpark.update('none'); // Update without animation
+        }
+
+        function updateApiHealth(apis) {
+            const container = document.getElementById('api-health');
+
+            const entries = Object.entries(apis || {});
+            if (!entries.length) {
+                container.innerHTML = `<div class="logline log-warning">⚠️ No API definitions returned by /health/api/</div>`;
+                return;
+            }
+
+            let html = '<table><thead><tr><th>API</th><th>Status</th><th>Response</th></tr></thead><tbody>';
+
+            for (const [, api] of entries) {
+                const status = (api.status || 'missing').toLowerCase();
+                const cls = badgeClassFromStatus(status);
+                const code = api.status_code != null ? api.status_code : '-';
+                const ms = api.response_time_ms != null ? `${api.response_time_ms} ms` : '-';
+
+                html += `
+          <tr>
+            <td>${escapeHtml(api.name || 'Unnamed')}</td>
+            <td><span class="badge ${cls}" style="padding:6px 12px;font-size:11px"><span class="ping"></span>${escapeHtml(status)}</span></td>
+            <td>${escapeHtml(ms)} ${code !== '-' ? '(' + escapeHtml(String(code)) + ')' : ''}</td>
+          </tr>
+        `;
+            }
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Fetch and display logs
+        async function refreshLogs() {
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading logs…</div></div>';
+
+            try {
+                const response = await fetch('/health/api/logs/?lines=50', { cache: 'no-store' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                if (data.logs && data.logs.length > 0) {
+                    let html = '';
+                    data.logs.forEach(log => {
+                        const lvl = (log.level || 'info').toLowerCase();
+                        const levelClass =
+                            lvl === 'error' ? 'log-error' :
+                                lvl === 'warning' ? 'log-warning' :
+                                    lvl === 'ok' ? 'log-ok' :
+                                        'log-info';
+
+                        html += `<div class="logline ${levelClass}">${escapeHtml(log.message || '')}</div>`;
+                    });
+                    container.innerHTML = html;
+                    showNotification('Logs refreshed successfully!');
+                } else {
+                    container.innerHTML = '<div class="logline log-ok">✅ No recent log entries</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="logline log-error">⚠️ Error loading logs: ${escapeHtml(error.message || String(error))}</div>`;
+                showNotification('Failed to refresh logs: ' + error.message, true);
+            }
+        }
+
+        // Generate report
+        function generateReport() {
+            if (!healthData) {
+                showNotification('Please fetch health data first!', true);
+                return;
+            }
+
+            const modal = document.getElementById('reportModal');
+            const content = document.getElementById('reportContent');
+
+            const timestamp = healthData.timestamp ? new Date(healthData.timestamp) : new Date();
+            const server = healthData.server || {};
+            const db = healthData.database || {};
+            const build = healthData.build || {};
+            const stat = healthData.static || {};
+            const resources = healthData.resources || {};
+            const apis = healthData.apis || {};
+
+            let html = `
+        <div class="report-section">
+          <h3>📋 Executive Summary</h3>
+          <div class="report-item">
+            <span class="report-label">Report Generated:</span>
+            <span class="report-value">${timestamp.toLocaleString()}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Overall Status:</span>
+            <span class="report-value">${healthData.overall_status || 'Unknown'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Environment:</span>
+            <span class="report-value">Production</span>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>🖥️ Server Status</h3>
+          <div class="report-item">
+            <span class="report-label">Server Running:</span>
+            <span class="report-value">${server.running ? '✅ Yes' : '❌ No'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Host:</span>
+            <span class="report-value">${escapeHtml(server.host || '—')}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Port:</span>
+            <span class="report-value">${server.port || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Process ID:</span>
+            <span class="report-value">${server?.process?.pid || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Uptime:</span>
+            <span class="report-value">${server?.process?.uptime_hours != null ? Number(server.process.uptime_hours).toFixed(2) + ' hours' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Memory Usage:</span>
+            <span class="report-value">${server?.process?.memory_mb || '—'} MB</span>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>🗄️ Database Status</h3>
+          <div class="report-item">
+            <span class="report-label">Connection:</span>
+            <span class="report-value">${db.connected ? '✅ Connected' : '❌ Disconnected'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Database Name:</span>
+            <span class="report-value">${escapeHtml(db.name || '—')}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Engine:</span>
+            <span class="report-value">${escapeHtml(db.engine || '—')}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Table Count:</span>
+            <span class="report-value">${db.table_count || '—'}</span>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>🔨 Build & Static Files</h3>
+          <div class="report-item">
+            <span class="report-label">Build Valid:</span>
+            <span class="report-value">${build.valid ? '✅ Yes' : '❌ No'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Build Age:</span>
+            <span class="report-value">${build.age_hours != null ? build.age_hours + ' hours' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Total Entries:</span>
+            <span class="report-value">${build.total_entries || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Critical Entries:</span>
+            <span class="report-value">${build.critical_entries || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Static Collected:</span>
+            <span class="report-value">${stat.collected ? '✅ Yes' : '❌ No'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">JS Files:</span>
+            <span class="report-value">${stat.js_count || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">CSS Files:</span>
+            <span class="report-value">${stat.css_count || '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Total Size:</span>
+            <span class="report-value">${stat.total_size_mb || '—'} MB</span>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>⚡ System Resources</h3>
+          <div class="report-item">
+            <span class="report-label">CPU Usage:</span>
+            <span class="report-value">${resources?.cpu?.percent != null ? Number(resources.cpu.percent).toFixed(2) + '%' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Memory Usage:</span>
+            <span class="report-value">${resources?.memory?.percent != null ? Number(resources.memory.percent).toFixed(2) + '%' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Memory Used:</span>
+            <span class="report-value">${resources?.memory?.used_gb != null ? resources.memory.used_gb + ' GB' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Memory Total:</span>
+            <span class="report-value">${resources?.memory?.total_gb != null ? resources.memory.total_gb + ' GB' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Disk Usage:</span>
+            <span class="report-value">${resources?.disk?.percent != null ? Number(resources.disk.percent).toFixed(2) + '%' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Disk Used:</span>
+            <span class="report-value">${resources?.disk?.used_gb != null ? resources.disk.used_gb + ' GB' : '—'}</span>
+          </div>
+          <div class="report-item">
+            <span class="report-label">Disk Total:</span>
+            <span class="report-value">${resources?.disk?.total_gb != null ? resources.disk.total_gb + ' GB' : '—'}</span>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>🌐 External APIs</h3>
+      `;
+
+            const apiEntries = Object.entries(apis);
+            if (apiEntries.length > 0) {
+                apiEntries.forEach(([, api]) => {
+                    html += `
+            <div class="report-item">
+              <span class="report-label">${escapeHtml(api.name || 'Unnamed')}:</span>
+              <span class="report-value">${escapeHtml(api.status || 'Unknown')} (${api.response_time_ms != null ? api.response_time_ms + 'ms' : '—'})</span>
+            </div>
+          `;
+                });
+            } else {
+                html += `
+          <div class="report-item">
+            <span class="report-label">Status:</span>
+            <span class="report-value">No APIs configured</span>
+          </div>
+        `;
+            }
+
+            html += `
+        </div>
+
+        <div class="report-section">
+          <h3>📊 Recommendations</h3>
+      `;
+
+            // Generate recommendations based on data
+            const recommendations = [];
+
+            if (!server.running) {
+                recommendations.push('⚠️ Server is not running - immediate attention required');
+            }
+
+            if (!db.connected) {
+                recommendations.push('⚠️ Database connection failed - check configuration');
+            }
+
+            if (!build.valid) {
+                recommendations.push('⚠️ Build manifest is invalid - rebuild required');
+            }
+
+            if (!stat.collected) {
+                recommendations.push('⚠️ Static files not collected - run collectstatic');
+            }
+
+            if (resources?.cpu?.percent > 85) {
+                recommendations.push('⚠️ High CPU usage detected - investigate resource-intensive processes');
+            }
+
+            if (resources?.memory?.percent > 85) {
+                recommendations.push('⚠️ High memory usage detected - consider scaling or optimization');
+            }
+
+            if (resources?.disk?.percent > 85) {
+                recommendations.push('⚠️ Low disk space - clean up or expand storage');
+            }
+
+            if (recommendations.length === 0) {
+                recommendations.push('✅ All systems operating normally - no immediate action required');
+            }
+
+            recommendations.forEach(rec => {
+                html += `<div class="report-item"><span class="report-value">${rec}</span></div>`;
+            });
+
+            html += `</div>`;
+
+            content.innerHTML = html;
+            modal.classList.add('active');
+
+            showNotification('Report generated successfully!');
+        }
+
+        function closeReportModal() {
+            document.getElementById('reportModal').classList.remove('active');
+        }
+
+        // Restart service
+        async function confirmRestart() {
+            if (!confirm('Are you sure you want to restart the Waitress service? This will cause brief downtime.')) return;
+
+            try {
+                const response = await fetch('/health/api/restart/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Service restart initiated successfully!');
+                    setTimeout(() => location.reload(), 5000);
+                } else {
+                    showNotification('Failed to restart service: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showNotification('Error restarting service: ' + (error.message || String(error)), true);
+            }
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('reportModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeReportModal();
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+
+            // Optional: Auto-load data on first load
+            // fetchHealthData();
+            // refreshLogs();
+
+            // Show initial message
+            showNotification('Dashboard ready! Click Refresh to load data.');
+        });
+    </script>
+</body>
+
+</html>

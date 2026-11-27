@@ -1,0 +1,81 @@
+{
+  "timestamp": "2026-01-13T08:46:32.943852",
+  "tests": {
+    "server_status": {
+      "waitress_running": true,
+      "port": 8000,
+      "process_info": {
+        "pid": 136407,
+        "name": "python",
+        "memory_mb": 82.578125,
+        "cpu_percent": 0.0
+      }
+    },
+    "build_integrity": {
+      "manifest_exists": true,
+      "manifest_valid": true,
+      "entry_points": {
+        "src/entries/dashboard_main.js": {
+          "file": "assets/dashboard_main-CBOUZmip.js",
+          "exists": true
+        },
+        "src/entries/auth_login.js": {
+          "file": "assets/auth_login-y_ywPWRi.js",
+          "exists": true
+        },
+        "src/entries/auth_signup.js": {
+          "file": "assets/auth_signup-Ctp9j9ns.js",
+          "exists": true
+        },
+        "src/entries/auth_reset.js": {
+          "file": "assets/auth_reset-DiHwx4lL.js",
+          "exists": true
+        },
+        "src/entries/auth_reset_confirm.js": {
+          "file": "assets/auth_reset_confirm-6CSA7C1O.js",
+          "exists": true
+        }
+      },
+      "total_assets": 80,
+      "issues": []
+    },
+    "static_collection": {
+      "static_root_exists": true,
+      "assets_collected": true,
+      "file_count": 47,
+      "sample_files": [
+        {
+          "name": "auth_reset_confirm-6CSA7C1O.js",
+          "size_kb": 0.22
+        },
+        {
+          "name": "map-layers-BcGHtt44.js",
+          "size_kb": 0.09
+        },
+        {
+          "name": "auth-base-Dm5zATfc.js",
+          "size_kb": 0.23
+        }
+      ],
+      "issues": []
+    },
+    "configuration": {
+      "prod_settings_exists": true,
+      "env_file_exists": true,
+      "vite_config_valid": true,
+      "wsgi_configured": true,
+      "issues": []
+    },
+    "permissions": {
+      "vite_dist_readable": true,
+      "static_dist_readable": true,
+      "issues": []
+    },
+    "database_connection": {
+      "connection_success": true,
+      "database_info": {},
+      "error": null
+    }
+  },
+  "overall_status": "healthy"
+}
