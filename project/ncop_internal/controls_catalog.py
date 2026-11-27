@@ -91,6 +91,36 @@ RAIL_CONTROLS = [
         "description": "Splits the map into two side-by-side panes so two different temporal layers (e.g. two different forecast times, or two different datasets) can be visually compared at once, with synced playback controls.",
     },
     {
+        "frontend_id": "floodModelToggle",
+        "label": "Flash-Flood Early Warning",
+        "category": "analysis",
+        "description": (
+            "A real, on-demand flood model — not a fixed pre-computed layer. Covers "
+            "two flood types: flash flood (small basin, local runoff) and riverine "
+            "(major river reach). Four modes: fixed HAND (Height Above Nearest "
+            "Drainage) threshold susceptibility; rainfall-scenario discharge-driven "
+            "(SCS-CN runoff through Manning's equation, giving a spatially-varying "
+            "flood stage instead of one uniform cutoff); AHP susceptibility "
+            "(literature-weighted overlay of terrain, land cover, soil, rainfall, "
+            "NDVI, and connectivity factors into a low/medium/high zone map); and "
+            "live gauge-driven riverine flood-fill (a real water-surface elevation, "
+            "either from a named PMD/FFD barrage gauge or, for a custom area, a "
+            "GeoGLOWS discharge forecast converted via a synthetic rating curve). "
+            "The area to model can be a curated catchment (6 flash-flood pilots — "
+            "Nullah Lai, Bhudni Nullah, Karachi Urban, Swat-Mingora, Lasbela-Uthal, "
+            "Hunza-Karimabad, one real documented small-basin case per major region — "
+            "plus 31 real FFD gauge/barrage stations spanning every province along the "
+            "Indus, Jhelum, Chenab, Ravi, Sutlej, and Kabul rivers), a polygon drawn "
+            "directly on the map, or an uploaded shapefile/GeoJSON/KML file. Every "
+            "run reports real computed exposure (buildings, population by age/sex, "
+            "roads, drainage, schools, bridges, hospitals, administrative context), "
+            "an honest accuracy figure (a calibrated AUC for the curated catchments, "
+            "or a live AHP-vs-observed-flood cross-check for a custom area when real "
+            "ground truth is nearby), and can be downloaded as a self-contained "
+            "GeoJSON file with every attribute attached."
+        ),
+    },
+    {
         "frontend_id": "gisExportToggle",
         "label": "GIS Export",
         "category": "data",

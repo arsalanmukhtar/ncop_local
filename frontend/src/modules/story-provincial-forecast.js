@@ -28,6 +28,7 @@
 
 import { getNwfcWeeklyOutlook, getPmdWarnings } from "./gcop-api-cache.js";
 import { HAZARD_TYPES } from "./pmd-warnings-filter.js";
+import { mountExportButton, runStoryExport, captureMap, notifyCard, firstSentences } from "./story-report-export.js";
 
 const MODAL_ID   = "story-modal";
 const ROOT_ID    = "story-root";
@@ -1533,6 +1534,7 @@ function _ensureCard(root) {
         <span class="pf-live" aria-hidden="true"></span>
         <span>7-Day Weather Outlook</span>
       </div>
+      <span class="pf-head-actions"></span>
       <button type="button" class="pf-mute is-muted" aria-label="Enable narration" title="Enable narration">${ICON_TTS_OFF}</button>
       <button type="button" class="pf-lang" aria-label="Switch to Urdu" title="Switch narration to Urdu">اردو</button>
       <button type="button" class="pf-refresh" aria-label="Refresh outlook">Refresh</button>
@@ -1560,6 +1562,7 @@ function _ensureCard(root) {
   _story.lang = _loadLangPref();
   _bindCardEvents(card);
   _syncLangButton(card);
+  mountExportButton(card, _exportReport);
   return card;
 }
 
@@ -4137,8 +4140,10 @@ async function _fetchAndBuild(card) {
 
     if (warningsRes.status === "fulfilled" && warningsRes.value) {
       _story.warningsFC = _toFC(warningsRes.value);
+      _story.warningsUnavailable = false;
     } else if (!_story.warningsFC) {
       _story.warningsFC = { type: "FeatureCollection", features: [] };
+      _story.warningsUnavailable = true;
       console.warn("[story] warningsFC empty — story will play overview-only");
     }
 
@@ -4177,6 +4182,15 @@ async function _fetchAndBuild(card) {
     if (card.style.display === "none") return;
 
     _renderDots(card);
+
+    if (_pendingExport) {
+      // Opened from the picker's Export: English, no prompts, no autoplay —
+      // export, then rest paused on the first day.
+      _story.lang = "en";
+      _syncLangButton(card);
+      await _runPendingExport(true);
+      return;
+    }
     _renderChapter(card, { fade: false });
 
     // Preference prompts — pause playback, ask, apply, THEN start playing.
@@ -4219,6 +4233,7 @@ async function _fetchAndBuild(card) {
     _renderStatus(card, `Couldn't load briefing: ${e.message}`, true);
   } finally {
     if (btn) btn.classList.remove("is-loading");
+    _dropPendingExport(); // never reached (no data / hidden): close the waiting print window
   }
 }
 
@@ -4318,9 +4333,10 @@ function _hideCardExternally() {
   card.style.display = "none";
 }
 
+let _suppressRestore = false; // set while #storySelect's change event is being handled
 function _restoreCardExternally() {
   const card = document.getElementById(CARD_ID);
-  if (!card) return;
+  if (!card || _suppressRestore) return;
   card.style.display = "";
   if (!_story.started) {
     _renderStartPrompt(card);
@@ -4332,9 +4348,292 @@ function _restoreCardExternally() {
   }
 }
 
+// ==========================================================================
+// Export Report (PDF / Word) — built from the same loaded outlook and PMD
+// warnings the briefing plays; renderers in story-report-export.js. Works
+// without playing, always in English.
+// ==========================================================================
+const REPORT_BOUNDS = [[60.8, 23.6], [77.9, 37.1]]; // Pakistan
+const SEVERITY_STEPS = ["blue", "yellow", "orange", "red"]; // PMD's escalation order
+const _cap = (s) => String(s || "").charAt(0).toUpperCase() + String(s || "").slice(1);
+
+// Province names the vendor feed still uses -> current official names.
+const REPORT_PROVINCES = {
+  "Baluchistan": "Balochistan", "Balochistan": "Balochistan", "Sind": "Sindh", "Sindh": "Sindh", "Punjab": "Punjab",
+  "N.W.F.P": "Khyber Pakhtunkhwa", "Khyber Pakhtunkhwa": "Khyber Pakhtunkhwa", "F.A.T.A": "Khyber Pakhtunkhwa (former FATA)",
+  "Northern Areas": "Gilgit-Baltistan", "Gilgit Baltistan": "Gilgit-Baltistan", "Azad Kashmir": "Azad Kashmir", "Kashmir": "Kashmir",
+  "F.C.T": "Islamabad", "Islamabad": "Islamabad",
+};
+const REPORT_PROV_RE = new RegExp(`^(.+?)\\s+in\\s+(?:the\\s+)?(?:Province\\s+(?:of\\s+)?)?(${Object.keys(REPORT_PROVINCES).sort((a, b) => b.length - a.length).map((k) => k.replace(/\./g, "\\.")).join("|")})\\b`);
+// "Kalat in Baluchistan,Karachi in Sind and …" -> Map(province -> [places])
+function _reportPlaces(message) {
+  const out = new Map();
+  for (const seg of String(message || "").split(/,|;|\band\b/)) {
+    const m = REPORT_PROV_RE.exec(seg.replace(/^.*\bincluding?\s+/i, "").replace(/^.*\binclude\s+/i, "").trim());
+    if (!m) continue;
+    const prov = REPORT_PROVINCES[m[2]];
+    const place = m[1].replace(/\.$/, "").trim();
+    if (!out.has(prov)) out.set(prov, new Set());
+    if (place !== m[2] && place.length < 40 && /^[A-Z]/.test(place) && !REPORT_PROVINCES[place]) out.get(prov).add(place);
+  }
+  if (!out.size) { // other wording: at least name the provinces mentioned
+    for (const [k, prov] of Object.entries(REPORT_PROVINCES)) if (String(message || "").includes(k) && !out.has(prov)) out.set(prov, new Set());
+  }
+  return out;
+}
+function _reportWhere(places) {
+  const txt = [...places].map(([p, set]) => (set.size ? `${p} (${[...set].slice(0, 6).join(", ")}${set.size > 6 ? ` and ${set.size - 6} more` : ""})` : p)).join("; ");
+  return txt || "see the map";
+}
+function _reportText(t) {
+  return String(t || "").replace(/^Pakistan Meteorological Department Warning:\s*/i, "")
+    .replace(/\bBaluchistan\b/g, "Balochistan").replace(/\bSind\b/g, "Sindh").replace(/\bNorthern Areas\b/g, "Gilgit-Baltistan")
+    .replace(/,(?=[A-Z])/g, ", ");
+}
+// "2026-11-25T00:00:00" -> "25 Nov, 00:00" (the feed's own clock, no conversion)
+function _reportTime(iso) {
+  const m = /^\d{4}-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(String(iso || ""));
+  return m ? `${Number(m[2])} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m[1]) - 1]}${m[3] ? `, ${m[3]}` : ""}` : "";
+}
+// One report row per distinct warning (the same warning can match two days).
+function _reportWarning(f) {
+  const p = f.properties || {};
+  const code = p._hazard_code || _hazardCodeForFeature(f);
+  const { warning, advisory } = _splitWarningMessage(p.message || "");
+  return {
+    key: f.geometry || f,
+    code,
+    hazard: HAZARDS_BY_CODE[code]?.label || p.element_label || "Warning",
+    level: String(p.level || "").trim().toLowerCase(),
+    rank: _levelRank(f),
+    issued: _reportTime(p.data_time),
+    valid: _reportTime(p.forecast_time),
+    area: p.area_km2 ? Number(p.area_km2) : null,
+    where: _reportWhere(_reportPlaces(p.message)),
+    text: _reportText(_flagUntranslatedCjk(warning)),
+    advice: advisory ? _flagUntranslatedCjk(advisory).split(/\s+(?=\d+\.\s)/g).map((x) => x.trim().replace(/^\d+\.\s*/, "")).filter(Boolean) : [],
+  };
+}
+function _levelSummary(rows) {
+  const n = new Map();
+  for (const r of rows) n.set(r.level || "unrated", (n.get(r.level || "unrated") || 0) + 1);
+  return [...n].sort((a, b) => (_LEVEL_RANK[b[0]] ?? -1) - (_LEVEL_RANK[a[0]] ?? -1)).map(([l, c]) => `${c} ${_cap(l)}`).join(", ");
+}
+const REPORT_MAX_ROWS = 25;
+
+/** Report sections from the loaded story. shots: Map(dayIndex -> {src, caption}). */
+function _reportSections(shots) {
+  const chapters = _story.chapters || [];
+  const unavailable = !!_story.warningsUnavailable;
+  const days = chapters.map((c) => ({ c, rows: (c._selectedFeatures || []).map(_reportWarning).sort((a, b) => b.rank - a.rank) }));
+  const unique = new Map();
+  for (const d of days) for (const r of d.rows) if (!unique.has(r.key)) unique.set(r.key, r);
+  const all = [...unique.values()];
+  const graded = all.filter((r) => SEVERITY_STEPS.includes(r.level));
+  const top = graded.length ? graded.reduce((a, b) => (b.rank > a.rank ? b : a)) : null;
+  const serious = all.filter((r) => r.level === "orange" || r.level === "red").length;
+  const named = [...new Set(chapters.flatMap((c) => c.provinces || []))];
+  const first = chapters[0], last = chapters[chapters.length - 1];
+
+  const warnLine = unavailable
+    ? "PMD's warning feed could not be read for this report, so warnings are not included."
+    : all.length
+      ? `PMD has ${all.length} warning${all.length === 1 ? "" : "s"} matching these days and places (${_levelSummary(all)}).${top ? ` The most serious is ${top.hazard.toLowerCase()} at ${_cap(top.level)} level.` : ""}`
+      : "No PMD warning matches these days and places.";
+  const out = [{
+    glance: {
+      bottomLine: `${first.date}: ${first.text} ${warnLine}`,
+      level: top ? { label: _cap(top.level), color: LEVEL_COLORS[top.level].bg, steps: SEVERITY_STEPS.map((l) => ({ label: _cap(l), color: LEVEL_COLORS[l].bg, on: l === top.level })) } : null,
+      levelLabel: "Highest PMD warning level in this outlook",
+      levelNote: "PMD colours its warnings from blue (least serious) to red (most serious). The highlighted box is the highest level among the warnings in this report.",
+      kpis: [
+        { value: `${chapters.length} day${chapters.length === 1 ? "" : "s"}`, label: `${first.date} to ${last.date}` },
+        { value: unavailable ? "n/a" : String(all.length), label: "PMD warnings in this outlook" },
+        { value: unavailable ? "n/a" : String(serious), label: "at Orange or Red level" },
+        { value: named.length ? String(named.length) : "Nationwide", label: named.length ? `provinces or areas named: ${named.join(", ")}` : "outlook names no single province" },
+      ],
+      chapters: days.map((d, i) => ({ n: i + 1, name: d.c.date, text: firstSentences(d.c.text) })),
+    },
+  }];
+
+  if (!unavailable && all.length) {
+    out.push({ heading: "The week's warnings" });
+    out.push({ body: `The PMD feed carried ${(_story.warningsFC?.features || []).length} warnings when this report was made. A warning is listed under a day when its issue or forecast date is that day and its text names a place in that day's outlook.` });
+    out.push({ bars: { label: "Warnings by day", rows: days.map((d) => ({ name: d.c.date, value: d.rows.length ? `${d.rows.length} (${_levelSummary(d.rows)})` : "0", n: d.rows.length })) } });
+    const byHazard = new Map();
+    for (const r of all) byHazard.set(r.hazard, [...(byHazard.get(r.hazard) || []), r]);
+    out.push({ bars: { label: "Warnings by type", rows: [...byHazard].sort((a, b) => b[1].length - a[1].length).map(([h, rs]) => ({ name: h, value: `${rs.length} (${_levelSummary(rs)})`, n: rs.length })) } });
+  }
+
+  const told = new Set();
+  days.forEach((d, i) => {
+    out.push({ chapter: { n: i + 1, name: d.c.date, kicker: `Day ${i + 1}`, flow: i > 0 } });
+    if (shots.has(i)) out.push({ image: shots.get(i) });
+    out.push({ subheading: "What to expect", body: d.c.text });
+    const hazards = (d.c.hazards || []).map((h) => HAZARDS_BY_CODE[h]?.label).filter(Boolean);
+    out.push({ bullets: [
+      `Places named in the outlook: ${(d.c.provinces || []).join(", ") || "none — it applies nationwide"}.`,
+      hazards.length ? `Weather hazards mentioned: ${hazards.join(", ")}.` : "No specific weather hazard is mentioned.",
+      unavailable ? "PMD warnings could not be read for this report." : d.rows.length ? `PMD warnings on this day: ${d.rows.length} (${_levelSummary(d.rows)}).` : "No PMD warning matches this day.",
+    ] });
+    if (!d.rows.length) return;
+    out.push({ subheading: "PMD warnings for this day", table: {
+      title: `Warnings for ${d.c.date}, most serious first${d.rows.length > REPORT_MAX_ROWS ? ` (first ${REPORT_MAX_ROWS} of ${d.rows.length})` : ""}. Times are as issued by PMD.`,
+      head: ["Type", "Level", "Where", "Area (km²)", "Issued", "Forecast for"],
+      rows: d.rows.slice(0, REPORT_MAX_ROWS).map((r) => [
+        r.hazard, _cap(r.level) || "n/a",
+        r.where,
+        r.area ? r.area.toLocaleString("en-GB") : "n/a", r.issued || "n/a", r.valid || "n/a",
+      ]),
+    } });
+    // Full text of the most serious warnings, each told once in the report.
+    for (const r of d.rows.filter((x) => !told.has(x.key)).slice(0, 3)) {
+      told.add(r.key);
+      if (r.text) out.push({ cards: [{ title: `${r.hazard} — ${_cap(r.level) || "unrated"} level`, text: r.text, source: `PMD${r.issued ? `, issued ${r.issued}` : ""}${r.valid ? `, forecast for ${r.valid}` : ""}` }] });
+    }
+  });
+
+  // Safety advice, once per hazard type (from its most serious warning).
+  const advice = new Map();
+  for (const r of [...all].sort((a, b) => b.rank - a.rank)) if (r.advice.length && !advice.has(r.hazard)) advice.set(r.hazard, r.advice);
+  if (advice.size) {
+    out.push({ heading: "What to do — PMD's safety advice" });
+    for (const [h, list] of advice) out.push({ subheading: h, bullets: list });
+  }
+  return out;
+}
+
+function _reportMeta() {
+  const ch = _story.chapters || [];
+  return {
+    title: "7-Day Weather Outlook",
+    subtitle: "Day-by-day weather for Pakistan with PMD hazard warnings",
+    strip: [
+      { label: "Issued", value: new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+      { label: "Period", value: ch.length ? `${ch[0].date} – ${ch[ch.length - 1].date}` : "n/a" },
+      { label: "PMD warnings", value: _story.warningsUnavailable ? "feed unavailable" : "read from the PMD feed" },
+      { label: "Reference", value: `NDMA/NCOP/WX7/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}` },
+    ],
+    glossary: [
+      { term: "PMD", def: "Pakistan Meteorological Department, the national weather service." },
+      { term: "NWFC", def: "PMD's National Weather Forecasting Centre, which writes the weekly outlook." },
+      { term: "Outlook", def: "A forecast in words of the expected weather. It becomes less certain the further ahead the day is." },
+      { term: "Warning level", def: "How serious PMD rates a warning: blue, yellow, orange, then red. Thunderstorm and gust warnings have their own labels." },
+      { term: "Issued / Forecast for", def: "When the warning was made, and the time the weather is expected." },
+      { term: "Fog / smog", def: "Fog is tiny water drops near the ground; smog is fog mixed with smoke and pollution. Both cut how far you can see." },
+      { term: "Gale", def: "Very strong wind, able to break branches and damage weak structures." },
+      { term: "Area (km²)", def: "The size of the area covered by the warning." },
+    ],
+    footer: "Sources: PMD National Weather Forecasting Centre weekly outlook; PMD weather warnings.",
+  };
+}
+
+let _exporting = false;
+async function _exportReport(format, win, inLoad = false) {
+  const card = document.getElementById(CARD_ID);
+  // A (re)load in flight owns the story state until it shows its prompts.
+  const loading = !inLoad && _inFlightFetch && !card?.querySelector(".pf-tts-prompt");
+  if (_exporting || loading || !(_story.chapters || []).length) {
+    try { if (win && !win.closed) win.close(); } catch (_) {}
+    notifyCard(card, _exporting ? "An export is already running." : "The outlook is still loading — try again in a moment.");
+    return;
+  }
+  _exporting = true;
+  const lang = _story.lang;
+  _story.lang = "en"; // reports are always in English
+  const map = window.ncop_map;
+  const cam = map ? { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() } : null;
+  _pause();
+  _stopSpeaking();
+  _stopCinematicLoop();
+  _clearHazardEffects();
+  _teardownHighlight(); // also closes the briefing popup
+  _closeWarningHoverPopup();
+  // A map for every day with warnings; without any, one map of the first day.
+  const chapters = _story.chapters;
+  let mapDays = chapters.map((c, i) => i).filter((i) => (chapters[i]._selectedFeatures || []).length);
+  if (!mapDays.length) mapDays = [0];
+  const closed = () => card?.style.display === "none" || !document.getElementById(CARD_ID)
+    || document.getElementById(MODAL_ID)?.style.display === "none";
+  try {
+    await runStoryExport({
+      format, win, card, slug: "7-day-weather-outlook", meta: _reportMeta(),
+      steps: [{ key: "data", label: "Outlook and warnings" }, ...mapDays.map((i) => ({ key: `map${i}`, label: `Map: ${chapters[i].date}` }))],
+      build: async ({ run, mark }) => {
+        run("data"); mark("data");
+        const shots = new Map();
+        for (const i of mapDays) {
+          run(`map${i}`);
+          if (closed()) throw new Error("briefing closed during export");
+          const n = (chapters[i]._selectedFeatures || []).length;
+          let src = null;
+          if (map) {
+            try {
+              _story.currentWarnFeatures = chapters[i]._selectedFeatures || [];
+              _applyChapterWarningsOverlay();
+              map.fitBounds(REPORT_BOUNDS, { duration: 0, padding: 30, pitch: 0, bearing: 0 });
+              src = await captureMap(map, { settleMs: 400 });
+            } catch (e) { console.warn("[story] report capture failed:", i, e); }
+          }
+          if (closed()) throw new Error("briefing closed during export");
+          shots.set(i, { src, caption: n
+            ? `PMD warning areas matching ${chapters[i].date} (${n}), coloured by type: ${[...new Set((chapters[i]._selectedFeatures || []).map((f) => HAZARDS_BY_CODE[f.properties?._hazard_code]?.label).filter(Boolean))].join(", ")}.`
+            : `Pakistan, ${chapters[i].date}: no matching PMD warning areas.` });
+          mark(`map${i}`, src ? "ok" : "warn");
+        }
+        return _reportSections(shots);
+      },
+    });
+  } finally {
+    _story.lang = lang;
+    _exporting = false;
+    if (closed()) {
+      _teardownStoryWarningsOverlay();
+    } else {
+      if (cam && map) { try { map.jumpTo(cam); } catch (_) {} }
+      // Back to where the operator was, paused. An open voice/language prompt
+      // is left alone: its answer starts playback as usual.
+      if (!card.querySelector(".pf-tts-prompt")) _renderChapter(card, { fade: false });
+    }
+  }
+}
+
+// Story picker's Export: open this briefing in export-only mode.
+let _pendingExport = null;
+async function _runPendingExport(inLoad = false) {
+  const job = _pendingExport;
+  _pendingExport = null;
+  if (job) await _exportReport(job.format, job.win, inLoad);
+}
+function _dropPendingExport() {
+  const job = _pendingExport;
+  _pendingExport = null;
+  try { if (job?.win && !job.win.closed) job.win.close(); } catch (_) {}
+}
+function _exportFromPicker(format, win) {
+  const sel = document.getElementById(SELECT_ID);
+  if (!sel || _exporting) { try { if (win && !win.closed) win.close(); } catch (_) {} return false; }
+  _dropPendingExport();
+  _pendingExport = { format, win };
+  sel.value = PF_SENTINEL;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
+// Story panel's X: stop AND forget the pick, so reopening the panel shows
+// the story picker instead of resurrecting this card.
+function _closeCompletely() {
+  _hideCardExternally();
+  _dropPendingExport();
+  _pfActiveViaPicker = false;
+  _wasPlayingBeforeExternalHide = false;
+}
+
 window.ncopProvincialForecast = {
   hide: _hideCardExternally,
   restore: _restoreCardExternally,
+  closeAll: _closeCompletely,
+  exportReport: _exportFromPicker,
 };
 
 // ---- #storySelect integration ---------------------------------------
@@ -4388,6 +4687,10 @@ function _watchSelect(sel) {
     // right after, so there's no visible flicker.
     const chaptersEl = document.getElementById(ROOT_ID)?.querySelector("#storyChapters");
     _pfActiveViaPicker = e.target.value === PF_SENTINEL;
+    // The other stories' hide handlers run for this same event and call
+    // restore(); the operator's pick alone decides what is shown.
+    _suppressRestore = true;
+    setTimeout(() => { _suppressRestore = false; }, 0);
     if (_pfActiveViaPicker) {
       if (chaptersEl) chaptersEl.style.display = "none";
       _showFromPicker();
@@ -4425,6 +4728,12 @@ function _showFromPicker() {
   // place instead of re-fetching, same reasoning _handlePanelVisible's
   // resume-in-place branch uses.
   if (_story.playable.length) {
+    if (_pendingExport) {
+      // Ready (also while a prompt is open): export now. Mid-reload: the
+      // running load picks the pending export up when its data are in.
+      if (!_inFlightFetch || card.querySelector(".pf-tts-prompt")) _runPendingExport();
+      return;
+    }
     if (_inFlightFetch) return;
     _renderChapter(card, { fade: false });
     _play();

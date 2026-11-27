@@ -245,7 +245,41 @@
       "Bash(grep -n \"_renderScene\\(card\\);$\\\\|dwr-lang.*addEventListener\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-dynamic-weather.js)",
       "Bash(grep -n \"_renderChapter\\(card, { fade: false }\\);\" d:/muhammad_arsalan/ncop_v1/ncop_local/frontend/src/modules/story-provincial-forecast.js)",
       "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/docs/ --max-time 5)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/docs/ --max-time 5)",
+      "Bash(python -m ncop_internal.flood_ahp)",
+      "WebFetch(domain:www.frontiersin.org)",
+      "WebFetch(domain:www.nature.com)",
+      "WebFetch(domain:doi.org)",
+      "WebFetch(domain:www.mdpi.com)",
+      "WebFetch(domain:www.sciencedirect.com)",
+      "Bash(python manage.py shell -c ' *)",
+      "WebFetch(domain:ffd.pmd.gov.pk)",
+      "Bash(grep -o 'cardLayout.\\\\{0,3500\\\\}' ffd_flood_limits.html)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('ncop_internal/flood_model.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('ncop_internal/flood_model_views.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(node --check src/modules/flood-model-control.js)",
+      "WebFetch(domain:gmd.copernicus.org)",
+      "WebFetch(domain:agupubs.onlinelibrary.wiley.com)",
+      "Bash(wait)",
+      "Bash(python \"C:\\\\Users\\\\5693KA~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--muhammad-arsalan-ncop-v1-ncop-local\\\\98d36b44-7fde-436c-945d-ebd903b447e0\\\\scratchpad\\\\test_susceptibility_auc.py\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('D:/muhammad_arsalan/ncop_v1/ncop_local/project/ncop_internal/flood_exposure.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "WebFetch(domain:www.scribd.com)",
+      "WebFetch(domain:link.springer.com)",
+      "WebFetch(domain:idp.nature.com)",
+      "WebFetch(domain:doaj.org)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('ncop_internal/flood_ahp.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python \"C:\\\\Users\\\\5693KA~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--muhammad-arsalan-ncop-v1-ncop-local\\\\98d36b44-7fde-436c-945d-ebd903b447e0\\\\scratchpad\\\\test_distance_to_stream.py\")",
+      "Bash(python \"C:\\\\Users\\\\5693KA~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--muhammad-arsalan-ncop-v1-ncop-local\\\\98d36b44-7fde-436c-945d-ebd903b447e0\\\\scratchpad\\\\test_chamfer_distance.py\")",
+      "Bash(python -c \"import scipy; print\\(scipy.__version__\\)\")",
+      "WebFetch(domain:www.researchgate.net)",
+      "WebFetch(domain:file.scirp.org)",
+      "Bash(ls /d/muhammad_arsalan/ncop_v1/ncop_local/project/media/flood_model/chashma_indus/_test_* 2>&1 *)",
+      "WebFetch(domain:www.yorkcity.org)",
+      "WebFetch(domain:www.hec.usace.army.mil)",
+      "WebFetch(domain:directives.nrcs.usda.gov)",
+      "WebFetch(domain:drainagecalculators.com)",
+      "WebFetch(domain:codelibrary.amlegal.com)",
+      "Bash(awk 'NR==2861,NR==3140 {if \\($0 ~ /cfg = PILOT_CATCHMENTS/\\) print NR\": \"$0}' /d/muhammad_arsalan/ncop_v1/ncop_local/project/ncop_internal/flood_model.py)"
     ],
     "deny": [
       "Bash(git push *)",
@@ -257,7 +291,8 @@
       "\\tmp",
       "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp",
       "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\shp_test",
-      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\claude\\d--muhammad-arsalan-ncop-v1-ncop-local\\98d36b44-7fde-436c-945d-ebd903b447e0\\scratchpad"
+      "C:\\Users\\5693KASHIF\\AppData\\Local\\Temp\\claude\\d--muhammad-arsalan-ncop-v1-ncop-local\\98d36b44-7fde-436c-945d-ebd903b447e0\\scratchpad",
+      "D:\\muhammad_arsalan\\ncop_v1\\ncop_local\\project\\media\\flood_model\\chashma_indus"
     ]
   }
 }

@@ -1,6 +1,21 @@
 from django.urls import path
 from .chatbot import NcopAssistantChatView, NcopAssistantModelsView
 from .translate import NcopTranslateView
+from .flood_model_views import FloodModelRunView, FloodModelStatusView, FloodModelAhpBuildingsInViewView, FloodModelPrewarmCustomAoiView, FloodModelExportView, FloodModelReportExportView
+from .iwmi_flood_views import (
+    IwmiGlofasPointsView, IwmiGlofasPointDischargeView, IwmiGlofasForecastDaysView, IwmiFloodhubGaugesView,
+    IwmiFloodhubGaugeDischargeView, IwmiFloodhubInundationView, IwmiStatusView, IwmiHealthView, IwmiWatchView,
+)
+from .gefs_views import GefsFramesView, GefsPointView, GefsHealthView, GefsDistrictsView
+from .dew_proxy import DewExposuresView
+from .foodsec_watch import FoodSecurityWatchView
+from .flood_ews import FloodEwsView, FloodMapView
+from .hawanama_views import (
+    HawanamaStationsView, HawanamaStationHistoryView, HawanamaStationsDailyView, HawanamaTileDatesView,
+    HawanamaTileView, HawanamaPointView, HawanamaForecastView, HawanamaNowcastView, HawanamaFiresOutlookView,
+    HawanamaFireSeasonView, HawanamaHealthView, HawanamaWatchView,
+)
+from .landslide_model_views import LandslideModelRunView, LandslideModelStatusView, LandslideModelExportView, LandslideModelReportExportView
 from .views import (
     dashboard_view,
     documentation_view,
@@ -60,6 +75,43 @@ from .views import (
 
 
 urlpatterns = [
+    # IWMI ENSO Outlook flood forecasting proxy (GloFAS reference points +
+    # Google Flood Hub) — see iwmi_flood_views.py.
+    path("api/iwmi/glofas/points/", IwmiGlofasPointsView.as_view(), name="iwmi-glofas-points"),
+    path("api/iwmi/glofas/points/<int:point_id>/discharge/", IwmiGlofasPointDischargeView.as_view(), name="iwmi-glofas-point-discharge"),
+    path("api/iwmi/glofas/forecast-days/", IwmiGlofasForecastDaysView.as_view(), name="iwmi-glofas-forecast-days"),
+    path("api/iwmi/floodhub/gauges/", IwmiFloodhubGaugesView.as_view(), name="iwmi-floodhub-gauges"),
+    path("api/iwmi/floodhub/gauges/<str:gauge_id>/discharge/", IwmiFloodhubGaugeDischargeView.as_view(), name="iwmi-floodhub-gauge-discharge"),
+    path("api/iwmi/floodhub/inundation/", IwmiFloodhubInundationView.as_view(), name="iwmi-floodhub-inundation"),
+    path("api/iwmi/status/", IwmiStatusView.as_view(), name="iwmi-status"),
+    path("api/iwmi/health/", IwmiHealthView.as_view(), name="iwmi-health"),
+    path("api/iwmi/watch/", IwmiWatchView.as_view(), name="iwmi-watch"),
+    # NOAA GEFS 35-day outlook (gefs_views.py)
+    path("api/gefs/frames/", GefsFramesView.as_view(), name="gefs-frames"),
+    path("api/gefs/point/", GefsPointView.as_view(), name="gefs-point"),
+    path("api/gefs/health/", GefsHealthView.as_view(), name="gefs-health"),
+    path("api/gefs/districts/", GefsDistrictsView.as_view(), name="gefs-districts"),
+    # DEW exposures service, proxied same-origin (dew_proxy.py)
+    path("api/dew/exposures/", DewExposuresView.as_view(), name="dew-exposures"),
+    # National Flood Watch early-warning document (flood_ews.py)
+    path("api/flood/watch/", FloodEwsView.as_view(), name="flood-watch"),
+    path("api/flood/watch/map/<slug:name>.png", FloodMapView.as_view(), name="flood-watch-map"),
+    # Food Security & Agriculture Watch story digest (foodsec_watch.py)
+    path("api/foodsec/watch/", FoodSecurityWatchView.as_view(), name="foodsec-watch"),
+    # Hawanama (Pakistan Air Quality Initiative) air-quality proxy — see
+    # hawanama_views.py. CC BY 4.0, attribution carried in every response.
+    path("api/hawanama/stations/", HawanamaStationsView.as_view(), name="hawanama-stations"),
+    path("api/hawanama/stations/daily/<str:date>/", HawanamaStationsDailyView.as_view(), name="hawanama-stations-daily"),
+    path("api/hawanama/stations/<str:station_id>/history/", HawanamaStationHistoryView.as_view(), name="hawanama-station-history"),
+    path("api/hawanama/tiles/dates/", HawanamaTileDatesView.as_view(), name="hawanama-tile-dates"),
+    path("api/hawanama/tiles/<str:date>/<int:z>/<int:x>/<int:y>.png", HawanamaTileView.as_view(), name="hawanama-tile"),
+    path("api/hawanama/point/", HawanamaPointView.as_view(), name="hawanama-point"),
+    path("api/hawanama/forecast/", HawanamaForecastView.as_view(), name="hawanama-forecast"),
+    path("api/hawanama/nowcast/", HawanamaNowcastView.as_view(), name="hawanama-nowcast"),
+    path("api/hawanama/fires/outlook/", HawanamaFiresOutlookView.as_view(), name="hawanama-fires-outlook"),
+    path("api/hawanama/fires/season/", HawanamaFireSeasonView.as_view(), name="hawanama-fire-season"),
+    path("api/hawanama/health/", HawanamaHealthView.as_view(), name="hawanama-health"),
+    path("api/hawanama/watch/", HawanamaWatchView.as_view(), name="hawanama-watch"),
     path("", dashboard_view, name="dashboard"),
     path("docs/", documentation_view, name="documentation"),
 
@@ -185,5 +237,72 @@ urlpatterns = [
         "api/translate/",
         NcopTranslateView.as_view(),
         name="ncop-translate",
+    ),
+    # Flash-flood early warning — Phase 1.6's first real HTTP endpoints.
+    # Async job-id polling, not a blocking request — see
+    # ncop_internal/flood_model_views.py's own module docstring for why.
+    path(
+        "api/flood-model/run/",
+        FloodModelRunView.as_view(),
+        name="flood-model-run",
+    ),
+    path(
+        "api/flood-model/status/<str:job_id>/",
+        FloodModelStatusView.as_view(),
+        name="flood-model-status",
+    ),
+    # Sub-phase 5 — viewport-bounded buildings-on-zoom (see
+    # flood_model_views.py's own FloodModelAhpBuildingsInViewView
+    # docstring). Synchronous, not job-id based.
+    path(
+        "api/flood-model/ahp-buildings-in-view/",
+        FloodModelAhpBuildingsInViewView.as_view(),
+        name="flood-model-ahp-buildings-in-view",
+    ),
+    # §0.37 — fire-and-forget custom-AOI prewarm (see flood_model_views.py's
+    # own FloodModelPrewarmCustomAoiView docstring).
+    path(
+        "api/flood-model/prewarm-custom-aoi/",
+        FloodModelPrewarmCustomAoiView.as_view(),
+        name="flood-model-prewarm-custom-aoi",
+    ),
+    # §0.47 — download a finished job's own result as GeoJSON (see
+    # flood_model_views.py's own FloodModelExportView docstring).
+    path(
+        "api/flood-model/export/<str:job_id>/",
+        FloodModelExportView.as_view(),
+        name="flood-model-export",
+    ),
+    # Export Report button — a detailed .docx (map snapshot + legend,
+    # scenario/accuracy summary, exposure/infrastructure-damage tables,
+    # data-driven mitigation measures). See flood_model_views.py's own
+    # FloodModelReportExportView / flood_report_export.py docstrings.
+    path(
+        "api/flood-model/export-report/<str:job_id>/",
+        FloodModelReportExportView.as_view(),
+        name="flood-model-export-report",
+    ),
+    # Landslide early warning — L5's first real HTTP endpoints. Same
+    # async job-id polling pattern as flood-model above, own executor/
+    # registry (see landslide_model_views.py's own module docstring).
+    path(
+        "api/landslide-model/run/",
+        LandslideModelRunView.as_view(),
+        name="landslide-model-run",
+    ),
+    path(
+        "api/landslide-model/status/<str:job_id>/",
+        LandslideModelStatusView.as_view(),
+        name="landslide-model-status",
+    ),
+    path(
+        "api/landslide-model/export/<str:job_id>/",
+        LandslideModelExportView.as_view(),
+        name="landslide-model-export",
+    ),
+    path(
+        "api/landslide-model/export-report/<str:job_id>/",
+        LandslideModelReportExportView.as_view(),
+        name="landslide-model-export-report",
     ),
 ]

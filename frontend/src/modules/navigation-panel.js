@@ -506,8 +506,11 @@ export class NavigationPanel {
       // Stop whichever cinematic briefing was active and strip its
       // layers/overlays — both hooks are safe no-ops when their story
       // wasn't the one running.
-      window.ncopProvincialForecast?.hide();
+      window.ncopProvincialForecast?.closeAll?.();
       window.ncopDynamicWeather?.closeAll();
+      window.ncopAirQualityWatch?.closeAll();
+      window.ncopFloodWatch?.closeAll();
+      window.ncopFoodSecurityWatch?.closeAll();
       // Reset the picker back to its default "nothing selected" state so
       // reopening the panel shows the picker, not a stale selection.
       const sel = document.getElementById("storySelect");

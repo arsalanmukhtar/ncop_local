@@ -1,0 +1,18 @@
+# /etc/systemd/system/flood-watch-data.service
+# FFD reading history, catchment rain (GPM, GFS, ECMWF), soil wetness and snow
+# (project/ncop_internal/management/commands/flood_watch_data.py), about 1 minute.
+# Once on a new server: `manage.py flood_watch_data --backfill` (~15 min) and
+# `manage.py flood_watch_data --atlas` (~10 min, about 1 GB of memory, once),
+# `--maps` (~8 min, once) and `--hydraulic` (about an hour on 4 cores, once; resumes).
+[Unit]
+Description=NCOP flood-watch data refresh
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py flood_watch_data --update
+TimeoutStartSec=1800
+Nice=15
+IOSchedulingClass=idle

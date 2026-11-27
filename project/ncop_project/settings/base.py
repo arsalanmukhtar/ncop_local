@@ -160,6 +160,25 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MAPBOX_ACCESS_TOKEN = env("MAPBOX_ACCESS_TOKEN", default="noob")
 METEOBLUE_TOKEN = env("METEOBLUE_TOKEN", default="noob")
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="noob")
+# Landslide GeoServer (inventory, 2025 events, regional susceptibility
+# rasters - accuracy_assessment.py / landslide_regional_comparison.py).
+# Moved from 172.18.1.100:8080 to 172.18.1.113:8080 on 2026-11-17.
+NCOP_LANDSLIDE_GEOSERVER_HOST = env("NCOP_LANDSLIDE_GEOSERVER_HOST", default="172.18.1.113:8080")
+# Hawanama (Pakistan Air Quality Initiative) — air-quality layers via
+# hawanama_client.py. CC BY 4.0, attribution "Pakistan Air Quality
+# Initiative (Hawanama)".
+HAWANAMA_BASE_URL = env("HAWANAMA_BASE_URL", default="https://hawanama.org")
+# IWMI ENSO Outlook flood forecasting (GloFAS reference points + Google
+# Flood Hub) — iwmi_flood_client.py. Countries are ISO3, comma-separated.
+IWMI_ENSO_API_BASE_URL = env("IWMI_ENSO_API_BASE_URL", default="https://enso.iwmi.org/ENSO_api/api/v1")
+# NOAA GEFS 35-day outlook (gefs_client.py): NOAA Open Data on Azure / Planetary Computer.
+GEFS_BLOB_BASE_URL = env("GEFS_BLOB_BASE_URL", default="https://noaagefs.blob.core.windows.net/gefs")
+# DEW (Disaster Early Warning) exposures service — reached through /api/dew/exposures/
+DEW_EXPOSURES_URL = env("DEW_EXPOSURES_URL", default="http://172.18.1.108:8000/get-exposures/")
+IWMI_FLOOD_COUNTRIES = env.list(
+    "IWMI_FLOOD_COUNTRIES",
+    default=["PAK", "IND", "BGD", "LKA", "AFG", "MMR", "THA", "VNM", "KHM", "LAO", "IDN", "PHL", "MYS"],
+)
 GEE_PROJECT_ID = env("GEE_PROJECT_ID", default="flood-mapping-dashboard-471116")
 GROQ_API_KEY = env("GROQ_API_KEY", default="noob")
 # Second Groq account's key — used ONLY as an automatic fallback when the
@@ -191,6 +210,84 @@ REST_FRAMEWORK = {
         # the shared VM, not spend — 40/min comfortably covers even a
         # large story's full chunk sequence with headroom.
         "ncop_translate": "40/min",
+        # Flash-flood early-warning job submission (ncop_internal.
+        # flood_model_views) — deliberately TIGHT, not just "conservative
+        # by default" like the endpoints above. The job executor behind
+        # this endpoint is a single-worker queue (see flood_model_views.py's
+        # own module docstring — jobs already serialize internally on the
+        # GDAL/WBT locks anyway, so a second worker would only add thread
+        # overhead, not real parallelism). Confirmed live a single run
+        # takes 64-85s even warm (§0.12/§0.13/§0.14 of the methodology
+        # doc). Without a tight cap here, a burst of run requests would
+        # each queue behind the last, and the Nth queued job would wait
+        # roughly N * 70s before even starting — 3/min bounds that queue
+        # depth to something a real interactive user would never hit
+        # while still allowing a few threshold-comparison runs in a row.
+        "flood_model_run": "3/min",
+        # Status polling — cheap (an in-memory dict lookup, no compute),
+        # expected to be hit frequently (every 2-3s) while a job runs, so
+        # generous by design, not an oversight relative to the tight
+        # run-submission rate above.
+        "flood_model_status": "120/min",
+        # Sub-phase 5 — buildings-on-zoom (ncop_internal.flood_model_views.
+        # FloodModelAhpBuildingsInViewView). Fires on moveend while zoomed
+        # in close, client-side debounced to ~150ms — generous like status
+        # polling above (this is a cheap, bounded in-memory STRtree query
+        # on a warm cache, not a heavy compute), but not left unbounded.
+        "flood_model_buildings_view": "60/min",
+        # §0.37 — custom-AOI prewarm (FloodModelPrewarmCustomAoiView).
+        # Fired once per real polygon draw (debounced client-side), never
+        # in a tight loop like status polling — a tighter cap than that,
+        # but generous enough for a user redrawing their area a few
+        # times while getting the shape right. The endpoint itself is
+        # cheap regardless (fire-and-forget, never blocks on the real
+        # fetch) — this bounds submission frequency, not compute cost.
+        "flood_model_prewarm": "20/min",
+        # §0.47 — export a finished job's own result as a GeoJSON
+        # download (FloodModelExportView). A real, deliberate user
+        # action (clicking "Download"), never polled — generous enough
+        # for a user re-downloading a few times, tight enough to still
+        # be a real cap against abuse.
+        "flood_model_export": "20/min",
+        # Export Report button (FloodModelReportExportView) — builds a
+        # .docx server-side (map decode/embed, several tables), a real
+        # if modest CPU cost per request unlike the plain-JSON export
+        # above, so a bit tighter — still generous for genuine repeated
+        # downloads of the same finished result.
+        "flood_model_report_export": "10/min",
+        # Landslide early-warning job submission (ncop_internal.
+        # landslide_model_views, L5) — same tight-cap reasoning as
+        # flood_model_run above, own executor/registry (§9/§12's explicit
+        # decision not to share flood's — see landslide_model_views.py's
+        # own module docstring). Live-confirmed cold-run costs through
+        # L0-L4: the susceptibility mode's own DEM/HAND pipeline +
+        # Overture buildings exposure alone is 250-270s; a burst of run
+        # requests would queue behind each other the same way flood's
+        # own single-worker executor already does. 3/min matches flood's
+        # own figure exactly, not independently re-derived.
+        "landslide_model_run": "3/min",
+        # Status polling — cheap in-memory dict lookup, same generous-by-
+        # design reasoning as flood_model_status above.
+        "landslide_model_status": "120/min",
+        # GeoJSON/report export — real, deliberate user actions (a
+        # download click), never polled. Same figures as flood's own
+        # flood_model_export/flood_model_report_export, not
+        # independently re-derived.
+        "landslide_model_export": "20/min",
+        "landslide_model_report_export": "10/min",
+        # Hawanama air-quality proxy (hawanama_views.py). JSON endpoints are
+        # served from hawanama_client's cache (one upstream call per TTL for
+        # all users), so this only bounds per-client abuse. Tiles are far
+        # more numerous per map view (a pan/zoom across the slider's dates
+        # can request hundreds), and mostly served from the permanent disk
+        # cache, so their cap is much higher.
+        "hawanama_api": "120/min",
+        "hawanama_tiles": "3000/min",
+        # IWMI flood-forecasting proxy (iwmi_flood_views.py) — cached JSON, same
+        # per-client-abuse bound as the Hawanama JSON endpoints.
+        "iwmi_flood_api": "120/min",
+        "gefs_api": "240/min",
+        "dew_api": "120/min",
     },
 }
 
@@ -214,6 +311,19 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Compresses response bodies (gzip) when the client sends
+    # Accept-Encoding: gzip — purely an encoding change, never touches
+    # content. Placed right after SecurityMiddleware per Django's own
+    # docs (high in the list, before anything that might read/transform
+    # the body). Closes a real gap found auditing the flood-model
+    # feature's own JSON/GeoJSON responses (up to ~1.5MB for a
+    # vectorized AHP zone payload): neither this app nor the production
+    # nginx reverse proxy's `location /` block compresses proxied API
+    # responses (only static assets under /assets/, /static/ have their
+    # own gzip_types) — this fixes it at the Django layer so it applies
+    # regardless of which reverse proxy sits in front, in dev/staging/
+    # prod alike.
+    "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -308,6 +418,26 @@ PMD_MONITOR_PASS = env("PMD_MONITOR_PASS", default="Ab123456")
 # CORS
 # ---------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)
+
+# ---------------------------------------------------------------------------
+# Request body size
+# ---------------------------------------------------------------------------
+# Django's own default (2.5MB) is too tight for FloodModelReportExportView
+# (flood_model_views.py) — confirmed live: a base64-encoded PNG map
+# snapshot captured off a real desktop browser canvas (flood-model-
+# control.js's own #captureMapSnapshot) routinely exceeds it, and
+# HttpRequest.body's own size guard raises RequestDataTooBig BEFORE that
+# view's json.loads() ever runs, surfacing to the client as a bare,
+# message-less Django 400 — not the clean JSON error every other
+# malformed-input path in this app already returns. Raised generously
+# (the view's own client side also downscales the capture to keep typical
+# payloads well under even the old 2.5MB limit — see #captureMapSnapshot's
+# own comment — this headroom is for the cases that don't hit that
+# downscale path, not a expectation of routinely needing it) — and
+# FloodModelReportExportView.post() ALSO now catches RequestDataTooBig
+# explicitly as defense in depth, in case some future caller's payload
+# still exceeds even this.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
 
 # ---------------------------------------------------------------------------
 # Django-Vite

@@ -1,7 +1,10 @@
 """
 Production settings — HTTPS, HSTS, manifest-backed static files.
 
-Entry point: ``ncop_project.wsgi:application`` behind Gunicorn + Nginx.
+Entry point: ``ncop_project.wsgi:application`` behind Waitress + Nginx
+(confirmed against ``urls.py``'s own comment and the ``ncop-waitress.service``
+systemd unit actually used in deployment — this docstring previously said
+"Gunicorn", which was stale/incorrect).
 """
 
 from .base import *  # noqa: F401,F403

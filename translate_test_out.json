@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "body": {
+    "reply": "**Precipitation layers live in the **Weather** category of the NCOP sidebar.** They are grouped into three sub‑categories:\n\n| Layer | What it shows | Sub‑category |\n|-------|---------------|--------------|\n| Weekly Precipitation (2 m Above Ground) | Total rain over the past week at 2 m height | Meteoblue Forecast |\n| Hourly Precipitation (2 m Above Ground) | Hour‑by‑hour rain at 2 m height | Meteoblue Forecast |\n| Precipitation Radar | Real‑time radar‑derived rain intensity | Meteoblue Forecast |\n| Accumulated Precipitation | Total rain accumulated over a chosen period | Global Deterministic Prediction System (GDPS) |\n| Precipitation Type / 3 hrs | Expected rain, snow, etc. for the next 3 h | Global Deterministic Prediction System (GDPS) |\n| Convective Precipitation Weekly | Forecasted thunderstorm‑related rain (kg/m²) for the next 10 days | Global Deterministic Prediction System (GDPS) |\n| IMERG Precipitation Rate (14 Days) | Rain rates from the past 14 days (satellite‑derived) | Radar Layers |\n\nYou’ll find them by expanding **Weather** → then selecting the appropriate sub‑category (Meteoblue Forecast, GDPS, or Radar Layers). 🚀",
+    "sources": [
+      {
+        "source_file": "map-layers.js",
+        "item_key": "weekly_precipitation_2m_above_ground"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "hourly_precipitation_2m_above_ground"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "gdps_accumulated_precipitation"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "precipitation_type_3hrs"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "convective_precipitation_weekly_forecast"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "imerg_precipitation_rate_14_days"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "precipitation_radar"
+      },
+      {
+        "source_file": "map-layers.js",
+        "item_key": "reservoirs"
+      }
+    ],
+    "actions": [],
+    "model": "openai/gpt-oss-120b"
+  }
+}

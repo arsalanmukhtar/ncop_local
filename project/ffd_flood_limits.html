@@ -1,0 +1,2025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1.0, shrink-to-fit=no">
+    <meta name="keywords" content="flood danger levels, flood limits Pakistan, river threshold, danger level discharge, FFD flood limits">
+    <meta name="description" content="Official flood danger levels and threshold discharges for Pakistan&#039;s river gauging stations and dams, as defined by the Flood Forecasting Division.">
+    <meta name="csrf-token" content="qv946X4HH0V6w4qsMp0DDLCi7s8oCy6sVp2ykNwP">
+
+    <title>Flood Danger Levels — Pakistan River Stations — FFD Lahore</title>
+
+    <link rel="icon" href="https://ffd.pmd.gov.pk/favicon.svg" type="image/svg+xml">
+    <link rel="shortcut icon" href="https://ffd.pmd.gov.pk/favicon.svg" type="image/svg+xml">
+
+    
+        <link rel="canonical" href="https://ffd.pmd.gov.pk/flood-limits">
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Flood Forecasting Division — FFD Lahore">
+    <meta property="og:title" content="Flood Danger Levels — Pakistan River Stations — FFD Lahore">
+    <meta property="og:description" content="Official flood danger levels and threshold discharges for Pakistan&#039;s river gauging stations and dams, as defined by the Flood Forecasting Division.">
+    <meta property="og:url" content="https://ffd.pmd.gov.pk/flood-limits">
+    <meta property="og:image" content="https://ffd.pmd.gov.pk/images/ffd-og-card.svg">
+    <meta property="og:locale" content="en_PK">
+
+    
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Flood Danger Levels — Pakistan River Stations — FFD Lahore">
+    <meta name="twitter:description" content="Official flood danger levels and threshold discharges for Pakistan&#039;s river gauging stations and dams, as defined by the Flood Forecasting Division.">
+    <meta name="twitter:image" content="https://ffd.pmd.gov.pk/images/ffd-og-card.svg">
+
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 4 (stackpath CDN is retired — served from jsDelivr, SRI-pinned) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css"
+          integrity="sha384-He3RckdFB2wffiHOcESa3sf4Ida+ni/fw9SSzAcfY2EPnU1zkK/sLUzw2C5Tyuhj" crossorigin="anonymous">
+
+    
+    <link rel="preload" as="style" href="https://ffd.pmd.gov.pk/build/assets/public-DvFd5mdd.css" /><link rel="modulepreload" as="script" href="https://ffd.pmd.gov.pk/build/assets/public-BUUa4qWm.js" /><link rel="stylesheet" href="https://ffd.pmd.gov.pk/build/assets/public-DvFd5mdd.css" /><script type="module" src="https://ffd.pmd.gov.pk/build/assets/public-BUUa4qWm.js"></script>
+    <style>
+        /* Critical inline stub — tokens + base font only. The full chrome
+           stylesheet lives in resources/css/public.css (Vite bundle). Keep
+           these token values in sync with public.css. */
+        :root {
+            --ffd-blue:   #0f2942;
+            --ffd-blue-light: #1a4971;
+            --ffd-accent: #00b4d8;
+            --ffd-green:  #10b981;
+            --ffd-gold:   #f59e0b;
+            /* Sticky-navbar height. Here as well as in public.css because a
+               page sized against it (the model viewer) styles itself from an
+               inline pushed-styles block, which the browser applies before the
+               Vite bundle has necessarily arrived.
+
+               (Do not write the push directive's name in this file, even inside
+               a CSS comment: Blade compiles directives wherever they appear, and
+               a bare one here compiles to a property read that 500s the whole
+               public layout at runtime — it costs nothing at compile time, so
+               view:cache does not catch it.) */
+            --ffd-nav-h:  51px;
+        }
+        body { font-family: 'Nunito', sans-serif; background: #f8f9fa; }
+    </style>
+
+    <style>
+    .flood-card {
+        transition: transform .25s ease, box-shadow .25s ease;
+        border-radius: 12px;
+        background: #fff;
+    }
+    .flood-card:hover {
+        transform: translateY(-4px) scale(1.01);
+        box-shadow: 0 10px 22px rgba(0,0,0,.12) !important;
+    }
+    .flood-card .card-title { color: #2c3e50; font-size: 1rem; }
+    .river-heading {
+        margin-top: 2.5rem;
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1e6fa8;
+        border-left: 5px solid #3498db;
+        padding-left: 10px;
+    }
+    .table-layout { display: none; }
+    table.flood-table th, table.flood-table td {
+        text-align: center;
+        vertical-align: middle;
+        font-size: 0.9rem;
+    }
+    .flood-title { font-size: 1.25rem; }
+    @media (min-width: 769px) { .flood-title { font-size: 2.2rem; } }
+</style>
+
+    
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "GovernmentOrganization",
+        "name": "Flood Forecasting Division",
+        "alternateName": ["FFD", "FFD Lahore"],
+        "url": "https://ffd.pmd.gov.pk",
+        "logo": "https://ffd.pmd.gov.pk/images/ffd-logo.png",
+        "description": "Flood Forecasting Division (FFD) is a specialized unit of Pakistan Meteorological Department responsible for flood forecasting and early warning systems in Pakistan.",
+        "parentOrganization": {
+            "@type": "GovernmentOrganization",
+            "name": "Pakistan Meteorological Department",
+            "alternateName": "PMD",
+            "url": "https://www.pmd.gov.pk"
+        },
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Lahore",
+            "addressRegion": "Punjab",
+            "addressCountry": "PK"
+        }
+    }
+    </script>
+
+    
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Flood Forecasting Division — Pakistan",
+        "alternateName": ["FFD", "FFD Lahore", "Flood Updates Pakistan"],
+        "url": "https://ffd.pmd.gov.pk",
+        "description": "Real-time flood forecasting, live river flows and discharge, dam levels, and flood bulletins for Pakistan's rivers — Indus, Chenab, Jhelum, Ravi, Sutlej and Kabul.",
+        "publisher": {
+            "@type": "GovernmentOrganization",
+            "name": "Flood Forecasting Division, Pakistan Meteorological Department"
+        },
+        "inLanguage": ["en", "ur"]
+    }
+    </script>
+    </head>
+<body>
+
+<!-- ── Topbar ───────────────────────────────────────────────────── -->
+<div class="site-topbar">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="topbar-left">
+                <span class="badge-live">Live</span>
+                <a href="/cdn-cgi/l/email-protection#4721212307302226332f22356920283169372c">
+                    <i class="bi bi-envelope mr-1"></i><span class="__cf_email__" data-cfemail="c0a6a6a480b7a5a1b4a8a5b2eea7afb6eeb0ab">[email&#160;protected]</span>
+                </a>
+                <a href="https://whatsapp.com/channel/0029VahnO02DuMRigsxmJk0c" target="_blank" rel="noopener">
+                    <i class="bi bi-whatsapp mr-1"></i>WhatsApp Channel
+                </a>
+            </div>
+            <div class="topbar-right">
+                <a href="https://www.pmd.gov.pk" target="_blank" rel="noopener">
+                    <i class="bi bi-globe2 mr-1"></i>PMD Website
+                </a>
+                <a href="https://ffd.pmd.gov.pk/contact-us">
+                    <i class="bi bi-telephone mr-1"></i>Contact
+                </a>
+                <a href="https://ffd.pmd.gov.pk/address-book">
+                    <i class="bi bi-people mr-1"></i>Directory
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Main header (logo + name) ──────────────────────────────────── -->
+<header class="site-header">
+    <div class="container">
+        <div class="site-header-inner">
+
+            <a href="https://ffd.pmd.gov.pk" class="site-logo-block">
+                <img src="https://ffd.pmd.gov.pk/images/web-logo.png" alt="FFD Logo">
+                <div class="site-logo-text">
+                    <div class="org-name">Flood Forecasting Division, Lahore</div>
+                    <div class="org-parent">Pakistan Meteorological Department</div>
+                    <div class="org-ministry">Ministry of Defence, Government of Pakistan</div>
+                </div>
+            </a>
+
+            <div class="header-info-cards">
+                <a href="https://ffd.pmd.gov.pk/flood-dashboard" target="_blank" rel="noopener"
+                   class="header-card card-rain-watch">
+                    <div class="card-icon"><i class="bi bi-display"></i></div>
+                    <div>
+                        <div class="card-label">Flood Dashboard</div>
+                        <div class="card-value">Rivers · Radar · Forecasts · Alerts</div>
+                    </div>
+                    <i class="bi bi-arrow-right card-arrow"></i>
+                </a>
+            </div>
+
+        </div>
+    </div>
+</header>
+
+<!-- ── Sticky navbar ──────────────────────────────────────────────── -->
+<div id="site-nav">
+    <div class="container">
+        <div class="site-nav-inner">
+
+            
+            <a href="https://ffd.pmd.gov.pk" class="site-nav-brand">FFD Lahore</a>
+
+            
+            <ul class="site-nav-links">
+                <li class="">
+                    <a href="https://ffd.pmd.gov.pk"><i class="bi bi-house-door"></i> Home</a>
+                </li>
+
+                <li class="has-drop ">
+                    <a href="https://ffd.pmd.gov.pk/bulletin"><i class="bi bi-journal-text"></i> Publications</a>
+                    <div class="site-nav-drop">
+                        <a href="https://ffd.pmd.gov.pk/bulletin"><i class="bi bi-grid"></i>All Publications</a>
+                        <div class="drop-divider"></div>
+                        <a href="https://ffd.pmd.gov.pk/bulletin/bulletin"><i class="bi bi-file-text"></i>Flood Bulletins</a>
+                        <a href="https://ffd.pmd.gov.pk/bulletin/advisory"><i class="bi bi-exclamation-triangle"></i>Advisories</a>
+                        <a href="https://ffd.pmd.gov.pk/flood-reports"><i class="bi bi-file-earmark-pdf"></i>Flood Reports</a>
+                        <a href="https://ffd.pmd.gov.pk/notifications"><i class="bi bi-megaphone"></i>Updates &amp; Notifications</a>
+                        <a href="https://ffd.pmd.gov.pk/notifications/preferences"><i class="bi bi-bell"></i>Notification Settings</a>
+                        <div class="drop-divider"></div>
+                        <div class="drop-header">System Info</div>
+                        <a href="https://ffd.pmd.gov.pk/flood-ews"><i class="bi bi-shield-check"></i>Early Warning System</a>
+                    </div>
+                </li>
+
+                
+                <li class="active">
+                    <a href="https://ffd.pmd.gov.pk/flood-limits"><i class="bi bi-bar-chart-line"></i> Flood Limits</a>
+                </li>
+
+                <li class="has-drop ">
+                    <a href="https://ffd.pmd.gov.pk/weather-model"><i class="bi bi-cloud-sun"></i> Forecasts<span class="nav-new" aria-hidden="true">New</span></a>
+                    <div class="site-nav-drop">
+                        <a href="https://ffd.pmd.gov.pk/weather-model"><i class="bi bi-globe-asia-australia"></i>Weather Model Viewer</a>
+                        <a href="https://ffd.pmd.gov.pk/meteograms"><i class="bi bi-graph-up"></i>Station Meteograms</a>
+                        <a href="https://ffd.pmd.gov.pk/radar"><i class="bi bi-broadcast-pin"></i>Weather Radar</a>
+                    </div>
+                </li>
+
+                <li class="">
+                    <a href="https://ffd.pmd.gov.pk/about"><i class="bi bi-info-circle"></i> About</a>
+                </li>
+
+                <li class="">
+                    <a href="https://ffd.pmd.gov.pk/internships"><i class="bi bi-mortarboard"></i> Internships</a>
+                </li>
+
+                
+                            </ul>
+
+            
+            <div class="site-nav-right">
+                                    <a href="https://ffd.pmd.gov.pk/login" class="snr-btn snr-btn-login">
+                        <i class="bi bi-box-arrow-in-right"></i> Sign In
+                    </a>
+                            </div>
+
+            
+            <div class="site-nav-mobile-auth">
+                                    <a href="https://ffd.pmd.gov.pk/login" class="snm-btn snm-btn-login">
+                        <i class="bi bi-box-arrow-in-right"></i> Sign In
+                    </a>
+                            </div>
+
+            
+            <button class="site-nav-toggle" id="mobileNavToggle" aria-label="Toggle navigation">
+                <i class="bi bi-list"></i>
+            </button>
+
+        </div>
+    </div>
+
+    
+    <div id="mobile-nav">
+        <a href="https://ffd.pmd.gov.pk"><i class="bi bi-house-door"></i> Home</a>
+        <a href="https://ffd.pmd.gov.pk/bulletin"><i class="bi bi-journal-text"></i> Publications</a>
+        <div class="mob-indent">
+            <a href="https://ffd.pmd.gov.pk/bulletin/bulletin">Flood Bulletins</a>
+            <a href="https://ffd.pmd.gov.pk/bulletin/advisory">Advisories</a>
+            <a href="https://ffd.pmd.gov.pk/flood-reports">Flood Reports</a>
+            <a href="https://ffd.pmd.gov.pk/notifications">Updates &amp; Notifications</a>
+            <a href="https://ffd.pmd.gov.pk/notifications/preferences">Notification Settings</a>
+            <a href="https://ffd.pmd.gov.pk/flood-ews" class="mob-indent"><i class="bi bi-shield-check"></i> Early Warning System</a>
+        </div>
+        <a href="https://ffd.pmd.gov.pk/flood-dashboard" target="_blank" rel="noopener"><i class="bi bi-display"></i> Flood Dashboard</a>
+        <a href="https://ffd.pmd.gov.pk/flood-limits"><i class="bi bi-bar-chart-line"></i> Flood Limits</a>
+        <a href="https://ffd.pmd.gov.pk/weather-model"><i class="bi bi-cloud-sun"></i> Forecasts<span class="nav-new" aria-hidden="true">New</span></a>
+        <div class="mob-indent">
+            <a href="https://ffd.pmd.gov.pk/weather-model">Weather Model Viewer</a>
+            <a href="https://ffd.pmd.gov.pk/meteograms">Station Meteograms</a>
+            <a href="https://ffd.pmd.gov.pk/radar">Weather Radar</a>
+        </div>
+        <a href="https://ffd.pmd.gov.pk/about"><i class="bi bi-info-circle"></i> About</a>
+        <a href="https://ffd.pmd.gov.pk/internships"><i class="bi bi-mortarboard"></i> Internships</a>
+        <a href="https://ffd.pmd.gov.pk/contact-us"><i class="bi bi-chat-dots"></i> Contact</a>
+                <div class="mob-section">
+            <a href="https://ffd.pmd.gov.pk/login"><i class="bi bi-box-arrow-in-right"></i> Sign In</a>
+        </div>
+            </div>
+</div>
+
+<!-- ── Flash messages ─────────────────────────────────────────────── -->
+
+<div class="container py-5">
+
+    <h1 class="text-center mb-4 font-weight-bold flood-title">
+        Flood Limits of Rivers &amp; Nullahs
+        <span id="flow_in_cusecs" style="display:block;font-size:12px;text-align:center;">(In Lacs of Cusecs)</span>
+        <span id="flow_in_lacs_cusecs" style="display:none;font-size:12px;text-align:center;">(In Cusecs)</span>
+    </h1>
+
+    <div class="d-flex justify-content-center mb-4">
+        <button class="btn btn-primary" id="toggleLayoutBtn">Switch to Table View</button>
+    </div>
+
+    <!-- ── Card layout ──────────────────────────────────────────────── -->
+    <div id="cardLayout">
+                    <h2 class="river-heading">Indus River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Tarbela</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">15 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Attock</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Kalabagh</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">9.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Chashma</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">9.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Taunsa</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">10 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Guddu</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">12 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">7 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">9 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Sukkur</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">7 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">9 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Kotri</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">8.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">3 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">4.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">6.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                    <h2 class="river-heading">Kabul River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">WARSAK</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">5.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.6 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">— lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">NOWSHERA</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.6 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">— lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                    <h2 class="river-heading">Jhelum River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Kohala</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">3 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">4 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Mangla</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">10.6 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">2.25 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">3 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Rasul</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">8.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">2.25 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">3 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                    <h2 class="river-heading">Chenab River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Jammu Tawi</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.7 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">0.83 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.7 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">— lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Akhnur</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.97 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2.97 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">3.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">— lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Marala</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">11 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">6 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Khanki</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">11 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">6 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Qadirabad</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">6 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Chinot Bridge</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">8.07 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">6 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Trimmu</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">8.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">3 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">4.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">6 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Panjnad</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">8.65 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">5.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">7 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                    <h2 class="river-heading">Ravi River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Jassar</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">2.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">2 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Syphon</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">4.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.65 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">0.9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.35 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">1.8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Shahdara</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">2.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.65 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">0.9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.35 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">1.8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Balloki</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">3.8 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.4 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.65 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">0.9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.35 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">1.8 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Sidhnai</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">1.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.3 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.46 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">0.6 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">0.9 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">1.3 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+                    <h2 class="river-heading">Sutlej River</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Suleimanki</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">3.25 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.8 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">2.25 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Islam</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">3 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.8 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">2.25 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">G.S. Wala</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span>
+                                    <span class="font-weight-semibold">— lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span>
+                                    <span class="font-weight-semibold text-primary">0.5 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span>
+                                    <span class="font-weight-semibold text-warning">0.8 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span>
+                                    <span class="font-weight-semibold text-orange" style="color:#fd7e14;">1.2 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span>
+                                    <span class="font-weight-semibold text-danger">1.75 lacs</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span>
+                                    <span class="font-weight-semibold" style="color:#7b1010;">2.25 lacs</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+        
+                    <h2 class="river-heading">Nullahs</h2>
+            <div class="row">
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Bein (Chak Amru)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">1300</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">7000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">20000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">30000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">35000 &amp; Above</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Bein (Shakargarh)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">1600</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">3000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">24000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">26000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">43000 &amp; Above</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Aik (Ura)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">2000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">9000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">13000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">16000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">33000 &amp; Above</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Basantar (Jassar)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">4100</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">4700</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">7500</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">11600</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">17800 &amp; Above</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Deg (Kingra Bridge)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">10000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">15000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">22000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">30000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">—</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                                <div class="col-sm-6 col-md-4 col-lg-3 mb-4">
+                    <div class="card flood-card shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title font-weight-bold text-center mb-3">Palku (Wazirabad)</h5>
+                            <ul class="list-group list-group-flush flex-grow-1">
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Design Capacity</span><span>—</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Low Flood</span><span class="text-primary">2500</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Medium Flood</span><span class="text-warning">3100</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>High Flood</span><span style="color:#fd7e14;">5000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Very High</span><span class="text-danger">25000</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between py-1">
+                                    <span>Exceptional</span><span style="color:#7b1010;">26000 &amp; Above</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                            </div>
+            </div>
+
+    <!-- ── Table layout ─────────────────────────────────────────────── -->
+    <div id="tableLayout">
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm flood-table">
+                <thead class="thead-light">
+                    <tr>
+                        <th>River</th><th>Station</th><th>Design</th>
+                        <th>Low</th><th>Medium</th><th>High</th><th>Very High</th><th>Exceptional</th>
+                    </tr>
+                </thead>
+                <tbody>
+                                                                                            <tr>
+                                                        <td rowspan="8" class="align-middle font-weight-bold text-primary">Indus River</td>
+                                                        <td><b>Tarbela</b></td>
+                            <td>15</td>
+                            <td>2.5</td>
+                            <td>3.75</td>
+                            <td>5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Attock</b></td>
+                            <td>—</td>
+                            <td>2.5</td>
+                            <td>3.75</td>
+                            <td>5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Kalabagh</b></td>
+                            <td>9.5</td>
+                            <td>2.5</td>
+                            <td>3.75</td>
+                            <td>5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Chashma</b></td>
+                            <td>9.5</td>
+                            <td>2.5</td>
+                            <td>3.75</td>
+                            <td>5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Taunsa</b></td>
+                            <td>10</td>
+                            <td>2.5</td>
+                            <td>3.75</td>
+                            <td>5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Guddu</b></td>
+                            <td>12</td>
+                            <td>2</td>
+                            <td>3.5</td>
+                            <td>5</td>
+                            <td>7</td>
+                            <td>9</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Sukkur</b></td>
+                            <td>9</td>
+                            <td>2</td>
+                            <td>3.5</td>
+                            <td>5</td>
+                            <td>7</td>
+                            <td>9</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Kotri</b></td>
+                            <td>8.75</td>
+                            <td>2</td>
+                            <td>3</td>
+                            <td>4.5</td>
+                            <td>6.5</td>
+                            <td>8</td>
+                        </tr>
+                                                                                                                    <tr>
+                                                        <td rowspan="2" class="align-middle font-weight-bold text-primary">Kabul River</td>
+                                                        <td><b>WARSAK</b></td>
+                            <td>5.4</td>
+                            <td>0.4</td>
+                            <td>0.6</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>—</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>NOWSHERA</b></td>
+                            <td>—</td>
+                            <td>0.6</td>
+                            <td>0.9</td>
+                            <td>1.4</td>
+                            <td>2</td>
+                            <td>—</td>
+                        </tr>
+                                                                                                                    <tr>
+                                                        <td rowspan="3" class="align-middle font-weight-bold text-primary">Jhelum River</td>
+                                                        <td><b>Kohala</b></td>
+                            <td>—</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>3</td>
+                            <td>4</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Mangla</b></td>
+                            <td>10.6</td>
+                            <td>0.75</td>
+                            <td>1.1</td>
+                            <td>1.5</td>
+                            <td>2.25</td>
+                            <td>3</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Rasul</b></td>
+                            <td>8.5</td>
+                            <td>0.75</td>
+                            <td>1.1</td>
+                            <td>1.5</td>
+                            <td>2.25</td>
+                            <td>3</td>
+                        </tr>
+                                                                                                                    <tr>
+                                                        <td rowspan="8" class="align-middle font-weight-bold text-primary">Chenab River</td>
+                                                        <td><b>Jammu Tawi</b></td>
+                            <td>—</td>
+                            <td>0.2</td>
+                            <td>0.7</td>
+                            <td>0.83</td>
+                            <td>1.7</td>
+                            <td>—</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Akhnur</b></td>
+                            <td>—</td>
+                            <td>0.75</td>
+                            <td>1.97</td>
+                            <td>2.97</td>
+                            <td>3.5</td>
+                            <td>—</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Marala</b></td>
+                            <td>11</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>4</td>
+                            <td>6</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Khanki</b></td>
+                            <td>11</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>4</td>
+                            <td>6</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Qadirabad</b></td>
+                            <td>9</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>4</td>
+                            <td>6</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Chinot Bridge</b></td>
+                            <td>8.07</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>4</td>
+                            <td>6</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Trimmu</b></td>
+                            <td>8.75</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                            <td>3</td>
+                            <td>4.5</td>
+                            <td>6</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Panjnad</b></td>
+                            <td>8.65</td>
+                            <td>1.5</td>
+                            <td>2.5</td>
+                            <td>4</td>
+                            <td>5.5</td>
+                            <td>7</td>
+                        </tr>
+                                                                                                                    <tr>
+                                                        <td rowspan="5" class="align-middle font-weight-bold text-primary">Ravi River</td>
+                                                        <td><b>Jassar</b></td>
+                            <td>2.75</td>
+                            <td>0.5</td>
+                            <td>0.75</td>
+                            <td>1</td>
+                            <td>1.5</td>
+                            <td>2</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Syphon</b></td>
+                            <td>4.5</td>
+                            <td>0.4</td>
+                            <td>0.65</td>
+                            <td>0.9</td>
+                            <td>1.35</td>
+                            <td>1.8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Shahdara</b></td>
+                            <td>2.5</td>
+                            <td>0.4</td>
+                            <td>0.65</td>
+                            <td>0.9</td>
+                            <td>1.35</td>
+                            <td>1.8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Balloki</b></td>
+                            <td>3.8</td>
+                            <td>0.4</td>
+                            <td>0.65</td>
+                            <td>0.9</td>
+                            <td>1.35</td>
+                            <td>1.8</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Sidhnai</b></td>
+                            <td>1.5</td>
+                            <td>0.3</td>
+                            <td>0.46</td>
+                            <td>0.6</td>
+                            <td>0.9</td>
+                            <td>1.3</td>
+                        </tr>
+                                                                                                                    <tr>
+                                                        <td rowspan="3" class="align-middle font-weight-bold text-primary">Sutlej River</td>
+                                                        <td><b>Suleimanki</b></td>
+                            <td>3.25</td>
+                            <td>0.5</td>
+                            <td>0.8</td>
+                            <td>1.2</td>
+                            <td>1.75</td>
+                            <td>2.25</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Islam</b></td>
+                            <td>3</td>
+                            <td>0.5</td>
+                            <td>0.8</td>
+                            <td>1.2</td>
+                            <td>1.75</td>
+                            <td>2.25</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>G.S. Wala</b></td>
+                            <td>—</td>
+                            <td>0.5</td>
+                            <td>0.8</td>
+                            <td>1.2</td>
+                            <td>1.75</td>
+                            <td>2.25</td>
+                        </tr>
+                                                                <tr><td colspan="8" class="font-weight-bold bg-light">Nullahs Limits (In Cusecs)</td></tr>
+                                                                                            <tr>
+                                                        <td rowspan="6" class="align-middle font-weight-bold text-primary">Nullahs</td>
+                                                        <td><b>Bein (Chak Amru)</b></td>
+                            <td>—</td>
+                            <td>1300</td>
+                            <td>7000</td>
+                            <td>20000</td>
+                            <td>30000</td>
+                            <td>35000 &amp; Above</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Bein (Shakargarh)</b></td>
+                            <td>—</td>
+                            <td>1600</td>
+                            <td>3000</td>
+                            <td>24000</td>
+                            <td>26000</td>
+                            <td>43000 &amp; Above</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Aik (Ura)</b></td>
+                            <td>—</td>
+                            <td>2000</td>
+                            <td>9000</td>
+                            <td>13000</td>
+                            <td>16000</td>
+                            <td>33000 &amp; Above</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Basantar (Jassar)</b></td>
+                            <td>—</td>
+                            <td>4100</td>
+                            <td>4700</td>
+                            <td>7500</td>
+                            <td>11600</td>
+                            <td>17800 &amp; Above</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Deg (Kingra Bridge)</b></td>
+                            <td>—</td>
+                            <td>10000</td>
+                            <td>15000</td>
+                            <td>22000</td>
+                            <td>30000</td>
+                            <td>—</td>
+                        </tr>
+                                                <tr>
+                                                        <td><b>Palku (Wazirabad)</b></td>
+                            <td>—</td>
+                            <td>2500</td>
+                            <td>3100</td>
+                            <td>5000</td>
+                            <td>25000</td>
+                            <td>26000 &amp; Above</td>
+                        </tr>
+                                                            </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="text-right mt-3">
+        <small class="text-muted">Last updated: 9-Sept 2025</small>
+    </div>
+
+</div>
+
+<!-- ── Footer ────────────────────────────────────────────────────── -->
+<footer id="footer">
+    <div class="container">
+        <div class="pub-footer-top">
+            <div class="pub-footer-org">
+                <strong>Flood Forecasting Division (FFD), Lahore</strong>
+                <span class="pub-footer-tag">Pakistan Meteorological Department — Government of Pakistan</span>
+            </div>
+            <nav class="pub-footer-links" aria-label="Footer">
+                <a href="https://ffd.pmd.gov.pk/about">About</a>
+                <a href="https://ffd.pmd.gov.pk/contact-us">Contact</a>
+                <a href="https://ffd.pmd.gov.pk/address-book">Address Book</a>
+                <a href="https://ffd.pmd.gov.pk/bulletin">Bulletins</a>
+            </nav>
+        </div>
+        <div class="pub-footer-bottom">
+            <span>&copy; 2026 Flood Forecasting Division. All rights reserved.</span>
+            <span class="pub-footer-credit">Developed by Usman Ali</span>
+        </div>
+    </div>
+</footer>
+
+
+<!-- ── Scripts ───────────────────────────────────────────────────── -->
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+        integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm" crossorigin="anonymous"></script>
+
+<script>
+    // Auto-dismiss alerts after 7s
+    window.setTimeout(function () {
+        $(".alert").fadeTo(500, 0).slideUp(400, function () { $(this).remove(); });
+    }, 7000);
+
+    // Day-scoped dismissal flags (replaces the retired jquery-cookie plugin).
+    window.ffdDismissed = function (key) {
+        try {
+            var until = parseInt(localStorage.getItem(key), 10);
+            return until && Date.now() < until;
+        } catch (e) { return false; }
+    };
+    window.ffdDismiss = function (key) {
+        try { localStorage.setItem(key, String(Date.now() + 24 * 60 * 60 * 1000)); } catch (e) {}
+    };
+
+    
+    </script>
+
+<style>
+        /* Homepage opt-in popup — top-right slide-in card (no backdrop).
+           It used to sit bottom-right, where it landed squarely on the flood and
+           weather assistant launchers (right:22px at bottom:22px and bottom:84px)
+           and, at z-index 2147483000, buried both.
+           --ffd-nav-bottom is the sticky navbar's current bottom edge, measured
+           below: the nav rides under the header at rest and pins to the top once
+           scrolled, so no fixed offset clears it in both states. */
+        #ffd-push-popup {
+            position: fixed;
+            right: 18px;
+            top: calc(var(--ffd-nav-bottom, 58px) + 12px);
+            bottom: auto;
+            z-index: 2147483000;
+            width: 330px;
+            max-width: calc(100vw - 36px);
+            background: #fff;
+            color: #13243a;
+            border: 1px solid rgba(0, 0, 0, .06);
+            border-radius: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .22);
+            padding: 16px 16px 14px;
+            font-family: inherit;
+            transform: translateY(-140%);
+            opacity: 0;
+            transition: transform .35s cubic-bezier(.2, .8, .2, 1), opacity .35s ease;
+        }
+        #ffd-push-popup.ffd-pp-in { transform: translateY(0); opacity: 1; }
+        #ffd-push-popup .ffd-pp-close {
+            position: absolute;
+            top: 7px;
+            right: 11px;
+            border: 0;
+            background: transparent;
+            font-size: 1.3rem;
+            line-height: 1;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        #ffd-push-popup .ffd-pp-close:hover { color: #475569; }
+        #ffd-push-popup .ffd-pp-row { display: flex; gap: 12px; align-items: flex-start; }
+        #ffd-push-popup .ffd-pp-ico { font-size: 1.7rem; color: #0d9488; margin-top: 1px; flex-shrink: 0; }
+        #ffd-push-popup .ffd-pp-title { display: block; font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+        #ffd-push-popup .ffd-pp-text { margin: 0; font-size: .84rem; color: #475569; line-height: 1.4; }
+        #ffd-push-popup .ffd-pp-actions { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
+        #ffd-push-popup .ffd-pp-enable {
+            background: linear-gradient(135deg, #0ea5a4, #0d9488);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 700;
+            font-size: .85rem;
+            cursor: pointer;
+        }
+        #ffd-push-popup .ffd-pp-enable:hover { filter: brightness(1.06); }
+        #ffd-push-popup .ffd-pp-never {
+            background: transparent;
+            border: 0;
+            color: #64748b;
+            font-size: .8rem;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        #ffd-push-popup .ffd-pp-never:hover { color: #334155; }
+        @media (max-width: 480px) {
+            #ffd-push-popup {
+                right: 10px; left: 10px; width: auto; bottom: auto;
+                top: calc(var(--ffd-nav-bottom, 52px) + 10px);
+            }
+        }
+    </style>
+    <script>
+        /* Keeps --ffd-nav-bottom on the sticky navbar's live bottom edge, so the
+           popup clears it whether the page is at rest (nav sitting under the
+           header) or scrolled (nav pinned to the top). Reading it off the element
+           also means a nav that changes height — breakpoints, the signed-in
+           state, a wrapped row — needs no second set of numbers here.
+           rAF-throttled, since scroll fires far faster than paint. */
+        (function () {
+            // Only the nav is required. The opt-in card is homepage-only, but the
+            // incoming-message toast can surface on any page and is anchored to
+            // the same edge, so the variable has to exist wherever the nav does.
+            var nav = document.getElementById('site-nav');
+
+            if (!nav) { return; }
+
+            var queued = false;
+
+            function place() {
+                queued = false;
+                var edge = Math.max(0, nav.getBoundingClientRect().bottom);
+                document.documentElement.style.setProperty('--ffd-nav-bottom', Math.round(edge) + 'px');
+            }
+            function schedule() {
+                if (queued) { return; }
+                queued = true;
+                window.requestAnimationFrame(place);
+            }
+
+            place();
+            window.addEventListener('scroll', schedule, { passive: true });
+            window.addEventListener('resize', schedule);
+        })();
+
+        window.FFD_FCM = {
+            config: {
+                apiKey: "AIzaSyBj33YvE6uwKRGvDApkUZAYQgJKSrib0Ug",
+                authDomain: "ffd-web-app.firebaseapp.com",
+                projectId: "ffd-web-app",
+                messagingSenderId: "292615105742",
+                appId: "1:292615105742:web:23acac94e2a7a0c0d2749f"            },
+            vapidKey: "BP9uZIBUHIr5h79aCa-eXnApzzrjlHv7bX_VIv-wzcSRatRz-usb1LoMUAviJ8Jo0N_M_KrAMQwQuy-gnEGgF2Q",
+            
+            swPath: "\/firebase-messaging-sw.js",
+            endpoints: {
+                register: "\/api\/app\/v1\/devices",
+                heartbeat: "\/api\/app\/v1\/devices\/heartbeat",
+                unregister: "\/api\/app\/v1\/devices"            }
+        };
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+    <script src="https://ffd.pmd.gov.pk/js/web-push.js?v=1785387363" defer></script>
+
+<script>
+document.getElementById('toggleLayoutBtn').addEventListener('click', function () {
+    var card  = document.getElementById('cardLayout');
+    var table = document.getElementById('tableLayout');
+    var lacs  = document.getElementById('flow_in_cusecs');
+    var cus   = document.getElementById('flow_in_lacs_cusecs');
+
+    if (card.style.display === 'none') {
+        card.style.display  = 'block';
+        table.style.display = 'none';
+        lacs.style.display  = 'block';
+        cus.style.display   = 'none';
+        this.textContent = 'Switch to Table View';
+    } else {
+        card.style.display  = 'none';
+        table.style.display = 'block';
+        lacs.style.display  = 'none';
+        cus.style.display   = 'block';
+        this.textContent = 'Switch to Card View';
+    }
+});
+</script>
+
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-VX3MXJBGL0"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-VX3MXJBGL0');
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a320bea0cf0dfa00',t:'MTc4Nzg5MzE0NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

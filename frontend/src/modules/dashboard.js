@@ -33,10 +33,14 @@ import { SourceLayerControl } from "./sourcelayer-control.js";
 import { LayerInfoPanel, LayerOrderControl } from "./layer-panels.js";
 import { initializeSourceLayerControl } from "./mapbox-functions.js";
 import LayerAttributePopup from "./layer-attribute-popup.js";
+import { installHawanamaEstimateClick } from "./hawanama-layers.js";
+import { installGefsClick } from "./gefs-layers.js";
+import { installIwmiStatusCard, installIwmiInundationNotice } from "./iwmi-flood-layers.js";
 import { WeatherReportControl } from "./weather-report-control.js";
 import SplitCompareControl from "./split-compare-control.js";
 import CropExplorerControl from "./crop-explorer-control.js";
 import { GisExportControl } from "./gis-export-control.js";
+import { FloodModelControl } from "./flood-model-control.js";
 import { NcopAssistantControl } from "./ncop-assistant.js";
 import { initGcopFfdIntegration } from "./gcop-ffd-integration.js";
 import { initFfdHistoryPriming } from "./ffd-stats-modal.js";
@@ -59,6 +63,20 @@ import "./story-provincial-forecast.js";
 // independent story from the provincial forecast above. Auto-inits on
 // DOMContentLoaded; does nothing until picked from the dropdown.
 import "./story-dynamic-weather.js";
+
+// Side-effect import: adds "National Air Quality Watch" to #storySelect
+// (Hawanama PM2.5 estimate/stations for the past week, then the 72-hour
+// forecast with WAQI stations). Must stay AFTER the Dynamic Weather import:
+// its capture-phase select listener has to run last (see that file).
+import "./story-air-quality-watch.js";
+
+// Side-effect import: adds "National Flood Watch" to #storySelect (FFD
+// barrage/dam tour moved out of the Dynamic Weather Report, GloFAS 15-day
+// outlook, Google Flood Hub gauges + inundation, research context). Kept
+// LAST among the story imports so its capture-phase select listener runs
+// after the others' (see that file's _hide()).
+import "./story-flood-watch.js";
+import "./story-food-security-watch.js";
 
 
 // ---- Mapbox token handling ----
@@ -190,6 +208,13 @@ class DashboardManager {
     // own button + panel, only wraps addLayerByKey/removeLayerByKey for
     // live refresh (same pattern LayerInfoPanel already uses).
     new GisExportControl(this.#map, this.#sourceLayerControl);
+    // Flash-Flood Early Warning (Phase 1.6, first slice — see
+    // FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md §0.15). Same zero-coupling
+    // shape as GisExportControl above: own button + panel, calls the
+    // async job endpoints in ncop_internal/flood_model_views.py, renders
+    // the result as a temporary raster overlay (never added to the
+    // permanent layer catalog).
+    new FloodModelControl(this.#map);
     // NCOP Assistant (Phase 1 — RAG Q&A). Standalone rail button + panel,
     // deliberately separate from navigation-panel.js's own "#gee-chat-modal"
     // (GEE Data Assistant, narrowly scoped to Earth Engine layers) so
@@ -243,10 +268,35 @@ class DashboardManager {
       zoom: 6,
       projection: "mercator",
       hash: true,
+      // Required for flood-model-control.js's own Export Report feature
+      // (#captureMapSnapshot -> map.getCanvas().toDataURL()). Without
+      // this, the browser is free to clear the WebGL drawing buffer
+      // right after compositing each frame to the screen — confirmed
+      // live: a raster overlay layer (the flood-prone-zone PNG) was
+      // silently missing from the exported snapshot even with a forced
+      // triggerRepaint()+render-event capture, while the base style
+      // layers underneath still came through — the known, documented
+      // failure mode of trying to work around this flag with timing
+      // instead of just setting it. Mapbox's own docs recommend this
+      // exact flag for any "export the map as an image" feature; the
+      // cost is the browser retaining the buffer an extra frame instead
+      // of an early clear — negligible for a desktop dashboard, no
+      // effect on any interaction/rendering behavior otherwise.
+      preserveDrawingBuffer: true,
     });
 
     // CRITICAL: Expose map globally so slider can access it
     window.ncop_map = this.#map;
+
+    // Click-for-value on the Hawanama daily PM2.5 estimate (raster frames
+    // are not vector features, so the attribute popup cannot see them).
+    installHawanamaEstimateClick(this.#map, window.mapboxgl);
+    installGefsClick(this.#map, window.mapboxgl);
+
+    // Regional river-flood status card, shown while an IWMI flood layer is on.
+    installIwmiStatusCard(this.#map);
+    // Empty-state notice + 15-min refresh for the Flood Hub inundation layer.
+    installIwmiInundationNotice(this.#map);
 
     // Bottom-right scale bar — minimalist black tick + label.  The
     // styling lives in _map-panels.css (`.mapboxgl-ctrl-scale`).
@@ -526,6 +576,7 @@ const RAIL_PANEL_BUTTON_MAP = {
   weatherReportPanel: { btnId: "weatherReportToggle", visibleClass: "visible" },
   ncopTourPanel:   { btnId: "ncopTourToggle",   visibleClass: "visible" },
   gisExportPanel:  { btnId: "gisExportToggle",  visibleClass: "visible" },
+  floodModelPanel: { btnId: "floodModelToggle", visibleClass: "visible" },
 };
 
 function buildUnifiedRightRail() {
@@ -592,6 +643,10 @@ function buildUnifiedRightRail() {
     // GIS Export — pushed alongside the other data/analysis controls.
     // Wrapper div is injected by GisExportControl in its constructor.
     push(document.querySelector(".custom-gis-export-btn"));
+    // Flash-Flood Early Warning — pushed alongside the other data/analysis
+    // controls, right after GIS Export. Wrapper div is injected by
+    // FloodModelControl in its constructor.
+    push(document.querySelector(".custom-flood-model-btn"));
     // NCOP Assistant has no rail button anymore — its sole entry point is
     // the standalone floating mascot (NcopAssistantControl#renderMascot),
     // which lives outside the rail entirely.
@@ -905,6 +960,8 @@ const RAIL_PANEL_REGISTRY = [
   { id: "ncopTourPanel",        kind: "class",   cls: "visible" },
   { id: "gisExportPanel",       kind: "class",   cls: "visible",
     btn: { id: "gisExportToggle",  activeCls: "active-gis-export" } },
+  { id: "floodModelPanel",      kind: "class",   cls: "visible",
+    btn: { id: "floodModelToggle", activeCls: "active-flood-model" } },
   // Display-driven float panels
   { id: "gee-chat-modal",          kind: "display",
     btn: { id: "geeChat",          activeCls: "active-gee"       } },

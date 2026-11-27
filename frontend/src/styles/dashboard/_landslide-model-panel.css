@@ -1,0 +1,126 @@
+/* _landslide-model-panel.css
+   ---------------------------------------------------------------------------
+   Landslide panel — deliberately small. landslide-model-control.js reuses
+   every existing .flood-model-* class directly wherever the shape already
+   matches (select/run-btn/checklist/result-row/etc. have nothing flood-
+   specific about their own styling) — only the genuinely NEW elements this
+   panel introduces get their own rules here: a horizontal checkbox+label+
+   hint row (the "lite factor set" / "COOLR validation" toggles), a small
+   text-link button (the custom-area escape hatch), and the trigger-mode
+   advisory badge.
+   --------------------------------------------------------------------- */
+
+.landslide-model-toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.landslide-model-toggle-row input[type="checkbox"] {
+    margin-top: 2px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    accent-color: var(--ndma-blue);
+}
+
+.landslide-model-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.landslide-model-toggle-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.landslide-model-toggle-hint {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+/* Escape hatch out of custom-draw mode (Area section) — a plain text
+   link, not a heavy button, since it's a secondary action next to the
+   draw/upload icon row it sits beside. */
+.landslide-model-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 4px;
+    font-size: 10.5px;
+    color: var(--ndma-blue);
+    text-decoration: underline;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.landslide-model-link-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Trigger mode's own advisory badge — Normal/Watch/Warning, the
+   decision-matrix output (landslide_trigger.LANDSLIDE_ADVISORY_MATRIX).
+   Same status-color convention .flood-model-status-success/-error
+   already establish (var(--success)/var(--danger) with the same
+   fallback hex), extended with a genuine third ("Watch") state neither
+   of those two already covers. */
+.landslide-model-advisory-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.landslide-model-advisory-badge.is-normal {
+    background: color-mix(in srgb, var(--success, #2e7d32) 14%, transparent);
+    color: var(--success, #2e7d32);
+}
+
+.landslide-model-advisory-badge.is-watch {
+    background: rgba(230, 160, 0, 0.16);
+    color: #b98900;
+}
+
+.landslide-model-advisory-badge.is-warning {
+    background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent);
+    color: var(--danger, #c0392b);
+}
+
+/* LHASA2 real-time extraction + exposure scan — a secondary action nested
+   under the "Cross-check layers" section's own LHASA2 toggle, not a
+   full flood-model-section of its own (it's a sub-action of that
+   layer, not an independent panel concern). */
+.landslide-model-lhasa2-scan {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-dark, rgba(128, 128, 128, 0.25));
+}
+
+.landslide-model-lhasa2-scan-btn {
+    width: 100%;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+/* §L7 — slide-score method selector label + calibration "not approved"
+   reasons list. */
+.landslide-model-field-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 6px 0 3px;
+}
+
+.landslide-model-reason-list {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}

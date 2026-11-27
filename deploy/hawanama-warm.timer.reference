@@ -1,0 +1,14 @@
+# /etc/systemd/system/hawanama-warm.timer
+# Every 30 min keeps every Hawanama JSON cache inside its TTL; completed-day
+# tiles are fetched once and kept. Enable with:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hawanama-warm.timer
+[Unit]
+Description=Run NCOP Hawanama cache warm-up every 30 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

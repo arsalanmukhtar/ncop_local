@@ -9,6 +9,7 @@
 // ADDED: Temporal Opacity Controller (global factor applied to all temporal layers/steps)
 
 import { legends } from "./temporal-layer-legends";
+import { sourceSpec } from "./map-source-spec.js";
 
 // ===== GLOBAL VARIABLES =====
 let sliderLayers = []; // Array of arrays of layer ids for each timestep
@@ -571,6 +572,19 @@ function cleanupSliderLayers() {
   _lastStepIndex = null;
 }
 
+// Opacity a frame is shown at. A layer may opt into its own value via
+// Mapbox layer metadata {"ncop:opacity": 0.9} (e.g. the GEFS outlook frames,
+// which are banded and need to read strongly); every other layer keeps the
+// long-standing 0.75. The user's opacity control still scales it.
+const _shownOpacityCache = new Map();
+function _shownOpacity(map, id) {
+  if (_shownOpacityCache.has(id)) return _shownOpacityCache.get(id);
+  const v = Number(map.getLayer(id)?.metadata?.["ncop:opacity"]);
+  const out = Number.isFinite(v) && v > 0 && v <= 1 ? v : 0.75;
+  _shownOpacityCache.set(id, out);
+  return out;
+}
+
 // Optimized show: only flip previous vs current
 function showTimeStepLayers(stepIndex) {
   const map = getMap();
@@ -584,7 +598,7 @@ function showTimeStepLayers(stepIndex) {
   }
   if (sliderLayers[stepIndex]) {
     sliderLayers[stepIndex].forEach((id) => {
-      if (map.getLayer(id)) setLayerOpacity(id, 0.75);
+      if (map.getLayer(id)) setLayerOpacity(id, _shownOpacity(map, id));
     });
   }
   _lastStepIndex = stepIndex;
@@ -612,11 +626,11 @@ function _rebuildLayersFromDef(layersDef, currentIndex) {
 
     if (entry.sources) {
       entry.sources.forEach((source) => {
-        if (!map.getSource(source.id)) map.addSource(source.id, source);
+        if (!map.getSource(source.id)) map.addSource(source.id, sourceSpec(source));
       });
     } else if (entry.source) {
       if (!map.getSource(entry.source.id))
-        map.addSource(entry.source.id, entry.source);
+        map.addSource(entry.source.id, sourceSpec(entry.source));
     }
 
     entry.layers.forEach((layerDef) => {
@@ -739,11 +753,11 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
 
     if (entry.sources)
       entry.sources.forEach((s) => {
-        if (!map.getSource(s.id)) map.addSource(s.id, s);
+        if (!map.getSource(s.id)) map.addSource(s.id, sourceSpec(s));
       });
     else if (entry.source) {
       const sid = entry.source.id;
-      if (!map.getSource(sid)) map.addSource(sid, entry.source);
+      if (!map.getSource(sid)) map.addSource(sid, sourceSpec(entry.source));
     }
 
     entry.layers.forEach((layerDef) => {
@@ -827,6 +841,18 @@ function updateTempSlider(layers, textContent, layerKey, event = null) {
   if (sliderEl) {
     sliderEl.max = layers.length - 1;
     sliderEl.value = 0;
+    // Optional: a frame array may carry `initialIndex` (e.g. a daily
+    // archive that should open on its newest day while keeping the
+    // timeline chronological). Jump there through the normal input path
+    // once the frames are registered.
+    const start = layers.initialIndex;
+    if (Number.isInteger(start) && start > 0 && start < layers.length) {
+      setTimeout(() => {
+        if (sliderEl.max !== String(layers.length - 1)) return; // slider was replaced meanwhile
+        sliderEl.value = String(start);
+        sliderEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }, 350);
+    }
   }
 
   const titleElement = document.querySelector("#temp-slider1 p");
@@ -1049,7 +1075,11 @@ document.addEventListener("DOMContentLoaded", function () {
 async function updateTempSliderAsync(layersPromise, textContent, layerKey) {
   const map = getMap();
   if (!map) return;
-  if (!map.isStyleLoaded()) {
+  // isStyleLoaded() is also false while ANY tiles are still loading (e.g.
+  // mid-pan or during a camera flight), but "load" fires only once — so
+  // only wait for it when the style itself has not loaded yet; otherwise
+  // this awaited forever and the layer never appeared.
+  if (!map.isStyleLoaded() && !map.style?._loaded) {
     await new Promise((resolve) => {
       map.once("load", resolve);
     });

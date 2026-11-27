@@ -9,6 +9,8 @@ import {
   getNwfcPressReleaseText,
 } from "./gcop-api-cache.js";
 import { pmdWarningsFilter } from "./pmd-warnings-filter.js";
+import { isGefsDistrictLayer, renderGefsDistrictReport } from "./gefs-district-report.js";
+import { exportGefsOutlook } from "./gefs-outlook-export.js";
 
 // =========================================================================
 // District-level Weather Report
@@ -630,6 +632,7 @@ export class WeatherReportControl {
   // is on screen.
   #lastReport = null; // { rows, meta, state, generatedAt: Date }
   #wrpExportDocBtn = null;
+  #gefsMode = false; // GEFS 35-day layer drives the panel → header exports = 35-day outlook
   #wrpExportPdfBtn = null;
 
   // §3.4 drill-down state — "overview" is the default multi-section
@@ -769,12 +772,12 @@ export class WeatherReportControl {
     this.#wrpExportDocBtn?.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (this.#wrpExportDocBtn.disabled) return;
-      this.#runExport("Word", () => this.#downloadReportAsWord());
+      this.#runExport("Word", () => (this.#gefsMode ? exportGefsOutlook("word") : this.#downloadReportAsWord()));
     });
     this.#wrpExportPdfBtn?.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (this.#wrpExportPdfBtn.disabled) return;
-      this.#runExport("PDF", () => this.#downloadReportAsPdf());
+      this.#runExport("PDF", () => (this.#gefsMode ? exportGefsOutlook("pdf") : this.#downloadReportAsPdf()));
     });
 
     // Tab click delegation — single listener on the strip, dispatches
@@ -1029,6 +1032,30 @@ export class WeatherReportControl {
       : { layerKey: null, currentEntry: null, date: "", currentIndex: 0 };
 
     const layerKey = state.layerKey;
+
+    // NOAA GEFS 35-day outlook: values are pre-aggregated per district
+    // server-side, so this mode bypasses map sampling entirely (and the
+    // fingerprint below — pans don't change it). gefs-district-report.js
+    // keys its own re-renders on the slider day and filters.
+    if (isGefsDistrictLayer(layerKey)) {
+      this.#titleEl.textContent = "Weather Report";
+      this.#clearThreshold();
+      this.#gefsMode = true;
+      this.#setExportEnabled(true);
+      this.#lastReport = null;
+      this.#lastFingerprint = "";
+      renderGefsDistrictReport({
+        container: this.#contentEl,
+        footerEl: this.#footerEl,
+        subtitleEl: this.#subtitleEl,
+        state,
+        districtVisible: this.#anyLayerVisible(DISTRICT_LAYER_IDS),
+        rerender: () => this.#scheduleRender(),
+      });
+      return;
+    }
+    this.#gefsMode = false;
+
     const tempMeta = layerKey ? LAYER_KIND_MAP[layerKey] : null;
     const activeStations = this.#activeStationKeys();
     const fallbackStationKey = activeStations[0] || null;

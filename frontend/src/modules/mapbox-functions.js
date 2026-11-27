@@ -909,7 +909,7 @@ export async function handleDewExposureCheckbox(exposureId, isChecked) {
   if (isChecked) {
     // Fetch and add to map
     try {
-      const endpoint = `http://172.18.1.108:8000/get-exposures/?exposure_id=${exposureId}`;
+      const endpoint = `${window.location.origin}/api/dew/exposures/?exposure_id=${encodeURIComponent(exposureId)}`;
       // console.log(`📡 Fetching: ${endpoint}`);
       
       const response = await fetch(endpoint);

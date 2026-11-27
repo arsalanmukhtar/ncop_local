@@ -1,0 +1,51 @@
+{
+  "nullah_lai_fixed_3.0m": {
+    "bounds": [
+      [
+        72.91661093809522,
+        33.54991990518224
+      ],
+      [
+        73.11684541492546,
+        33.76686304629711
+      ]
+    ]
+  },
+  "nullah_lai_discharge_r100_d4": {
+    "_note": "flood_prone_cells/flood_zone_km2 updated 2026-08-28 after an accidental force=True DEM refetch (while testing the new AHP distance-to-stream factor) exposed pre-existing run-to-run non-determinism in WhiteboxTools' breach_depressions_least_cost tie-breaking — NOT a code-logic change (every upstream physics number below is unchanged; the drift is confined to marginal-cell boundary placement, ~2-3% of cells). Old value was 6907/5.17; the underlying DEM bytes that produced it no longer exist to restore. Confirmed stable (not still drifting) across a follow-up re-run.",
+    "rainfall_mm": 100,
+    "duration_hr": 4,
+    "composite_cn": 80.7,
+    "channel_slope": 0.02772,
+    "outlet_area_km2": 242.21,
+    "flood_prone_cells": 7085,
+    "flood_zone_km2": 5.31,
+    "runoff_depth_mm": 51.94,
+    "time_of_concentration_hr": 3.62,
+    "peak_discharge_m3s": 627.14
+  },
+  "peshawar_bhudni_nullah_fixed_3.0m": {
+    "bounds": [
+      [
+        71.44975191065645,
+        33.97976376863344
+      ],
+      [
+        71.70011238034056,
+        34.20021033935637
+      ]
+    ]
+  },
+  "peshawar_bhudni_nullah_discharge_r100_d4": {
+    "rainfall_mm": 100.0,
+    "duration_hr": 4.0,
+    "composite_cn": 81.2,
+    "channel_slope": 0.00322,
+    "outlet_area_km2": 298.33,
+    "flood_prone_cells": 112846,
+    "flood_zone_km2": 84.11,
+    "runoff_depth_mm": 52.95,
+    "time_of_concentration_hr": 9.95,
+    "peak_discharge_m3s": 412.27
+  }
+}

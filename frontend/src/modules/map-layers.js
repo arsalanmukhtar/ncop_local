@@ -7,6 +7,9 @@ import {
   USGS_ICON_IDS,
 } from "./map-icons.js";
 import { NWFC_WEATHER_ICON_URLS } from "./nwfc-weather-icons.js";
+import { hawanamaToggleItems, hawanamaTemporalItems, registerHawanamaTemporalLoaders } from "./hawanama-layers.js";
+import { iwmiToggleItems, iwmiTemporalItems, registerIwmiTemporalLoaders } from "./iwmi-flood-layers.js";
+import { gefsTemporalItems, registerGefsTemporalLoaders } from "./gefs-layers.js";
 
 import {
   generateDWDSatelliteLayers,
@@ -437,7 +440,16 @@ const mbx_snow_daily        = generateMBX_MeteoblueDailySnowfallLayers(model, me
 const mbx_cape_daily        = generateMBX_MeteoblueDailyCAPELayers(model, metbluT);
 const mbx_warn_official     = generateMBX_MeteoblueOfficialWeatherWarningsLayers(metbluT);
 const mbx_warn_forecast     = generateMBX_MeteoblueForecastWarningsDailyLayers(model, metbluT);
-const mbx_lhasa2_latest     = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
+// Exported (not just a local const) so landslide-model-control.js can
+// toggle this SAME, already-resolved layer definition as an in-panel
+// cross-check (methodology doc §3.2: "show the Meteoblue LHASA2 tile
+// alongside the result... real value for an operator's own judgment,
+// just not yet a term in the matrix itself") without a second,
+// redundant call to generateMBX_MeteoblueLHASA2LatestLayer — that
+// function does a SYNCHRONOUS network request internally
+// (getLatestMeteoblueTimeSync) to resolve the latest available time;
+// calling it twice would mean two blocking XHRs for the same layer.
+export const mbx_lhasa2_latest = generateMBX_MeteoblueLHASA2LatestLayer(metbluT);
 const cams_aqi_hourly_layers = generateMeteoblueCAMSAirQualityHourlyLayers(metbluT);
 const cams_aqi_daily_layers = generateMeteoblueCAMSAirQualityDailyLayers(metbluT);
 const cams_desert_dust_hourly_layers = generateMeteoblueCAMSDesertDustHourlyLayers(metbluT);
@@ -523,6 +535,13 @@ window.pmd_pred_hourtpe       = generatePmdPredictionsLoader("hourtpe",       "p
 window.pmd_pred_sixtpe        = generatePmdPredictionsLoader("sixtpe",        "pmd_pred_sixtpe");
 window.pmd_pred_twelvetpe     = generatePmdPredictionsLoader("twelvetpe",     "pmd_pred_twelvetpe");
 window.pmd_pred_daytpe        = generatePmdPredictionsLoader("daytpe",        "pmd_pred_daytpe");
+// Hawanama (Pakistan Air Quality Initiative) temporal layers — lazy
+// builders on window[itemKey], same convention as the PMD loaders above.
+registerHawanamaTemporalLoaders();
+// IWMI flood forecasting (GloFAS forecast-day slider) — same lazy-builder convention.
+registerIwmiTemporalLoaders();
+// NOAA GEFS 35-day outlook (precipitation + 2 m temperature) — same lazy-builder convention.
+registerGefsTemporalLoaders();
 // State-quantity layers — temperature, cloud cover, humidity.  Same loader,
 // different registry entries on the backend (element_keys map to the vendor's
 // TEM / TCC / RHU codes across WRFPRS + GDFS models).
@@ -2266,6 +2285,13 @@ export const ncop_menu_items = {
         },
       },
     },
+    // NOAA GEFS v12 35-day outlook — daily precipitation and 2 m temperature
+    // frames rendered once per 00Z run by the backend (gefs_client.py).
+    "NOAA GEFS — 35-Day Outlook": {
+      temporal: Object.fromEntries(
+        Object.entries(gefsTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail) }])
+      ),
+    },
     "Live Meteorological Operations": {
       toggle: {
         pmd_weather_stations: {
@@ -2928,6 +2954,15 @@ export const ncop_menu_items = {
         },
       },
     },
+    // IWMI ENSO Outlook flood forecasting — GloFAS flood-alert points and
+    // Google Flood Hub gauges/inundation for Pakistan, the subcontinent and
+    // Southeast Asia. Configs in iwmi-flood-layers.js; data via /api/iwmi/.
+    "IWMI Flood Forecasting": {
+      temporal: Object.fromEntries(
+        Object.entries(iwmiTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail || "glofas-flood-sum-1-30d.webp") }])
+      ),
+      toggle: iwmiToggleItems,
+    },
     "Global Flood Awareness System (GloFAS)": {
       static: {
         precipitation_probability_50mm_10days: {
@@ -3535,6 +3570,14 @@ export const ncop_menu_items = {
         },
       },
     },
+    // Hawanama — Pakistan Air Quality Initiative (CC BY 4.0). Layer configs
+    // and loaders live in hawanama-layers.js; data via /api/hawanama/.
+    "Hawanama — Pakistan Air Quality Initiative": {
+      temporal: Object.fromEntries(
+        Object.entries(hawanamaTemporalItems).map(([k, v]) => [k, { ...v, image: getImage(v.thumbnail || "pm_2.5.webp") }])
+      ),
+      toggle: hawanamaToggleItems,
+    },
     "Meteoblue Air-Quality Forecast": {
       temporal: {
         cams_air_quality_index_hourly: {
@@ -3746,8 +3789,8 @@ export const ncop_menu_items = {
     "API Features": {
       dropdown: {
         dew_exposures: {
-          exposure_id_endpoint: "http://172.18.1.108:8000/get-exposures/",
-          exposure_feature_endpoint: `http://172.18.1.108:8000/get-exposures/?exposure_id=<individual_exposure_id>`,
+          exposure_id_endpoint: `${window.location.origin}/api/dew/exposures/`,   // same-origin proxy of the DEW service (dew_proxy.py)
+          exposure_feature_endpoint: `${window.location.origin}/api/dew/exposures/?exposure_id=<individual_exposure_id>`,
           key: "id",
           attribute: "remarks",
           type: "geojson",

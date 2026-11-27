@@ -1,0 +1,18 @@
+# /etc/systemd/system/foodsec-eo.service
+# District rain, soil moisture and crop greenness for the Food Security Watch
+# (project/ncop_internal/management/commands/foodsec_eo.py). About 1 minute and
+# ~800 KB on disk; run `manage.py foodsec_eo --backfill` once on a new server
+# (about 5 minutes). Without the file the story still works, but without the
+# early-warning levels.
+[Unit]
+Description=NCOP food-security drought indicators refresh
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py foodsec_eo --update
+TimeoutStartSec=1800
+Nice=15
+IOSchedulingClass=idle

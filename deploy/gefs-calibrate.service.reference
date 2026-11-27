@@ -1,0 +1,20 @@
+# /etc/systemd/system/gefs-calibrate.service
+# Monthly rolling retrain of the GEFS district bias correction
+# (project/ncop_internal/management/commands/gefs_calibrate.py --update):
+# fetches any missing weekly archived GEFS runs of the last 2 years
+# (district averages only, ~50 KB each), refreshes NASA POWER truth,
+# cross-validates, saves media/gefs/_calibration_v1.npz and prunes data
+# older than the window. ~10 min after the first run, ~2 min afterwards.
+# The served district table picks the new model up automatically.
+[Unit]
+Description=NCOP GEFS district bias-correction retrain
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cladmin
+WorkingDirectory=/home/cladmin/ncop_local/ncop_local_prod/project
+ExecStart=/home/cladmin/ncop_local/ncop_local_prod/venv/bin/python manage.py gefs_calibrate --update
+TimeoutStartSec=3600
+Nice=15
+IOSchedulingClass=idle

@@ -1,0 +1,45 @@
+Methodology for a Lightweight Real-Time Flood Forecasting System
+(Django + Mapbox GL JS)
+Objective: Develop a lightweight, open-source flood forecasting and visualization platform following the workflow: Weather Data → Rainfall Forecast → Hydrologic/Hydraulic Model → Flood Inundation Prediction → GIS Visualization & Decision Support.
+1. System Architecture
+The system consists of a Django backend, PostgreSQL/PostGIS spatial database, Celery for scheduled processing, EPA SWMM as the hydrologic model, and a Mapbox GL JS frontend. Data are collected from free sources (NASA GPM, Open-Meteo, SRTM, HydroSHEDS, OpenStreetMap, ESA WorldCover). Results are stored as GeoJSON/vector layers and visualized interactively.
+2. Weather Data Acquisition
+Observed rainfall is retrieved from NASA GPM IMERG. Forecast rainfall is obtained from Open-Meteo (or NOAA GFS). Scheduled jobs download hourly observations and forecasts, validate them, clip them to the study area, and store them in PostGIS.
+3. Spatial Data Preparation
+SRTM DEM provides elevation. HydroSHEDS is used to derive flow direction and accumulation. OpenStreetMap supplies roads, rivers, drainage features and buildings. ESA WorldCover provides land-cover classes used to estimate runoff coefficients and infiltration.
+4. Hydrologic/Hydraulic Modelling
+Rainfall, catchments, drainage network and land-cover parameters are converted into SWMM input files. EPA SWMM simulates runoff, drainage flow, flooded nodes, and water depth. PySWMM automates model execution from Django background tasks.
+5. Flood Inundation Prediction
+SWMM outputs are converted to GIS layers. Flooded nodes are interpolated into water-depth surfaces and transformed into inundation polygons. Each polygon stores depth, forecast time and risk level.
+6. Database Design
+PostGIS stores rainfall records, forecasts, DEM references, drainage network, flood polygons, water-depth rasters, and metadata. Spatial indexing enables fast querying.
+7. Backend Services
+Django REST Framework exposes GeoJSON APIs for rainfall, forecasts, flood polygons, water depth and risk. Celery schedules periodic updates and model execution.
+8. Mapbox GL JS Frontend
+The web interface displays base maps, rainfall heatmaps, flood polygons, water-depth styling, drainage, buildings and evacuation routes. A timeline slider visualizes forecast horizons (current, +1 h, +3 h, +6 h, +24 h). Popups display flood depth and warning level.
+9. Decision Support
+Flood severity is classified (Safe, Minor, Moderate, High, Severe) based on predicted depth. Users can filter layers, inspect affected infrastructure and export reports.
+10. Processing Workflow
+1. Download observed rainfall.
+2. Download rainfall forecast.
+3. Preprocess and validate inputs.
+4. Update PostGIS.
+5. Generate SWMM inputs.
+6. Execute SWMM.
+7. Convert outputs to GeoJSON.
+8. Publish REST endpoints.
+9. Render updates in Mapbox GL JS.
+11. Technology Stack
+Backend: Django, Django REST Framework, Celery, Redis
+Database: PostgreSQL + PostGIS
+Hydrologic Model: EPA SWMM + PySWMM
+Spatial Data: SRTM, HydroSHEDS, ESA WorldCover, OpenStreetMap
+Weather: NASA GPM IMERG, Open-Meteo
+Frontend: Mapbox GL JS
+12. Expected Outputs
+• Real-time rainfall map
+• Forecast rainfall layers
+• Flood inundation polygons
+• Water-depth visualization
+• Risk classification dashboard
+• Decision-support web GIS

@@ -201,3 +201,76 @@ project/cache/
 # couple minutes via `graphify update .` but are kept committed so
 # CONTEXT.md's graph links work without re-running the tool)
 graphify-out/cache/
+
+# Flash-flood model runtime cache (see FLASH_FLOOD_EARLY_WARNING_METHODOLOGY.md,
+# ncop_internal/flood_model.py + flood_exposure.py). Per-catchment DEM/HAND
+# pipeline rasters, flood-zone masks/PNGs, and OSM/Overture exposure caches
+# (confirmed live: 272MB total for the one Nullah Lai pilot catchment,
+# 220MB of that a single Overture buildings cache) — all regenerate
+# on-demand (DEM/HAND: ~28s cold; Overture buildings: ~225-270s cold, by
+# far the slowest; OSM bridges/hospitals/drainage/roads: seconds to
+# ~80s), same "safe to never commit" reasoning as pmd_predictions/ above.
+# Same narrow-scoping reasoning too — NOT project/media/ as a whole.
+project/media/flood_model/
+
+# Landslide early-warning model runtime cache (see
+# LANDSLIDE_EARLY_WARNING_METHODOLOGY.md, ncop_internal/landslide_model.py
+# + landslide_lhasa2_scan.py + landslide_regional_comparison.py). Same
+# "safe to never commit" reasoning as flood_model/ above: per-catchment
+# AHP/infinite-slope/rockfall/avalanche rasters, LOCO Frequency-Ratio
+# calibration scratch files, LHASA2 nowcast mosaics, and regional-
+# comparison WCS fetches — all regenerate on demand (confirmed live:
+# 742MB total across the 6 pilot catchments + scratch subdirs). Same
+# narrow-scoping reasoning too — NOT project/media/ as a whole.
+project/media/landslide_model/
+
+# Snow-avalanche susceptibility runtime cache (see avalanche_model.py) —
+# same reasoning as landslide_model/ above, its own small per-catchment
+# raster cache.
+project/media/avalanche_model/
+
+# accuracy_assessment.py's own external ground-truth cache — currently
+# just NASA's static Global Landslide Catalog CSV export (~8.5MB,
+# 30-day TTL, re-downloads automatically on expiry/cache-miss — see
+# _fetch_glc_csv_cached's own docstring). Same "safe to never commit"
+# reasoning as every other cache above.
+project/media/accuracy_assessment_cache/
+
+# pip's own local HTTP cache (misc/pip_cache/ — used during dependency
+# testing this session, e.g. verifying pyarrow/shapely resolve cleanly
+# together). Pure binary cache, ~46MB, regenerates automatically on next
+# pip install; the rest of misc/ (docs, setup scripts, the pinned GDAL
+# wheel) stays tracked as before — only this one cache subdirectory is new.
+misc/pip_cache/
+
+# Debris-flow watershed screening runtime cache (see debris_flow_model.py) -
+# per-catchment rasters + a small JSON sidecar, rebuilt on demand. Same
+# narrow scoping as landslide_model/ above.
+project/media/debris_flow_model/
+
+# Hawanama air-quality runtime caches (hawanama_client.py): cached JSON,
+# permanent daily-estimate tile cache, rendered forecast frames.
+project/media/hawanama_cache/
+project/media/hawanama_tiles/
+project/media/hawanama_forecast/
+
+# IWMI flood-forecasting runtime cache (iwmi_flood_client.py / cached_fetch.py).
+project/media/iwmi_flood_cache/
+
+# NOAA GEFS outlook runs (gefs_client.py): rendered frames + values per run.
+project/media/gefs/
+project/media/gefs_backtest/
+
+# Air Quality Watch digest snapshots (rebuilt at runtime, newest 60 kept)
+project/media/aqi_snapshots/
+
+# Food Security early-warning runtime stores (foodsec_sources / foodsec_eo / foodsec_ews),
+# rebuilt by `manage.py foodsec_eo --backfill` and the digest build
+project/media/foodsec/sources/
+project/media/foodsec/eo_v1.npz
+project/media/foodsec/issues.json
+project/media/foodsec/backtest.json
+
+# Flood Watch early-warning runtime stores (flood_store / flood_eo / flood_atlas / flood_ews),
+# rebuilt by `manage.py flood_watch_data --backfill --atlas`
+project/media/floodwatch/
